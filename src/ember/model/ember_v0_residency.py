@@ -525,6 +525,7 @@ class ResidentExecution:
         self.input_valid = torch.ones(3, dtype=torch.bool, device=self.device)
         self._geometry_lengths, self._geometry_sizes, self._geometry_repeats = (), (), None
         self._plan_declaration, self._plan_candidates, self._plan_winners = None, None, None
+        self.segmented = None
 
     def bind_geometry(self, lengths):
         """Allocate fixed ragged geometry before entering a captured step."""
@@ -543,6 +544,9 @@ class ResidentExecution:
         """Prepare an explicit diagnostic plan outside the step; native gates remain live."""
         if self.active or self.retired or self.poisoned or not self._geometry_lengths:
             raise RuntimeError('route-plan binding requires quiescent bound geometry')
+        if getattr(self, 'segmented', None) is not None:
+            self.segmented.invalidate()
+            self.segmented._cia_invalidated = True
         if plan is None:
             self._plan_declaration, self._plan_candidates, self._plan_winners = None, None, None
             return
@@ -626,6 +630,32 @@ class ResidentExecution:
             raise RuntimeError('resident execution requires its current active candidate step')
         if self.identity() != self.bound:
             raise RuntimeError('resident candidate owner changed during the step')
+
+    @contextmanager
+    def capture_region(self):
+        """Temporarily admit synthetic dense-segment work without advancing a real training step."""
+        if (self.active or self.retired or self.poisoned or self.pending
+                or self.model._cuda_execution is not self):
+            raise RuntimeError('capture requires a quiescent current resident execution')
+        self.model.parameter_inventory()
+        owner = self.identity()
+        saved = (self.bound, self.step_id, self.routed,
+                 self.routing_valid.clone(), self.input_valid.clone())
+        self.bound = owner
+        self.routed = []
+        self.active = True
+        try:
+            yield
+            if self.pending or self.identity() != owner:
+                raise RuntimeError('capture changed owner identity or left expert backward incomplete')
+        except BaseException:
+            self.poisoned = True
+            raise
+        finally:
+            self.active = False
+            self.bound, self.step_id, self.routed = saved[:3]
+            self.routing_valid.copy_(saved[3])
+            self.input_valid.copy_(saved[4])
 
     def begin_step(self):
         if self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:

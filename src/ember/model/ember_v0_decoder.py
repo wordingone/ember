@@ -21,6 +21,21 @@ from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, se
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
 
 
+def _resident_geometry(lengths):
+    from .ember_v0_residency import DeviceRouteGeometry
+    if (type(lengths) is not tuple or not lengths or
+            any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > 4096):
+        raise ValueError('resident segment geometry requires complete positive document lengths')
+    chunks, offset, epoch = [], 0, 0
+    for document, length in enumerate(lengths):
+        for start in range(0, length, 1024):
+            chunks.extend((document, offset, segment, min(256, length-segment), epoch)
+                          for segment in range(start, min(start+1024, length), 256))
+            epoch += 1
+        offset += length
+    return DeviceRouteGeometry(tuple(chunks), lengths)
+
+
 def _document_sdpa(q, k, v, lengths):
     """One causal 4-D attention call with independent, possibly ragged documents."""
     if (not lengths or any(type(length) is not int or length <= 0 for length in lengths)
@@ -438,6 +453,10 @@ class CIADecoder(nn.Module):
                                          and spec.expert not in self._resident_experts for spec in equation_inventory()):
             raise ValueError('resident mode cannot enable non-resident expert gradients')
         parameters = self.parameter_inventory()
+        segmented = getattr(self._cuda_execution, 'segmented', None)
+        if segmented is not None:
+            segmented.invalidate()
+            segmented._cia_invalidated = True
         for name, parameter in parameters.items():
             parameter.grad = None
             parameter.requires_grad_(name in names)
@@ -678,28 +697,81 @@ class CIADecoder(nn.Module):
                                            sparse_depth=sparse_depth, capture=capture)
         return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
 
-    def _resident_documents_forward(self, documents, *, collector=None, plan=None):
-        from .ember_v0_residency import resident_global_routes, resident_local_routes, ResidentRouteTrace
+    def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2):
+        """Bind the actual dense segments and owner Parameters before an exemplar training step."""
+        from functools import partial
+        from .ember_v0_capture import SegmentSpec, SegmentedStep
         execution = self._cuda_execution
-        execution.check()
-        execution.check_route_plan(plan)
-        lengths = tuple(len(embedded) for embedded, _, _ in documents)
-        embedded = torch.cat([item[0] for item in documents])
-        positions = torch.cat([item[1] for item in documents])
-        keys = torch.stack([self._weight(f'router.layers.{layer}.keys') for layer in range(1, 24, 2)])
-        geometry, priors, ranked, candidates, valid = resident_global_routes(
-            embedded, lengths, self._weight('router.global_query.weight'), keys)
-        execution.require_valid(valid, 'routing')
-        if collector is not None:
-            collector('global', dict(geometry=geometry, priors=priors.detach().clone(),
-                                    ranked=ranked.detach().clone(), candidates=candidates.detach().clone()))
+        if (not self._resident_experts or execution is None or execution.active
+                or execution.poisoned or execution.retired):
+            raise RuntimeError('segment binding requires quiescent current resident execution')
+        if collector is not None and not callable(collector):
+            raise ValueError('segment collector must be callable')
+        lengths = execution._geometry_lengths
+        geometry = _resident_geometry(lengths)
+        repeats = execution._geometry_repeats
+        state, seen = [], set()
+        for value in (execution.input_valid, repeats, execution._plan_candidates,
+                      execution._plan_winners, *static_state):
+            if value is None:
+                continue
+            if (not isinstance(value, torch.Tensor) or value.requires_grad
+                    or value.device != execution.device):
+                raise ValueError('capture static state must be nondifferentiable tensors on the execution device')
+            if id(value) not in seen:
+                seen.add(id(value))
+                state.append(value)
+        specs = []
+        for index in range(13):
+            prefixes = (f'layers.{2*index}.', f'layers.{2*index+1}.')
+            params, owners = [], set()
+            for stored_name, parameter in self.weights.items():
+                name = stored_name.replace('__', '.')
+                selected = ((name in ('final_norm.weight', 'embedding.weight')) if index == 12 else
+                    (name.startswith(prefixes) or name == 'router.local_query.weight' or
+                     (index == 0 and (name == 'router.global_query.weight' or name.startswith('router.layers.')))))
+                if selected and parameter.requires_grad and id(parameter) not in owners:
+                    owners.add(id(parameter))
+                    params.append(parameter)
+            fn = partial(self._resident_segment, index, lengths=lengths, geometry=geometry,
+                         repeats=repeats, collector=collector)
+            specs.append(SegmentSpec(index, fn, tuple(params), tuple(state), f'dense-{index}'))
+        step = SegmentedStep(specs, device=execution.device, warmup_steps=warmup_steps).bind(execution, loss_fn=loss_fn)
+        step._cia_lengths, step._cia_collector, step._cia_invalidated = lengths, collector, False
+        previous = getattr(execution, 'segmented', None)
+        if previous is not None:
+            previous.invalidate()
+        execution.segmented = step
+        return step
+
+    def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None):
+        """One dense forward segment; every differentiable cross-segment value is carried explicitly."""
+        from .ember_v0_residency import resident_global_routes, resident_local_routes
+        if type(index) is not int or not 0 <= index <= 12:
+            raise ValueError('resident segment index must be 0..12')
+        execution = self._cuda_execution
+        if index == 0:
+            embedded, positions = carry
+            values = embedded
+            keys = torch.stack([self._weight(f'router.layers.{layer}.keys') for layer in range(1, 24, 2)])
+            actual_geometry, priors, ranked, candidates, valid = resident_global_routes(
+                embedded, lengths, self._weight('router.global_query.weight'), keys)
+            if actual_geometry != geometry:
+                raise ValueError('resident segment geometry differs from its bound documents')
+            execution.require_valid(valid, 'routing')
+            if collector is not None:
+                collector('global', dict(geometry=geometry, priors=priors.detach().clone(),
+                                        ranked=ranked.detach().clone(), candidates=candidates.detach().clone()))
+            history = None
+        else:
+            shared, residual, _, row_gates, positions, keys, priors, ranked, candidates, history = carry
+            values = shared + residual * row_gates[:, None].to(residual.dtype)
+            if index == 12:
+                logits = self._linear(self._norm(values, 'final_norm.weight'), 'embedding.weight')
+                return logits, ranked, history
         sizes = tuple(row[3] for row in geometry.chunks)
         equal = len(set(sizes)) == 1
-        # Ragged geometry is fixed for a capture. Prepare its row mapping once outside
-        # the captured forward through ResidentExecution.bind_geometry.
-        repeats = execution.geometry_repeats(lengths, sizes)
-        values, winners_by_layer = embedded, []
-        for layer in range(24):
+        for layer in (2 * index, 2 * index + 1):
             prefix = f'layers.{layer}'
             values = values + self._batched_attention(
                 self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
@@ -717,16 +789,51 @@ class CIADecoder(nn.Module):
                 row_experts = winners.repeat_interleave(sizes[0])
                 row_gates = gates.repeat_interleave(sizes[0])
             else:
-                row_experts = torch.repeat_interleave(winners, repeats, output_size=len(embedded))
-                row_gates = torch.repeat_interleave(gates, repeats, output_size=len(embedded))
-            residual = execution.grouped_block(self._norm(shared, prefix + '.expert_norm.weight'), row_experts, layer)
-            values = shared + residual * row_gates[:, None].to(residual.dtype)
-            winners_by_layer.append(winners.detach())
+                row_experts = torch.repeat_interleave(winners, repeats, output_size=sum(lengths))
+                row_gates = torch.repeat_interleave(gates, repeats, output_size=sum(lengths))
+            normed = self._norm(shared, prefix + '.expert_norm.weight')
+            history = (winners.detach()[None, :] if history is None else
+                       torch.cat((history, winners.detach()[None, :]), dim=0))
             if collector is not None:
                 collector('local', dict(layer=layer, winners=winners.detach().clone(), logits=logits.detach().clone(),
                                        gates=gates.detach().clone(), valid=valid.detach().clone(), native_winners=native_winners.detach().clone()))
-        outputs = self._linear(self._norm(values, 'final_norm.weight'), 'embedding.weight').split(lengths)
-        trace = ResidentRouteTrace(execution, execution.step_id, geometry, ranked.detach(), tuple(winners_by_layer))
+        return shared, normed, row_experts, row_gates, positions, keys, priors, ranked, candidates, history
+
+    def _resident_documents_forward(self, documents, *, collector=None, plan=None):
+        from .ember_v0_residency import ResidentRouteTrace
+        execution = self._cuda_execution
+        execution.check()
+        execution.check_route_plan(plan)
+        lengths = tuple(len(embedded) for embedded, _, _ in documents)
+        embedded = torch.cat([item[0] for item in documents])
+        positions = torch.cat([item[1] for item in documents])
+        geometry = _resident_geometry(lengths)
+        repeats = execution.geometry_repeats(lengths, tuple(row[3] for row in geometry.chunks))
+        step = getattr(execution, 'segmented', None)
+        if step is not None:
+            if step._cia_invalidated:
+                raise ValueError('resident capture requires rebinding after a geometry, plan or support change')
+            bound_collector = step._cia_collector
+            same_collector = (collector is bound_collector or
+                (getattr(collector, '__func__', None) is not None and
+                 getattr(collector, '__func__', None) is getattr(bound_collector, '__func__', None) and
+                 getattr(collector, '__self__', None) is getattr(bound_collector, '__self__', None)))
+            if step._cia_lengths != lengths or not same_collector:
+                raise ValueError('resident capture geometry or collector differs from its bound source')
+        carry = (embedded, positions)
+        for index in range(13):
+            if step is None:
+                carry = self._resident_segment(index, *carry, lengths=lengths, geometry=geometry,
+                                               repeats=repeats, collector=collector)
+            else:
+                carry = step.run(index, *carry)
+            if index < 12:
+                shared, normed, row_experts, *tail = carry
+                residual = execution.grouped_block(normed, row_experts, 2 * index + 1)
+                carry = (shared, residual, row_experts, *tail)
+        logits, ranked, winners = carry
+        outputs = logits.split(lengths)
+        trace = ResidentRouteTrace(execution, execution.step_id, geometry, ranked.detach(), tuple(winners.unbind(0)))
         return outputs, trace
 
     def _batched_documents_forward(self, documents, *, observer=None, plan=None):
