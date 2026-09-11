@@ -399,7 +399,11 @@ class RoutingStatisticsBuffers:
         self.chunks, self.epochs, self.chunk_count = tuple(chunks), epochs, len(chunks)
         E, C, L = epochs, len(chunks), len(self.LAYERS)
         # int64 sections first (8-byte alignment at offset 0), then float32, then bool; every section padded to 8.
-        sections = (('ranked', torch.int64, (E, 2)), ('candidates', torch.int64, (E, 2)), ('winners', torch.int64, (L, C)),
+        # 'reports' counts the step's device-side reports (index 0 = global, 1..12 = the sparse layers): zeroed at
+        # begin_step, incremented in place by the collector, validated from the boundary snapshot, so completion
+        # does not depend on Python executing (a captured replay writes the buffer without running the collector).
+        sections = (('reports', torch.int64, (1 + L,)),
+                    ('ranked', torch.int64, (E, 2)), ('candidates', torch.int64, (E, 2)), ('winners', torch.int64, (L, C)),
                     ('priors', torch.float32, (E, 25)), ('logits', torch.float32, (L, C, 2)), ('gates', torch.float32, (L, C)),
                     ('valid', torch.bool, (L,)))
         self.layout, cursor = [], 0
@@ -429,6 +433,7 @@ class RoutingStatisticsBuffers:
     def begin_step(self):
         self._global_calls, self._local_layers = 0, []
         self.views['valid'].fill_(False)
+        self.views['reports'].zero_()
 
     def _receive(self, name, tensor, index=None):
         import torch
@@ -437,6 +442,8 @@ class RoutingStatisticsBuffers:
             raise ValueError(f'routing statistic {name} must be a tensor of shape {tuple(target.shape)}')
         if tensor.device != self.device:
             raise ValueError(f'routing statistic {name} must live on {self.device}')
+        if tensor.dtype != target.dtype:
+            raise ValueError(f'routing statistic {name} must be {target.dtype}, got {tensor.dtype}')
         target.copy_(tensor.detach(), non_blocking=True)
 
     def collector(self, kind, payload):
@@ -451,6 +458,7 @@ class RoutingStatisticsBuffers:
             self._global_calls += 1
             for name in ('priors', 'ranked', 'candidates'):
                 self._receive(name, payload[name])
+            self.views['reports'][0] += 1
             return
         if kind == 'local':
             layer = payload['layer']
@@ -463,17 +471,22 @@ class RoutingStatisticsBuffers:
             for name in ('winners', 'logits', 'gates'):
                 self._receive(name, payload[name], index)
             self._receive('valid', payload['valid'].reshape(()), index)
+            self.views['reports'][1 + index] += 1
             return
         raise ValueError(f'unknown routing report kind {kind!r}')
 
-    def complete(self):
-        if self._global_calls != 1 or sorted(self._local_layers) != list(self.LAYERS):
-            raise RuntimeError('incomplete routing statistics for the step')
+    def complete(self, snapshot=None):
+        """Validate completion from the DEVICE report counts (one global, one per sparse layer), never from Python."""
+        counts = self._decode(self.snapshot() if snapshot is None else snapshot)['reports'].tolist()
+        if counts != [1] * (1 + len(self.LAYERS)):
+            raise RuntimeError(f'incomplete routing statistics for the step: device report counts {counts}')
 
     def snapshot(self):
-        """ONE device-to-host copy of the whole buffer (the step's final synchronization has drained the stream)."""
-        self.complete()
-        return bytes(self.raw.cpu().numpy().tobytes())
+        """ONE device-to-host copy of the whole buffer (the step's final synchronization has drained the stream);
+        refuses unless the device report counts show exactly one global and one report per sparse layer."""
+        raw = bytes(self.raw.cpu().numpy().tobytes())
+        self.complete(raw)
+        return raw
 
     def digest(self, snapshot):
         return hashlib.sha256(self.header + b'\0' + snapshot).hexdigest()
