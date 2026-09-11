@@ -80,16 +80,22 @@ _FUSED = {}
 _C_COMPILER = None
 
 
+def _windows():
+    return os.name == "nt"
+
+
 def bind_triton_c_compiler():
     """Bind the C compiler Triton uses to build inductor's launcher stubs: once per process, before the first compile.
 
-    Triton's own discovery looks for its bundled TinyCC under sysconfig's platlib and otherwise searches PATH for
-    cl/gcc/clang. A user-site Triton inside the scrubbed governed environment therefore finds no compiler at all
-    (measurement 2, 2026-09-11: "Failed to find C compiler"), while an interactive shell may pick up an unrelated
-    compiler from PATH. This resolves the INSTALLED Triton package's own bundled tcc.exe (module-relative), records
-    its sha256, and exports it as CC unless CC is already set; an explicit CC must itself name an existing file.
-    Refusal, never fallback: no PATH search, no substitute toolchain. Cached after the first call, so per-call use
-    from fused_elementwise costs nothing on the step.
+    On Windows, Triton's own discovery looks for its bundled TinyCC under sysconfig's platlib and otherwise searches
+    PATH for cl/gcc/clang. With Triton installed in the user site and no compiler on PATH it finds none (measurement 2,
+    2026-09-11: "Failed to find C compiler"), while an interactive shell may pick up an unrelated compiler from PATH.
+    On Windows this resolves the INSTALLED Triton package's own bundled tcc.exe (module-relative), records its sha256,
+    and exports it as CC unless CC is already set. An explicit CC on any platform must itself name an existing file.
+    On other platforms Triton's ordinary discovery is left untouched and the metadata says so. Refusal, never
+    fallback: no PATH search, no substitute toolchain. Cached after the first call, so per-call use from
+    fused_elementwise costs nothing on the step. The returned mapping is truthful runtime metadata at bind time,
+    not a predeclared toolchain binding.
     """
     global _C_COMPILER
     if _C_COMPILER is None:
@@ -98,15 +104,18 @@ def bind_triton_c_compiler():
             path = Path(explicit)
             if not path.is_file():
                 raise RuntimeError("CC names a compiler that does not exist: " + explicit)
-            source = "explicit CC"
-        else:
+            binding = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "source": "explicit CC"}
+        elif _windows():
             import triton
             path = Path(triton.__file__).resolve().parent / "runtime" / "tcc" / "tcc.exe"
             if not path.is_file():
                 raise RuntimeError("installed Triton carries no bundled TinyCC at " + str(path) + "; set CC explicitly")
             os.environ["CC"] = str(path)
-            source = "triton bundled tcc"
-        _C_COMPILER = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "source": source}
+            binding = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                       "source": "triton bundled tcc"}
+        else:
+            binding = {"path": None, "sha256": None, "source": "triton default discovery"}
+        _C_COMPILER = binding
     return dict(_C_COMPILER)
 
 
