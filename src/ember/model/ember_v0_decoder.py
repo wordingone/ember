@@ -19,13 +19,19 @@ from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, se
 
 
 def rotate_three_axis(values, positions):
-    """RoPE on disjoint temporal/vertical/horizontal dimensions 32/16/16."""
+    """RoPE on disjoint temporal/vertical/horizontal dimensions 32/16/16.
+
+    On CUDA the same function runs inductor-fused (see fused_elementwise); the eager body below is the
+    reference and is what the compiled twin traces, so there is one definition of the rotation.
+    """
     if values.ndim != 3 or values.shape[-1] != 64:
         raise ValueError("attention heads must have shape [positions,heads,64]")
     if tuple(positions.shape) != (len(values), 3) or positions.dtype != torch.long:
         raise ValueError("three integer axes required at every position")
     if positions.device != values.device:
         raise ValueError("positions and heads must share a device")
+    if values.is_cuda and not torch.compiler.is_compiling():
+        return fused_elementwise("rotate")(values, positions)
     pieces = []
     offset = 0
     for axis, width in enumerate((32, 16, 16)):
@@ -38,6 +44,30 @@ def rotate_three_axis(values, positions):
         pieces.append(rotated.flatten(-2).to(values.dtype))
         offset += width
     return torch.cat(pieces, dim=-1)
+
+
+def _rms_norm(values, weight):
+    """RMSNorm as the CPU reference computes it: fp32 statistics, cast back, then the bf16 scale."""
+    scale = (values.float().square().mean(-1, keepdim=True) + 1e-6).rsqrt()
+    return (values.float() * scale).to(values.dtype) * weight
+
+
+_FUSED = {}
+
+
+def fused_elementwise(name):
+    """The torch.compile (inductor) twin of one elementwise chain, built once per process on first CUDA use.
+
+    The eager functions are the CPU reference and stay definitional; on the CUDA candidate path the SAME
+    Python function is compiled so each chain executes as fused kernels (forward and, through AOTAutograd,
+    backward) instead of ~9 device launches per call (kernel census 2026-09-11: 7,832 elementwise/copy
+    kernels per step at 19.7 us mean). Compilation introduces no arithmetic the reference does not declare;
+    the per-call equivalence bar and the launch-count reduction are asserted by
+    tests/test_issue1945_cia_fused_elementwise.py. Meta and CPU execution never reach this function.
+    """
+    if name not in _FUSED:
+        _FUSED[name] = torch.compile({"norm": _rms_norm, "rotate": rotate_three_axis}[name])
+    return _FUSED[name]
 
 
 class CIADecoder(nn.Module):
@@ -230,8 +260,10 @@ class CIADecoder(nn.Module):
             raise ValueError(f"expected [positions,{trailing}]")
 
     def _norm(self, values, name):
-        scale = (values.float().square().mean(-1, keepdim=True) + 1e-6).rsqrt()
-        return (values.float() * scale).to(values.dtype) * self._weight(name)
+        weight = self._weight(name)
+        if self._cuda_execution is not None:
+            return fused_elementwise("norm")(values, weight)
+        return _rms_norm(values, weight)
 
     def _linear(self, values, name):
         return F.linear(values, self._weight(name))
