@@ -802,6 +802,9 @@ _TRAIN_PARTITION_PROJECTION_ROW_FIELDS = {
     "split",
     "supporting_receipts",
 }
+_LICENSE_ONLY_PARTITION_PROJECTION_ROW_FIELDS = (
+    _TRAIN_PARTITION_PROJECTION_ROW_FIELDS | {"license_only"}
+)
 _SUPPORTING_RECEIPT_FIELDS = {"path", "sha256"}
 _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS = _PROJECTION_ROW_FIELDS | {
     "predecessor_media_bindings"
@@ -1116,8 +1119,17 @@ def _partition_media_type(
 
 
 def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
-    if row.get("split") != "train" or "-train-" not in row.get("source_id", ""):
-        raise ValueError("PARTITION_PROJECTION_SPLIT_REFUSED:train authority required")
+    license_only = "license_only" in row
+    if license_only and row["license_only"] is not True:
+        raise ValueError("PARTITION_PROJECTION_LICENSE_ONLY_MARKER_REFUSED")
+    required_split = "heldout" if license_only else "train"
+    if (
+        row.get("split") != required_split
+        or f"-{required_split}-" not in row.get("source_id", "")
+    ):
+        raise ValueError(
+            f"PARTITION_PROJECTION_SPLIT_REFUSED:{required_split} authority required"
+        )
     receipt_path = Path(row["license_partition_receipt_path"])
     expected_sha = _require_sha(
         row["license_partition_receipt_sha256"], "partition receipt identity"
@@ -1395,8 +1407,9 @@ def project_catalog_spec(
     ``exclusion_records`` (#2168), when given, receives one record per bulk row describing
     the files its declared exclusions dropped (empty items when nothing was declared).
 
-    ``license_rows`` (#1581), when given, receives the projected rows themselves so the caller
-    can build the object license index over the same projection this manifest was built from.
+    ``license_rows`` (#1581), when given, receives all validated projected rows.
+    Partition rows with explicit ``license_only: true`` must bind heldout authority;
+    they reach this index consumer only and never the returned dataset manifest.
     """
 
     try:
@@ -1412,6 +1425,7 @@ def project_catalog_spec(
     ):
         raise ValueError("catalog projection spec has an invalid closed schema")
     rows = []
+    index_rows = []
     media_class_table = None
     for row in spec["rows"]:
         if not isinstance(row, dict):
@@ -1420,11 +1434,21 @@ def project_catalog_spec(
         if set(row) - set(declared) not in (
             _PROJECTION_ROW_FIELDS,
             _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
+            _LICENSE_ONLY_PARTITION_PROJECTION_ROW_FIELDS,
             _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS,
         ):
             raise ValueError("catalog projection row has an invalid closed schema")
-        if declared and set(row) - set(declared) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
+        partition_row = set(row) - set(declared) in (
+            _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
+            _LICENSE_ONLY_PARTITION_PROJECTION_ROW_FIELDS,
+        )
+        if declared and partition_row:
             raise ValueError("BULK_EXCLUSION_ROUTE_REFUSED")
+        license_only = "license_only" in row
+        if license_only and row["license_only"] is not True:
+            raise ValueError("PARTITION_PROJECTION_LICENSE_ONLY_MARKER_REFUSED")
+        if license_only and license_rows is None:
+            raise ValueError("PARTITION_PROJECTION_LICENSE_ONLY_CONSUMER_REQUIRED")
         supporting_receipt_sha256 = []
         supporting_receipts = row["supporting_receipts"]
         if not isinstance(supporting_receipts, list):
@@ -1442,7 +1466,7 @@ def project_catalog_spec(
                     "supporting receipt bytes do not match the frozen identity"
                 )
             supporting_receipt_sha256.append(claimed)
-        if set(row) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
+        if partition_row:
             projected = _load_train_partition_projection(row)
         else:
             if media_class_table is None:
@@ -1493,14 +1517,17 @@ def project_catalog_spec(
                     },
                 })
         projected["supporting_receipt_sha256"] = supporting_receipt_sha256
-        rows.append(projected)
-    if license_rows is not None:
-        license_rows.extend(rows)
-    return build_dataset_catalog_manifest(
+        index_rows.append(projected)
+        if not license_only:
+            rows.append(projected)
+    manifest = build_dataset_catalog_manifest(
         rows=rows,
         tokenizer_sha256=spec["tokenizer_sha256"],
         created_at_ms=spec["created_at_ms"],
     )
+    if license_rows is not None:
+        license_rows.extend(index_rows)
+    return manifest
 
 
 def _consumer_edges_bound_to_export(
