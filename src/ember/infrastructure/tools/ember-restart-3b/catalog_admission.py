@@ -809,6 +809,14 @@ _SUPPORTING_RECEIPT_FIELDS = {"path", "sha256"}
 _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS = _PROJECTION_ROW_FIELDS | {
     "predecessor_media_bindings"
 }
+# #1581 licence-only route for BULK connector rows (mirror of the partition route above):
+# a heldout connector row that must SAY it is licence-only reaches the object licence index
+# consumer and is refused entry to the dataset manifest, so a governed projection can name
+# every admitted object's licence without admitting heldout objects to a training dataset.
+_LICENSE_ONLY_PROJECTION_ROW_FIELDS = _PROJECTION_ROW_FIELDS | {"license_only"}
+_LICENSE_ONLY_BULK_PREDECESSOR_PROJECTION_ROW_FIELDS = (
+    _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS | {"license_only"}
+)
 _BULK_MEDIA_TYPE_TABLE = Path(__file__).with_name("bulk_connector_media_types.json")
 _BULK_MEDIA_TABLE_SCHEMA = "ember-issue1581-bulk-connector-media-types-v1"
 _BULK_PREDECESSOR_BINDINGS_SCHEMA = "ember-issue1581-bulk-predecessor-media-types-v1"
@@ -1408,8 +1416,11 @@ def project_catalog_spec(
     the files its declared exclusions dropped (empty items when nothing was declared).
 
     ``license_rows`` (#1581), when given, receives all validated projected rows.
-    Partition rows with explicit ``license_only: true`` must bind heldout authority;
-    they reach this index consumer only and never the returned dataset manifest.
+    Partition rows and bulk connector rows with explicit ``license_only: true`` must
+    bind heldout authority (``split: heldout`` with the matching ``-heldout-`` source
+    identity); they reach this index consumer only and never the returned dataset
+    manifest. Every other check on such a row (receipt identity, selector and license
+    authority, media-class keying, declared exclusions) is the unchanged manifest-route check.
     """
 
     try:
@@ -1436,6 +1447,8 @@ def project_catalog_spec(
             _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
             _LICENSE_ONLY_PARTITION_PROJECTION_ROW_FIELDS,
             _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS,
+            _LICENSE_ONLY_PROJECTION_ROW_FIELDS,
+            _LICENSE_ONLY_BULK_PREDECESSOR_PROJECTION_ROW_FIELDS,
         ):
             raise ValueError("catalog projection row has an invalid closed schema")
         partition_row = set(row) - set(declared) in (
@@ -1449,6 +1462,13 @@ def project_catalog_spec(
             raise ValueError("PARTITION_PROJECTION_LICENSE_ONLY_MARKER_REFUSED")
         if license_only and license_rows is None:
             raise ValueError("PARTITION_PROJECTION_LICENSE_ONLY_CONSUMER_REQUIRED")
+        if license_only and not partition_row and row.get("split") != "heldout":
+            # The bulk loader binds ``-{split}-`` in the source identity; the marker is
+            # admissible only on the heldout route (a train connector row already reaches
+            # the index through the manifest route and may not hide behind the marker).
+            raise ValueError(
+                "BULK_PROJECTION_LICENSE_ONLY_SPLIT_REFUSED:heldout authority required"
+            )
         supporting_receipt_sha256 = []
         supporting_receipts = row["supporting_receipts"]
         if not isinstance(supporting_receipts, list):
