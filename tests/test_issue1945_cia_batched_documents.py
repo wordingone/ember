@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from ember.model.ember_v0_residency import _swiglu, paged_swiglu, paged_swiglu_group
+from ember.model.ember_v0_residency import ExpertCache, _swiglu, paged_swiglu, paged_swiglu_group
 
 
 class StubCache:
@@ -117,6 +117,34 @@ class GroupedPagedSwiGLUTests(unittest.TestCase):
         expected = [_swiglu(c, weights['up'], weights['gate'], weights['down']) for c in self.chunks]
         for a, b in zip(expected, paged_swiglu_group(self.chunks, self.cache, 7)):
             torch.testing.assert_close(a, b, rtol=0, atol=0)
+
+
+class ResidentCapacityTests(unittest.TestCase):
+    """Real ExpertCache on CPU: the resident bound is explicit, defaults to 2, and is refused below 2."""
+    def bank(self):
+        return make_bank(2163, experts=(0, 1, 8), width=64, hidden=32)
+
+    def lease_sequence(self, cache, experts):
+        with cache.step():
+            for expert in experts:
+                with cache.lease(expert):
+                    pass
+
+    def test_default_bound_of_two_evicts_the_third_bundle(self):
+        cache = ExpertCache(self.bank(), device=torch.device('cpu'))
+        self.assertEqual(cache.resident_capacity, 2)
+        self.lease_sequence(cache, (0, 1, 8, 0))
+        self.assertEqual((cache.lease_count, cache.miss_count, cache.eviction_count, cache.peak_resident_bundles), (4, 4, 2, 2))
+
+    def test_bound_of_three_keeps_three_bundles_resident(self):
+        cache = ExpertCache(self.bank(), device=torch.device('cpu'), resident_capacity=3)
+        self.lease_sequence(cache, (0, 1, 8, 0, 1, 8))
+        self.assertEqual((cache.lease_count, cache.miss_count, cache.eviction_count, cache.peak_resident_bundles), (6, 3, 0, 3))
+
+    def test_refusals(self):
+        for bad in (1, 0, -2, 2.0, '2', True, None):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                ExpertCache(self.bank(), device=torch.device('cpu'), resident_capacity=bad)
 
 
 @unittest.skipUnless(os.environ.get('EMBER_CIA_CPU_CONFORMANCE') == '1',

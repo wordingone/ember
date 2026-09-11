@@ -27,8 +27,13 @@ class ExpertCache:
         if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
             raise ValueError('expert source storage alias')
 
-    def __init__(self, bank, *, device, owner_parameters=None):
+    def __init__(self, bank, *, device, owner_parameters=None, resident_capacity=2):
         self.validate_sources(bank)
+        # Device-resident bundle slots: an execution bound, not a routing quantity. Per-document routing
+        # still selects two of the global experts per epoch regardless of how many bundles may stay resident.
+        if type(resident_capacity) is not int or resident_capacity < 2:
+            raise ValueError('resident_capacity must be an int >= 2')
+        self.resident_capacity = resident_capacity
         self.bank = bank
         self.device = device
         self.entries = OrderedDict()
@@ -113,10 +118,10 @@ class ExpertCache:
         if expert not in self.entries:
             self.miss_count += 1
             started = time.perf_counter()
-            if len(self.entries) == 2:
+            if len(self.entries) >= self.resident_capacity:
                 available = next((key for key in self.entries if key not in self.leased), None)
                 if available is None:
-                    raise RuntimeError('two expert slots are already leased')
+                    raise RuntimeError('all expert slots are already leased')
                 self.synchronize()
                 self.eviction_count += 1
                 del self.entries[available]
@@ -292,14 +297,14 @@ def expert_bundles(parameters):
 
 class CUDAExecution:
     """One candidate's execution state, never a serving/admission generation."""
-    def __init__(self, model, device):
+    def __init__(self, model, device, *, resident_capacity=2):
         device = torch.device(device)
         if device.type != 'cuda' or device.index is None:
             raise ValueError('an explicit indexed CUDA device is required')
         self.model = model
         self.device = device
         self.cache = ExpertCache(expert_bundles(model.parameter_inventory()), device=device,
-                                 owner_parameters=model.parameter_inventory)
+                                 owner_parameters=model.parameter_inventory, resident_capacity=resident_capacity)
 
     @contextmanager
     def step(self):
