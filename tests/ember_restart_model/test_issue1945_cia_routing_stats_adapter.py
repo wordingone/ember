@@ -168,7 +168,9 @@ class CollectorTests(unittest.TestCase):
         buffers.begin_step()
         with self.assertRaises(RuntimeError):
             buffers.snapshot()
+        self.assertEqual(buffers.views['reports'].tolist(), [0] * 13)
         buffers.collector('global', global_payload)
+        self.assertEqual(buffers.views['reports'].tolist(), [1] + [0] * 12)
         with self.assertRaises(ValueError):
             buffers.collector('global', global_payload)
         for layer in LAYERS[:-1]:
@@ -197,6 +199,13 @@ class CollectorTests(unittest.TestCase):
             buffers.collector('local', dict(locals_[1], layer=2))
         with self.assertRaises(ValueError):
             buffers.collector('local', dict(locals_[1], winners=locals_[1]['winners'][:-1]))
+        with self.assertRaises(ValueError):  # exact dtype: a float winners tensor must not be cast into int64
+            buffers.collector('local', dict(locals_[1], winners=locals_[1]['winners'].float()))
+        with self.assertRaises(ValueError):
+            buffers.collector('global', dict(global_payload, priors=global_payload['priors'].double()))
+        with self.assertRaises(ValueError):
+            buffers.collector('local', dict(locals_[1], valid=torch.tensor(1)))
+        self.assertEqual(buffers.views['reports'].tolist(), [0] * 13)
         with self.assertRaises(ValueError):
             buffers.collector('routes', {})
         with self.assertRaises(ValueError):
@@ -222,6 +231,40 @@ class CollectorTests(unittest.TestCase):
         host_reading_collector('global', device_only(global_payload))
         with self.assertRaises(AssertionError):
             host_reading_collector('local', device_only(locals_[1]))
+
+
+class ReplayTests(unittest.TestCase):
+    """Completion is decided by device report counts in the buffer, the way a captured replay would leave them."""
+
+    def test_replayed_writes_complete_without_python_counters(self):
+        lengths = (300, 520)
+        geometry, global_payload, locals_ = fixture_payloads(lengths, 9)
+        buffers = subject.RoutingStatisticsBuffers(lengths, device='cpu')
+        feed(buffers, global_payload, locals_)
+        # A replay reproduces the device writes (payload copies + count increments) with no Python executed:
+        # model that by resetting the Python-side counters to their post-begin_step state.
+        buffers._global_calls, buffers._local_layers = 0, []
+        snapshot = buffers.snapshot()
+        self.assertEqual(buffers._decode(snapshot)['reports'].tolist(), [1] * 13)
+        self.assertEqual(buffers.routes(snapshot), reference_rows(geometry, global_payload, locals_))
+        buffers.begin_step()  # the next step starts from zero counts on device
+        self.assertEqual(buffers.views['reports'].tolist(), [0] * 13)
+        with self.assertRaises(RuntimeError):
+            buffers.snapshot()
+
+    def test_duplicate_or_missing_device_report_refuses_from_snapshot(self):
+        lengths = (300, 520)
+        geometry, global_payload, locals_ = fixture_payloads(lengths, 10)
+        buffers = subject.RoutingStatisticsBuffers(lengths, device='cpu')
+        feed(buffers, global_payload, locals_)
+        buffers.views['reports'][7] += 1  # a duplicate written on the device path, invisible to Python
+        with self.assertRaises(RuntimeError):
+            buffers.snapshot()
+        buffers.views['reports'][7] -= 2  # now that layer is missing
+        with self.assertRaises(RuntimeError):
+            buffers.snapshot()
+        buffers.views['reports'][7] += 1
+        buffers.snapshot()
 
 
 class Cache:
