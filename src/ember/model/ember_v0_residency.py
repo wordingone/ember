@@ -210,9 +210,9 @@ class _PagedSwiGLUGroup(torch.autograd.Function):
 
     Numerically each chunk is the identical per-chunk _swiglu the single-chunk path runs (same shapes,
     same kernels, same inputs), so forward outputs are bit-identical to separate calls; only the bundle
-    transfer and the per-lease synchronize are shared. Weight gradients are the per-chunk gradients
-    summed here rather than by autograd's accumulation, which is the one place a summation order
-    differs from the serial path.
+    transfer and the per-lease synchronize are shared. Weight gradients retain their native dtype
+    and per-chunk summation order on the execution device, then transfer once per required weight
+    to its source device. This explicit order differs from the serial path's autograd accumulation.
     """
     @staticmethod
     def forward(ctx, up, gate, down, cache, expert, names, *values):
@@ -249,12 +249,14 @@ class _PagedSwiGLUGroup(torch.autograd.Function):
                     result = _swiglu(*inputs)
                     gradients = torch.autograd.grad(result, inputs, output_gradient)
                 value_gradients.append(gradients[0])
-                for index, (gradient, source) in enumerate(zip(gradients[1:], (up, gate, down))):
+                for index, gradient in enumerate(gradients[1:]):
                     if ctx.needs_input_grad[index]:
-                        moved = gradient.to(source.device)
-                        weight_gradients[index] = (moved if weight_gradients[index] is None
-                                                   else weight_gradients[index] + moved)
+                        weight_gradients[index] = (gradient if weight_gradients[index] is None
+                                                   else weight_gradients[index] + gradient)
                 del result, inputs, gradients
+            for index, source in enumerate((up, gate, down)):
+                if weight_gradients[index] is not None:
+                    weight_gradients[index] = weight_gradients[index].to(source.device)
         if ctx.counted:
             cache.pending -= 1
         ctx.completed = True
