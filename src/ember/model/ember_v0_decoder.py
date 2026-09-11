@@ -8,6 +8,7 @@ and learning qualification require their own execution evidence.
 """
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
+import dataclasses
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -84,6 +85,36 @@ class CIADecoder(nn.Module):
                 if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
                     raise ValueError("physical parameter storage alias")
         return actual
+
+    def live_parameters(self):
+        """Live whole-model registered-parameter view under RAW registered names, without schema validation.
+
+        Walks named_parameters(remove_duplicate=False) over the whole module tree at every call and keeps the raw
+        registered name as the key (no normalization, so a root or child registration can never collide with a
+        weights entry); a replaced, removed, re-pointed, duplicated, or newly registered Parameter anywhere is a
+        key or object change at the next identity check. The immutable schema/census/alias validation runs at
+        step bind and step end through parameter_inventory.
+        """
+        return dict(self.named_parameters(remove_duplicate=False))
+
+    def owner_declaration(self):
+        """Exact-type value snapshot of the non-tensor inputs to parameter_inventory: config and placement.
+
+        Compared by the residency cache at every check. Types travel with the values, so a config replaced by
+        its repr string, a placement replaced by a plain string, a different object, or a moved placement is
+        refused at the next lease rather than at step end.
+        """
+        def typed(value):
+            if dataclasses.is_dataclass(value) and not isinstance(value, type):
+                fields = tuple((name, typed(item)) for name, item in sorted(dataclasses.asdict(value).items()))
+            elif isinstance(value, dict):
+                fields = tuple((repr(key), typed(item)) for key, item in sorted(value.items(), key=repr))
+            elif isinstance(value, (list, tuple)):
+                fields = tuple(typed(item) for item in value)
+            else:
+                fields = repr(value)
+            return (type(value).__module__, type(value).__qualname__, fields)
+        return (typed(self.config), typed(self._parameter_device), typed(self._execution_device))
 
     def _apply(self, fn, recurse=True):
         raise ValueError('generic module migration cannot bypass explicit CIA placement')
