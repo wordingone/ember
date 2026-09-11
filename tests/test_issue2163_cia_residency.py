@@ -70,7 +70,7 @@ class ResidencyMechanics(unittest.TestCase):
 
     def test_two_live_leases_refuse_third_and_exception_cleans(self):
         bank, cache = self.make()
-        with self.assertRaisesRegex(RuntimeError, 'two expert slots'):
+        with self.assertRaisesRegex(RuntimeError, 'expert slots are already leased'):
             with cache.step(), cache.lease(0), cache.lease(1), cache.lease(2):
                 self.fail('third lease admitted')
         self.assertFalse(cache.active)

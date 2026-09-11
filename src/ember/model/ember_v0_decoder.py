@@ -122,11 +122,13 @@ class CIADecoder(nn.Module):
         self.parameter_inventory()
         return self
 
-    def activate_cuda(self, device):
+    def activate_cuda(self, device, *, resident_capacity=2):
         """Activate bounded execution before constructing the candidate optimizer.
 
         Caller must reserve the complete host/device envelope. This neither admits
         a generation nor grants launch, checkpoint, learning or throughput credit.
+        `resident_capacity` bounds the device-resident expert bundles (int >= 2; default 2,
+        the reference behaviour); it does not change per-document routing.
         """
         if self._parameter_device != 'cpu':
             raise ValueError('CUDA activation requires the complete CPU population')
@@ -148,7 +150,7 @@ class CIADecoder(nn.Module):
                 value.data = moved[name]
             self._execution_device = target
             self._parameter_device = 'cuda'
-            self._cuda_execution = CUDAExecution(self, target)
+            self._cuda_execution = CUDAExecution(self, target, resident_capacity=resident_capacity)
             self.parameter_inventory()
         except BaseException:
             for name, value in shared.items():
