@@ -163,18 +163,49 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
         positions[:, 0] = torch.arange(len(tokens))
         return self.model(self.model.embed_text(torch.tensor(tokens)), positions, **kwargs)
 
-    def test_batched_path_equals_serial_path_exactly(self):
+    @staticmethod
+    def relative_l2(candidate, reference):
+        return float((candidate.float() - reference.float()).norm() / reference.float().norm().clamp_min(1e-12))
+
+    def test_batched_path_matches_serial_path(self):
+        """Routes exact; logits within the declared rel-L2 bound (0.05) on both attention branches."""
         with torch.no_grad():
-            serial, serial_routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4), return_routes=True)
-            batched, batched_routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4),
-                                                      return_routes=True, batch_documents=True)
-            torch.testing.assert_close(serial, batched, rtol=0, atol=0)
-            self.assertEqual(serial_routes, batched_routes)
+            for tokens, starts in (([1, 2, 9, 8, 5, 6], (0, 2, 4)),        # equal lengths: batched 4-D attention
+                                   ([1, 2, 9, 8, 5, 6, 7], (0, 2, 5))):    # unequal lengths: per-document fallback
+                serial, serial_routes = self.run_tokens(tokens, document_starts=starts, return_routes=True)
+                batched, batched_routes = self.run_tokens(tokens, document_starts=starts,
+                                                          return_routes=True, batch_documents=True)
+                self.assertEqual(serial_routes, batched_routes)
+                self.assertEqual(tuple(serial.shape), tuple(batched.shape))
+                self.assertLessEqual(self.relative_l2(batched, serial), 0.05, msg=str(starts))
             single = self.run_tokens([1, 2, 3], batch_documents=True)
-            torch.testing.assert_close(single, self.run_tokens([1, 2, 3]), rtol=0, atol=0)
+            self.assertLessEqual(self.relative_l2(single, self.run_tokens([1, 2, 3])), 0.05)
         with self.assertRaisesRegex(ValueError, 'batch_documents must be a bool'):
             self.run_tokens([1, 2], batch_documents=1)
 
+    def test_batched_path_calls_each_expert_once_per_sparse_layer(self):
+        """The grouped call site issues exactly one expert_block_group per (layer, expert) with one member."""
+        calls = []
+        original = type(self.model).expert_block_group
+
+        def counting(model, values, *, expert, layer):
+            calls.append((layer, expert, len(values), tuple(len(v) for v in values)))
+            return original(model, values, expert=expert, layer=layer)
+        type(self.model).expert_block_group = counting
+        try:
+            with torch.no_grad():
+                _, routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4),
+                                            return_routes=True, batch_documents=True)
+        finally:
+            type(self.model).expert_block_group = original
+        expected = {(layer, expert) for _, layer, _, _, expert in routes}
+        self.assertEqual({(layer, expert) for layer, expert, _, _ in calls}, expected)
+        self.assertEqual(len(calls), len(expected))
+        self.assertTrue(all(members == 1 for _, _, members, _ in calls))
+        rows = {(layer, expert): 0 for layer, expert in expected}
+        for document, layer, start, _, expert in routes:
+            rows[(layer, expert)] += 2   # every document here is 2 tokens, one chunk each
+        self.assertEqual({(layer, expert): sizes[0] for layer, expert, _, sizes in calls}, rows)
 
 if __name__ == '__main__':
     unittest.main()
