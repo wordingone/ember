@@ -9305,14 +9305,15 @@ fn validate_dispatch_workload_profile(
         });
     }
     if profile.profile_id == DispatchWorkloadProfileId::CiaMeasurement {
-        const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+        const LEGACY_BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+        const BUDGET: u64 = 40 * 1024 * 1024 * 1024;
         if memory_model_authority.is_some()
-            || maximum_job_memory_bytes != BUDGET
-            || total != BUDGET
+            || !matches!(maximum_job_memory_bytes, LEGACY_BUDGET | BUDGET)
+            || total != maximum_job_memory_bytes
             || !cia_measurement_args_valid(args)
         {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "CIA measurement requires closed argv, exact 20 GiB host budget, and no training memory authority".into(),
+                detail: "CIA measurement requires closed argv, exact 20 or 40 GiB host budget, and no training memory authority".into(),
             });
         }
     }
@@ -9613,6 +9614,34 @@ mod cia_measurement_profile_tests {
             let mut changed = args();
             changed[index] = replacement.into();
             assert!(valid(DispatchWorkloadProfileId::CiaMeasurement, &changed).is_err());
+        }
+    }
+
+    #[test]
+    fn measurement_host_budget_accepts_declared_40_gib() {
+        let host_budget = 40 * 1024 * 1024 * 1024;
+        let mut declared = profile(DispatchWorkloadProfileId::CiaMeasurement);
+        declared.pinned_host_producers[0].maximum_bytes = host_budget;
+        assert!(validate_dispatch_workload_profile(
+            &declared,
+            None,
+            DispatchCpuPacingClass::Unpaced,
+            &args(),
+            host_budget,
+            host_budget,
+        )
+        .is_ok());
+        for unsupported in [32 * 1024 * 1024 * 1024, host_budget - 1, host_budget + 1] {
+            declared.pinned_host_producers[0].maximum_bytes = unsupported;
+            assert!(validate_dispatch_workload_profile(
+                &declared,
+                None,
+                DispatchCpuPacingClass::Unpaced,
+                &args(),
+                unsupported,
+                unsupported,
+            )
+            .is_err());
         }
     }
 
