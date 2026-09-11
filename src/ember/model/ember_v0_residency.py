@@ -200,6 +200,79 @@ def paged_swiglu(value, cache, expert, *, names=('up', 'gate', 'down')):
     return _PagedSwiGLU.apply(value, *(row[name] for name in names), cache, expert, names)
 
 
+class _PagedSwiGLUGroup(torch.autograd.Function):
+    """Several same-expert chunks under ONE lease per pass.
+
+    Numerically each chunk is the identical per-chunk _swiglu the single-chunk path runs (same shapes,
+    same kernels, same inputs), so forward outputs are bit-identical to separate calls; only the bundle
+    transfer and the per-lease synchronize are shared. Weight gradients are the per-chunk gradients
+    summed here rather than by autograd's accumulation, which is the one place a summation order
+    differs from the serial path.
+    """
+    @staticmethod
+    def forward(ctx, up, gate, down, cache, expert, names, *values):
+        cache.check()
+        ctx.cache = cache
+        ctx.expert = expert
+        ctx.step_id = cache.step_id
+        ctx.completed = False
+        ctx.names = names
+        ctx.save_for_backward(up, gate, down, *values)
+        with cache.lease(expert) as weights:
+            bundle = tuple(weights[name] for name in names)
+            results = tuple(_swiglu(value, *bundle) for value in values)
+        ctx.counted = any(ctx.needs_input_grad[:3]) or any(ctx.needs_input_grad[6:])
+        if ctx.counted:
+            cache.pending += 1
+        return results
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, *output_gradients):
+        cache = ctx.cache
+        cache.check()
+        if ctx.step_id != cache.step_id or ctx.completed:
+            raise RuntimeError('stale or repeated expert backward')
+        up, gate, down, *values = ctx.saved_tensors
+        value_gradients = []
+        weight_gradients = [None, None, None]
+        with cache.lease(ctx.expert) as weights:
+            for value, output_gradient in zip(values, output_gradients):
+                with torch.enable_grad():
+                    inputs = [value.detach().requires_grad_(True)]
+                    inputs.extend(weights[name].detach().requires_grad_(True) for name in ctx.names)
+                    result = _swiglu(*inputs)
+                    gradients = torch.autograd.grad(result, inputs, output_gradient)
+                value_gradients.append(gradients[0])
+                for index, (gradient, source) in enumerate(zip(gradients[1:], (up, gate, down))):
+                    if ctx.needs_input_grad[index]:
+                        moved = gradient.to(source.device)
+                        weight_gradients[index] = (moved if weight_gradients[index] is None
+                                                   else weight_gradients[index] + moved)
+                del result, inputs, gradients
+        if ctx.counted:
+            cache.pending -= 1
+        ctx.completed = True
+        returned_values = tuple(gradient if required else None
+                                for gradient, required in zip(value_gradients, ctx.needs_input_grad[6:]))
+        return (*weight_gradients, None, None, None, *returned_values)
+
+
+def paged_swiglu_group(values, cache, expert, *, names=('up', 'gate', 'down')):
+    """One expert, several chunks, one lease per pass. Same per-chunk numerics as paged_swiglu."""
+    cache.check()
+    if type(values) is not tuple or not values:
+        raise ValueError('a non-empty tuple of chunk inputs is required')
+    if any(value.device != cache.device for value in values):
+        raise ValueError('input device differs from the expert cache')
+    row = cache.bank[expert]
+    if not torch.is_grad_enabled():
+        with cache.lease(expert) as weights:
+            bundle = tuple(weights[name] for name in names)
+            return tuple(_swiglu(value, *bundle) for value in values)
+    return _PagedSwiGLUGroup.apply(*(row[name] for name in names), cache, expert, names, *values)
+
+
 def expert_bundles(parameters):
     """Bind the complete25x36 inventory; no caller-selected reduced population."""
     specs = equation_inventory()
@@ -240,3 +313,7 @@ class CUDAExecution:
     def expert_block(self, values, expert, layer):
         names = tuple(f'experts.{expert}.layers.{layer}.{name}.weight' for name in ('up', 'gate', 'down'))
         return paged_swiglu(values, self.cache, expert, names=names)
+
+    def expert_block_group(self, values, expert, layer):
+        names = tuple(f'experts.{expert}.layers.{layer}.{name}.weight' for name in ('up', 'gate', 'down'))
+        return paged_swiglu_group(values, self.cache, expert, names=names)
