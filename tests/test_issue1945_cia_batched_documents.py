@@ -171,7 +171,10 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
         """Routes exact; logits within the declared rel-L2 bound (0.05) on both attention branches."""
         with torch.no_grad():
             for tokens, starts in (([1, 2, 9, 8, 5, 6], (0, 2, 4)),        # equal lengths: batched 4-D attention
-                                   ([1, 2, 9, 8, 5, 6, 7], (0, 2, 5))):    # unequal lengths: per-document fallback
+                                   ([1, 2, 9, 8, 5, 6, 7], (0, 2, 5)),     # unequal lengths: per-document fallback
+                                   # 257 + 513 tokens: partial 1-row chunks in both documents, non-uniform gate
+                                   # repetition and the inverse scatter over a concatenated member.
+                                   (list(range(5, 5 + 770)), (0, 257))):
                 serial, serial_routes = self.run_tokens(tokens, document_starts=starts, return_routes=True)
                 batched, batched_routes = self.run_tokens(tokens, document_starts=starts,
                                                           return_routes=True, batch_documents=True)
