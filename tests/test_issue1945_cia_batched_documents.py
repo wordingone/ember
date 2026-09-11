@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from ember.model.ember_v0_residency import _swiglu, paged_swiglu, paged_swiglu_group
+from ember.model.ember_v0_residency import ExpertCache, _swiglu, paged_swiglu, paged_swiglu_group
 
 
 class StubCache:
@@ -119,6 +119,34 @@ class GroupedPagedSwiGLUTests(unittest.TestCase):
             torch.testing.assert_close(a, b, rtol=0, atol=0)
 
 
+class ResidentCapacityTests(unittest.TestCase):
+    """Real ExpertCache on CPU: the resident bound is explicit, defaults to 2, and is refused below 2."""
+    def bank(self):
+        return make_bank(2163, experts=(0, 1, 8), width=64, hidden=32)
+
+    def lease_sequence(self, cache, experts):
+        with cache.step():
+            for expert in experts:
+                with cache.lease(expert):
+                    pass
+
+    def test_default_bound_of_two_evicts_the_third_bundle(self):
+        cache = ExpertCache(self.bank(), device=torch.device('cpu'))
+        self.assertEqual(cache.resident_capacity, 2)
+        self.lease_sequence(cache, (0, 1, 8, 0))
+        self.assertEqual((cache.lease_count, cache.miss_count, cache.eviction_count, cache.peak_resident_bundles), (4, 4, 2, 2))
+
+    def test_bound_of_three_keeps_three_bundles_resident(self):
+        cache = ExpertCache(self.bank(), device=torch.device('cpu'), resident_capacity=3)
+        self.lease_sequence(cache, (0, 1, 8, 0, 1, 8))
+        self.assertEqual((cache.lease_count, cache.miss_count, cache.eviction_count, cache.peak_resident_bundles), (6, 3, 0, 3))
+
+    def test_refusals(self):
+        for bad in (1, 0, -2, 2.0, '2', True, None):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                ExpertCache(self.bank(), device=torch.device('cpu'), resident_capacity=bad)
+
+
 @unittest.skipUnless(os.environ.get('EMBER_CIA_CPU_CONFORMANCE') == '1',
                      'requires explicit full-population CPU resource envelope')
 class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
@@ -135,18 +163,91 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
         positions[:, 0] = torch.arange(len(tokens))
         return self.model(self.model.embed_text(torch.tensor(tokens)), positions, **kwargs)
 
-    def test_batched_path_equals_serial_path_exactly(self):
+    @staticmethod
+    def relative_l2(candidate, reference):
+        return float((candidate.float() - reference.float()).norm() / reference.float().norm().clamp_min(1e-12))
+
+    def test_batched_path_matches_serial_path(self):
+        """Routes exact; logits within the declared rel-L2 bound (0.05) on both attention branches."""
         with torch.no_grad():
-            serial, serial_routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4), return_routes=True)
-            batched, batched_routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4),
-                                                      return_routes=True, batch_documents=True)
-            torch.testing.assert_close(serial, batched, rtol=0, atol=0)
-            self.assertEqual(serial_routes, batched_routes)
+            for tokens, starts in (([1, 2, 9, 8, 5, 6], (0, 2, 4)),        # equal lengths (same per-document path)
+                                   ([1, 2, 9, 8, 5, 6, 7], (0, 2, 5)),     # unequal lengths: per-document fallback
+                                   # 257 + 513 tokens: partial 1-row chunks in both documents, non-uniform gate
+                                   # repetition and the inverse scatter over a concatenated member.
+                                   (list(range(5, 5 + 770)), (0, 257))):
+                serial, serial_routes = self.run_tokens(tokens, document_starts=starts, return_routes=True)
+                batched, batched_routes = self.run_tokens(tokens, document_starts=starts,
+                                                          return_routes=True, batch_documents=True)
+                self.assertEqual(serial_routes, batched_routes)
+                self.assertEqual(tuple(serial.shape), tuple(batched.shape))
+                self.assertLessEqual(self.relative_l2(batched, serial), 0.05, msg=str(starts))
             single = self.run_tokens([1, 2, 3], batch_documents=True)
-            torch.testing.assert_close(single, self.run_tokens([1, 2, 3]), rtol=0, atol=0)
+            self.assertLessEqual(self.relative_l2(single, self.run_tokens([1, 2, 3])), 0.05)
         with self.assertRaisesRegex(ValueError, 'batch_documents must be a bool'):
             self.run_tokens([1, 2], batch_documents=1)
 
+    def test_batched_path_calls_each_expert_once_per_sparse_layer(self):
+        """One expert_block_group call per (layer, expert); its members are the routed chunks at their
+        ORIGINAL sizes (256, shorter tail), in chunk order -- the serial path's GEMM shapes under one lease."""
+        calls = []
+        original = type(self.model).expert_block_group
+
+        def counting(model, values, *, expert, layer):
+            calls.append((layer, expert, tuple(len(v) for v in values)))
+            return original(model, values, expert=expert, layer=layer)
+        type(self.model).expert_block_group = counting
+        lengths = (257, 513)   # chunks 256+1 and 256+256+1: shared experts get several members
+        tokens = list(range(5, 5 + sum(lengths)))
+        try:
+            with torch.no_grad():
+                _, routes = self.run_tokens(tokens, document_starts=(0, lengths[0]),
+                                            return_routes=True, batch_documents=True)
+        finally:
+            type(self.model).expert_block_group = original
+        expected = {}
+        for document, layer, start, _, expert in sorted(routes):
+            expected.setdefault((layer, expert), []).append(min(256, lengths[document] - start))
+        self.assertEqual(len(calls), len(expected))
+        self.assertEqual({(layer, expert): sizes for layer, expert, sizes in calls},
+                         {key: tuple(sizes) for key, sizes in expected.items()})
+        self.assertTrue(any(len(sizes) > 1 for _, _, sizes in calls), 'no shared expert exercised')
+        self.assertTrue(any(1 in sizes for _, _, sizes in calls), 'partial tail chunk not exercised')
+
+    def test_batched_path_routes_once_per_sparse_layer(self):
+        """One StepRouting.select_local_batch call per sparse layer covering every chunk; the legacy per-chunk
+        select_local is never called on the batched path; observer records arrive per chunk per layer."""
+        import ember.model.ember_v0_decoder as decoder_module
+        from ember.model.ember_v0_routing import StepRouting
+        calls = []
+        original = StepRouting.select_local_batch
+
+        def counting(routing, hidden, chunks, **kwargs):
+            calls.append((kwargs['sparse_depth'], len(chunks), kwargs['capture']))
+            return original(routing, hidden, chunks, **kwargs)
+
+        def refused(*args, **kwargs):
+            raise AssertionError('legacy select_local called on the batched path')
+        StepRouting.select_local_batch = counting
+        legacy = decoder_module.select_local
+        decoder_module.select_local = refused
+        observations = []
+        lengths = (257, 513)
+        tokens = list(range(5, 5 + sum(lengths)))
+        try:
+            with torch.no_grad():
+                self.run_tokens(tokens, document_starts=(0, lengths[0]), batch_documents=True)
+                self.run_tokens(tokens, document_starts=(0, lengths[0]), batch_documents=True,
+                                route_observer=observations.append)
+        finally:
+            StepRouting.select_local_batch = original
+            decoder_module.select_local = legacy
+        chunks = sum(-(-length // 256) for length in lengths)
+        self.assertEqual(calls, [(depth, chunks, False) for depth in range(12)]
+                         + [(depth, chunks, True) for depth in range(12)])
+        locals_seen = [o for o in observations if type(o).__name__ == 'LocalObservation']
+        self.assertEqual(len(locals_seen), 12 * chunks)
+        self.assertEqual(sorted({(o.document, o.layer) for o in locals_seen}),
+                         sorted({(d, layer) for d in range(2) for layer in range(1, 24, 2)}))
 
 if __name__ == '__main__':
     unittest.main()

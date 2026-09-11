@@ -79,6 +79,8 @@ def _is_pid_alive(pid, side):
                 capture_output=True, text=True, timeout=5,
                 **_hidden_process_kwargs(),
             )
+            if result.returncode != 0 or not result.stdout.strip():
+                return True  # an unavailable process query does not prove the holder exited
             return str(pid) in result.stdout
         except Exception:
             return True   # conservative on error

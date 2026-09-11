@@ -27,8 +27,14 @@ class ExpertCache:
         if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
             raise ValueError('expert source storage alias')
 
-    def __init__(self, bank, *, device, owner_parameters=None):
+    def __init__(self, bank, *, device, owner_parameters=None, resident_capacity=2, owner_validate=None,
+                 owner_declaration=None):
         self.validate_sources(bank)
+        # Device-resident bundle slots: an execution bound, not a routing quantity. Per-document routing
+        # still selects two of the global experts per epoch regardless of how many bundles may stay resident.
+        if type(resident_capacity) is not int or resident_capacity < 2:
+            raise ValueError('resident_capacity must be an int >= 2')
+        self.resident_capacity = resident_capacity
         self.bank = bank
         self.device = device
         self.entries = OrderedDict()
@@ -44,6 +50,12 @@ class ExpertCache:
         self.transfer_seconds = 0.0
         self.step_id = 0
         self.owner_parameters = owner_parameters
+        # Full owner validation (schema, census, alias) runs at step bind and step end; per-lease identity reads
+        # the live owner registry through owner_parameters and compares the per-tensor signature below.
+        self.owner_validate = owner_validate
+        # Snapshot of the owner's non-tensor validation inputs (declared config and placement); compared at
+        # every check like the tensor signature, because those declarations are inputs to owner_validate.
+        self.owner_declaration = owner_declaration
         self.poisoned = False
 
     @property
@@ -58,17 +70,24 @@ class ExpertCache:
                 self.poisoned = True
                 raise
 
+    @staticmethod
+    def _signature(value):
+        # Every field a between-lease mutation can move: object, in-place version, storage address/offset/size,
+        # shape, layout (stride), dtype, device, grad requirement. Read from the live object at every check.
+        return (id(value), value._version, value.data_ptr(), value.storage_offset(), value.untyped_storage().nbytes(),
+                tuple(value.shape), tuple(value.stride()), value.dtype, value.device, value.requires_grad)
+
     def identity(self):
-        signature = {(expert, name): (id(value), value._version, value.data_ptr(), tuple(value.shape), value.dtype,
-                                     value.device, value.requires_grad)
+        signature = {(expert, name): self._signature(value)
                      for expert, row in self.bank.items() for name, value in row.items()}
         if self.owner_parameters is not None:
             owned = self.owner_parameters()
             owner_ids = {id(value) for value in owned.values()}
             if any(id(value) not in owner_ids for row in self.bank.values() for value in row.values()):
                 raise RuntimeError('cache bank ownership changed')
-            signature.update({('owner', name): (id(value), value._version, value.data_ptr(), tuple(value.shape),
-                              value.dtype, value.device, value.requires_grad) for name, value in owned.items()})
+            signature.update({('owner', name): self._signature(value) for name, value in owned.items()})
+        if self.owner_declaration is not None:
+            signature[('declaration', 'owner')] = self.owner_declaration()
         return signature
 
     def check(self):
@@ -84,6 +103,8 @@ class ExpertCache:
         if self.active:
             raise RuntimeError('candidate step is already active')
         self.validate_sources(self.bank)
+        if self.owner_validate is not None:
+            self.owner_validate()
         bound = self.identity()
         self.active = True
         self.step_id += 1
@@ -92,6 +113,9 @@ class ExpertCache:
         try:
             yield
             self.check()
+            if self.owner_validate is not None:
+                self.owner_validate()
+                self.check()
             if self.pending:
                 raise RuntimeError('incomplete expert backward')
         finally:
@@ -113,10 +137,10 @@ class ExpertCache:
         if expert not in self.entries:
             self.miss_count += 1
             started = time.perf_counter()
-            if len(self.entries) == 2:
+            if len(self.entries) >= self.resident_capacity:
                 available = next((key for key in self.entries if key not in self.leased), None)
                 if available is None:
-                    raise RuntimeError('two expert slots are already leased')
+                    raise RuntimeError('all expert slots are already leased')
                 self.synchronize()
                 self.eviction_count += 1
                 del self.entries[available]
@@ -200,14 +224,42 @@ def paged_swiglu(value, cache, expert, *, names=('up', 'gate', 'down')):
     return _PagedSwiGLU.apply(value, *(row[name] for name in names), cache, expert, names)
 
 
+def _swiglu_group_gradients(value, bundle, output_gradient):
+    """First-order chunk derivatives, retaining native BF16 operation shapes.
+
+    Contiguous matrices use the same native derivative operations directly. The
+    final down projection need not be recomputed: its derivative uses the hidden
+    product and upstream gradient. Other ranks/layouts retain framework backward.
+    """
+    up, gate, down = bundle
+    if all(tensor.ndim == 2 and tensor.is_contiguous()
+           for tensor in (value, output_gradient, *bundle)):
+        gate_projection = F.linear(value, gate)
+        activated = F.silu(gate_projection)
+        up_projection = F.linear(value, up)
+        hidden = activated * up_projection
+        hidden_gradient = output_gradient.mm(down)
+        up_gradient = hidden_gradient * activated
+        gate_gradient = torch.ops.aten.silu_backward.default(
+            hidden_gradient * up_projection, gate_projection)
+        value_gradient = up_gradient.mm(up) + gate_gradient.mm(gate)
+        return (value_gradient, up_gradient.t().mm(value), gate_gradient.t().mm(value),
+                output_gradient.t().mm(hidden))
+    with torch.enable_grad():
+        inputs = [value.detach().requires_grad_(True)]
+        inputs.extend(weight.detach().requires_grad_(True) for weight in bundle)
+        result = _swiglu(*inputs)
+        return torch.autograd.grad(result, inputs, output_gradient)
+
+
 class _PagedSwiGLUGroup(torch.autograd.Function):
     """Several same-expert chunks under ONE lease per pass.
 
     Numerically each chunk is the identical per-chunk _swiglu the single-chunk path runs (same shapes,
     same kernels, same inputs), so forward outputs are bit-identical to separate calls; only the bundle
-    transfer and the per-lease synchronize are shared. Weight gradients are the per-chunk gradients
-    summed here rather than by autograd's accumulation, which is the one place a summation order
-    differs from the serial path.
+    transfer and the per-lease synchronize are shared. Weight gradients retain their native dtype
+    and per-chunk summation order on the execution device, then transfer once per required weight
+    to its source device. This explicit order differs from the serial path's autograd accumulation.
     """
     @staticmethod
     def forward(ctx, up, gate, down, cache, expert, names, *values):
@@ -237,19 +289,18 @@ class _PagedSwiGLUGroup(torch.autograd.Function):
         value_gradients = []
         weight_gradients = [None, None, None]
         with cache.lease(ctx.expert) as weights:
+            bundle = tuple(weights[name] for name in ctx.names)
             for value, output_gradient in zip(values, output_gradients):
-                with torch.enable_grad():
-                    inputs = [value.detach().requires_grad_(True)]
-                    inputs.extend(weights[name].detach().requires_grad_(True) for name in ctx.names)
-                    result = _swiglu(*inputs)
-                    gradients = torch.autograd.grad(result, inputs, output_gradient)
+                gradients = _swiglu_group_gradients(value, bundle, output_gradient)
                 value_gradients.append(gradients[0])
-                for index, (gradient, source) in enumerate(zip(gradients[1:], (up, gate, down))):
+                for index, gradient in enumerate(gradients[1:]):
                     if ctx.needs_input_grad[index]:
-                        moved = gradient.to(source.device)
-                        weight_gradients[index] = (moved if weight_gradients[index] is None
-                                                   else weight_gradients[index] + moved)
-                del result, inputs, gradients
+                        weight_gradients[index] = (gradient if weight_gradients[index] is None
+                                                   else weight_gradients[index] + gradient)
+                del gradients
+            for index, source in enumerate((up, gate, down)):
+                if weight_gradients[index] is not None:
+                    weight_gradients[index] = weight_gradients[index].to(source.device)
         if ctx.counted:
             cache.pending -= 1
         ctx.completed = True
@@ -292,14 +343,15 @@ def expert_bundles(parameters):
 
 class CUDAExecution:
     """One candidate's execution state, never a serving/admission generation."""
-    def __init__(self, model, device):
+    def __init__(self, model, device, *, resident_capacity=2):
         device = torch.device(device)
         if device.type != 'cuda' or device.index is None:
             raise ValueError('an explicit indexed CUDA device is required')
         self.model = model
         self.device = device
         self.cache = ExpertCache(expert_bundles(model.parameter_inventory()), device=device,
-                                 owner_parameters=model.parameter_inventory)
+                                 owner_parameters=model.live_parameters, owner_validate=model.parameter_inventory,
+                                 owner_declaration=model.owner_declaration, resident_capacity=resident_capacity)
 
     @contextmanager
     def step(self):

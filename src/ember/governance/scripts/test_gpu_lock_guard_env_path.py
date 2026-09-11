@@ -149,3 +149,24 @@ def test_module_level_rebind_still_wins(monkeypatch, tmp_path):
 def test_release_without_configuration_is_a_noop(monkeypatch):
     guard = _fresh_module(monkeypatch, None)
     guard.release()  # must not raise, must not SystemExit
+
+@pytest.mark.parametrize("returncode", [0, 1, 5])
+def test_failed_windows_process_query_preserves_existing_lock(monkeypatch, tmp_path, returncode):
+    lock = tmp_path / "gpu.lock"
+    guard = _fresh_module(monkeypatch, lock)
+    payload = {"daemon_pid": 123456789, "side": "windows", "active_jobs": 1}
+    lock.write_text(json.dumps(payload), encoding="utf-8")
+    original = lock.read_bytes()
+    result = guard.subprocess.CompletedProcess([], returncode, stdout="", stderr="Process query unavailable")
+    monkeypatch.setattr(guard.subprocess, "run", lambda *args, **kwargs: result)
+    with pytest.raises(SystemExit) as exc:
+        guard.check_or_die()
+    assert exc.value.code == 1
+    assert lock.read_bytes() == original
+
+
+def test_successful_windows_query_without_holder_still_reports_dead(monkeypatch, tmp_path):
+    guard = _fresh_module(monkeypatch, tmp_path / "gpu.lock")
+    result = guard.subprocess.CompletedProcess([], 0, stdout="INFO: No tasks match the specified criteria.", stderr="")
+    monkeypatch.setattr(guard.subprocess, "run", lambda *args, **kwargs: result)
+    assert guard._is_pid_alive(123456789, "windows") is False
