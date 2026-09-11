@@ -205,6 +205,34 @@ def paged_swiglu(value, cache, expert, *, names=('up', 'gate', 'down')):
     return _PagedSwiGLU.apply(value, *(row[name] for name in names), cache, expert, names)
 
 
+def _swiglu_group_gradients(value, bundle, output_gradient):
+    """First-order chunk derivatives, retaining native BF16 operation shapes.
+
+    Contiguous matrices use the same native derivative operations directly. The
+    final down projection need not be recomputed: its derivative uses the hidden
+    product and upstream gradient. Other ranks/layouts retain framework backward.
+    """
+    up, gate, down = bundle
+    if all(tensor.ndim == 2 and tensor.is_contiguous()
+           for tensor in (value, output_gradient, *bundle)):
+        gate_projection = F.linear(value, gate)
+        activated = F.silu(gate_projection)
+        up_projection = F.linear(value, up)
+        hidden = activated * up_projection
+        hidden_gradient = output_gradient.mm(down)
+        up_gradient = hidden_gradient * activated
+        gate_gradient = torch.ops.aten.silu_backward.default(
+            hidden_gradient * up_projection, gate_projection)
+        value_gradient = up_gradient.mm(up) + gate_gradient.mm(gate)
+        return (value_gradient, up_gradient.t().mm(value), gate_gradient.t().mm(value),
+                output_gradient.t().mm(hidden))
+    with torch.enable_grad():
+        inputs = [value.detach().requires_grad_(True)]
+        inputs.extend(weight.detach().requires_grad_(True) for weight in bundle)
+        result = _swiglu(*inputs)
+        return torch.autograd.grad(result, inputs, output_gradient)
+
+
 class _PagedSwiGLUGroup(torch.autograd.Function):
     """Several same-expert chunks under ONE lease per pass.
 
@@ -242,18 +270,15 @@ class _PagedSwiGLUGroup(torch.autograd.Function):
         value_gradients = []
         weight_gradients = [None, None, None]
         with cache.lease(ctx.expert) as weights:
+            bundle = tuple(weights[name] for name in ctx.names)
             for value, output_gradient in zip(values, output_gradients):
-                with torch.enable_grad():
-                    inputs = [value.detach().requires_grad_(True)]
-                    inputs.extend(weights[name].detach().requires_grad_(True) for name in ctx.names)
-                    result = _swiglu(*inputs)
-                    gradients = torch.autograd.grad(result, inputs, output_gradient)
+                gradients = _swiglu_group_gradients(value, bundle, output_gradient)
                 value_gradients.append(gradients[0])
                 for index, gradient in enumerate(gradients[1:]):
                     if ctx.needs_input_grad[index]:
                         weight_gradients[index] = (gradient if weight_gradients[index] is None
                                                    else weight_gradients[index] + gradient)
-                del result, inputs, gradients
+                del gradients
             for index, source in enumerate((up, gate, down)):
                 if weight_gradients[index] is not None:
                     weight_gradients[index] = weight_gradients[index].to(source.device)
