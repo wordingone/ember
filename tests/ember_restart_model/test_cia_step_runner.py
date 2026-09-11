@@ -166,7 +166,7 @@ class PredictionTests(unittest.TestCase):
             'geometry': {'sequence_length': 2, 'documents_per_step': 2,
                          'warm_steps': 1, 'measured_steps': 1},
             'batch_documents': False,
-            'resources': {'host_memory_bytes': 20 * 1024 ** 3,
+            'resources': {'host_memory_bytes': 40 * 1024 ** 3,
                           'total_gpu_bytes': 20 * 1024 ** 3,
                           'allocator_bytes': 18 * 1024 ** 3, 'wall_seconds': 600,
                           'min_c_free_bytes': 150 * 1024 ** 3,
@@ -230,7 +230,7 @@ class PredictionTests(unittest.TestCase):
             source_sha256={path: 'c' * 64 for path in subject.SOURCES},
             input_binding={}, gpu_uuid='GPU-ab12',
             dispatch_resources={'profile': 'cia_measurement',
-                                'maximum_job_memory_bytes': 20 * 1024 ** 3,
+                                'maximum_job_memory_bytes': 40 * 1024 ** 3,
                                 'window_contract': 'headless_no_windows', 'vram_wall': wall})
         return prediction
 
@@ -250,6 +250,37 @@ class PredictionTests(unittest.TestCase):
                     subject, 'file_sha256', side_effect=AssertionError('file read before device binding')):
                 with self.assertRaises(ValueError):
                     subject.prepare_execution(prediction)
+
+
+class HostEnvelopeTests(unittest.TestCase):
+    def argv(self):
+        return ['--daemon-run', '--live', '--custody', str(Path('B:/host-envelope')),
+                '--hidden-helper', str(Path('C:/helpers/hidden.py')), '--prediction',
+                str(Path('B:/host-envelope/prediction.json')), '--prediction-sha256', 'a' * 64]
+
+    def test_authenticated_40_gib_cap_reaches_measurement_launch(self):
+        from ember.governance.scripts import ember_dispatch_token
+        budget = 40 * 1024 ** 3
+        with patch.object(ember_dispatch_token, 'consume_dispatch', return_value=budget), \
+             patch.dict('os.environ', {'EMBER_LAB_DISPATCH_JOB_ID': 'a' * 32,
+                                      'EMBER_LAB_DISPATCH_DAEMON_PID': '123'}), \
+             patch.object(subject, 'launch', return_value=0) as launch:
+            self.assertEqual(subject.main(self.argv()), 0)
+        self.assertEqual(launch.call_args.args[1]['memory_cap'], budget)
+        self.assertEqual(subject.LIMITS['total_gpu_bytes'], 20 * 1024 ** 3)
+        self.assertEqual(subject.LIMITS['allocator_bytes'], 18 * 1024 ** 3)
+        self.assertEqual(subject.LIMITS['wall_seconds'], 600)
+
+    def test_legacy_or_inexact_host_cap_refuses_before_launch(self):
+        from ember.governance.scripts import ember_dispatch_token
+        for budget in (20 * 1024 ** 3, 40 * 1024 ** 3 - 1, 40 * 1024 ** 3 + 1, True):
+            with self.subTest(budget=budget), \
+                 patch.object(ember_dispatch_token, 'consume_dispatch', return_value=budget), \
+                 patch.dict('os.environ', {'EMBER_LAB_DISPATCH_JOB_ID': 'a' * 32,
+                                          'EMBER_LAB_DISPATCH_DAEMON_PID': '123'}), \
+                 patch.object(subject, 'launch', side_effect=AssertionError('launch before exact host binding')):
+                with self.assertRaises(ValueError):
+                    subject.main(self.argv())
 
 
 class InvocationTests(unittest.TestCase):
