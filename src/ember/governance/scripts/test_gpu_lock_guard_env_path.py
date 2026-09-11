@@ -16,6 +16,8 @@ import importlib
 import json
 import os
 import sys
+import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -30,6 +32,25 @@ def _fresh_module(monkeypatch, lock_path):
         monkeypatch.setenv("EMBER_GPU_LOCK_PATH", str(lock_path))
     import gpu_lock_guard
     return importlib.reload(gpu_lock_guard)
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows host child visibility contract')
+@pytest.mark.parametrize('side', ['windows', 'wsl2'])
+def test_live_pid_probe_keeps_actual_windows_child_hidden(monkeypatch, tmp_path, side):
+    guard = _fresh_module(monkeypatch, tmp_path / 'gpu.lock')
+    calls = []
+    def capture(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(stdout='12345', returncode=0)
+    monkeypatch.setattr(guard.subprocess, 'run', capture)
+    assert guard._is_pid_alive(12345, side)
+    assert len(calls) == 1
+    argv, kwargs = calls[0]
+    assert argv[0] == ('tasklist' if side == 'windows' else 'wsl')
+    assert kwargs['shell'] is False
+    assert kwargs['creationflags'] & subprocess.CREATE_NO_WINDOW
+    assert kwargs['startupinfo'].dwFlags & subprocess.STARTF_USESHOWWINDOW
+    assert kwargs['startupinfo'].wShowWindow == subprocess.SW_HIDE
 
 
 def test_unset_env_refuses_rather_than_guessing(monkeypatch, capsys):

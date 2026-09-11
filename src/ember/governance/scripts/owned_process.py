@@ -291,11 +291,14 @@ class OwnedProcessRunner:
             | subprocess.CREATE_NO_WINDOW
         )
         job_factory = self._windows_job_factory or _WindowsJob
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
         with job_factory() as job:
             proc = subprocess.Popen(
                 argv, cwd=cwd, env=dict(env) if env is not None else None,
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, creationflags=creationflags,
+                text=True, creationflags=creationflags, startupinfo=startup, shell=False,
             )
             try:
                 job.assign_and_resume(proc)
