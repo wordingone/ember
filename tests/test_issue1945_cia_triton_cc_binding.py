@@ -8,8 +8,9 @@ looks for its bundled TinyCC under sysconfig's platlib (the system site) while t
 and the worker's PATH carries no cl/gcc/clang. These CPU-only cases prove `bind_triton_c_compiler` resolves, on Windows,
 the INSTALLED Triton package's bundled tcc module-relatively, records its sha256, exports it as CC exactly once, honours
 an explicit CC that exists on any platform, refuses a missing compiler without falling back, leaves Triton's ordinary
-discovery untouched off Windows, and runs before the first inductor compile. They do not compile anything and establish
-no throughput or conformance claim.
+discovery untouched off Windows, and runs before the first inductor compile (the measurement worker's explicit early
+bind and its model.json record are the runner workstream's change, carried by the routing-statistics adapter PR).
+They do not compile anything and establish no throughput or conformance claim.
 """
 import hashlib
 import os
@@ -21,9 +22,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from ember.model import ember_v0_decoder as subject  # noqa: E402
-
-RUNNER = Path(__file__).resolve().parents[1] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "cia_step_runner.py"
-
 
 class _Env:
     """Save/restore CC, the module cache and the fake triton module around each case."""
@@ -183,15 +181,6 @@ class OrderingTests(unittest.TestCase):
             finally:
                 torch.compile = original
             self.assertEqual(subject._FUSED, {})
-
-    def test_worker_binds_before_activation_and_records_it(self):
-        source = RUNNER.read_text(encoding="utf-8")
-        start = source.index("def worker(")
-        body = source[start:source.index("\ndef ", start + 1)]
-        bind = body.index("bind_triton_c_compiler()")
-        self.assertLess(bind, body.index("model.activate_cuda(device)"))
-        self.assertLess(bind, body.index("measure_step("))
-        self.assertIn("'c_compiler': c_compiler", body)
 
 
 if __name__ == "__main__":

@@ -541,11 +541,8 @@ def worker(binding_path):
             raise ValueError('prediction differs from owned run or selected GPU')
         config, prepared = prepare_execution(prediction)
         import torch
-        from ember.model.ember_v0_decoder import CIADecoder, bind_triton_c_compiler
+        from ember.model.ember_v0_decoder import CIADecoder
         from ember.model.ember_v0_contract import validate_cia_architecture
-        # The fused elementwise chains compile through inductor/Triton on first CUDA use; bind Triton's C compiler
-        # here, once, before activation, so the binding never happens inside a timed step and its identity is recorded.
-        c_compiler = bind_triton_c_compiler()
         validate_cia_architecture(config)
         if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
             raise ValueError('one explicitly bound CUDA device is required')
@@ -574,8 +571,7 @@ def worker(binding_path):
         supported = {name: parameter.numel() for name, parameter in inventory.items() if parameter.requires_grad}
         _write_new(custody / 'model.json', {'population': POPULATION, 'parameter_count': len(inventory),
             'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
-            'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'c_compiler': c_compiler,
-            'claim': CLAIM})
+            'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'claim': CLAIM})
         with (custody / 'rows.jsonl').open('xb') as rows:
             for pack in prepared['packs']:
                 verify_prepared_inputs(prepared)
