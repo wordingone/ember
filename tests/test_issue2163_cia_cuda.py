@@ -349,6 +349,17 @@ class FullPopulationCUDA(unittest.TestCase):
         # checkpoint nobody writes here.
         binding_started = time.perf_counter()
         optimizer.zero_grad(set_to_none=True)
+        # Return the caching allocator's reserved-but-unallocated device blocks before the capture.
+        # On this host those blocks are backed by process private commit, so the governed job's
+        # 20 GiB cap sees them: measured off-gate at this exact boundary, commit reads 19.886 GB on
+        # entry against a 21.475 GB budget, the capture costs 1.630 GB, and the run therefore
+        # overshoots by 60.8 MB and dies inside _cia_snapshot_placed_moments on a 2 MB allocation.
+        # empty_cache() here returns 3.482 GB (reserved 6.164 -> 2.439 GB) and leaves 3.689 GB of
+        # margin after the capture completes. gc.collect() at the same point returns nothing, so the
+        # memory is the allocator's rather than Python's. Nothing measured is disturbed: the update's
+        # peak was read above, allocated bytes are unchanged at 1.579 GB across the call, and this
+        # sits after the gradients are cleared, at the same quiescent boundary the capture requires.
+        torch.cuda.empty_cache()
         quiescent = artifacts._cia_quiescent_parameters(model)
         self.assertEqual(sorted(quiescent), sorted(parameters))
         optimizer_identity = artifacts.cia_optimizer_identity(model, optimizer)
