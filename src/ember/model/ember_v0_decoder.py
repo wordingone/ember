@@ -238,6 +238,20 @@ class CIADecoder(nn.Module):
             return self._cuda_execution.expert_block(values, expert, layer)
         return self._swiglu(values, f"experts.{expert}.layers.{layer}")
 
+    def expert_block_group(self, values, *, expert, layer):
+        """Same expert, several 256-row chunks (possibly from different documents), one lease."""
+        if type(values) is not tuple or not values:
+            raise ValueError("a non-empty tuple of chunk inputs is required")
+        for value in values:
+            self._input(value, 1024)
+        if type(expert) is not int or not 0 <= expert < 25:
+            raise ValueError("global expert identity outside [0,25)")
+        if type(layer) is not int or layer not in range(1, 24, 2):
+            raise ValueError("expert blocks exist only at sparse depths")
+        if self._cuda_execution is not None:
+            return self._cuda_execution.expert_block_group(values, expert, layer)
+        return tuple(self._swiglu(value, f"experts.{expert}.layers.{layer}") for value in values)
+
     def _attention(self, values, positions, prefix):
         length = len(values)
         q = self._linear(values, prefix + ".q.weight").view(length, 16, 64)
@@ -338,6 +352,80 @@ class CIADecoder(nn.Module):
                 values = shared
         return self._linear(self._norm(values, "final_norm.weight"), "embedding.weight"), routes
 
+    def _batched_documents_forward(self, documents, *, observer=None, plan=None):
+        """Layer-major execution over independent documents with expert calls grouped per lease.
+
+        Per document the computation is the one _document_forward performs, chunk for chunk and shape
+        for shape: attention and the shared path run per document, every selector call sees exactly
+        the per-document state it sees serially, and every expert chunk is the same 256-row call. What
+        changes is only that at each sparse layer the chunks that chose the same expert, across all
+        documents, execute under one bundle lease instead of one lease per chunk. Routes are returned
+        in (document, layer, start) order, which is the serial order. Observer calls arrive
+        layer-major rather than document-major.
+        """
+        keys = torch.stack([self._weight(f"router.layers.{layer}.keys") for layer in range(1, 24, 2)])
+        generation = ('cpu-conformance' if self._cuda_execution is None else
+                      f'cuda-candidate-step-{self._cuda_execution.cache.step_id}')
+        states = []
+        for embedded, positions, document_index in documents:
+            request = f"{generation}-document-{document_index}"
+            selections = {start: select_global(
+                embedded, self._weight("router.global_query.weight"), keys,
+                position=start, document_start=0, generation=generation, request=request)
+                for start in range(0, len(embedded), 1024)}
+            if observer is not None:
+                for start in sorted(selections):
+                    observer(observe_global(selections[start], document=document_index))
+            states.append(dict(embedded=embedded, positions=positions, index=document_index,
+                               request=request, selections=selections, values=embedded))
+        routes = []
+        for layer in range(24):
+            prefix = f"layers.{layer}"
+            for state in states:
+                values = state['values']
+                values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"),
+                                                  state['positions'], prefix + ".attention")
+                state['shared'] = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"),
+                                                        prefix + ".shared")
+            if not layer % 2:
+                for state in states:
+                    state['values'] = state['shared']
+                continue
+            chunks = []
+            for state in states:
+                shared = state['shared']
+                for start in range(0, len(state['embedded']), 256):
+                    selection = state['selections'][(start // 1024) * 1024]
+                    local = select_local(shared, self._weight("router.local_query.weight"), keys,
+                        selection, position=start, document_start=0, generation=generation,
+                        request=state['request'], sparse_depth=layer // 2, capture=observer is not None)
+                    if observer is not None:
+                        observer(observe_local(local, document=state['index'], layer=layer))
+                    candidates = tuple(sorted(selection.experts))
+                    chosen = local.expert if plan is None else self._planned_expert(
+                        plan, (state['index'], layer, start), candidates)
+                    chunks.append((state, start, chosen, candidates.index(chosen), local.logits))
+                    routes.append((state['index'], layer, start, selection.experts, chosen))
+            residuals = {}
+            for expert in sorted({chunk[2] for chunk in chunks}):
+                members = [chunk for chunk in chunks if chunk[2] == expert]
+                inputs = tuple(self._norm(chunk[0]['shared'][chunk[1]:chunk[1] + 256],
+                                          prefix + ".expert_norm.weight") for chunk in members)
+                for chunk, residual in zip(members, self.expert_block_group(inputs, expert=expert, layer=layer)):
+                    residuals[(chunk[0]['index'], chunk[1])] = residual
+            gates = {(chunk[0]['index'], chunk[1]): (chunk[3], chunk[4]) for chunk in chunks}
+            for state in states:
+                shared = state['shared']
+                pieces = []
+                for start in range(0, len(state['embedded']), 256):
+                    slot, logits = gates[(state['index'], start)]
+                    pieces.append(shared[start:start + 256]
+                                  + residuals[(state['index'], start)] * unit_task_gate(logits, slot))
+                state['values'] = torch.cat(pieces)
+        outputs = [self._linear(self._norm(state['values'], "final_norm.weight"), "embedding.weight")
+                   for state in states]
+        return outputs, sorted(routes, key=lambda row: row[:3])
+
     @staticmethod
     def _planned_expert(plan, key, candidates):
         """Consume one planned winner, refusing every way the plan could fail to describe this run.
@@ -358,11 +446,13 @@ class CIADecoder(nn.Module):
         return planned_expert
 
     def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False,
-                route_observer=None, route_plan=None):
+                route_observer=None, route_plan=None, batch_documents=False):
         """Numerical execution over explicitly packed, unpadded documents.
 
         Every document is evaluated independently. There is no co-batch pooling,
-        mutable route cache or caller-forced numerical expert. Replaying a prefix
+        mutable route cache or caller-forced numerical expert. With batch_documents=True the same
+        per-document computation runs layer-major with same-expert chunks grouped under one lease
+        per sparse layer (see _batched_documents_forward); the serial path remains the reference. Replaying a prefix
         recomputes its routes; this is not an incremental KV-cache implementation.
         CPU reference holds the full population locally. CUDA execution requires
         a candidate_step context and leases expert bundles during both passes.
@@ -382,13 +472,21 @@ class CIADecoder(nn.Module):
             or any(type(i) is not int or not 0 <= i < len(embedded) for i in document_starts)
             or any(a >= b for a, b in zip(document_starts, document_starts[1:]))):
             raise ValueError("strictly increasing document starts beginning at zero required")
+        if type(batch_documents) is not bool:
+            raise ValueError("batch_documents must be a bool")
         self.parameter_inventory()
-        outputs, routes = [], []
-        for index, (start, end) in enumerate(zip(document_starts, document_starts[1:] + (len(embedded),))):
-            result, document_routes = self._document_forward(
-                embedded[start:end], positions[start:end], index,
+        spans = list(zip(document_starts, document_starts[1:] + (len(embedded),)))
+        if batch_documents:
+            outputs, routes = self._batched_documents_forward(
+                [(embedded[start:end], positions[start:end], index) for index, (start, end) in enumerate(spans)],
                 observer=route_observer, plan=route_plan)
-            outputs.append(result)
-            routes.extend(document_routes)
+        else:
+            outputs, routes = [], []
+            for index, (start, end) in enumerate(spans):
+                result, document_routes = self._document_forward(
+                    embedded[start:end], positions[start:end], index,
+                    observer=route_observer, plan=route_plan)
+                outputs.append(result)
+                routes.extend(document_routes)
         logits = torch.cat(outputs)
         return (logits, tuple(routes)) if return_routes else logits
