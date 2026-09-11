@@ -1006,17 +1006,100 @@ fn validate_disk_write_wall_contract(contract: &DiskWriteWallContract) -> Result
 
 #[cfg(windows)]
 fn windows_file_link_count(path: &Path) -> Result<u32> {
+    use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_SHARE_DELETE, FILE_SHARE_READ,
+        FILE_SHARE_WRITE,
     };
 
-    let file = fs::File::open(path)?;
+    // Query metadata without requesting data access to an exclusively held writer lock.
+    // Sharing this metadata handle does not relax the existing writer handle's share mode.
+    let file = OpenOptions::new()
+        .access_mode(0)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .open(path)?;
     let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut information) } == 0 {
         return Err(std::io::Error::last_os_error().into());
     }
     Ok(information.nNumberOfLinks)
+}
+
+#[cfg(all(test, windows))]
+mod disk_wall_locked_metadata_tests {
+    use super::*;
+
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "ember-disk-metadata-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn disk_wall_counts_bytes_with_exclusive_state_writer_lock() {
+        let scratch = Scratch::new();
+        let database = scratch.0.join("ember-lab.sqlite3");
+        let writer = acquire_state_writer_lock(&database).unwrap();
+        fs::write(scratch.0.join("payload.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let measured =
+            measure_disk_write_tree(&root, &root, Instant::now(), Duration::from_secs(5)).unwrap();
+        assert_eq!(measured, 7);
+        assert!(matches!(
+            acquire_state_writer_lock(&database),
+            Err(EmberLabError::StateWriterBusy { .. })
+        ));
+        drop(writer);
+        let successor = acquire_state_writer_lock(&database).unwrap();
+        drop(successor);
+    }
+
+    #[test]
+    fn disk_wall_metadata_still_refuses_two_link_files() {
+        let scratch = Scratch::new();
+        let original = scratch.0.join("original.bin");
+        fs::write(&original, b"payload").unwrap();
+        fs::hard_link(&original, scratch.0.join("second.bin")).unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let result = measure_disk_write_tree(&root, &root, Instant::now(), Duration::from_secs(5));
+        assert!(
+            matches!(result, Err(EmberLabError::InvalidDispatchManifest { detail })
+            if detail.contains("hard-linked file attribution"))
+        );
+    }
+
+    #[test]
+    fn disk_wall_metadata_retains_duration_limit() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("payload.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let result = measure_disk_write_tree(
+            &root,
+            &root,
+            Instant::now() - Duration::from_secs(1),
+            Duration::from_nanos(1),
+        );
+        assert!(matches!(
+            result,
+            Err(EmberLabError::DiskWallMeasurementDuration { .. })
+        ));
+    }
 }
 
 #[cfg(windows)]
