@@ -53,7 +53,7 @@ import math
 
 import torch
 
-REVISION = "CIA3-R1-N62-numerical-split-v2"
+REVISION = "CIA3-R1-N63-numerical-split-v3"
 
 # --- prospectively fixed bounds (issue #2163 body, 2026-09-09) -----------------------------------
 LOCAL_ROUTES = 60
@@ -68,6 +68,17 @@ SHARED_VECTOR_RELATIVE_L2_MAX = 0.02
 SELECTOR_SCORE_ABSOLUTE_MAX = 2.0 ** -18
 FIXED_PLAN_LOGIT_RTOL = 0.05
 FIXED_PLAN_LOGIT_ATOL = 0.05
+#: N63 (issue #2163, 2026-09-10). The retained elementwise atol/rtol pair above is still
+#: measured and reported, but it no longer gates: the N62 attribution found the fixed-plan logit
+#: difference is the BF16 format's own rounding under two reduction orders (divergence at layer 0
+#: of 1.07 ulp, sub-quadrature accumulation, no site; per-matmul floor 2.146e-3 relative L2,
+#: FP32 3.47e-7, FP64 exact), so an absolute same-backend bound cannot be met by any correct
+#: cross-backend computation. The gate is the whole-logit relative L2 against the CPU
+#: reference. Measured backend floor 0.0161794; planted defects: one weight moved one BF16 ulp
+#: 1.0016x the floor (NOT resolvable at this precision, recorded as such), one planned route not
+#: consumed 7.164x, one layer of routes not consumed 12.437x. The bound sits above the floor and
+#: below every resolvable defect. About 3.09x the floor.
+FIXED_PLAN_LOGIT_RELATIVE_L2_MAX = 0.05
 GRADIENT_RELATIVE_L2_MAX = 0.1
 
 
@@ -291,6 +302,40 @@ def local_route_report(comparisons):
                        "shared_vector_relative_l2_max": SHARED_VECTOR_RELATIVE_L2_MAX,
                        "zero_reference_absolute_l2_max": 0.0},
             "routes": [row.as_row() for row in comparisons]}
+
+
+def compare_fixed_plan_logits(reference, candidate):
+    """The N63 fixed-plan logit comparison: whole-logit relative L2 gates, elementwise is reported.
+
+    `reference` is the CPU fixed-plan logit tensor, `candidate` the CUDA one under the same plan.
+    Returns the measurement row; raises NumericalSplitRefusal when the relative L2 exceeds
+    FIXED_PLAN_LOGIT_RELATIVE_L2_MAX, when the shapes differ, or when either side is nonfinite.
+    The retained atol/rtol count is carried in the row so the N62 field keeps its meaning.
+    """
+    if tuple(reference.shape) != tuple(candidate.shape):
+        raise NumericalSplitRefusal(
+            f"fixed-plan logit shapes differ: {tuple(reference.shape)} vs {tuple(candidate.shape)}")
+    reference = reference.detach().float()
+    candidate = candidate.detach().float()
+    if not bool(torch.isfinite(reference).all()) or not bool(torch.isfinite(candidate).all()):
+        raise NumericalSplitRefusal("fixed-plan logits are nonfinite on at least one backend")
+    denominator = float(reference.norm())
+    if denominator == 0.0:
+        raise NumericalSplitRefusal("fixed-plan reference logits have zero norm; relative L2 undefined")
+    delta = (candidate - reference).abs()
+    allowed = FIXED_PLAN_LOGIT_ATOL + FIXED_PLAN_LOGIT_RTOL * reference.abs()
+    row = {"relative_l2": float((candidate - reference).norm() / denominator),
+           "bound": FIXED_PLAN_LOGIT_RELATIVE_L2_MAX,
+           "max_absolute": float(delta.max()),
+           "elements_exceeding_retained_atol_rtol": int((delta > allowed).sum()),
+           "elements_compared": int(reference.numel())}
+    if not row["relative_l2"] <= FIXED_PLAN_LOGIT_RELATIVE_L2_MAX:
+        raise NumericalSplitRefusal(
+            "fixed-plan logits: relative L2 %.10g exceeds %g (max absolute %.10g; %d of %d elements "
+            "outside the retained atol/rtol)" % (
+                row["relative_l2"], FIXED_PLAN_LOGIT_RELATIVE_L2_MAX, row["max_absolute"],
+                row["elements_exceeding_retained_atol_rtol"], row["elements_compared"]))
+    return row
 
 
 def refuse_if_inadmissible(comparisons):

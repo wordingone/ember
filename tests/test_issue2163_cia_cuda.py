@@ -40,8 +40,10 @@ from ember.model.ember_v0_decoder import CIADecoder
 from ember.model.ember_v0_routing import GlobalObservation, LocalObservation, _local_scores
 from ember.governance.scripts.cia_conformance import fixed_input_values, require_current_dispatch
 from ember.governance.scripts.cia_numerical_split import (
-    FIXED_PLAN_LOGIT_ATOL, FIXED_PLAN_LOGIT_RTOL, GRADIENT_RELATIVE_L2_MAX, LOCAL_ROUTES, REVISION,
-    compare_global_selections, compare_local_routes, cross_evaluate_selector, digest_of,
+    FIXED_PLAN_LOGIT_ATOL, FIXED_PLAN_LOGIT_RELATIVE_L2_MAX, FIXED_PLAN_LOGIT_RTOL,
+    GRADIENT_RELATIVE_L2_MAX, LOCAL_ROUTES, REVISION, NumericalSplitRefusal,
+    compare_fixed_plan_logits, compare_global_selections, compare_local_routes,
+    cross_evaluate_selector, digest_of,
     local_route_report, refuse_if_inadmissible, route_plan)
 
 LIVE = '--live' in sys.argv
@@ -213,20 +215,26 @@ class FullPopulationCUDA(unittest.TestCase):
             self.assertEqual(planned_routes, cpu_routes)
             planned_cpu = planned_logits.detach().cpu().float()
             expected_logits = reference_logits.float()
-            logit_delta = (planned_cpu - expected_logits).abs()
-            logit_max_absolute = float(logit_delta.max())
-            # The same tolerance assert_close applies, evaluated elementwise so the COUNT of
-            # exceeding elements is reported and not only the largest one's magnitude. Twenty-four
-            # elements and three million elements are different findings about the same maximum.
-            allowed = FIXED_PLAN_LOGIT_ATOL + FIXED_PLAN_LOGIT_RTOL * expected_logits.abs()
-            exceeding = int((logit_delta > allowed).sum())
-            compared = int(expected_logits.numel())
-            if exceeding:
-                deferred_failures.append(
-                    'fixed-plan logits: %d of %d elements exceed atol %g + rtol %g; max absolute '
-                    'delta %.10g' % (exceeding, compared, FIXED_PLAN_LOGIT_ATOL,
-                                     FIXED_PLAN_LOGIT_RTOL, logit_max_absolute))
-            del planned_cpu, expected_logits, logit_delta, allowed
+            # N63: the gate is the whole-logit relative L2 (the cross-backend BF16 floor is
+            # attributed and has no site); the retained elementwise atol/rtol count is still
+            # measured and published, because the N62 field keeps its meaning as a report.
+            try:
+                logit_row = compare_fixed_plan_logits(expected_logits, planned_cpu)
+            except NumericalSplitRefusal as refusal:
+                deferred_failures.append(str(refusal))
+                logit_delta = (planned_cpu - expected_logits).abs()
+                allowed = FIXED_PLAN_LOGIT_ATOL + FIXED_PLAN_LOGIT_RTOL * expected_logits.abs()
+                logit_row = {'relative_l2': float((planned_cpu - expected_logits).norm()
+                                                 / (float(expected_logits.norm()) or 1.0)),
+                             'bound': FIXED_PLAN_LOGIT_RELATIVE_L2_MAX,
+                             'max_absolute': float(logit_delta.max()),
+                             'elements_exceeding_retained_atol_rtol': int((logit_delta > allowed).sum()),
+                             'elements_compared': int(expected_logits.numel())}
+                del logit_delta, allowed
+            logit_max_absolute = logit_row['max_absolute']
+            exceeding = logit_row['elements_exceeding_retained_atol_rtol']
+            compared = logit_row['elements_compared']
+            del planned_cpu, expected_logits
             planned_logits[:, :64].float().square().mean().backward()
         gradient_rows = {}
         for name, expected in reference_gradients.items():
@@ -246,6 +254,8 @@ class FullPopulationCUDA(unittest.TestCase):
               'logit_elements_exceeding_tolerance': exceeding,
               'logit_elements_compared': compared,
               'logit_atol': FIXED_PLAN_LOGIT_ATOL, 'logit_rtol': FIXED_PLAN_LOGIT_RTOL,
+              'logit_relative_l2': logit_row['relative_l2'],
+              'logit_relative_l2_bound': FIXED_PLAN_LOGIT_RELATIVE_L2_MAX,
               'gradient_relative_l2': gradient_rows, 'bound': GRADIENT_RELATIVE_L2_MAX,
               'deferred_failures': list(deferred_failures),
               'elapsed_seconds': time.perf_counter() - started}), flush=True)
