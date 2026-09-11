@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 from dataclasses import asdict, replace
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -295,13 +296,26 @@ def load_prediction(path, digest):
     return json.loads(raw), raw
 
 
+EXECUTION_MODES = ('resident-segmented-capture',)
+
+
+def execution_mode(identity):
+    """The optional identity field selecting the resident step's execution regime; absent means the eager resident
+    step. The value set is fixed so an unknown mode refuses before any file read instead of silently running eager."""
+    mode = identity.get('execution_mode')
+    if mode is not None and mode not in EXECUTION_MODES:
+        raise ValueError('execution mode is outside its fixed set')
+    return mode
+
+
 def prepare_execution(prediction):
     identity = prediction.get('identity')
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or set(identity) != keys:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode'}:
         raise ValueError('measurement identity fields differ')
+    execution_mode(identity)
     sequence, documents, _, _ = geometry_counts(identity['geometry'])
     validate_prediction(prediction, expected_identity=identity, positions_per_step=sequence * documents)
     outer = identity['dispatch_resources']
@@ -429,6 +443,7 @@ class RoutingStatisticsBuffers:
                                  'layers': list(self.LAYERS), 'layout': self.layout, 'byteorder': sys.byteorder})
         self.route_host_reads = 0
         self._global_calls, self._local_layers = 0, []
+        self.capturing = False  # True only inside SegmentedStep.capture(): synthetic repeats of one step's reports
 
     def begin_step(self):
         self._global_calls, self._local_layers = 0, []
@@ -453,7 +468,7 @@ class RoutingStatisticsBuffers:
             geometry = payload['geometry']
             if tuple(getattr(geometry, 'lengths', ())) != self.lengths or tuple(getattr(geometry, 'chunks', ())) != self.chunks:
                 raise ValueError('routing geometry differs from the bound statistics buffers')
-            if self._global_calls:
+            if self._global_calls and not self.capturing:
                 raise ValueError('duplicate global routing report within one step')
             self._global_calls += 1
             for name in ('priors', 'ranked', 'candidates'):
@@ -464,7 +479,7 @@ class RoutingStatisticsBuffers:
             layer = payload['layer']
             if type(layer) is not int or layer not in self.LAYERS:
                 raise ValueError('local routing report requires an odd sparse layer in 1..23')
-            if layer in self._local_layers:
+            if layer in self._local_layers and not self.capturing:
                 raise ValueError(f'duplicate local routing report for layer {layer}')
             self._local_layers.append(layer)
             index = layer // 2
@@ -534,13 +549,21 @@ def document_lengths(starts, total):
     return tuple(b - a for a, b in zip(starts, starts[1:] + (total,)))
 
 
-def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False):
+def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
+                 capture=None, record=False):
     """Return one row only after context exit, successful update and synchronization.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
-    inside the step; one device-to-host copy after the final synchronization serves the digest and the
-    statistics). verify_routes additionally materializes the model's own trace and requires it to equal the
-    rows decoded from the buffers (the reference path; never on the measured path).
+    inside the forward/backward; ONE device-to-host copy at the pre-update boundary validates the report set and
+    then serves the digest and the statistics). verify_routes additionally materializes the model's own trace and
+    requires it to equal the rows decoded from the buffers (the reference path; never on the measured path).
+    Both refusals fire before optimizer.step(), so a step whose device reports are incomplete cannot mutate the model.
+
+    capture (a bound SegmentedStep from model.bind_segmented_capture) selects the segmented path: with record=True this
+    step is the eager exemplar the graphs are recorded from (a real update, counted as warm work); afterwards the step
+    runs through the captured segments. Owner grads are zeroed IN PLACE (static-accumulate) so the captured backward
+    keeps its grad storage; the routing buffers are the collector's static state, so the pre-update boundary copy is
+    unchanged.
     """
     import torch
     if device.type == 'cuda':
@@ -562,10 +585,19 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     buffers = routing_buffers(document_lengths(starts, len(pack['token_ids'])), device) if resident else None
     if buffers is not None:
         buffers.begin_step()
-    optimizer.zero_grad(set_to_none=True)
+    if capture is not None:
+        if buffers is None:
+            raise ValueError('segmented capture requires the resident routing buffers')
+        if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
+            raise ValueError('segmented capture is not bound to this model execution')
+        optimizer.zero_grad(set_to_none=False)  # static-accumulate: the captured backward owns the grad storage
+        capture.zero_grad()
+    else:
+        optimizer.zero_grad(set_to_none=True)
     staged = time.perf_counter()
     events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if device.type == 'cuda' else None
-    with model.candidate_step():
+    recording = capture.record() if (capture is not None and record) else contextlib.nullcontext()
+    with model.candidate_step(), recording:
         if events is not None:
             events[0].record()
         if buffers is not None:
@@ -586,6 +618,21 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     exited = time.perf_counter()
     if not math.isfinite(float(loss.detach())):
         raise ValueError('nonfinite step loss')
+    # Pre-update boundary: the ONE device-to-host copy of the routing buffers happens here, so an incomplete or
+    # duplicated report set (a captured segment that skipped the collector) and a trace mismatch refuse BEFORE
+    # optimizer.step() can mutate the model. The copy is step work and stays inside the wall; the digest and the
+    # statistics are decoded from the retained snapshot after timing, without a second copy.
+    snapshot = None
+    routing_boundary_started = time.perf_counter()
+    if buffers is not None:
+        snapshot = buffers.snapshot()
+        if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
+            raise ValueError('device routing buffers differ from the model trace')
+    routing_digest_seconds = time.perf_counter() - routing_boundary_started
+    if capture is not None and record:
+        # The exemplar step's autograd graph must not outlive the record: the harness captures on a side stream and a
+        # live AccumulateGrad node bound to the default stream invalidates the capture (proven in the harness fixture).
+        del routes
     optimizer.step()
     if events is not None:
         events[3].record()
@@ -593,17 +640,12 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
-    digest_started = time.perf_counter()
     if buffers is not None:
-        snapshot = buffers.snapshot()
         routes_sha256, grammar = buffers.digest(snapshot), buffers.GRAMMAR
         routing_statistics, route_host_reads = buffers.statistics(snapshot), buffers.route_host_reads
-        if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
-            raise ValueError('device routing buffers differ from the model trace')
     else:
         routes_sha256, grammar, routing_statistics, route_host_reads = (
             hashlib.sha256(canonical(routes)).hexdigest(), ROUTES_DIGEST_GRAMMARS[0], None, None)
-    routing_digest_seconds = time.perf_counter() - digest_started
     if not math.isfinite(wall) or wall <= 0:
         raise ValueError('complete step wall observation is invalid')
     allocator = ({'allocated_bytes': torch.cuda.memory_allocated(device),
@@ -627,7 +669,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'expert_bundle_fetches': after['miss_count'] - before['miss_count'],
             'expert_evictions': after['eviction_count'] - before['eviction_count'],
             'host_to_device_bytes': after['transfer_bytes'] - before['transfer_bytes'],
-            'cache': {key: after[key] - before[key] for key in before}, 'allocator': allocator, 'claim': CLAIM}
+            'cache': {key: after[key] - before[key] for key in before}, 'allocator': allocator,
+            'captured': bool(capture is not None and capture.captured), 'claim': CLAIM}
 
 
 def load_disk_module():
@@ -738,8 +781,11 @@ def worker(binding_path):
             raise ValueError('prediction differs from owned run or selected GPU')
         config, prepared = prepare_execution(prediction)
         import torch
-        from ember.model.ember_v0_decoder import CIADecoder
+        from ember.model.ember_v0_decoder import CIADecoder, bind_triton_c_compiler
         from ember.model.ember_v0_contract import validate_cia_architecture
+        # The fused elementwise chains compile through inductor/Triton on first CUDA use; bind Triton's C compiler
+        # here, once, before activation, so the binding never happens inside a timed step and its identity is recorded.
+        c_compiler = bind_triton_c_compiler()
         validate_cia_architecture(config)
         if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
             raise ValueError('one explicitly bound CUDA device is required')
@@ -768,12 +814,35 @@ def worker(binding_path):
         supported = {name: parameter.numel() for name, parameter in inventory.items() if parameter.requires_grad}
         _write_new(custody / 'model.json', {'population': POPULATION, 'parameter_count': len(inventory),
             'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
-            'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'claim': CLAIM})
+            'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'c_compiler': c_compiler,
+            'claim': CLAIM})
+        capture = None
+        mode = execution_mode(prediction['identity'])
+        if mode == 'resident-segmented-capture':
+            _, _, warm, _ = geometry_counts(prediction['identity']['geometry'])
+            if warm < 1:
+                raise ValueError('segmented capture needs one warm step as the recorded exemplar')
+            first = prepared['packs'][0]
+            buffers = routing_buffers(document_lengths(tuple(first['document_starts']), len(first['token_ids'])), device)
+            capture = model.bind_segmented_capture(
+                collector=buffers.collector,
+                loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
+                static_state=(buffers.raw,), warmup_steps=2)
         with (custody / 'rows.jsonl').open('xb') as rows:
-            for pack in prepared['packs']:
+            for index, pack in enumerate(prepared['packs']):
                 verify_prepared_inputs(prepared)
                 row = measure_step(model, optimizer, pack, device=device,
-                                   batch_documents=prediction['identity']['batch_documents'], run_id=run_id)
+                                   batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
+                                   capture=capture, record=(capture is not None and index == 0))
+                if capture is not None and index == 0:
+                    optimizer.zero_grad(set_to_none=False)  # full retained membership, eager expert owners included
+                    capture.zero_grad()
+                    buffers.capturing = True
+                    try:
+                        capture.capture(optimizer=optimizer)  # state proof inside; refuses instead of measuring a drifted model
+                    finally:
+                        buffers.capturing = False
+                    _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
                 row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
                            input_sha256=prepared['binding']['input_sha256'])
                 rows.write(canonical(row) + b'\n')
