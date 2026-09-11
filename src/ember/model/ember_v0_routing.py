@@ -262,3 +262,321 @@ def select_local(hidden, query_weight, keys, selection, *, position, document_st
                           candidates=ids, summary=summary.detach().clone(),
                           keys_slice=keys_slice.detach().clone(),
                           prior_slice=prior_slice.detach().clone())
+
+
+# The scalar selectors above remain the reference. This per-forward API batches
+# materialization, retaining their individual score/softmax operation shapes.
+class _RoutingPayload:
+    """One device-to-host byte transfer, including all validation flags.
+
+    Capture bytes travel in this same transfer. Host reconstruction never reads
+    a live device tensor, including when locals() is requested later.
+    """
+
+    def __init__(self, device):
+        self.device = device
+        self._parts = []
+        self._fields = []
+        self._size = 0
+        self._host = None
+
+    def add(self, value):
+        frozen = value.detach().contiguous().clone()
+        raw = frozen.reshape(-1).view(torch.uint8)
+        field = (self._size, raw.numel(), frozen.dtype, tuple(frozen.shape))
+        self._parts.append(raw)
+        self._fields.append(field)
+        self._size += raw.numel()
+        return len(self._fields) - 1
+
+    def drain(self):
+        if self._host is not None:
+            raise ValueError("routing payload already materialized")
+        packed = torch.cat(self._parts) if self._parts else torch.empty(0, dtype=torch.uint8, device=self.device)
+        self._host = packed.to(device="cpu").numpy().tobytes()
+        self._parts.clear()
+
+    def raw(self, index):
+        if self._host is None:
+            raise ValueError("routing payload not materialized")
+        offset, size, _, _ = self._fields[index]
+        return self._host[offset:offset + size]
+
+    def tensor(self, index):
+        _, size, dtype, shape = self._fields[index]
+        if not size:
+            return torch.empty(shape, dtype=dtype)
+        # Each reconstruction owns its bytes; mutation cannot alter the packet.
+        return torch.frombuffer(bytearray(self.raw(index)), dtype=dtype).reshape(shape)
+
+    def digest(self, index):
+        _, _, dtype, shape = self._fields[index]
+        return hashlib.sha256(f"{dtype}:{shape}:".encode() + self.raw(index)).hexdigest()
+
+
+class _RoutingSnapshot:
+    """Private original-byte snapshot; tensor version counters are insufficient."""
+
+    def __init__(self, value):
+        self.value = value
+        self.metadata = (tuple(value.shape), value.dtype, value.device, value.layout)
+        self.bytes = value.detach().contiguous().reshape(-1).view(torch.uint8).clone()
+
+    def unchanged(self):
+        value = self.value
+        if (tuple(value.shape), value.dtype, value.device, value.layout) != self.metadata:
+            raise ValueError("routing tensor metadata changed within the forward")
+        return (value.detach().contiguous().reshape(-1).view(torch.uint8) == self.bytes).all()
+
+
+def _routing_metadata(value, shape, device, name):
+    _tensor(value, shape, name)
+    if value.layout != torch.strided or value.device != device:
+        raise ValueError(f"{name} must share the exact strided routing device")
+
+
+def _routing_flags(payload, flags):
+    return payload.add(torch.stack(flags).to(dtype=torch.uint8))
+
+
+def _routing_require_flags(payload, field):
+    if any(value != 1 for value in payload.raw(field)):
+        raise ValueError("routing finite or exact-byte custody check failed")
+
+
+def _unit_task_gate_rows(logits, slots):
+    # Preserve the scalar helper's softmax kernel shape and arithmetic order.
+    working = logits if logits.dtype == torch.float64 else logits.float()
+    probabilities = torch.stack([row.softmax(0).gather(0, slot.reshape(1))[0]
+                                 for row, slot in zip(working.unbind(0), slots.unbind(0))])
+    return (probabilities - probabilities.detach()) + 1.0
+
+
+def unit_task_gate_batch(logits, slots):
+    """Checked native-slot gates with the same row-wise derivative as the reference."""
+    if (not isinstance(logits, torch.Tensor) or logits.ndim != 2 or logits.shape[1] != 2
+            or not len(logits) or not logits.is_floating_point()
+            or logits.device.type not in {"cpu", "cuda", "meta"}):
+        raise ValueError("nonempty floating local logits shaped [n,2] required")
+    if (not isinstance(slots, torch.Tensor) or tuple(slots.shape) != (len(logits),)
+            or slots.dtype != torch.long or slots.device != logits.device):
+        raise ValueError("one same-device integer slot per logits row required")
+    if logits.device.type != "meta":
+        payload = _RoutingPayload(logits.device)
+        flags = _routing_flags(payload, [torch.isfinite(logits).all(),
+                                         ((slots >= 0) & (slots < 2)).all()])
+        payload.drain()
+        _routing_require_flags(payload, flags)
+    return _unit_task_gate_rows(logits, slots)
+
+
+@dataclass(frozen=True)
+class ChunkSpec:
+    document_offset: int
+    start: int
+    selection: GlobalSelection
+    request: str
+
+
+class LocalBatch:
+    """Native decisions and gates; optional records use selection-time host bytes."""
+
+    def __init__(self, experts, logits, gates, payload, capture_fields):
+        self.experts = tuple(experts)
+        self.logits = logits
+        self.gates = gates
+        self._payload = payload
+        self._capture_fields = capture_fields
+
+    def locals(self):
+        if self._capture_fields is None:
+            raise ValueError("local records require capture=True at selection time")
+        records = []
+        for expert, start, ids, logits, visible, summary, keys, prior in self._capture_fields:
+            records.append(LocalSelection(
+                expert, self._payload.tensor(logits), start, start, self._payload.digest(visible),
+                candidates=ids, summary=self._payload.tensor(summary),
+                keys_slice=self._payload.tensor(keys), prior_slice=self._payload.tensor(prior)))
+        return tuple(records)
+
+
+class StepRouting:
+    """One forward's routing cache; no residency, optimizer or admission authority.
+
+    Register every document epoch before select_local_batch. Chunk order is
+    document offset then segment start and covers every registered request.
+    Four 1024-token documents use four global and twelve local host transfers;
+    this is a routing subtotal, not a measured whole-step transfer count.
+    """
+
+    def __init__(self, global_query, local_query, keys, generation):
+        _tensor(keys, (12, 25, 1024), "expert keys")
+        self._device = keys.device
+        _routing_metadata(keys, (12, 25, 1024), self._device, "expert keys")
+        _routing_metadata(global_query, (1024, 1024), self._device, "global query projection")
+        _routing_metadata(local_query, (1024, 1024), self._device, "local query projection")
+        if not isinstance(generation, str) or not generation:
+            raise ValueError("nonempty generation identity required")
+        self._global_query, self._local_query, self._keys = global_query, local_query, keys
+        self._generation = generation
+        self._snapshots = tuple(_RoutingSnapshot(value) for value in (global_query, local_query, keys))
+        self._keys_digest = None
+        self._documents = {}
+        self._selections = {}
+        self._closed = False
+
+    def close(self):
+        self._closed = True
+        self._snapshots = ()
+        self._selections.clear()
+        self._documents.clear()
+        self._global_query = self._local_query = self._keys = None
+
+    def _check_open(self):
+        if self._closed:
+            raise ValueError("routing forward is closed")
+
+    def _source_flags(self):
+        return [flag for snapshot in self._snapshots
+                for flag in (snapshot.unchanged(), torch.isfinite(snapshot.value).all())]
+
+    @staticmethod
+    def _selection_identity(selection):
+        return (selection.generation, selection.request, selection.document_start,
+                selection.epoch_start, selection.history_digest, selection.keys_digest,
+                selection.prior_digest, selection.experts, selection.selector_version)
+
+    def select_global(self, embedded, *, position, document_start, request):
+        self._check_open()
+        if type(document_start) is not int or document_start != 0:
+            raise ValueError("batched routing document_start must be zero")
+        if not isinstance(embedded, torch.Tensor) or embedded.ndim != 2:
+            raise ValueError("one document shaped [positions,1024] required")
+        _routing_metadata(embedded, (len(embedded), 1024), self._device, "embeddings")
+        if not isinstance(request, str) or not request:
+            raise ValueError("nonempty request identity required")
+        lo, hi = history_window(position=position, document_start=document_start, period=1024)
+        if position >= len(embedded) or hi > len(embedded):
+            raise ValueError("global position must belong to the bound document")
+        document = (len(embedded), document_start)
+        if request in self._documents and self._documents[request] != document:
+            raise ValueError("request document length or start changed")
+        if (request, hi) in self._selections:
+            raise ValueError("request epoch already selected in this forward")
+        flags = self._source_flags()
+        history = embedded[lo:hi].detach()
+        flags.append(torch.isfinite(history).all())
+        summary = history.float().mean(0) if hi > lo else torch.zeros(1024, device=self._device)
+        prior = _global_scores(summary, self._global_query, self._keys)
+        flags.append(torch.isfinite(prior).all())
+        ranked = torch.argsort(prior, descending=True, stable=True)[:2]
+        payload = _RoutingPayload(self._device)
+        check_field = _routing_flags(payload, flags)
+        ranked_field = payload.add(ranked)
+        history_field = payload.add(history)
+        prior_field = payload.add(prior)
+        keys_field = payload.add(self._keys) if self._keys_digest is None else None
+        # Snapshot before releasing the public tensor, independently of its version counter.
+        prior_snapshot = _RoutingSnapshot(prior)
+        payload.drain()
+        _routing_require_flags(payload, check_field)
+        experts = tuple(payload.tensor(ranked_field).tolist())
+        keys_digest = payload.digest(keys_field) if keys_field is not None else self._keys_digest
+        selection = GlobalSelection(
+            self._generation, request, document_start, hi, payload.digest(history_field),
+            keys_digest, payload.digest(prior_field), experts, prior,
+            CUDA_SELECTOR_VERSION if self._device.type == "cuda" else SELECTOR_VERSION)
+        self._keys_digest = keys_digest
+        self._documents[request] = document
+        self._selections[(request, hi)] = (selection, prior_snapshot, self._selection_identity(selection))
+        return selection
+
+    def _bound_chunks(self, hidden, chunks, sparse_depth, capture):
+        self._check_open()
+        if type(sparse_depth) is not int or not 0 <= sparse_depth < 12:
+            raise ValueError("sparse_depth must be an integer in [0,12)")
+        if type(capture) is not bool:
+            raise ValueError("capture must be a bool")
+        if not isinstance(hidden, torch.Tensor) or hidden.ndim != 2:
+            raise ValueError("concatenated hidden state shaped [positions,1024] required")
+        _routing_metadata(hidden, (len(hidden), 1024), self._device, "hidden state")
+        if not isinstance(chunks, (tuple, list)) or not chunks or not self._documents:
+            raise ValueError("nonempty complete chunk sequence required")
+        offsets = {}
+        for chunk in chunks:
+            if (type(chunk) is not ChunkSpec or type(chunk.document_offset) is not int
+                    or chunk.document_offset < 0 or type(chunk.start) is not int
+                    or not isinstance(chunk.request, str) or chunk.request not in self._documents):
+                raise ValueError("chunk has an unbound document or invalid integer geometry")
+            if chunk.request in offsets and offsets[chunk.request] != chunk.document_offset:
+                raise ValueError("one offset required per document")
+            offsets[chunk.request] = chunk.document_offset
+        if offsets.keys() != self._documents.keys():
+            raise ValueError("batch must contain every registered document")
+        expected, end = [], 0
+        for request, offset in sorted(offsets.items(), key=lambda item: item[1]):
+            length, document_start = self._documents[request]
+            if offset != end:
+                raise ValueError("document offsets must exactly partition hidden state")
+            expected.extend((offset, start, request) for start in range(document_start, length, 256))
+            end += length
+        if end != len(hidden) or [(c.document_offset, c.start, c.request) for c in chunks] != expected:
+            raise ValueError("complete ordered nonoverlapping segment partition required")
+        owned = []
+        for chunk in chunks:
+            _, document_start = self._documents[chunk.request]
+            _, epoch = history_window(position=chunk.start, document_start=document_start, period=1024)
+            binding = self._selections.get((chunk.request, epoch))
+            if binding is None or binding[0] is not chunk.selection:
+                raise ValueError("global selection is not owned by this request epoch and forward")
+            selection, snapshot, identity = binding
+            if (type(selection) is not GlobalSelection or selection.log_prior is not snapshot.value
+                    or self._selection_identity(selection) != identity):
+                raise ValueError("global selection identity changed after selection")
+            _routing_metadata(selection.log_prior, (25,), self._device, "global log prior")
+            owned.append(binding)
+        return owned
+
+    def select_local_batch(self, hidden, chunks, *, sparse_depth, capture=False):
+        owned = self._bound_chunks(hidden, chunks, sparse_depth, capture)
+        flags = self._source_flags()
+        # Each prior is checked once per layer, even when several chunks use it.
+        seen = set()
+        for selection, snapshot, _ in owned:
+            if id(selection) not in seen:
+                flags.extend((snapshot.unchanged(), torch.isfinite(selection.log_prior).all()))
+                seen.add(id(selection))
+        logits_rows, candidates, captures = [], [], []
+        payload = _RoutingPayload(self._device)
+        for chunk in chunks:
+            _, document_start = self._documents[chunk.request]
+            visible = (hidden[chunk.document_offset + chunk.start - 1:
+                              chunk.document_offset + chunk.start]
+                       if chunk.start > document_start else hidden[:0])
+            flags.append(torch.isfinite(visible).all())
+            summary = visible[0].float() if len(visible) else torch.zeros(1024, device=self._device)
+            ids = tuple(sorted(chunk.selection.experts))
+            keys_slice = self._keys[sparse_depth, list(ids)]
+            prior_slice = chunk.selection.log_prior[list(ids)]
+            # The individual score reduction shape/order is exactly the reference.
+            logits = _local_scores(summary, self._local_query, keys_slice, prior_slice)
+            flags.append(torch.isfinite(logits).all())
+            logits_rows.append(logits)
+            candidates.append(ids)
+            if capture:
+                captures.append((chunk.start, ids, payload.add(logits), payload.add(visible),
+                                 payload.add(summary), payload.add(keys_slice), payload.add(prior_slice)))
+        logits = torch.stack(logits_rows)
+        slots = torch.argmax(logits, dim=1)
+        # Private logits/native slots produce gates before public mutable logits are released.
+        gates = _unit_task_gate_rows(logits, slots)
+        flags.append(torch.isfinite(gates).all())
+        check_field = _routing_flags(payload, flags)
+        slot_field = payload.add(slots)
+        payload.drain()
+        _routing_require_flags(payload, check_field)
+        winners = payload.tensor(slot_field).tolist()
+        experts = tuple(ids[slot] for ids, slot in zip(candidates, winners))
+        records = (tuple((expert,) + fields for expert, fields in zip(experts, captures))
+                   if capture else None)
+        return LocalBatch(experts, logits, gates, payload if capture else None, records)
