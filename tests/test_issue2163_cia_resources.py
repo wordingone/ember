@@ -15,6 +15,25 @@ from ember.governance.scripts.owned_process import OwnedProcessRunner
 
 
 class ResourceTests(unittest.TestCase):
+    def test_measurement_resource_namespace_is_distinct_and_numerical_defaults_remain(self):
+        run_id = 'a' * 32
+        self.assertEqual(resources.job_name(run_id), 'Local\\EmberCIAConformance-' + run_id)
+        self.assertEqual(resources.job_name(run_id, namespace='EmberCIAMeasurement'),
+                         'Local\\EmberCIAMeasurement-' + run_id)
+        with self.assertRaises(ValueError):
+            resources.job_name(run_id, namespace='other\\job')
+        self.assertEqual(resources.ALLOCATOR_BYTES, 16 * 1024 ** 3)
+
+    def test_selected_device_ceiling_is_explicit_without_changing_default(self):
+        identity = 'GPU-ab12'
+        sample = 'GPU-ab12, 24564, 19456'
+        self.assertEqual(resources.parse_device_sample(sample, identity)['used_bytes'], 19 * 1024 ** 3)
+        with self.assertRaises(ValueError):
+            resources.parse_device_sample(sample, identity, total_gpu_bytes=18 * 1024 ** 3)
+        for ceiling in [0, True, -1, 25 * 1024 ** 3]:
+            with self.subTest(ceiling=ceiling), self.assertRaises(ValueError):
+                resources.parse_device_sample(sample, identity, total_gpu_bytes=ceiling)
+
     def test_total_device_limits_and_identity(self):
         identity = 'GPU-ab12'
         good = resources.parse_device_sample('GPU-ab12, 24564, 900\n', identity)

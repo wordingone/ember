@@ -76,6 +76,10 @@ def test_windows_runner_forbids_a_console_window(
     assert flags & 0x00000004  # CREATE_SUSPENDED
     assert flags & subprocess.CREATE_NEW_PROCESS_GROUP
     assert flags & subprocess.CREATE_NO_WINDOW
+    assert calls[0]['shell'] is False
+    startup = calls[0]['startupinfo']
+    assert startup.dwFlags & subprocess.STARTF_USESHOWWINDOW
+    assert startup.wShowWindow == subprocess.SW_HIDE
 
 
 def _pid_alive(pid: int) -> bool:

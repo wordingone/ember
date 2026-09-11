@@ -60,6 +60,16 @@ def _require_lock_path():
     return LOCK_PATH
 
 
+def _hidden_process_kwargs():
+    flags = {'shell': False}
+    if os.name == 'nt':
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
+        flags.update(creationflags=subprocess.CREATE_NO_WINDOW, startupinfo=startup)
+    return flags
+
+
 def _is_pid_alive(pid, side):
     """Check whether the lock-holder PID is still alive."""
     if side == "windows":
@@ -67,7 +77,10 @@ def _is_pid_alive(pid, side):
             result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
                 capture_output=True, text=True, timeout=5,
+                **_hidden_process_kwargs(),
             )
+            if result.returncode != 0 or not result.stdout.strip():
+                return True  # an unavailable process query does not prove the holder exited
             return str(pid) in result.stdout
         except Exception:
             return True   # conservative on error
@@ -76,6 +89,7 @@ def _is_pid_alive(pid, side):
             result = subprocess.run(
                 ["wsl", "--", "kill", "-0", str(pid)],
                 capture_output=True, timeout=5,
+                **_hidden_process_kwargs(),
             )
             return result.returncode == 0
         except Exception:
