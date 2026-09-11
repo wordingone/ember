@@ -697,8 +697,10 @@ class CIADecoder(nn.Module):
                                            sparse_depth=sparse_depth, capture=capture)
         return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
 
-    def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2):
+    def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2, capture_experts=False):
         """Bind the actual dense segments and owner Parameters before an exemplar training step."""
+        if type(capture_experts) is not bool:
+            raise ValueError('capture_experts must be an explicit boolean')
         from functools import partial
         from .ember_v0_capture import SegmentSpec, SegmentedStep
         execution = self._cuda_execution
@@ -711,7 +713,8 @@ class CIADecoder(nn.Module):
         geometry = _resident_geometry(lengths)
         repeats = execution._geometry_repeats
         state, seen = [], set()
-        for value in (execution.input_valid, repeats, execution._plan_candidates,
+        expert_state = (execution.routing_valid, execution.id_tensor, execution.slot_tensor) if capture_experts else ()
+        for value in (execution.input_valid, *expert_state, repeats, execution._plan_candidates,
                       execution._plan_winners, *static_state):
             if value is None:
                 continue
@@ -724,27 +727,31 @@ class CIADecoder(nn.Module):
         specs = []
         for index in range(13):
             prefixes = (f'layers.{2*index}.', f'layers.{2*index+1}.')
+            expert_names = ({f'experts.{expert}.layers.{2*index+1}.{projection}.weight'
+                             for expert in self._resident_experts for projection in ('up', 'gate', 'down')}
+                            if capture_experts and index < 12 else set())
             params, owners = [], set()
             for stored_name, parameter in self.weights.items():
                 name = stored_name.replace('__', '.')
                 selected = ((name in ('final_norm.weight', 'embedding.weight')) if index == 12 else
-                    (name.startswith(prefixes) or name == 'router.local_query.weight' or
+                    (name.startswith(prefixes) or name in expert_names or name == 'router.local_query.weight' or
                      (index == 0 and (name == 'router.global_query.weight' or name.startswith('router.layers.')))))
                 if selected and parameter.requires_grad and id(parameter) not in owners:
                     owners.add(id(parameter))
                     params.append(parameter)
             fn = partial(self._resident_segment, index, lengths=lengths, geometry=geometry,
-                         repeats=repeats, collector=collector)
+                         repeats=repeats, collector=collector, capture_experts=capture_experts)
             specs.append(SegmentSpec(index, fn, tuple(params), tuple(state), f'dense-{index}'))
         step = SegmentedStep(specs, device=execution.device, warmup_steps=warmup_steps).bind(execution, loss_fn=loss_fn)
         step._cia_lengths, step._cia_collector, step._cia_invalidated = lengths, collector, False
+        step._cia_capture_experts = capture_experts
         previous = getattr(execution, 'segmented', None)
         if previous is not None:
             previous.invalidate()
         execution.segmented = step
         return step
 
-    def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None):
+    def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None, capture_experts=False):
         """One dense forward segment; every differentiable cross-segment value is carried explicitly."""
         from .ember_v0_residency import resident_global_routes, resident_local_routes
         if type(index) is not int or not 0 <= index <= 12:
@@ -797,6 +804,8 @@ class CIADecoder(nn.Module):
             if collector is not None:
                 collector('local', dict(layer=layer, winners=winners.detach().clone(), logits=logits.detach().clone(),
                                        gates=gates.detach().clone(), valid=valid.detach().clone(), native_winners=native_winners.detach().clone()))
+        if capture_experts:
+            normed = execution.grouped_block(normed, row_experts, 2 * index + 1, backend='dynamic')
         return shared, normed, row_experts, row_gates, positions, keys, priors, ranked, candidates, history
 
     def _resident_documents_forward(self, documents, *, collector=None, plan=None):
@@ -827,7 +836,7 @@ class CIADecoder(nn.Module):
                                                repeats=repeats, collector=collector)
             else:
                 carry = step.run(index, *carry)
-            if index < 12:
+            if index < 12 and not (step is not None and step._cia_capture_experts):
                 shared, normed, row_experts, *tail = carry
                 residual = execution.grouped_block(normed, row_experts, 2 * index + 1)
                 carry = (shared, residual, row_experts, *tail)
