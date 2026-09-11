@@ -9,6 +9,9 @@ and learning qualification require their own execution evidence.
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 import dataclasses
+import hashlib
+import os
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -74,6 +77,37 @@ def _rms_norm(values, weight):
 
 
 _FUSED = {}
+_C_COMPILER = None
+
+
+def bind_triton_c_compiler():
+    """Bind the C compiler Triton uses to build inductor's launcher stubs: once per process, before the first compile.
+
+    Triton's own discovery looks for its bundled TinyCC under sysconfig's platlib and otherwise searches PATH for
+    cl/gcc/clang. A user-site Triton inside the scrubbed governed environment therefore finds no compiler at all
+    (measurement 2, 2026-09-11: "Failed to find C compiler"), while an interactive shell may pick up an unrelated
+    compiler from PATH. This resolves the INSTALLED Triton package's own bundled tcc.exe (module-relative), records
+    its sha256, and exports it as CC unless CC is already set; an explicit CC must itself name an existing file.
+    Refusal, never fallback: no PATH search, no substitute toolchain. Cached after the first call, so per-call use
+    from fused_elementwise costs nothing on the step.
+    """
+    global _C_COMPILER
+    if _C_COMPILER is None:
+        explicit = os.environ.get("CC")
+        if explicit:
+            path = Path(explicit)
+            if not path.is_file():
+                raise RuntimeError("CC names a compiler that does not exist: " + explicit)
+            source = "explicit CC"
+        else:
+            import triton
+            path = Path(triton.__file__).resolve().parent / "runtime" / "tcc" / "tcc.exe"
+            if not path.is_file():
+                raise RuntimeError("installed Triton carries no bundled TinyCC at " + str(path) + "; set CC explicitly")
+            os.environ["CC"] = str(path)
+            source = "triton bundled tcc"
+        _C_COMPILER = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "source": source}
+    return dict(_C_COMPILER)
 
 
 def fused_elementwise(name):
@@ -87,6 +121,7 @@ def fused_elementwise(name):
     tests/test_issue1945_cia_fused_elementwise.py. Meta and CPU execution never reach this function.
     """
     if name not in _FUSED:
+        bind_triton_c_compiler()  # before the first compile; cached, so later chains pay nothing
         _FUSED[name] = torch.compile({"norm": _rms_norm, "rotate": rotate_three_axis}[name])
     return _FUSED[name]
 
