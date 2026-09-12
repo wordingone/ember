@@ -1599,7 +1599,7 @@ def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expect
     return parent, facts
 
 
-def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts):
+def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None):
     """Derive one mechanical transition from reopened parent state and child bytes."""
     for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','optimizer_identity','placement'):
         if child.get(name) != parent.get(name): raise ValueError('CIA parent and child '+name+' differ')
@@ -1613,22 +1613,39 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
         raise ValueError('CIA descendant genesis differs from the reopened parent')
     if set(child_facts['parameters']) != set(parent_facts['parameters']):
         raise ValueError('CIA descendant parameter inventory differs from parent')
-    updated, changed = [], []
+    recorded_counts = owner_update_counts
+    if recorded_counts is None:
+        recorded_counts = child.get('lineage', {}).get('owner_update_counts')
+    updated, changed, owner_update_counts = [], [], {}
     for name in sorted(parent_facts['parameters']):
         before = parent_facts['optimizer'].get(name,{})
         after = child_facts['optimizer'].get(name,{})
         before_step, after_step = before.get('step',0), after.get('step',0)
-        if after_step == before_step + step_delta:
+        if (type(before_step) not in (int, float) or type(after_step) not in (int, float)
+                or not 0 <= before_step <= 2**24 or not 0 <= after_step <= 2**24
+                or before_step != int(before_step) or after_step != int(after_step)):
+            raise ValueError('CIA descendant requires exact bounded optimizer clocks')
+        owner_delta = int(after_step - before_step)
+        if owner_delta < 0 or owner_delta > step_delta:
+            raise ValueError('CIA descendant owner clock exceeds the observed step interval')
+        if owner_delta > 0:
             if not child['placement'][name]['requires_grad']:
                 raise ValueError('CIA frozen parameter has optimizer update support')
             updated.append(name)
+            owner_update_counts[name] = owner_delta
         elif after != before:
             raise ValueError('CIA descendant optimizer clock or inactive state differs from parent')
         if child_facts['parameters'][name] != parent_facts['parameters'][name]:
             if name not in updated: raise ValueError('CIA inactive parameter bytes differ from parent')
             changed.append(name)
     if not updated or not changed: raise ValueError('CIA descendant requires actual optimizer and parameter update support')
-    return {'schema_version':'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
+    sparse = any(count != step_delta for count in owner_update_counts.values())
+    if sparse or recorded_counts is not None:
+        if (type(recorded_counts) is not dict or any(type(value) is not int for value in recorded_counts.values())
+                or recorded_counts != owner_update_counts):
+            raise ValueError('recorded per-owner update counts differ from reopened optimizer clocks')
+    return {**({'owner_update_counts': owner_update_counts} if sparse else {}),
+        'schema_version':'ember-cia-first-descendant-v2' if sparse else 'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
         'parent_manifest_sha256':parent['checkpoint_manifest_sha256'],
         'parent_counter_receipt_sha256':parent['_parent_counter_receipt_sha256'],
         'step_delta':step_delta,'token_delta':token_delta,'updated_parameters':updated,
