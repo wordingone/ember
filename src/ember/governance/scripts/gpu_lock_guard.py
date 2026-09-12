@@ -52,7 +52,7 @@ def _require_lock_path():
     caller that rebinds gpu_lock_guard.LOCK_PATH still wins."""
     if not LOCK_PATH:
         print(
-            f"[gpu_lock_guard] REFUSED — {LOCK_PATH_ENV} is unset, so CUDA access "
+            f"[gpu_lock_guard] REFUSED - {LOCK_PATH_ENV} is unset, so CUDA access "
             "cannot be serialized against the WSL2 train daemon",
             file=sys.stderr,
         )
@@ -150,7 +150,7 @@ def check_or_die(script=None):
         if not lock:
             # corrupt / empty dict — fail-closed
             print(
-                f"[gpu_lock_guard] HELD (corrupt lock at {path}) — refusing CUDA init",
+                f"[gpu_lock_guard] HELD (corrupt lock at {path}) - refusing CUDA init",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -161,16 +161,16 @@ def check_or_die(script=None):
 
         if pid and _is_pid_alive(pid, side) and active_jobs > 0:
             print(
-                f"[gpu_lock_guard] HELD — {side} PID {pid}, active_jobs={active_jobs}, "
+                f"[gpu_lock_guard] HELD - {side} PID {pid}, active_jobs={active_jobs}, "
                 f"ts_last={lock.get('ts_last', '?')}",
                 file=sys.stderr,
             )
-            print("[gpu_lock_guard] REFUSED — fix-forward-on-headroom-violation ban applies.",
+            print("[gpu_lock_guard] REFUSED - fix-forward-on-headroom-violation ban applies.",
                   file=sys.stderr)
             sys.exit(1)
 
         # stale lock (holder PID dead or active_jobs=0)
-        print(f"[gpu_lock_guard] stale lock (PID {pid} dead or jobs=0) — clearing",
+        print(f"[gpu_lock_guard] stale lock (PID {pid} dead or jobs=0) - clearing",
               file=sys.stderr)
         try:
             os.remove(path)
