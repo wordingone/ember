@@ -424,17 +424,6 @@ def execution_mode(identity):
     return mode
 
 
-def local_routing_mode(identity):
-    """Bind an explicit capture route without changing the existing batched default."""
-    mode = execution_mode(identity)
-    selected = identity.get('local_routing_mode', 'per-chunk' if mode is None else 'batched')
-    if type(selected) is not str or selected not in ('batched', 'per-chunk'):
-        raise ValueError('local routing mode is outside its fixed set')
-    if mode is None and selected != 'per-chunk':
-        raise ValueError('eager execution uses per-chunk local routing')
-    return selected
-
-
 def required_sources(identity):
     """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
     additional = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',) if trajectory_mode(identity) else ()
@@ -576,11 +565,10 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
-    local_routing_mode(identity)
     if ('production_mixture' in identity) != hour:
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
@@ -1310,7 +1298,6 @@ def worker(binding_path):
             # expert owners in the segment surface); the published G1 default takes no such argument.
             dynamic = {'capture_experts': True} if mode == 'resident-dynamic-capture' else {}
             capture = model.bind_segmented_capture(
-                local_routing_mode=local_routing_mode(identity),
                 collector=buffers.collector,
                 loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
                 static_state=(buffers.raw,), warmup_steps=2, **dynamic)

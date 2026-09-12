@@ -558,7 +558,6 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
                  shard_ledger_sha256=identity['data']['shard_ledger_sha256'], source_commit=identity['source_commit'],
                  source_sha256=identity['source_sha256'], optimizer=definition, snapshot_plan=plan)
     start['comparison_id'] = identity['trajectory']['comparison_id']
-    start['local_routing_mode'] = runner.local_routing_mode(identity)
     start['frozen_population_sha256'] = frozen_sha
     if permutation is not None:
         start['document_permutation'] = [list(order) for order in permutation]
@@ -574,7 +573,6 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         buffers = runner.routing_buffers(lengths, device)
         dynamic = {'capture_experts': True} if mode == 'resident-dynamic-capture' else {}
         capture = model.bind_segmented_capture(collector=buffers.collector,
-            local_routing_mode=runner.local_routing_mode(identity),
             loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
             static_state=(buffers.raw,), warmup_steps=2, **dynamic)
     arm_rows, snapshots, held = [], {}, {}
