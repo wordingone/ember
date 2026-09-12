@@ -8,6 +8,7 @@ import argparse
 import ctypes
 from dataclasses import asdict, replace
 import contextlib
+import gc
 import hashlib
 import importlib.util
 import json
@@ -1059,6 +1060,82 @@ def _write_new(path, value):
         os.fsync(stream.fileno())
 
 
+class GcPauseMeter:
+    """Attribute host pauses to CPython cyclic-GC collections: a gc.callbacks hook records every collection's
+    generation, duration and start instant; drain() hands back the collections since the previous drain, so the
+    loop can file them against the step they interrupted (custody/gc-events.jsonl). Diagnostic only: it changes no
+    collection policy and touches no row field.
+
+    Receipt behind it (governed hour 256270a2, 2026-09-12): 5.1% of measured rows carried a +139 ms host pause inside
+    the forward wall at strictly step-periodic gaps with every CUDA phase unchanged; the 1,024-update run 9fd531b6
+    carried the same pauses at gaps of 29-30 steps."""
+
+    def __init__(self):
+        self._open = None
+        self.events = []
+        self.total = 0
+
+    def __call__(self, phase, info):
+        now = time.perf_counter()
+        if phase == 'start':
+            self._open = (info.get('generation'), now)
+        elif phase == 'stop' and self._open is not None:
+            generation, began = self._open
+            self._open = None
+            self.total += 1
+            self.events.append({'generation': generation, 'seconds': now - began, 'collected': info.get('collected'),
+                                'uncollectable': info.get('uncollectable'), 'at': began})
+
+    def install(self):
+        if self not in gc.callbacks:
+            gc.callbacks.append(self)
+        return self
+
+    def remove(self):
+        if self in gc.callbacks:
+            gc.callbacks.remove(self)
+
+    # Ownership is scoped: entering installs, leaving (normally or by exception) removes exactly this callback.
+    def __enter__(self):
+        return self.install()
+
+    def __exit__(self, *exc):
+        self.remove()
+        return False
+
+    def drain(self):
+        events, self.events = self.events, []
+        return events
+
+    def bind(self, **identity):
+        """run_id / prediction_sha256 stamped on every sidecar row so the file is bound to its run, not a neighbour."""
+        self.identity = dict(identity)
+        return self
+
+    def file(self, index, phase, *, call_started, call_finished):
+        """One sidecar row per governed step: the step call's own start/end instants, the collections that BEGAN
+        inside that window (the only ones admissible as pauses of this step), and every other collection since the
+        previous row (setup, capture, the explicit collect+freeze, between-step bookkeeping) filed as outside-step.
+        Attribution is a question the rows answer by overlap; nothing here presumes a collection caused a pause."""
+        inside, outside = [], []
+        for event in self.drain():
+            (inside if call_started <= event['at'] <= call_finished else outside).append(event)
+        return dict(getattr(self, 'identity', {}), index=index, phase=phase, call_started=call_started,
+                    call_finished=call_finished, in_step=inside, outside_step=outside)
+
+
+def freeze_resident_object_graph(**identity):
+    """Move every object alive now -- the resident model, optimizer state, capture graphs, routing buffers -- into
+    CPython's permanent generation after one full collection, so every later generation-2 collection traverses only
+    the objects allocated since. Host-side only: no tensor, route, optimizer or RNG state is read or written, and the
+    collector stays enabled. Called exactly once, immediately before the first measured step (after the last declared
+    warm update, whatever warm_steps in 0..2 declares), outside every timed interval."""
+    collected = gc.collect()
+    gc.freeze()
+    return dict(identity, schema='gc-freeze-v1', collected=collected, frozen=gc.get_freeze_count(),
+                threshold=list(gc.get_threshold()), enabled=gc.isenabled())
+
+
 def verify_worker(binding, binding_path):
     from ember.governance.scripts import cia_conformance_resources as resources
     launch = binding['launch']
@@ -1226,17 +1303,27 @@ def worker(binding_path):
                 static_state=(buffers.raw,), warmup_steps=2, **dynamic)
         counts = geometry_counts(prediction['identity']['geometry'], measurement=True) if measurement else None
         measured_rates = []
-        with (custody / 'rows.jsonl').open('xb') as rows:
+        frozen = False
+        gc_identity = dict(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'])
+        with GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
+                (custody / 'gc-events.jsonl').open('xb') as gc_rows:
             for index, pack in enumerate(measurement_packs(prepared) if measurement else prepared['packs']):
                 if measurement:
                     verify_measurement_pack(pack, index, sequence=counts[0], documents=counts[1], warm=counts[2],
                                             measured=counts[3])
                 else:
                     verify_prepared_inputs(prepared)
+                if pack['phase'] == 'measured' and not frozen:
+                    # Warm-to-measured transition: after the last declared warm update (none when warm_steps is 0),
+                    # before the first measured step's clock starts; eager and captured paths alike.
+                    _write_new(custody / 'gc-freeze.json', freeze_resident_object_graph(**gc_identity))
+                    frozen = True
+                call_started = time.perf_counter()
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
                                    expert_owners=expert_owners)
+                call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
                 row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
@@ -1249,6 +1336,11 @@ def worker(binding_path):
                 rows.write(canonical(row) + b'\n')
                 rows.flush()
                 os.fsync(rows.fileno())
+                # Collections since the previous row, classified in-step / outside-step by their start instant against
+                # this step call's window; filed beside (never inside) the row.
+                gc_rows.write(canonical(gc_meter.file(index, pack['phase'], call_started=call_started,
+                                                      call_finished=call_finished)) + b'\n')
+                gc_rows.flush()
                 applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
                     optimizer.zero_grad(set_to_none=False)  # full retained membership, eager expert owners included
@@ -1259,10 +1351,16 @@ def worker(binding_path):
                     finally:
                         buffers.capturing = False
                     _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
+            # Collections after the last step (teardown side) are outside every step by construction.
+            closing_instant = time.perf_counter()
+            gc_rows.write(canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
+                                                  call_finished=closing_instant)) + b'\n')
         if measurement:
             _write_new(custody / 'measurement-summary.json', dict(measurement_summary(measured_rates),
                 measurement=prediction['identity']['measurement'], execution_mode=mode, optimizer=dict(definition),
-                input_sha256=prepared['binding']['input_sha256'], applied_positions=applied_positions, claim=CLAIM))
+                input_sha256=prepared['binding']['input_sha256'], applied_positions=applied_positions,
+                gc_events_sha256=file_sha256(custody / 'gc-events.jsonl'),
+                gc_freeze_sha256=file_sha256(custody / 'gc-freeze.json') if frozen else None, claim=CLAIM))
         _write_new(custody / 'worker-terminal.json', {'status': 'completed', 'applied_positions': applied_positions,
                                                     'claim': CLAIM})
         return 0
