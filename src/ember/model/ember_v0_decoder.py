@@ -697,10 +697,13 @@ class CIADecoder(nn.Module):
                                            sparse_depth=sparse_depth, capture=capture)
         return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
 
-    def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2, capture_experts=False):
+    def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2, capture_experts=False,
+                               local_routing_mode='batched'):
         """Bind the actual dense segments and owner Parameters before an exemplar training step."""
         if type(capture_experts) is not bool:
             raise ValueError('capture_experts must be an explicit boolean')
+        if type(local_routing_mode) is not str or local_routing_mode not in ('batched', 'per-chunk'):
+            raise ValueError('capture binding requires a supported local routing mode')
         from functools import partial
         from .ember_v0_capture import SegmentSpec, SegmentedStep
         from .ember_v0_residency import route_index
@@ -714,11 +717,12 @@ class CIADecoder(nn.Module):
         geometry = _resident_geometry(lengths)
         repeats = execution._geometry_repeats
         # #1945: the local router's geometry index tensors are bound here, outside capture, and reused per segment.
-        local_index = route_index(geometry, execution.device)
+        local_index = route_index(geometry, execution.device) if local_routing_mode == 'batched' else None
+        index_state = (local_index.rows, local_index.started, local_index.epochs, local_index.zero) if local_index is not None else ()
         state, seen = [], set()
         expert_state = (execution.routing_valid, execution.id_tensor, execution.slot_tensor) if capture_experts else ()
-        for value in (execution.input_valid, *expert_state, repeats, local_index.rows, local_index.started,
-                      local_index.epochs, local_index.zero, execution._plan_candidates, execution._plan_winners,
+        for value in (execution.input_valid, *expert_state, repeats, *index_state,
+                      execution._plan_candidates, execution._plan_winners,
                       *static_state):
             if value is None:
                 continue
@@ -745,7 +749,7 @@ class CIADecoder(nn.Module):
                     params.append(parameter)
             fn = partial(self._resident_segment, index, lengths=lengths, geometry=geometry,
                          repeats=repeats, collector=collector, capture_experts=capture_experts,
-                         local_index=local_index)
+                         local_index=local_index, local_routing_mode=local_routing_mode)
             specs.append(SegmentSpec(index, fn, tuple(params), tuple(state), f'dense-{index}'))
         step = SegmentedStep(specs, device=execution.device, warmup_steps=warmup_steps).bind(execution, loss_fn=loss_fn)
         step._cia_lengths, step._cia_collector, step._cia_invalidated = lengths, collector, False
@@ -757,7 +761,7 @@ class CIADecoder(nn.Module):
         return step
 
     def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None, capture_experts=False,
-                          local_index=None):
+                          local_index=None, local_routing_mode='batched'):
         """One dense forward segment; every differentiable cross-segment value is carried explicitly."""
         from .ember_v0_residency import resident_global_routes, resident_local_routes
         if type(index) is not int or not 0 <= index <= 12:
@@ -794,7 +798,7 @@ class CIADecoder(nn.Module):
                 continue
             winners, logits, gates, valid = resident_local_routes(
                 shared, self._weight('router.local_query.weight'), keys, layer // 2,
-                geometry, priors, candidates, index=local_index)
+                geometry, priors, candidates, index=local_index, local_routing_mode=local_routing_mode)
             execution.require_valid(valid, 'routing')
             native_winners = winners
             winners, gates = execution.planned_routes(layer//2, geometry, candidates, winners, logits, gates)
