@@ -3969,6 +3969,51 @@ def read_cia_core_object(root, *, record, architecture_config):
     return _validate_cia_core_payload(payload, architecture_sha256=architecture_sha256)
 
 
+def _cia_runtime_code_sha256(code):
+    """Hash code values, independent of marshal reference sharing and string interning.
+
+    Source location and line/exception tables remain bound, matching the former
+    full-code-object scope. Optional fields retain their names across Python
+    versions; this does not assert bytecode compatibility between interpreters.
+    """
+    import struct
+    import types
+    def encode(value):
+        kind = type(value)
+        if value is None:
+            return ['none']
+        if value is Ellipsis:
+            return ['ellipsis']
+        if kind is bool:
+            return ['bool', value]
+        if kind is int:
+            return ['int', str(value)]
+        if kind is float:
+            return ['float64', struct.pack('>d', value).hex()]
+        if kind is complex:
+            return ['complex', encode(value.real), encode(value.imag)]
+        if kind is str:
+            return ['str', value]
+        if kind is bytes:
+            return ['bytes', value.hex()]
+        if kind is tuple:
+            return ['tuple', [encode(item) for item in value]]
+        if kind is frozenset:
+            items = [encode(item) for item in value]
+            return ['frozenset', sorted(items, key=lambda item: json.dumps(item, sort_keys=True))]
+        if kind is types.CodeType:
+            fields = ('co_argcount', 'co_posonlyargcount', 'co_kwonlyargcount', 'co_nlocals',
+                      'co_stacksize', 'co_flags', 'co_code', 'co_consts', 'co_names', 'co_varnames',
+                      'co_freevars', 'co_cellvars', 'co_filename', 'co_name', 'co_firstlineno',
+                      'co_qualname', 'co_lnotab', 'co_linetable', 'co_exceptiontable')
+            return ['code', [[name, encode(getattr(value, name))] for name in fields if hasattr(value, name)]]
+        raise ValueError('unsupported constant in CIA optimizer runtime code identity')
+    if type(code) is not types.CodeType:
+        raise ValueError('CIA optimizer runtime identity requires a code object')
+    encoded = ['python-code-fields-v1', encode(code)]
+    return hashlib.sha256(json.dumps(encoded, ensure_ascii=True, separators=(',', ':')).encode()).hexdigest()
+
+
 def cia_optimizer_identity(model, optimizer) -> dict[str, Any]:
     """Bind the native CPU conformance optimizer; not production qualification.
 
@@ -3979,7 +4024,6 @@ def cia_optimizer_identity(model, optimizer) -> dict[str, Any]:
     """
     import math
     from torch.optim import adam, adamw, optimizer as optimizer_module, _functional
-    import marshal
     from ember.model.ember_v0_decoder import CIADecoder
     from ember.model.ember_v0_contract import cia_architecture_config, cia_architecture_sha256, validate_cia_architecture
 
@@ -4067,13 +4111,14 @@ def cia_optimizer_identity(model, optimizer) -> dict[str, Any]:
                 if id(function) in visited:
                     raise ValueError("CIA optimizer implementation wrapper cycle")
                 visited.add(id(function))
-                chain.append(hashlib.sha256(marshal.dumps(function.__code__)).hexdigest())
+                chain.append(_cia_runtime_code_sha256(function.__code__))
                 function = getattr(function, '__wrapped__', None)
             code_hashes[name] = chain
         implementation_dependencies[module_name] = {
             'source_sha256': _sha256(Path(module_source)), 'runtime_code_sha256': code_hashes}
     return {
-        'schema_version': 'ember-cia-optimizer-identity-v1',
+        'schema_version': 'ember-cia-optimizer-identity-v2',
+        'runtime_code_format': 'python-code-fields-v1',
         'architecture_sha256': cia_architecture_sha256(architecture_config),
         'implementation': f'{type(optimizer).__module__}.{type(optimizer).__qualname__}',
         'implementation_source_sha256': _sha256(Path(source)),
