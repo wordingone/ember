@@ -436,15 +436,30 @@ def required_sources(identity):
 def trajectory_mode(identity):
     if 'trajectory' not in identity:
         return False
-    arms = {'R1': None, 'R2': None, 'Tsegmented': 'resident-segmented-capture',
+    arms = {'R1': None, 'R2': None, 'R3': None, 'Tsegmented': 'resident-segmented-capture',
             'Tdynamic': 'resident-dynamic-capture', 'Tfused': 'resident-dynamic-capture'}
     value = identity['trajectory']
-    if (not isinstance(value, dict) or set(value) != {'schema', 'arm', 'comparison_id'}
+    keys = {'schema', 'arm', 'comparison_id'}
+    if isinstance(value, dict) and value.get('arm') == 'R3':
+        keys = keys | {'document_permutation'}
+    if (not isinstance(value, dict) or set(value) != keys
             or value['schema'] != 'reference-noise-floor-64-v1' or value['arm'] not in arms
             or not isinstance(value['comparison_id'], str) or not re.fullmatch('[0-9a-f]{32}', value['comparison_id'])
             or execution_mode(identity) != arms[value['arm']]):
         raise ValueError('trajectory requires a bound comparison and matching 64-update arm')
+    if value['arm'] == 'R3':
+        validate_document_permutation(value['document_permutation'])
     return True
+
+
+def validate_document_permutation(value):
+    """R3: one pinned permutation of the four documents per update; identity everywhere is refused."""
+    if (type(value) is not list or len(value) != 64
+            or any(type(row) is not list or len(row) != 4 or any(type(item) is not int for item in row)
+                   or sorted(row) != [0, 1, 2, 3] for row in value)
+            or all(row == [0, 1, 2, 3] for row in value)):
+        raise ValueError('R3 requires a pinned non-identity document permutation for each of the 64 updates')
+    return value
 
 
 MEASUREMENT_UPDATES = 1024

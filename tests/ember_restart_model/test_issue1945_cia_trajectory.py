@@ -38,18 +38,23 @@ class TrajectoryCoreTests(unittest.TestCase):
             roots, hashes = {}, {}
             rows = [dict(update=i + 1, loss=10.0, census=[[4096] + [0] * 24] * 12) for i in range(64)]
             inventory = {'owner': torch.nn.Parameter(torch.ones(3, dtype=torch.bfloat16))}
-            for name in ('R1', 'R2', 'Tdynamic'):
+            for name in ('R1', 'R2', 'Tdynamic', 'R3'):
                 root = Path(temporary) / name
                 root.mkdir()
                 snapshots = {str(i): subject.save_snapshot(inventory, root, update=i, budget_bytes=8192) for i in (1, 64)}
                 arm = dict(arm=name, frozen_owners_unchanged=True, snapshot_updates=[1, 64], snapshots=snapshots,
                            start=dict(source_sha256={'model': 'a' * 64}, optimizer={'foreach': False},
-                                      population_sha256='b' * 64, comparison_id='c' * 32), rows=rows)
+                                      population_sha256='b' * 64, comparison_id='c' * 32,
+                                      **(dict(document_permutation=[[1, 0, 3, 2]] * 64, executed_input_sha256='e' * 64)
+                                         if name == 'R3' else {})), rows=rows)
                 data = json.dumps(arm).encode()
                 (root / ('t2-arm-' + name + '.json')).write_bytes(data)
                 (root / 'worker-terminal.json').write_text(json.dumps(dict(status='completed', applied_positions=64 * 4096)))
                 roots[name], hashes[name] = root, hashlib.sha256(data).hexdigest()
-            self.assertTrue(subject.adjudicate_arms(roots, hashes)['passed'])
+            verdict = subject.adjudicate_arms(roots, hashes)
+            self.assertTrue(verdict['passed'])
+            self.assertEqual(verdict['permuted_reference_floor']['census_difference_updates'], [])
+            self.assertEqual(verdict['permuted_reference_floor']['worst_relative_l2_by_update'], {'1': 0.0, '64': 0.0})
             (roots['R2'] / 'worker-terminal.json').write_text(json.dumps(dict(status='failed', applied_positions=4096)))
             with self.assertRaisesRegex(ValueError, 'complete applied'):
                 subject.adjudicate_arms(roots, hashes)
@@ -66,6 +71,71 @@ class TrajectoryCoreTests(unittest.TestCase):
         subject.compare_start_identity(reference, fused, arm='Tfused')
         with self.assertRaises(ValueError):
             subject.compare_start_identity(reference, fused, arm='Tdynamic')
+
+    def test_r3_permutation_reorders_documents_and_inverts_routing_reports(self):
+        sequence = 1024
+        pack = dict(index=0, phase='warm', document_starts=[d * sequence for d in range(4)],
+                    token_ids=[d for d in range(4) for _ in range(sequence)],
+                    target_ids=[10 + d for d in range(4) for _ in range(sequence)],
+                    positions=[[p, 0, 0] for _ in range(4) for p in range(sequence)])
+        order = [2, 0, 3, 1]
+        permuted = subject.permute_pack(pack, order)
+        self.assertEqual(permuted['document_starts'], pack['document_starts'])
+        self.assertEqual(permuted['positions'], pack['positions'])
+        self.assertEqual([permuted['token_ids'][s * sequence] for s in range(4)], order)
+        self.assertEqual([permuted['target_ids'][s * sequence] for s in range(4)], [10 + d for d in order])
+        inverse = [order.index(d) for d in range(4)]
+        self.assertEqual(subject.permute_pack(permuted, inverse), pack)
+        with self.assertRaisesRegex(ValueError, 'geometry'):
+            subject.permute_pack(dict(pack, token_ids=pack['token_ids'][:-1]), order)
+        with self.assertRaisesRegex(ValueError, 'geometry'):
+            subject.permute_pack(pack, [0, 0, 1, 2])
+        data = dict(priors=[[float(d)] * 25 for d in range(4)], ranked=[[d, d + 1] for d in range(4)],
+                    candidates=[[d, d + 1] for d in range(4)],
+                    winners=[[d + c % 2 for d in range(4) for c in range(4)] for _ in range(12)],
+                    logits=[[[float(d), float(c)] for d in range(4) for c in range(4)] for _ in range(12)],
+                    gates=[[(d + c / 10) / 4 for d in range(4) for c in range(4)] for _ in range(12)], valid=[True] * 12)
+        executed = dict(data, priors=[data['priors'][d] for d in order], ranked=[data['ranked'][d] for d in order],
+                        candidates=[data['candidates'][d] for d in order],
+                        winners=[[row[d * 4 + c] for d in order for c in range(4)] for row in data['winners']],
+                        logits=[[row[d * 4 + c] for d in order for c in range(4)] for row in data['logits']],
+                        gates=[[row[d * 4 + c] for d in order for c in range(4)] for row in data['gates']])
+        self.assertNotEqual(executed['winners'], data['winners'])
+        self.assertEqual(subject.unpermute_routing(executed, order), data)
+        self.assertEqual(subject.routing_metrics(subject.unpermute_routing(executed, order))['census'],
+                         subject.routing_metrics(data)['census'])
+
+    def test_r3_identity_is_pinned_and_exclusive(self):
+        base = dict(schema='reference-noise-floor-64-v1', arm='R3', comparison_id='c' * 32)
+        rows = [[0, 1, 2, 3]] * 63 + [[1, 0, 3, 2]]
+        self.assertTrue(runner.trajectory_mode({'trajectory': dict(base, document_permutation=rows)}))
+        for bad in (None, [[0, 1, 2, 3]] * 64, rows[:63], [[0, 1, 2, 2]] * 64, [[0, 1, 2, 3.0]] * 64, rows + [rows[-1]]):
+            with self.assertRaises(ValueError):
+                runner.trajectory_mode({'trajectory': dict(base, document_permutation=bad)})
+        with self.assertRaises(ValueError):
+            runner.trajectory_mode({'trajectory': base})
+        with self.assertRaises(ValueError):
+            runner.trajectory_mode({'trajectory': dict(base, arm='R1', document_permutation=rows)})
+        with self.assertRaises(ValueError):
+            runner.trajectory_mode({'trajectory': dict(base, document_permutation=rows),
+                                    'execution_mode': 'resident-segmented-capture'})
+        reference = dict(population_sha256='a' * 64, source_commit='b' * 40, source_sha256={'m': 'c' * 64},
+                         optimizer={'foreach': False}, comparison_id='d' * 32, cursor={'token_offset': 0})
+        reference['input_binding'] = {'input_sha256': 'f' * 64}
+        permuted = dict(reference, document_permutation=rows, executed_input_sha256='e' * 64)
+        subject.compare_start_identity(reference, permuted, arm='R3')
+        with self.assertRaisesRegex(ValueError, 'R3 start'):
+            subject.compare_start_identity(reference, reference, arm='R3')
+        with self.assertRaisesRegex(ValueError, 'only the R3'):
+            subject.compare_start_identity(reference, permuted, arm='R2')
+        for bad in ([[0, 1, 2, 3]] * 64, rows[:63], rows[:63] + [[0, 1, 2, 2]], rows[:63] + [[0, 1, 2, '3']]):
+            with self.assertRaisesRegex(ValueError, 'non-identity document permutation'):
+                subject.compare_start_identity(reference, dict(permuted, document_permutation=bad), arm='R3')
+        for digest in ('e' * 63, 'E' * 64, 'f' * 64, 123):
+            with self.assertRaisesRegex(ValueError, '64-hex digest'):
+                subject.compare_start_identity(reference, dict(permuted, executed_input_sha256=digest), arm='R3')
+        with self.assertRaisesRegex(ValueError, 'identities differ'):
+            subject.compare_start_identity(reference, dict(permuted, population_sha256='0' * 64), arm='R3')
 
     def test_snapshot_files_preserve_all_support_and_reject_changed_bytes(self):
         inventory = {'active': torch.nn.Parameter(torch.arange(5, dtype=torch.bfloat16)),
