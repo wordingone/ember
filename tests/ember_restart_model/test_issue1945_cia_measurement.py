@@ -11,9 +11,9 @@ import sys
 import tempfile
 import unittest
 
-SOURCE = Path(os.environ.get('CIA_MEASUREMENT_RUNNER', str(Path(__file__).resolve().parents[2] /
-    'src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py')))
-ROOT = SOURCE.resolve().parents[5]
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = Path(os.environ.get('CIA_MEASUREMENT_RUNNER',
+    str(ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py')))
 
 
 def load(path, name):
