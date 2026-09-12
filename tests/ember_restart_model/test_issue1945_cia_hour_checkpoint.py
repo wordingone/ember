@@ -94,4 +94,119 @@ class SparseLineageTests(unittest.TestCase):
                 args[3]['placement']['sparse']['requires_grad'] = False
             with self.assertRaises(ValueError, msg=mode): counter._cia_derive_first_lineage(*args)
 
+
+
+class ResidentCheckpointBoundaryTests(unittest.TestCase):
+    def fixture(self):
+        from types import SimpleNamespace
+        from ember.model.ember_v0_residency import ResidentExecution
+        parameter = torch.nn.Parameter(torch.ones(8, dtype=torch.bfloat16))
+        model = SimpleNamespace(parameter_inventory=lambda: {'weight': parameter},
+            _resident_experts=(0, 1, 2, 3), _execution_device=torch.device('cpu'))
+        execution = object.__new__(ResidentExecution)
+        execution.model = model
+        execution.cache = execution
+        execution.device = model._execution_device
+        execution.ids = model._resident_experts
+        execution.active = execution.poisoned = execution.retired = False
+        execution.pending = 0
+        execution.segmented = None
+        model._cuda_execution = execution
+        return model, execution, parameter
+
+    def test_resident_boundary_uses_actual_execution_state_without_paging_fields(self):
+        model, execution, parameter = self.fixture()
+        self.assertFalse(hasattr(execution, 'entries'))
+        self.assertFalse(hasattr(execution, 'leased'))
+        self.assertEqual(artifacts._cia_quiescent_parameters(model), {'weight': parameter})
+        for field, value in (('active', True), ('pending', 1), ('poisoned', True), ('retired', True),
+                             ('ids', (4, 5, 6, 7)), ('model', object()), ('cache', object())):
+            prior = getattr(execution, field)
+            setattr(execution, field, value)
+            with self.assertRaisesRegex(ValueError, 'quiescent resident'):
+                artifacts._cia_quiescent_parameters(model)
+            setattr(execution, field, prior)
+        parameter.grad = torch.ones_like(parameter)
+        with self.assertRaisesRegex(ValueError, 'cleared gradients'):
+            artifacts._cia_quiescent_parameters(model)
+
+    def test_recorded_or_captured_operations_must_be_invalidated_before_checkpoint(self):
+        from types import SimpleNamespace
+        model, execution, _ = self.fixture()
+        capture = SimpleNamespace(execution=execution, captured=False, _recording=False, _recorded={})
+        execution.segmented = capture
+        artifacts._cia_quiescent_parameters(model)
+        for field, value in (('captured', True), ('_recording', True), ('_recorded', {0: object()}), ('execution', object())):
+            prior = getattr(capture, field)
+            setattr(capture, field, value)
+            with self.assertRaisesRegex(ValueError, 'invalidated capture'):
+                artifacts._cia_quiescent_parameters(model)
+            setattr(capture, field, prior)
+
+    def test_paging_boundary_still_refuses_entries_and_leases(self):
+        from types import SimpleNamespace
+        model, _, _ = self.fixture()
+        cache = SimpleNamespace(active=False, pending=0, entries={}, leased=set(), poisoned=False)
+        model._cuda_execution = SimpleNamespace(cache=cache)
+        artifacts._cia_quiescent_parameters(model)
+        for field, value in (('entries', {1: object()}), ('leased', {1})):
+            prior = getattr(cache, field)
+            setattr(cache, field, value)
+            with self.assertRaisesRegex(ValueError, 'quiescent candidate cache'):
+                artifacts._cia_quiescent_parameters(model)
+            setattr(cache, field, prior)
+
+
 if __name__ == '__main__': unittest.main()
+
+
+class GroupedParameterStorageTests(unittest.TestCase):
+    def parameters(self):
+        packed = torch.arange(32, dtype=torch.bfloat16).reshape(4, 8)
+        return {str(index): torch.nn.Parameter(packed[index]) for index in range(4)}
+
+    def snapshot(self, parameters, state):
+        return artifacts._cia_snapshot_placed_moments(parameters, state, max_state_bytes=1024)
+
+    def test_disjoint_grouped_slices_allow_empty_optimizer_state(self):
+        parameters = self.parameters()
+        self.assertEqual(len({value.untyped_storage().data_ptr() for value in parameters.values()}), 1)
+        self.assertEqual(self.snapshot(parameters, {}), {})
+
+    def test_disjoint_grouped_slices_copy_independent_moments(self):
+        parameters = self.parameters()
+        state = {name: {'step': torch.tensor(1.), 'exp_avg': torch.ones_like(value),
+                        'exp_avg_sq': torch.ones_like(value)} for name, value in parameters.items()}
+        snapshot = self.snapshot(parameters, state)
+        for name, fields in state.items():
+            for key, value in fields.items():
+                torch.testing.assert_close(snapshot[name][key], value, rtol=0, atol=0)
+                self.assertNotEqual(snapshot[name][key].data_ptr(), value.data_ptr())
+
+    def test_partial_parameter_overlap_is_refused_before_any_copy(self):
+        packed = torch.zeros(16, dtype=torch.bfloat16)
+        parameters = {'a': torch.nn.Parameter(packed[:8]), 'b': torch.nn.Parameter(packed[4:12])}
+        with patch.object(torch.Tensor, 'to', side_effect=AssertionError('copy before validation')):
+            with self.assertRaisesRegex(ValueError, 'overlap'):
+                self.snapshot(parameters, {})
+
+    def test_moment_parameter_overlap_is_still_refused(self):
+        parameter = torch.nn.Parameter(torch.zeros(8, dtype=torch.bfloat16))
+        with patch.object(torch.Tensor, 'to', side_effect=AssertionError('copy before validation')):
+            with self.assertRaisesRegex(ValueError, 'aliases'):
+                self.snapshot({'a': parameter}, {'a': {'exp_avg': parameter.detach()}})
+
+    def test_noncontiguous_parameter_uses_conservative_backing_span(self):
+        packed = torch.zeros(16, dtype=torch.bfloat16)
+        parameters = {'a': torch.nn.Parameter(packed[::2]), 'b': torch.nn.Parameter(packed[1::2])}
+        with self.assertRaisesRegex(ValueError, 'overlap'):
+            self.snapshot(parameters, {})
+
+    def test_empty_parameter_view_has_no_occupied_bytes(self):
+        parameters = self.parameters()
+        parameters['empty'] = torch.nn.Parameter(parameters['0'].detach()[:0])
+        self.assertEqual(self.snapshot(parameters, {}), {})
+
+
+if __name__ == '__main__':
+    unittest.main()
