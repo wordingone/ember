@@ -523,6 +523,18 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
              name, mode, row_stream, metric_stream, applied):
     from ember.model.ember_v0_decoder import CIADecoder
     identity = prediction['identity']
+    emission = runner.trajectory_checkpoint_emission(identity)
+    if emission:
+        if custody.drive.upper() != 'B:':
+            raise ValueError('trajectory checkpoint reservation requires B-drive custody')
+        free_bytes = runner.headroom()['free_disk_bytes']['B']
+        write_bytes = runner.resource_limits(identity)['max_b_write_gib'] * runner.GIB
+        floor_bytes = runner.LIMITS['min_b_free_bytes']
+        if free_bytes < floor_bytes + write_bytes:
+            raise ValueError('trajectory checkpoint reservation unavailable: free_bytes=%d required_bytes=%d'
+                             % (free_bytes, floor_bytes + write_bytes))
+        runner._write_new(custody / 'checkpoint-reservation.json', dict(
+            free_bytes=free_bytes, floor_bytes=floor_bytes, reserved_write_bytes=write_bytes))
     runner.verify_prepared_inputs(prepared)
     model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
     definition = identity['optimizer']
@@ -568,6 +580,11 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         execution_mode=mode, trajectory=identity['trajectory'], c_compiler=compiler,
         resident_experts=list(identity['support']['experts']), input_binding=prepared['binding'],
         snapshot_plan=plan, claim=runner.CLAIM))
+    if emission:
+        hour = runner.load_hour_module()
+        publish, owner_update_counts = hour.checkpoint_publisher(
+            runner, model, optimizer, inventory, identity, binding, custody, device)
+        parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
     expert_owners = runner.expert_owner_index(inventory)
     capture = None
     if mode is not None:
@@ -578,6 +595,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
             loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
             static_state=(buffers.raw,), warmup_steps=2, **dynamic)
     arm_rows, snapshots, held = [], {}, {}
+    applied_tokens = 0
     previous = None
     def step(index, pack):
         held['before'] = {key: value.detach().clone() for key, value in inventory.items() if value.requires_grad}
@@ -591,8 +609,13 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
                    input_sha256=prepared['binding']['input_sha256'])
         _stream_row(row_stream, row)
     def observe(index, row):
-        nonlocal previous
+        nonlocal previous, applied_tokens
+        applied_tokens += row['applied_positions']
         update = index + 1
+        if emission:
+            for owner, parameter in inventory.items():
+                if parameter.grad is not None:
+                    owner_update_counts[owner] = owner_update_counts.get(owner, 0) + 1
         data = held['observer'].finish() if mode is None else device_routing(**held['routing'])
         executed_sha = None
         if permutation is not None:
@@ -629,6 +652,18 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         raise ValueError('a frozen owner changed during the trajectory')
     result = dict(arm=name, execution_mode=mode, start=start, rows=arm_rows, snapshots=snapshots,
                   frozen_owners_unchanged=True, snapshot_updates=plan['updates'])
+    if emission:
+        if capture is not None:
+            capture.invalidate()
+        optimizer.zero_grad(set_to_none=True)
+        torch.cuda.synchronize(device)
+        child = publish('trained-child', steps=UPDATES, tokens=applied_tokens,
+                        cursor=prepared['binding']['cursor_end'], parent=custody / 'zero-parent')
+        hour.verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
+        if any(runner.file_sha256(runner.ROOT / path) != digest for path, digest in identity['source_sha256'].items()):
+            raise ValueError('trajectory checkpoint source changed during execution')
+        result.update(zero_parent_manifest_sha256=parent['checkpoint_manifest_sha256'],
+                      child_manifest_sha256=child['checkpoint_manifest_sha256'])
     runner._write_new(custody / ('t2-arm-' + name + '.json'), result)
     return result
 

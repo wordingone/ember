@@ -438,9 +438,10 @@ def local_routing_mode(identity):
 def required_sources(identity):
     """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
     additional = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',) if trajectory_mode(identity) else ()
-    if hour_mode(identity):
+    if hour_mode(identity) or trajectory_checkpoint_emission(identity):
         additional += tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
             ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+    if hour_mode(identity):
         additional += ('src/ember/governance/scripts/catalog_train_stream.py',)
     return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional
 
@@ -452,6 +453,10 @@ def trajectory_mode(identity):
             'Tdynamic': 'resident-dynamic-capture', 'Tfused': 'resident-dynamic-capture'}
     value = identity['trajectory']
     keys = {'schema', 'arm', 'comparison_id'}
+    if isinstance(value, dict) and 'checkpoint_emission' in value:
+        if value['checkpoint_emission'] is not True:
+            raise ValueError('trajectory checkpoint emission must be explicitly true')
+        keys = keys | {'checkpoint_emission'}
     if isinstance(value, dict) and value.get('arm') == 'R3':
         keys = keys | {'document_permutation'}
     if (not isinstance(value, dict) or set(value) != keys
@@ -462,6 +467,12 @@ def trajectory_mode(identity):
     if value['arm'] == 'R3':
         validate_document_permutation(value['document_permutation'])
     return True
+
+
+def trajectory_checkpoint_emission(identity):
+    if 'checkpoint_emission' in identity:
+        raise ValueError('checkpoint emission belongs only to the trajectory declaration')
+    return trajectory_mode(identity) and identity['trajectory'].get('checkpoint_emission') is True
 
 
 def validate_document_permutation(value):
@@ -523,7 +534,10 @@ def resource_limits(identity):
     if hour_mode(identity):
         limits.update(wall_seconds=4500, max_b_write_gib=24)
     elif trajectory_mode(identity):
-        limits['max_b_write_gib'] = 8
+        if trajectory_checkpoint_emission(identity):
+            limits.update(wall_seconds=1800, max_b_write_gib=32)
+        else:
+            limits['max_b_write_gib'] = 8
     elif measurement_mode(identity):
         limits['wall_seconds'] = MEASUREMENT_WALL_SECONDS
     return limits
@@ -546,11 +560,14 @@ def hour_mode(identity):
 
 def validate_trajectory_resources(identity):
     if trajectory_mode(identity):
+        emission = trajectory_checkpoint_emission(identity)
+        maximum = (32 if emission else 8) * GIB
         walls = identity['dispatch_resources'].get('disk_write_walls')
         if (not isinstance(walls, list) or len(walls) != 1 or not isinstance(walls[0], dict)
                 or walls[0].get('volume_root') != 'B:/'
-                or walls[0].get('maximum_write_bytes') != 8 * GIB):
-            raise ValueError('trajectory requires its matching eight GiB native disk wall')
+                or walls[0].get('maximum_write_bytes') != maximum):
+            raise ValueError('trajectory requires its matching 32 GiB checkpoint disk wall' if emission else
+                             'trajectory requires its matching eight GiB native disk wall')
 
 
 def load_trajectory_module():

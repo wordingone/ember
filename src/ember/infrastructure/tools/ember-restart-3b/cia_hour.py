@@ -279,33 +279,9 @@ def hour_complete(*, measured_updates, elapsed_seconds):
     return measured_updates >= 1024 and elapsed_seconds >= 3600
 
 
-def run_hour(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
-    """One complete-model worker shared by the explicit probe and both hour arms."""
+def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
-    from ember.model.ember_v0_decoder import CIADecoder
-    identity = prediction['identity']
-    hour = identity['hour']
-    mode = runner.execution_mode(identity)
-    probe = hour['schema'] == 'checkpoint-probe-v1'
-    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
-    first = prepared['first']
-    lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
-    definition = identity['optimizer']
-    def optimizer_factory(inventory):
-        if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
-            raise ValueError('hour optimizer population is incomplete')
-        return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
-            eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
-            **({'fused': True} if hour['arm'] == 'treatment' else {}))
-    inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
-        mode=mode, optimizer_factory=optimizer_factory)
-    if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
-        raise ValueError('hour optimizer owner membership differs')
-    runner._write_new(custody / 'model.json', dict(population=runner.POPULATION,
-        optimizer_membership=list(inventory), trainable_parameters=sum(p.numel() for p in inventory.values() if p.requires_grad),
-        input_binding=prepared['binding'], hour=hour, c_compiler=compiler,
-        claim='Complete-model execution inventory; no model qualification'))
     helper = Path.home() / '.codex/headless-python.ps1'
     if runner.file_sha256(helper) != binding['launch']['helpers'][str(helper.resolve())]:
         raise ValueError('checkpoint counter launcher differs from dispatch')
@@ -335,6 +311,56 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             expert_genesis_sha256={}, max_serialized_bytes=cap, max_transient_scratch_bytes=cap,
             host_commit_reserve_bytes=16 * runner.GIB, pre_publish_verifier=verifier,
             cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None)
+    return publish, owner_update_counts
+
+
+def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child):
+    import checkpoint_artifacts as artifacts
+    cap = 10 * runner.GIB
+    restored = artifacts.load_checkpoint_artifacts(model, optimizer, custody / 'trained-child', child,
+        max_transient_scratch_bytes=cap, host_commit_reserve_bytes=16 * runner.GIB)
+    if restored['data_cursor'] != child['data_cursor']:
+        raise ValueError('checkpoint restore cursor differs')
+    # Reopen full model and native moments, including inactive owners, through
+    # the existing lineage fact consumer after the codec restore transaction.
+    native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
+    facts = artifacts._cia_lineage_facts(inventory, native['state'])
+    import parameter_counter as counter
+    expected = {}
+    counter._cia_realization_receipt(custody / 'trained-child', child,
+        model_config_sha256=identity['config_sha256'], _facts=expected)
+    if facts != expected:
+        raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
+
+
+def run_hour(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
+    """One complete-model worker shared by the explicit probe and both hour arms."""
+    import torch
+    from ember.model.ember_v0_decoder import CIADecoder
+    identity = prediction['identity']
+    hour = identity['hour']
+    mode = runner.execution_mode(identity)
+    probe = hour['schema'] == 'checkpoint-probe-v1'
+    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
+    first = prepared['first']
+    lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+    definition = identity['optimizer']
+    def optimizer_factory(inventory):
+        if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
+            raise ValueError('hour optimizer population is incomplete')
+        return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+            eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
+            **({'fused': True} if hour['arm'] == 'treatment' else {}))
+    inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
+        mode=mode, optimizer_factory=optimizer_factory)
+    if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
+        raise ValueError('hour optimizer owner membership differs')
+    runner._write_new(custody / 'model.json', dict(population=runner.POPULATION,
+        optimizer_membership=list(inventory), trainable_parameters=sum(p.numel() for p in inventory.values() if p.requires_grad),
+        input_binding=prepared['binding'], hour=hour, c_compiler=compiler,
+        claim='Complete-model execution inventory; no model qualification'))
+    publish, owner_update_counts = checkpoint_publisher(
+        runner, model, optimizer, inventory, identity, binding, custody, device)
     parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
@@ -410,20 +436,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     child = publish('trained-child', steps=total_steps, tokens=positions,
                     cursor=pack['cursor_after'], parent=custody / 'zero-parent')
     checkpoint_finished = time.perf_counter()
-    restored = artifacts.load_checkpoint_artifacts(model, optimizer, custody / 'trained-child', child,
-        max_transient_scratch_bytes=cap, host_commit_reserve_bytes=16 * runner.GIB)
-    if restored['data_cursor'] != child['data_cursor']:
-        raise ValueError('checkpoint restore cursor differs')
-    # Reopen full model and native moments, including inactive owners, through
-    # the existing lineage fact consumer after the codec restore transaction.
-    native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
-    facts = artifacts._cia_lineage_facts(inventory, native['state'])
-    import parameter_counter as counter
-    expected = {}
-    counter._cia_realization_receipt(custody / 'trained-child', child,
-        model_config_sha256=identity['config_sha256'], _facts=expected)
-    if facts != expected:
-        raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
+    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
