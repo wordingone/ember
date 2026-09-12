@@ -349,17 +349,26 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     measured, positions, total_steps = 0, 0, 0
     started = None
     step_rates = []
-    with (custody / 'rows.jsonl').open('xb') as rows:
+    gc_identity = dict(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'])
+    with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
+            (custody / 'gc-events.jsonl').open('xb') as gc_rows:
         pack = first
         while True:
+            call_started = time.perf_counter()
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
                 run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners)
+            call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
                 cursor_after=pack['cursor_after'], hour=hour)
             rows.write(runner.canonical(row) + b'\n')
             rows.flush()
             os.fsync(rows.fileno())
+            # Collections since the previous row, classified in-step / outside-step against this step call's window;
+            # filed beside (never inside) the row.
+            gc_rows.write(runner.canonical(gc_meter.file(total_steps, row['phase'], call_started=call_started,
+                                                         call_finished=call_finished)) + b'\n')
+            gc_rows.flush()
             applied(row['applied_positions'])
             total_steps += 1
             positions += row['applied_positions']
@@ -376,6 +385,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     finally:
                         buffers.capturing = False
                     runner._write_new(custody / 'capture.json', capture.receipt())
+                # Warm-to-measured transition (the hour's single warm update is step 1), outside every timed interval,
+                # eager control and captured treatment alike; the governed clock starts after it.
+                runner._write_new(custody / 'gc-freeze.json', runner.freeze_resident_object_graph(**gc_identity))
                 started = time.perf_counter()
             else:
                 measured += 1
@@ -385,6 +397,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                         (not probe and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
                     break
             pack = prepared['packs'].next_pack()
+        closing_instant = time.perf_counter()
+        gc_rows.write(runner.canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
+                                                     call_finished=closing_instant)) + b'\n')
     elapsed_before_checkpoint = time.perf_counter() - started
     # Drop capture storage before the real codec's quiescence and restore checks.
     if capture is not None:
@@ -423,6 +438,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         parent_manifest_sha256=parent['checkpoint_manifest_sha256'],
         child_manifest_sha256=child['checkpoint_manifest_sha256'], lineage=child['lineage'],
         rows_sha256=runner.file_sha256(custody / 'rows.jsonl'), restored_state_matches=True,
+        gc_events_sha256=runner.file_sha256(custody / 'gc-events.jsonl'),
+        gc_freeze_sha256=runner.file_sha256(custody / 'gc-freeze.json'),
         input_binding=prepared['binding'], source_commit=identity['source_commit'], run_id=identity['run_id'],
         prediction_sha256=binding['launch']['prediction_sha256'],
         production_mixture_validation=prepared['mixture_validation'],
