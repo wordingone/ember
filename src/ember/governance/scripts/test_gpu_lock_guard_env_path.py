@@ -170,3 +170,19 @@ def test_successful_windows_query_without_holder_still_reports_dead(monkeypatch,
     result = guard.subprocess.CompletedProcess([], 0, stdout="INFO: No tasks match the specified criteria.", stderr="")
     monkeypatch.setattr(guard.subprocess, "run", lambda *args, **kwargs: result)
     assert guard._is_pid_alive(123456789, "windows") is False
+
+
+def test_stale_lock_diagnostic_is_utf8_decodable_with_windows_cp1252(monkeypatch, tmp_path):
+    import io
+    lock = tmp_path / 'gpu.lock'
+    guard = _fresh_module(monkeypatch, lock)
+    lock.write_text(json.dumps(dict(daemon_pid=1, side='windows', active_jobs=0)), encoding='utf-8')
+    monkeypatch.setattr(guard, '_is_pid_alive', lambda *args: False)
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding='cp1252', write_through=True)
+    monkeypatch.setattr(guard.sys, 'stderr', stream)
+    guard.check_or_die(script='encoding-regression')
+    text = raw.getvalue().decode('utf-8')
+    assert 'stale lock' in text and 'clearing' in text
+    guard.release()
+    stream.detach()

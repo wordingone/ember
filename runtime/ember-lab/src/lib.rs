@@ -31,6 +31,33 @@ pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
 
+/// Terminal text is UTF-8 when valid; otherwise the complete raw bytes are hex.
+/// Hashes always cover the sealed raw stream, never its display representation.
+#[derive(Debug, Serialize)]
+pub struct CertifiedJobResult {
+    pub exit_code: i64,
+    pub stdout: String,
+    pub stderr: String,
+    pub stdout_encoding: &'static str,
+    pub stderr_encoding: &'static str,
+    pub stdout_sha256: String,
+    pub stderr_sha256: String,
+}
+
+fn encode_terminal_log(bytes: Vec<u8>) -> (String, &'static str) {
+    match String::from_utf8(bytes) {
+        Ok(text) => (text, "utf-8"),
+        Err(error) => {
+            use std::fmt::Write as _;
+            let mut text = String::with_capacity(error.as_bytes().len() * 2);
+            for byte in error.as_bytes() {
+                write!(&mut text, "{byte:02x}").expect("writing to a String cannot fail");
+            }
+            (text, "hex")
+        }
+    }
+}
+
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
 const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 8;
@@ -5953,6 +5980,11 @@ impl Daemon {
     }
 
     pub fn job_result(&self, job_id: &str) -> Result<(i64, String, String)> {
+        let result = self.job_result_encoded(job_id)?;
+        Ok((result.exit_code, result.stdout, result.stderr))
+    }
+
+    pub fn job_result_encoded(&self, job_id: &str) -> Result<CertifiedJobResult> {
         let row: (String, Option<i64>, String, Option<String>, String, Option<String>) = self
             .conn()?
             .query_row(
@@ -5991,8 +6023,16 @@ impl Daemon {
         let actual_stdout_sha256 = hash_bytes(&stdout_bytes);
         let actual_stderr_sha256 = hash_bytes(&stderr_bytes);
         for (stream, expected, actual) in [
-            ("stdout", expected_stdout_sha256, actual_stdout_sha256),
-            ("stderr", expected_stderr_sha256, actual_stderr_sha256),
+            (
+                "stdout",
+                expected_stdout_sha256,
+                actual_stdout_sha256.clone(),
+            ),
+            (
+                "stderr",
+                expected_stderr_sha256,
+                actual_stderr_sha256.clone(),
+            ),
         ] {
             if actual != expected {
                 return Err(EmberLabError::LogEvidenceMismatch {
@@ -6003,17 +6043,17 @@ impl Daemon {
                 });
             }
         }
-        let stdout =
-            String::from_utf8(stdout_bytes).map_err(|_| EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "terminal certified launch stdout is not UTF-8".into(),
-            })?;
-        let stderr =
-            String::from_utf8(stderr_bytes).map_err(|_| EmberLabError::InvalidTransition {
-                job_id: job_id.into(),
-                detail: "terminal certified launch stderr is not UTF-8".into(),
-            })?;
-        Ok((exit_code, stdout, stderr))
+        let (stdout, stdout_encoding) = encode_terminal_log(stdout_bytes);
+        let (stderr, stderr_encoding) = encode_terminal_log(stderr_bytes);
+        Ok(CertifiedJobResult {
+            exit_code,
+            stdout,
+            stderr,
+            stdout_encoding,
+            stderr_encoding,
+            stdout_sha256: actual_stdout_sha256,
+            stderr_sha256: actual_stderr_sha256,
+        })
     }
 
     pub fn record_launch_context(
@@ -17839,5 +17879,123 @@ mod dispatch_binding_snapshot_tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod terminal_log_encoding_tests {
+    use super::*;
+
+    fn fixture(stderr_bytes: &[u8]) -> (Daemon, PathBuf, PathBuf) {
+        static NONCE: AtomicU64 = AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "ember-terminal-encoding-{}-{}-{}",
+            std::process::id(),
+            now_ms(),
+            NONCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let daemon = Daemon::open_with_resource_guard_seed_without_monitor(
+            &root.join("state.sqlite3"),
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "CPU-only terminal fixture".into(),
+            }),
+        )
+        .unwrap();
+        let stdout = root.join("stdout.log");
+        let stderr = root.join("stderr.log");
+        fs::write(&stdout, b"valid stdout\n").unwrap();
+        fs::write(&stderr, stderr_bytes).unwrap();
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "INSERT INTO jobs(job_id,program,args_json,env_json,resource,lease_epoch,
+             job_object_name,argv_sha256,state,stdout_log_path,stderr_log_path,
+             stdout_log_sha256,stderr_log_sha256,exit_code,started_at_ms,updated_at_ms)
+             VALUES('encoding','fixture','[]','{}','cpu-fixture',1,'fixture','fixture',
+             'exited',?1,?2,?3,?4,0,1,1)",
+                params![
+                    stdout.to_string_lossy(),
+                    stderr.to_string_lossy(),
+                    hash_bytes(b"valid stdout\n"),
+                    hash_bytes(stderr_bytes)
+                ],
+            )
+            .unwrap();
+        (daemon, root, stderr)
+    }
+
+    #[test]
+    fn sealed_non_utf8_terminal_log_keeps_raw_bytes_and_exit_code() {
+        for raw in [
+            b"lock \x97 cleared\r\n".as_slice(),
+            &[0xff, 0x00, 0xc3, 0x28],
+        ] {
+            let (daemon, root, stderr) = fixture(raw);
+            let (code, stdout, text) = daemon.job_result("encoding").unwrap();
+            assert_eq!(code, 0);
+            assert_eq!(stdout, "valid stdout\n");
+            assert!(!text.is_empty());
+            let classified = daemon.job_result_encoded("encoding").unwrap();
+            assert_eq!(classified.stdout_encoding, "utf-8");
+            assert_eq!(classified.stderr_encoding, "hex");
+            assert_eq!(classified.stderr_sha256, hash_bytes(raw));
+            assert_eq!(
+                classified.stderr,
+                raw.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            );
+            let rpc_fields = serde_json::to_value(classified).unwrap();
+            assert_eq!(rpc_fields["exit_code"], 0);
+            assert_eq!(rpc_fields["stderr_encoding"], "hex");
+            assert_eq!(fs::read(&stderr).unwrap(), raw);
+            drop(daemon);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn sealed_terminal_log_still_requires_terminal_seal_and_matching_bytes() {
+        let (daemon, root, stderr) = fixture(b"utf8\n");
+        assert_eq!(daemon.job_result("encoding").unwrap().2, "utf8\n");
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "UPDATE jobs SET state='running' WHERE job_id='encoding'",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            daemon.job_result("encoding"),
+            Err(EmberLabError::NonTerminalReceipt { .. })
+        ));
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "UPDATE jobs SET state='exited',stderr_log_sha256=NULL WHERE job_id='encoding'",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            daemon.job_result("encoding"),
+            Err(EmberLabError::LogEvidenceUnsealed { .. })
+        ));
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "UPDATE jobs SET stderr_log_sha256=?1 WHERE job_id='encoding'",
+                [hash_bytes(b"utf8\n")],
+            )
+            .unwrap();
+        fs::write(&stderr, b"changed\x97").unwrap();
+        assert!(matches!(
+            daemon.job_result("encoding"),
+            Err(EmberLabError::LogEvidenceMismatch { .. })
+        ));
+        drop(daemon);
+        fs::remove_dir_all(root).unwrap();
     }
 }

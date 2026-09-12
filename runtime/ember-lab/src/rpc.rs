@@ -618,14 +618,8 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Ok(value) => value,
                 Err(response) => return (response, false),
             };
-            match daemon.job_result(&params.job_id) {
-                Ok((exit_code, stdout, stderr)) => (
-                    success(
-                        id,
-                        json!({"exit_code":exit_code,"stdout":stdout,"stderr":stderr}),
-                    ),
-                    false,
-                ),
+            match daemon.job_result_encoded(&params.job_id) {
+                Ok(result) => (success(id, json!(result)), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
