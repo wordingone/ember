@@ -1127,6 +1127,124 @@ mod disk_wall_locked_metadata_tests {
             Err(EmberLabError::DiskWallMeasurementDuration { .. })
         ));
     }
+
+    /// An entry that vanishes between `read_dir` and its metadata read is a whole-sample miss:
+    /// the partial count is discarded and one fresh complete pass produces the total.
+    #[test]
+    fn disk_wall_vanished_entry_retries_one_complete_sample() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("first.bin"), b"payload").unwrap();
+        fs::write(scratch.0.join("second.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let mut probe_calls = 0_u32;
+        let measured = measure_disk_write_tree_with_entry_probe(
+            &root,
+            &root,
+            Instant::now(),
+            Duration::from_secs(5),
+            &mut |path| {
+                probe_calls += 1;
+                if probe_calls == 1 {
+                    fs::remove_file(path).unwrap();
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            measured, 7,
+            "the surviving file is counted by the second complete pass"
+        );
+        assert_eq!(
+            probe_calls, 2,
+            "first pass saw one entry and vanished it; second pass saw the one survivor"
+        );
+    }
+
+    /// The vanish lands after the first file was already counted: the 7 bytes accumulated in the
+    /// first pass are discarded (a partial-accumulating retry would report 14) and the second
+    /// pass restarts from the root (a skip of the missing entry would report probe_calls 2).
+    #[test]
+    fn disk_wall_vanish_after_partial_count_restarts_whole_sample() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("first.bin"), b"payload").unwrap();
+        fs::write(scratch.0.join("second.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let mut probe_calls = 0_u32;
+        let measured = measure_disk_write_tree_with_entry_probe(
+            &root,
+            &root,
+            Instant::now(),
+            Duration::from_secs(5),
+            &mut |path| {
+                probe_calls += 1;
+                if probe_calls == 2 {
+                    fs::remove_file(path).unwrap();
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            measured, 7,
+            "the first pass's counted 7 bytes are discarded, not added to the survivor"
+        );
+        assert_eq!(
+            probe_calls, 3,
+            "first pass saw both entries, the restarted pass saw the one survivor"
+        );
+    }
+
+    /// A second vanish inside the retry pass is persistent and refuses as the io error.
+    #[test]
+    fn disk_wall_repeated_vanish_refuses() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("first.bin"), b"payload").unwrap();
+        fs::write(scratch.0.join("second.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let mut probe_calls = 0_u32;
+        let result = measure_disk_write_tree_with_entry_probe(
+            &root,
+            &root,
+            Instant::now(),
+            Duration::from_secs(5),
+            &mut |path| {
+                probe_calls += 1;
+                fs::remove_file(path).unwrap();
+            },
+        );
+        assert!(
+            matches!(&result, Err(EmberLabError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound),
+            "persistent NotFound propagates: {result:?}"
+        );
+        assert_eq!(probe_calls, 2, "exactly one retry pass, never a third");
+    }
+
+    /// A vanish that leaves no time inside the shared deadline refuses on duration, never on a
+    /// partial count and never by resetting the deadline.
+    #[test]
+    fn disk_wall_vanish_past_deadline_refuses_on_duration() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("first.bin"), b"payload").unwrap();
+        fs::write(scratch.0.join("second.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let maximum_duration = Duration::from_millis(40);
+        let result = measure_disk_write_tree_with_entry_probe(
+            &root,
+            &root,
+            Instant::now(),
+            maximum_duration,
+            &mut |path| {
+                fs::remove_file(path).unwrap();
+                std::thread::sleep(maximum_duration + Duration::from_millis(20));
+            },
+        );
+        assert!(
+            matches!(
+                result,
+                Err(EmberLabError::DiskWallMeasurementDuration { .. })
+            ),
+            "deadline governs the retry: {result:?}"
+        );
+    }
 }
 
 #[cfg(windows)]
@@ -1135,6 +1253,95 @@ fn measure_disk_write_tree(
     canonical_write_root: &Path,
     started: Instant,
     maximum_duration: Duration,
+) -> Result<u64> {
+    measure_disk_write_tree_with_entry_probe(
+        directory,
+        canonical_write_root,
+        started,
+        maximum_duration,
+        &mut |_| {},
+    )
+}
+
+/// Whole-sample walk of the write root. The probe fires once per directory entry, after
+/// `read_dir` yields it and before its metadata is read; production passes a no-op and the
+/// tests use it to make an entry vanish mid-walk.
+///
+/// An entry that vanishes between `read_dir` and its metadata read (the owned child was
+/// replacing a temp file) surfaces as an io `NotFound` from the traversal. That is a miss of
+/// the whole sample, not a fact about the tree: the partial byte count is discarded and ONE
+/// fresh complete pass runs inside the same `started`/`maximum_duration` deadline, revalidating
+/// every entry again. The root must still exist for the retry; a second `NotFound`, any other
+/// io kind (permission, type, link) and every contract violation propagate unchanged, and a
+/// deadline reached before the retry refuses on duration exactly like a slow pass would.
+#[cfg(windows)]
+fn measure_disk_write_tree_with_entry_probe(
+    directory: &Path,
+    canonical_write_root: &Path,
+    started: Instant,
+    maximum_duration: Duration,
+    entry_probe: &mut dyn FnMut(&Path),
+) -> Result<u64> {
+    const COMPLETE_SAMPLE_ATTEMPTS: u8 = 2;
+    let mut attempts = 0_u8;
+    loop {
+        attempts += 1;
+        match measure_disk_write_tree_pass(
+            directory,
+            canonical_write_root,
+            started,
+            maximum_duration,
+            entry_probe,
+        ) {
+            Ok(total) => return Ok(total),
+            Err(EmberLabError::Io(error))
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && attempts < COMPLETE_SAMPLE_ATTEMPTS =>
+            {
+                // The root itself is revalidated before the retry: a root that vanished stays
+                // the NotFound; a root that is no longer a plain, contained directory refuses
+                // as a contract violation even when a substituted empty root would walk clean.
+                use std::os::windows::fs::MetadataExt;
+                let Ok(root_metadata) = fs::symlink_metadata(directory) else {
+                    return Err(EmberLabError::Io(error));
+                };
+                if !root_metadata.is_dir() || root_metadata.file_attributes() & 0x400 != 0 {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: format!(
+                            "disk write wall retry root is not a plain directory: {}",
+                            directory.display()
+                        ),
+                    });
+                }
+                let canonical_root = fs::canonicalize(directory)?;
+                if !canonical_root.starts_with(canonical_write_root) {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: format!(
+                            "disk write wall retry root escaped its canonical write root: {}",
+                            directory.display()
+                        ),
+                    });
+                }
+                let elapsed = started.elapsed();
+                if elapsed > maximum_duration {
+                    return Err(EmberLabError::DiskWallMeasurementDuration {
+                        elapsed_ms: u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+                        maximum_ms: u64::try_from(maximum_duration.as_millis()).unwrap_or(u64::MAX),
+                    });
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(windows)]
+fn measure_disk_write_tree_pass(
+    directory: &Path,
+    canonical_write_root: &Path,
+    started: Instant,
+    maximum_duration: Duration,
+    entry_probe: &mut dyn FnMut(&Path),
 ) -> Result<u64> {
     use std::os::windows::fs::MetadataExt;
 
@@ -1148,6 +1355,7 @@ fn measure_disk_write_tree(
         }
         let entry = entry?;
         let path = entry.path();
+        entry_probe(&path);
         let metadata = fs::symlink_metadata(&path)?;
         if metadata.file_attributes() & 0x400 != 0 {
             return Err(EmberLabError::InvalidDispatchManifest {
@@ -1168,11 +1376,12 @@ fn measure_disk_write_tree(
         }
         if metadata.is_dir() {
             total = total
-                .checked_add(measure_disk_write_tree(
+                .checked_add(measure_disk_write_tree_pass(
                     &canonical,
                     canonical_write_root,
                     started,
                     maximum_duration,
+                    entry_probe,
                 )?)
                 .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
                     detail: "disk write wall tree byte count overflowed".into(),
