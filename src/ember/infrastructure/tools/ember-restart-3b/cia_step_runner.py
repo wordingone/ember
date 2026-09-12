@@ -78,8 +78,9 @@ def positive_int(value, name, maximum):
     return value
 
 
-def geometry_counts(geometry, *, trajectory=False, hour=False):
-    if type(trajectory) is not bool or type(hour) is not bool or (trajectory and hour):
+def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False):
+    if (type(trajectory) is not bool or type(hour) is not bool or type(measurement) is not bool
+            or trajectory + hour + measurement > 1):
         raise ValueError('one explicit boolean extended geometry selection required')
     if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
         raise ValueError('geometry fields differ')
@@ -88,9 +89,12 @@ def geometry_counts(geometry, *, trajectory=False, hour=False):
     warm = geometry['warm_steps']
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
-    measured = positive_int(geometry['measured_steps'], 'measured steps', 32768 if hour else 63 if trajectory else 8)
+    measured = positive_int(geometry['measured_steps'], 'measured steps',
+                            32768 if hour else MEASUREMENT_UPDATES if measurement else 63 if trajectory else 8)
     if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
         raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
+    if measurement and (sequence, documents, warm, measured) != (1024, 4, 1, MEASUREMENT_UPDATES):
+        raise ValueError('long measurement requires exactly 1024 complete 4x1024 updates with one warm exemplar')
     if hour and ((sequence, documents, warm) != (1024, 4, 1) or measured < 2):
         raise ValueError('extended worker requires 4x1024 geometry, one warm exemplar and at least two measured updates')
     return sequence, documents, warm, measured
@@ -185,6 +189,93 @@ def verify_prepared_inputs(prepared):
             raise ValueError('prepared pack geometry or phase changed')
 
 
+MEASUREMENT_INPUT_GRAMMAR = 'measurement-receipt-cursor-span-v1'
+
+
+class MeasurementPacks:
+    """Generate only the next complete pack from the verified detached shard list. The 1,025-pack plan is never
+    resident, and each emitted pack carries the cursor it consumed so every row accounts for its own input."""
+    def __init__(self, stream, cursor, *, maximum_steps, sequence, documents, warm):
+        self.stream = stream
+        self.cursor = dict(cursor)
+        self.maximum_steps, self.sequence, self.documents, self.warm = maximum_steps, sequence, documents, warm
+        self.index = 0
+
+    def next_pack(self):
+        if self.index >= self.maximum_steps:
+            raise ValueError('declared measurement input capacity exhausted')
+        before = dict(self.cursor)
+        pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
+                'index': self.index, 'phase': 'warm' if self.index < self.warm else 'measured'}
+        for _ in range(self.documents):
+            episode, after = self.stream.next_episode(**self.cursor, sequence_length=self.sequence)
+            pack['document_starts'].append(len(pack['token_ids']))
+            pack['token_ids'].extend(episode['token_ids'])
+            pack['target_ids'].extend(episode['target_ids'])
+            pack['positions'].extend([[position, 0, 0] for position in range(self.sequence)])
+            self.cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+        pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
+        self.index += 1
+        return pack
+
+
+def prepare_measurement_inputs(data, geometry):
+    """Bind the 1,024-update plan by receipt, tokenizer, ledger, cursor and span without materializing it. The input
+    digest is the digest of that declaration under a named grammar, never a digest of pack bytes the plan does not
+    hold; the executed bytes are accounted per row (pack digest, cursor before and after)."""
+    stream, receipt, tokenizer, ledger = open_input_stream(data)
+    sequence, documents, warm, measured = geometry_counts(geometry, measurement=True)
+    cursor = dict(data['cursor'])
+    if set(cursor) != {'shard_index', 'token_offset'}:
+        raise ValueError('cursor fields differ')
+    planned_positions = (warm + measured) * documents * sequence
+    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    declaration = {'receipt_sha256': data['receipt_sha256'], 'tokenizer_sha256': data['tokenizer_sha256'],
+                   'shard_ledger_sha256': data['shard_ledger_sha256'], 'cursor_start': cursor,
+                   'geometry': dict(geometry), 'span': span, 'planned_positions': planned_positions}
+    binding = dict(declaration, input_sha256=hashlib.sha256(canonical(declaration)).hexdigest(),
+                   input_digest_grammar=MEASUREMENT_INPUT_GRAMMAR,
+                   shard_ledger_path=str(ledger) if ledger is not None else None)
+    packs = MeasurementPacks(stream, cursor, maximum_steps=warm + measured, sequence=sequence, documents=documents,
+                             warm=warm)
+    first = packs.next_pack()
+    bound = [(receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256'])]
+    if ledger is not None:
+        bound.append((ledger, data['shard_ledger_sha256']))
+    for path, expected in bound:
+        if file_sha256(path) != expected:
+            raise ValueError('measurement inputs changed during preparation')
+    return {'binding': binding, 'geometry': dict(geometry), 'first': first, 'packs': packs, 'measurement': True}
+
+
+def measurement_packs(prepared):
+    yield prepared['first']
+    packs = prepared['packs']
+    while packs.index < packs.maximum_steps:
+        yield packs.next_pack()
+
+
+def verify_measurement_pack(pack, index, *, sequence, documents, warm, measured):
+    if (index >= warm + measured or pack['index'] != index or pack['phase'] != ('warm' if index < warm else 'measured')
+            or len(pack['token_ids']) != sequence * documents or len(pack['target_ids']) != sequence * documents
+            or len(pack['positions']) != sequence * documents
+            or pack['document_starts'] != [step * sequence for step in range(documents)]):
+        raise ValueError('measurement pack geometry or phase changed')
+
+
+def measurement_summary(rates):
+    """Rank statistics of the measured updates' positions per second: nearest-rank lower percentile (rank
+    ceil(p*n), no interpolation), stated with the estimator so any consumer can recompute it from rows.jsonl."""
+    if not rates or any(type(value) is not float or not math.isfinite(value) or value <= 0 for value in rates):
+        raise ValueError('measurement summary needs finite positive measured rates')
+    ordered = sorted(rates)
+    def rank(p):
+        return ordered[max(0, math.ceil(p * len(ordered)) - 1)]
+    return {'schema': 'cia-measurement-summary-v1', 'measured_updates': len(ordered), 'estimator': 'nearest-rank-lower',
+            'positions_per_second': {'min': ordered[0], 'p10': rank(0.10), 'p50': rank(0.50), 'p90': rank(0.90),
+                                     'max': ordered[-1], 'mean': sum(ordered) / len(ordered)}}
+
+
 def validate_prediction(prediction, *, expected_identity, positions_per_step):
     if (not isinstance(prediction, dict) or set(prediction) != {
             'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis'}
@@ -203,7 +294,8 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError('prediction arithmetic differs from counted positions')
     trajectory, hour = trajectory_mode(expected_identity), hour_mode(expected_identity)
-    _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory, hour=hour)
+    _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory, hour=hour,
+                                           measurement=measurement_mode(expected_identity))
     planned = expected_identity['hour']['minimum_measured_steps'] if hour else measured
     if (warm + planned) * wall >= resource_limits(expected_identity)['wall_seconds']:
         raise ValueError('predicted steps do not fit the fixed wall bound')
@@ -355,12 +447,58 @@ def trajectory_mode(identity):
     return True
 
 
+MEASUREMENT_UPDATES = 1024
+MEASUREMENT_SCHEMA = 'governed-1024-v1'
+MEASUREMENT_WALL_SECONDS = 3000
+# Long-measurement arms: the declared execution regime of each; only the fused arm declares the fused optimizer.
+MEASUREMENT_ARMS = {'eager': None, 'segmented': 'resident-segmented-capture',
+                    'dynamic': 'resident-dynamic-capture', 'fused': 'resident-dynamic-capture'}
+
+
+def measurement_mode(identity):
+    """The explicit 1,024-update measurement identity. Distinct from the 64-update trajectory comparison (numerical
+    evidence) and the governed hour (checkpoint-bound qualification): it produces the warmed step-time distribution
+    over 1,024 complete updates and nothing else, so it is admitted only with its own declared block and arm."""
+    if 'measurement' not in identity:
+        return False
+    value = identity['measurement']
+    if ('trajectory' in identity or 'hour' in identity or not isinstance(value, dict)
+            or set(value) != {'schema', 'arm'} or value['schema'] != MEASUREMENT_SCHEMA
+            or value['arm'] not in MEASUREMENT_ARMS or execution_mode(identity) != MEASUREMENT_ARMS[value['arm']]):
+        raise ValueError('explicit fixed long-measurement identity with a matching arm required')
+    return True
+
+
+def expected_optimizer(identity):
+    """The one fixed optimizer definition an identity may carry. fused=True is a declared treatment: admitted for the
+    trajectory Tfused arm, the hour treatment arm and the long-measurement fused arm, never by request alone."""
+    expected = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],
+                'eps': 1e-8, 'weight_decay': 0.01, 'membership': 'complete_parameter_inventory'}
+    if ((trajectory_mode(identity) and identity['trajectory']['arm'] == 'Tfused')
+            or (hour_mode(identity) and identity['hour']['arm'] == 'treatment')
+            or (measurement_mode(identity) and identity['measurement']['arm'] == 'fused')):
+        expected['fused'] = True
+    return expected
+
+
+def optimizer_kwargs(definition):
+    """Constructor arguments from a validated definition. The fused flag is forwarded exactly when declared, so the
+    executed optimizer is the one the identity names; an identity-only admission would measure ordinary AdamW."""
+    kwargs = {'lr': definition['lr'], 'betas': tuple(definition['betas']), 'eps': definition['eps'],
+              'weight_decay': definition['weight_decay'], 'foreach': False}
+    if definition.get('fused') is True:
+        kwargs['fused'] = True
+    return kwargs
+
+
 def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
         limits.update(wall_seconds=4500, max_b_write_gib=24)
     elif trajectory_mode(identity):
         limits['max_b_write_gib'] = 8
+    elif measurement_mode(identity):
+        limits['wall_seconds'] = MEASUREMENT_WALL_SECONDS
     return limits
 
 
@@ -368,7 +506,7 @@ def hour_mode(identity):
     if 'hour' not in identity:
         return False
     value = identity['hour']
-    if ('trajectory' in identity or not isinstance(value, dict)
+    if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
             or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['arm'] not in ('control', 'treatment')
             or type(value['minimum_wall_seconds']) is not int
@@ -411,10 +549,10 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
-    trajectory, hour = trajectory_mode(identity), hour_mode(identity)
+    trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
     if ('production_mixture' in identity) != hour:
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
@@ -423,7 +561,8 @@ def prepare_execution(prediction):
     if hour:
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
         mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
-    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour)
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
+                                                measurement=measurement)
     validate_prediction(prediction, expected_identity=identity, positions_per_step=sequence * documents)
     outer = identity['dispatch_resources']
     if (not isinstance(outer, dict) or outer.get('profile') != 'cia_measurement'
@@ -470,21 +609,18 @@ def prepare_execution(prediction):
             or any(type(value) is not int or not 0 <= value < 25 for value in experts)
             or experts != sorted(set(experts))):
         raise ValueError('measurement expert support is outside its fixed bound')
-    optimizer = identity['optimizer']
-    expected = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],
-                'eps': 1e-8, 'weight_decay': 0.01, 'membership': 'complete_parameter_inventory'}
-    if (trajectory and identity['trajectory']['arm'] == 'Tfused') or (hour and identity['hour']['arm'] == 'treatment'):
-        expected['fused'] = True
-    if canonical(optimizer) != canonical(expected):
+    if canonical(identity['optimizer']) != canonical(expected_optimizer(identity)):
         raise ValueError('fixed optimizer definition differs')
     prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'])
-                if hour else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
+                if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
+                if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
     if hour:
         prepared['mixture_validation'] = mixture_validation
     actual = dict(identity, input_binding=prepared['binding'], resources=resource_limits(identity))
-    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour)
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
+                                                measurement=measurement)
     validate_prediction(prediction, expected_identity=actual, positions_per_step=sequence * documents)
-    if not hour:
+    if not (hour or measurement):
         verify_prepared_inputs(prepared)
     return config, prepared
 
@@ -705,7 +841,8 @@ def capture_prerequisites(identity):
         raise ValueError('segmented capture needs exactly four declared resident experts')
     if identity.get('batch_documents') is not True:
         raise ValueError('segmented capture needs document-batched steps')
-    _, _, warm, _ = geometry_counts(identity['geometry'], trajectory=trajectory_mode(identity), hour=hour_mode(identity))
+    _, _, warm, _ = geometry_counts(identity['geometry'], trajectory=trajectory_mode(identity), hour=hour_mode(identity),
+                                    measurement=measurement_mode(identity))
     if warm < 1:
         raise ValueError('segmented capture needs one warm step as the recorded exemplar')
     return experts
@@ -1040,14 +1177,14 @@ def worker(binding_path):
         model = CIADecoder(architecture_config=config).materialize_cpu(seed=prediction['identity']['seed'])
         mode = execution_mode(prediction['identity'])
         definition = prediction['identity']['optimizer']
-        first = prepared['packs'][0]
+        measurement = measurement_mode(prediction['identity'])
+        first = prepared['first'] if measurement else prepared['packs'][0]
         first_lengths = document_lengths(tuple(first['document_starts']), len(first['token_ids']))
 
         def optimizer_factory(inventory):
             if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
                 raise ValueError('full CIA-3B population is missing')
-            return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
-                                     eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False)
+            return torch.optim.AdamW(list(inventory.values()), **optimizer_kwargs(definition))
 
         inventory, optimizer = prepare_model(model, prediction['identity'], first_lengths, device, mode=mode,
                                              optimizer_factory=optimizer_factory)
@@ -1060,7 +1197,7 @@ def worker(binding_path):
             'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
             'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'c_compiler': c_compiler,
             'execution_mode': mode, 'resident_experts': (list(support['experts']) if mode is not None else None),
-            'claim': CLAIM})
+            'optimizer': dict(definition), 'measurement': prediction['identity'].get('measurement'), 'claim': CLAIM})
         expert_owners = expert_owner_index(inventory)
         capture = None
         if mode in MODE_SOURCES:
@@ -1072,9 +1209,15 @@ def worker(binding_path):
                 collector=buffers.collector,
                 loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
                 static_state=(buffers.raw,), warmup_steps=2, **dynamic)
+        counts = geometry_counts(prediction['identity']['geometry'], measurement=True) if measurement else None
+        measured_rates = []
         with (custody / 'rows.jsonl').open('xb') as rows:
-            for index, pack in enumerate(prepared['packs']):
-                verify_prepared_inputs(prepared)
+            for index, pack in enumerate(measurement_packs(prepared) if measurement else prepared['packs']):
+                if measurement:
+                    verify_measurement_pack(pack, index, sequence=counts[0], documents=counts[1], warm=counts[2],
+                                            measured=counts[3])
+                else:
+                    verify_prepared_inputs(prepared)
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
@@ -1083,6 +1226,11 @@ def worker(binding_path):
                 # after the successful warm update leaves a truthful applied count in the terminal record.
                 row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
                            input_sha256=prepared['binding']['input_sha256'])
+                if measurement:
+                    row.update(cursor_before=pack['cursor_before'], cursor_after=pack['cursor_after'],
+                               pack_sha256=_pack_digest([pack]), measurement=prediction['identity']['measurement'])
+                    if pack['phase'] == 'measured':
+                        measured_rates.append(row['positions_per_second'])
                 rows.write(canonical(row) + b'\n')
                 rows.flush()
                 os.fsync(rows.fileno())
@@ -1096,6 +1244,10 @@ def worker(binding_path):
                     finally:
                         buffers.capturing = False
                     _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
+        if measurement:
+            _write_new(custody / 'measurement-summary.json', dict(measurement_summary(measured_rates),
+                measurement=prediction['identity']['measurement'], execution_mode=mode, optimizer=dict(definition),
+                input_sha256=prepared['binding']['input_sha256'], applied_positions=applied_positions, claim=CLAIM))
         _write_new(custody / 'worker-terminal.json', {'status': 'completed', 'applied_positions': applied_positions,
                                                     'claim': CLAIM})
         return 0
