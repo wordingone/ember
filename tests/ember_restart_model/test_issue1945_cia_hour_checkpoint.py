@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 import torch
 
-ROOT = Path(os.environ.get('CIA_SOURCE_ROOT', str(Path(__file__).resolve().parents[2])))
+ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'
 sys.path[:0] = [str(BASE), str(ROOT / 'src'), str(ROOT)]
 SOURCE = Path(os.environ.get('CIA_CHECKPOINT_SOURCE', str(BASE)))
