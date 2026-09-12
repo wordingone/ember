@@ -438,8 +438,20 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
         ctx.backend = backend
         ctx.save_for_backward(value, offsets, *parameters)
         ctx.counted = ctx.needs_input_grad[0] or any(ctx.needs_input_grad[5:])
+        ctx.retained = None
         if ctx.counted:
             execution.pending += 1
+            if backend == 'dynamic':
+                # Retain the identical operation graph rather than repeat the
+                # three projections during backward. The outer Function still
+                # returns each gradient to its exact resident Parameter owner.
+                with torch.enable_grad():
+                    inputs = [value.detach().requires_grad_(True)]
+                    inputs.extend(group.detach().requires_grad_(True)
+                                  for group in execution.layer_groups(layer))
+                    result = _grouped_swiglu(*inputs, offsets, backend)
+                ctx.retained = (result, inputs)
+                return result.detach()
         return _grouped_swiglu(value, *execution.layer_groups(layer), offsets, backend)
 
     @staticmethod
@@ -450,11 +462,15 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
         if execution.step_id != ctx.step_id or ctx.completed:
             raise RuntimeError('stale or repeated resident grouped backward')
         value, offsets, *parameters = ctx.saved_tensors
-        with torch.enable_grad():
-            inputs = [value.detach().requires_grad_(True)]
-            inputs.extend(group.detach().requires_grad_(True) for group in execution.layer_groups(ctx.layer))
-            result = _grouped_swiglu(*inputs, offsets, ctx.backend)
-            gradients = torch.autograd.grad(result, inputs, output_gradient)
+        if ctx.retained is not None:
+            result, inputs = ctx.retained
+        else:
+            with torch.enable_grad():
+                inputs = [value.detach().requires_grad_(True)]
+                inputs.extend(group.detach().requires_grad_(True) for group in execution.layer_groups(ctx.layer))
+                result = _grouped_swiglu(*inputs, offsets, ctx.backend)
+        gradients = torch.autograd.grad(result, inputs, output_gradient)
+        ctx.retained = None
         returned = tuple(gradient[index] if required else None
                          for gradient, requirements in zip(gradients[1:],
                              (ctx.needs_input_grad[5:9], ctx.needs_input_grad[9:13], ctx.needs_input_grad[13:17]))
