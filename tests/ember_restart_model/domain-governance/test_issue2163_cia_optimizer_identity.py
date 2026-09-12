@@ -27,7 +27,8 @@ class CIAOptimizerIdentityTests(unittest.TestCase):
 
     def test_complete_named_identity_and_deterministic_reconstruction(self):
         identity = self.identity()
-        self.assertEqual(identity['schema_version'], 'ember-cia-optimizer-identity-v1')
+        self.assertEqual(identity['schema_version'], 'ember-cia-optimizer-identity-v2')
+        self.assertEqual(identity['runtime_code_format'], 'python-code-fields-v1')
         self.assertEqual(identity['parameter_elements'], 3_082_539_008)
         self.assertEqual(identity['param_groups'][0]['params'], list(self.parameters))
         self.assertEqual(identity['param_groups'][0]['hyperparameters']['betas'], [0.9, 0.999])
@@ -42,7 +43,7 @@ class CIAOptimizerIdentityTests(unittest.TestCase):
         group = self.optimizer.param_groups[0]
         for key, value in [('betas', (0.8, 0.99)), ('eps', 1e-7), ('lr', 0.02),
                            ('weight_decay', 0.2), ('amsgrad', True), ('maximize', True),
-                           ('foreach', True)]:
+                           ('foreach', True), ('fused', True)]:
             old = group[key]
             group[key] = value
             self.assertNotEqual(original, self.identity(), key)
@@ -119,6 +120,37 @@ class CIAOptimizerIdentityTests(unittest.TestCase):
                          if 'step' in vars(cls))
         with patch.object(inherited, 'step', lambda *args, **kwargs: None):
             self.assertNotEqual(before, self.identity())
+
+    def test_code_identity_ignores_interning_but_binds_bytecode_and_types(self):
+        import marshal
+        import uuid
+        def literal():
+            return 'placeholder'
+        value = 'non-interned identity constant ' + uuid.uuid4().hex
+        code = literal.__code__.replace(co_consts=(None, value))
+        before = artifacts._cia_runtime_code_sha256(code)
+        old = marshal.dumps(code)
+        sys.intern(value)
+        self.assertNotEqual(old, marshal.dumps(code), 'fixture must exercise the former representation instability')
+        self.assertEqual(before, artifacts._cia_runtime_code_sha256(code))
+        def original(value):
+            return value
+        def changed(value):
+            return -value
+        self.assertNotEqual(original.__code__.co_code, changed.__code__.co_code)
+        self.assertNotEqual(artifacts._cia_runtime_code_sha256(original.__code__),
+                            artifacts._cia_runtime_code_sha256(changed.__code__))
+        hashes = {artifacts._cia_runtime_code_sha256(code.replace(co_consts=(None, item)))
+                  for item in (1, 1.0, True, '1')}
+        self.assertEqual(len(hashes), 4)
+
+    def test_legacy_identity_is_not_coerced_into_new_runtime_identity(self):
+        legacy = dict(self.identity(), schema_version='ember-cia-optimizer-identity-v1')
+        del legacy['runtime_code_format']
+        payload = dict(schema_version='ember-cia-native-optimizer-state-v1', identity=legacy,
+                       master_weights=None, state={})
+        with self.assertRaisesRegex(ValueError, 'identity differs from the runtime'):
+            artifacts.prepare_cia_optimizer_state(self.model, self.optimizer, payload, max_state_bytes=1)
 
 
 if __name__ == '__main__':
