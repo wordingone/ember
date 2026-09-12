@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
+from .ember_v0_document_reduction import document_reduced_linear
 from .ember_v0_inventory import equation_inventory, update_support
 from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
@@ -485,6 +486,34 @@ class CIADecoder(nn.Module):
     def _linear(self, values, name):
         return F.linear(values, self._weight(name))
 
+    # The summation ORDER is a measured property of the reference, never a design choice: it
+    # reproduces the saved actual R1 update-1 gradients bitwise on 24 of 24 weights on cuda:0, and
+    # ascending reproduces none of them. bf16 reduction bytes are device-dependent -- the same check
+    # on CPU returns a confident false negative on every weight -- so the receipts record the device.
+    _DOCUMENT_REDUCTION_ORDER = "descending"
+
+    def _document_linear(self, values, name, lengths):
+        """Merged forward, weight gradient reduced per document in the measured reference order.
+
+        The forward is byte-identical to the merged F.linear this branch already ran; the input
+        gradient is unchanged. Only the weight-gradient reduction shape moves, because that is the
+        term that differs from the reference even where the forward is bit-equal.
+        """
+        return document_reduced_linear(values, self._weight(name), lengths,
+                                       self._DOCUMENT_REDUCTION_ORDER)
+
+    def _document_swiglu(self, values, prefix, lengths):
+        """Shared SwiGLU on merged rows with each weight gradient reduced per document.
+
+        The resident segment runs this block on the concatenated rows, so all three shared
+        projections carry the merged reduction; the reference reduces per document. Forward and
+        input gradients are unchanged here -- up, gate and down are all bit-equal merged at this
+        geometry -- and only the weight-gradient reduction shape is restored.
+        """
+        up = self._document_linear(values, prefix + ".up.weight", lengths)
+        gate = self._document_linear(values, prefix + ".gate.weight", lengths)
+        return self._document_linear(F.silu(gate) * up, prefix + ".down.weight", lengths)
+
     def add_modality(self, values, modality):
         self._input(values, 1024)
         if type(modality) is not int or not 0 <= modality < 8:
@@ -659,14 +688,28 @@ class CIADecoder(nn.Module):
         """
         if self._resident_experts:
             total = len(values)
-            q = self._linear(values, prefix + ".q.weight").view(total, 16, 64)
-            k = self._linear(values, prefix + ".k.weight").view(total, 4, 64)
-            v = self._linear(values, prefix + ".v.weight").view(total, 4, 64)
+            # Query/output retain merged forwards and use descending document weight-gradient
+            # reductions. Key/value use the reference per-document forward and backward below.
+            # Order is DESCENDING, measured not chosen: it reproduces the saved actual R1 update-1
+            # gradients bitwise on 24 of 24 weights across the attention and shared paths
+            # (state/issue1945-receipts/core-dw-order-resolution-cuda.json and
+            # shared-dw-order-resolution.json, cuda:0). Ascending matches none of them.
+            # k and v carry a SECOND mechanism the merged forward cannot fix: their 1024->256
+            # forward is not bit-equal merged (relative L2 .00283-.00289, ~37% of elements), because
+            # cuBLAS selects its algorithm from M. So they are restored to the reference's own
+            # _per_document construct, which reproduces both its forward AND its weight-gradient
+            # reduction exactly rather than reimplementing either. q and o do not need it: their
+            # forward is already bit-equal merged, so only their reduction shape moves.
+            q = self._document_linear(values, prefix + ".q.weight", lengths).view(total, 16, 64)
+            k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"),
+                                   values, lengths).view(total, 4, 64)
+            v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"),
+                                   values, lengths).view(total, 4, 64)
             q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
             k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
             out = _document_sdpa(q, k.repeat_interleave(4, dim=1),
                                  v.repeat_interleave(4, dim=1), lengths)
-            return self._linear(out.reshape(total, 1024), prefix + ".o.weight")
+            return self._document_linear(out.reshape(total, 1024), prefix + ".o.weight", lengths)
         total = len(values)
         q = self._per_document(lambda piece: self._linear(piece, prefix + ".q.weight"), values, lengths).view(total, 16, 64)
         k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"), values, lengths).view(total, 4, 64)
@@ -792,7 +835,8 @@ class CIADecoder(nn.Module):
             prefix = f'layers.{layer}'
             values = values + self._batched_attention(
                 self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
-            shared = values + self._swiglu(self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared')
+            shared = values + self._document_swiglu(
+                self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared', lengths)
             if layer % 2 == 0:
                 values = shared
                 continue

@@ -415,12 +415,12 @@ def _validate_resident_group(parameters, storage):
             raise ValueError('resident Parameter does not own its exact declared group slice')
 
 
-def _grouped_swiglu(value, up, gate, down, offsets, backend='native'):
+def _grouped_swiglu(value, up, gate, down, offsets, backend='native', chunk_ends=None):
     if backend == 'dynamic':
         from .ember_v0_grouped_capture import grouped_mm
-        hidden = F.silu(grouped_mm(value, gate.transpose(1, 2), offsets))
-        hidden = hidden * grouped_mm(value, up.transpose(1, 2), offsets)
-        return grouped_mm(hidden, down.transpose(1, 2), offsets)
+        hidden = F.silu(grouped_mm(value, gate.transpose(1, 2), offsets, chunk_ends=chunk_ends))
+        hidden = hidden * grouped_mm(value, up.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        return grouped_mm(hidden, down.transpose(1, 2), offsets, chunk_ends=chunk_ends)
     if backend != 'native':
         raise ValueError('unknown resident grouped backend')
     hidden = F.silu(F.grouped_mm(value, gate.transpose(1, 2), offs=offsets))
@@ -431,13 +431,14 @@ def _grouped_swiglu(value, up, gate, down, offsets, backend='native'):
 class _ResidentGroupedSwiGLU(torch.autograd.Function):
     """Grouped kernels share storage; gradients belong to the actual Parameters."""
     @staticmethod
-    def forward(ctx, value, offsets, execution, layer, backend, *parameters):
+    def forward(ctx, value, offsets, execution, layer, backend, chunk_ends, *parameters):
         execution.check()
         ctx.execution, ctx.layer, ctx.step_id = execution, layer, execution.step_id
         ctx.completed = False
         ctx.backend = backend
+        ctx.chunk_ends = chunk_ends
         ctx.save_for_backward(value, offsets, *parameters)
-        ctx.counted = ctx.needs_input_grad[0] or any(ctx.needs_input_grad[5:])
+        ctx.counted = ctx.needs_input_grad[0] or any(ctx.needs_input_grad[6:])
         ctx.retained = None
         if ctx.counted:
             execution.pending += 1
@@ -449,10 +450,10 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
                     inputs = [value.detach().requires_grad_(True)]
                     inputs.extend(group.detach().requires_grad_(True)
                                   for group in execution.layer_groups(layer))
-                    result = _grouped_swiglu(*inputs, offsets, backend)
+                    result = _grouped_swiglu(*inputs, offsets, backend, chunk_ends)
                 ctx.retained = (result, inputs)
                 return result.detach()
-        return _grouped_swiglu(value, *execution.layer_groups(layer), offsets, backend)
+        return _grouped_swiglu(value, *execution.layer_groups(layer), offsets, backend, chunk_ends)
 
     @staticmethod
     @once_differentiable
@@ -468,17 +469,17 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
             with torch.enable_grad():
                 inputs = [value.detach().requires_grad_(True)]
                 inputs.extend(group.detach().requires_grad_(True) for group in execution.layer_groups(ctx.layer))
-                result = _grouped_swiglu(*inputs, offsets, ctx.backend)
+                result = _grouped_swiglu(*inputs, offsets, ctx.backend, ctx.chunk_ends)
         gradients = torch.autograd.grad(result, inputs, output_gradient)
         ctx.retained = None
         returned = tuple(gradient[index] if required else None
                          for gradient, requirements in zip(gradients[1:],
-                             (ctx.needs_input_grad[5:9], ctx.needs_input_grad[9:13], ctx.needs_input_grad[13:17]))
+                             (ctx.needs_input_grad[6:10], ctx.needs_input_grad[10:14], ctx.needs_input_grad[14:18]))
                          for index, required in enumerate(requirements))
         if ctx.counted:
             execution.pending -= 1
         ctx.completed = True
-        return (gradients[0] if ctx.needs_input_grad[0] else None, None, None, None, None, *returned)
+        return (gradients[0] if ctx.needs_input_grad[0] else None, None, None, None, None, None, *returned)
 
 
 def _resident_bindings(model, parameters):
@@ -755,7 +756,17 @@ class ResidentExecution:
         ordered = values.index_select(0, order)
         parameters = tuple(self.model.weights[f'experts.{expert}.layers.{layer}.{projection}.weight'.replace('.', '__')]
                            for projection in ('up', 'gate', 'down') for expert in self.ids)
-        result = _ResidentGroupedSwiGLU.apply(ordered, offsets, self, layer, backend, *parameters)
+        chunk_ends = None
+        if backend == 'dynamic':
+            if not self._geometry_sizes or sum(self._geometry_sizes) != len(values):
+                raise ValueError('dynamic chunk gradients require the complete bound row geometry')
+            sizes = self._geometry_repeats
+            starts = sizes.cumsum(0) - sizes
+            chunk_slots = slots.index_select(0, starts)
+            self.require_valid((chunk_slots.repeat_interleave(sizes, output_size=len(values)) == slots).all(), 'routing')
+            counts = (chunk_slots[None, :] == self.slot_tensor[:, None]).to(torch.int32) * sizes[None, :]
+            chunk_ends = counts.cumsum(1, dtype=torch.int32)
+        result = _ResidentGroupedSwiGLU.apply(ordered, offsets, self, layer, backend, chunk_ends, *parameters)
         return result.index_select(0, torch.argsort(order))
 
     def expert_block(self, values, expert, layer):

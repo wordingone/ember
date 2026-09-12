@@ -52,6 +52,7 @@ class SmallDenseModel(torch.nn.Module):
         self.scale = torch.nn.Parameter(torch.linspace(.01,.02,24))
         self.output = torch.nn.Parameter(torch.randn(7,1024) * .01)
         self._cuda_execution = Execution()
+        self.shared_calls = []
         self._resident_experts = (0,1,8,18)
         self._resident_documents_forward = decoder._resident_documents_forward.__get__(self)
         if hasattr(decoder, '_resident_segment'):
@@ -74,6 +75,11 @@ class SmallDenseModel(torch.nn.Module):
         return values * self.scale[int(prefix.split('.')[1])]
     def _swiglu(self, values, prefix):
         return torch.nn.functional.silu(values) * self.scale[int(prefix.split('.')[1])]
+    def _document_swiglu(self, values, prefix, lengths):
+        # This stub records sequencing; the decoder caller suite checks gradient arithmetic.
+        assert sum(lengths) == len(values)
+        self.shared_calls.append(prefix)
+        return self._swiglu(values, prefix)
     def _linear(self, values, name): return torch.nn.functional.linear(values, self.output)
 
 class SegmentTests(unittest.TestCase):
