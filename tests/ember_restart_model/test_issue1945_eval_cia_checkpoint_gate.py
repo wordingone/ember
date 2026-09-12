@@ -28,6 +28,7 @@ for entry in (ROOT / 'src', TOOLS):
 import checkpoint_artifacts as artifacts  # noqa: E402
 import parameter_counter as counter  # noqa: E402
 import eval_cia_checkpoint_gate as gate  # noqa: E402
+import cia_step_runner as runner  # noqa: E402
 from ember.model import ember_v0_inventory as cia_inventory, ember_v0_decoder as cia_decoder  # noqa: E402
 from ember.model.ember_v0_contract import cia_architecture_config, validate_cia_architecture  # noqa: E402
 
@@ -110,12 +111,22 @@ class FixtureTests(unittest.TestCase):
         _write(self.dir / 'f.json', _fixture(HELD, export_sha256=self.export_sha))
         output = self.dir / 'receipt.json'
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONPATH=str(ROOT / 'src'))
-        completed = subprocess.run([sys.executable, str(TOOLS / 'eval_cia_checkpoint_gate.py'), 'run',
-                                    '--checkpoint', str(self.dir / 'absent'), '--receipt', str(self.dir / 'absent.json'),
-                                    '--fixture', str(self.dir / 'f.json'), '--fixture-sha256', '9' * 64,
-                                    '--export', str(self.export_path), '--export-sha256', self.export_sha,
-                                    '--tokenizer', str(self.export_path), '--tokenizer-sha256', TOKENIZER_SHA,
-                                    '--output', str(output)], capture_output=True, text=True, env=env, timeout=300)
+        arguments = [str(TOOLS / 'eval_cia_checkpoint_gate.py'), 'run',
+                     '--checkpoint', str(self.dir / 'absent'), '--receipt', str(self.dir / 'absent.json'),
+                     '--fixture', str(self.dir / 'f.json'), '--fixture-sha256', '9' * 64,
+                     '--export', str(self.export_path), '--export-sha256', self.export_sha,
+                     '--tokenizer', str(self.export_path), '--tokenizer-sha256', TOKENIZER_SHA,
+                     '--output', str(output)]
+        if os.name == 'nt':
+            # Permanent host rule: every non-CLI Python child runs through the headless helper, hidden.
+            helper = Path.home() / '.codex/headless-python.ps1'
+            command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper), '--'] + arguments
+            env['CODEX_PYTHON'] = sys.executable
+            hidden = runner.hidden_kwargs()
+        else:
+            command, hidden = [sys.executable] + arguments, {}
+        completed = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+                                   timeout=300, **hidden)
         self.assertEqual(completed.returncode, 2, completed.stderr)
         self.assertIn('REFUSED:FIXTURE_IDENTITY', completed.stderr)
         self.assertFalse(output.exists())
