@@ -9,6 +9,7 @@ import gc
 import json
 import math
 import os
+import re
 import weakref
 from pathlib import Path
 
@@ -242,6 +243,15 @@ def compare_start_identity(reference, candidate, *, arm):
         right['optimizer'] = dict(right['optimizer'])
         if right['optimizer'].pop('fused', None) is not True:
             raise ValueError('explicit fused optimizer treatment required')
+    if arm == 'R3':
+        permutation, executed = right.pop('document_permutation', None), right.pop('executed_input_sha256', None)
+        if permutation is None or executed is None:
+            raise ValueError('R3 start must record its pinned document permutation and executed input digest')
+        checked_document_permutation(permutation)
+        if type(executed) is not str or not re.fullmatch('[0-9a-f]{64}', executed) or executed == left.get('input_binding', {}).get('input_sha256'):
+            raise ValueError('R3 executed input digest must be a 64-hex digest distinct from the bound original input')
+    elif 'document_permutation' in right or 'executed_input_sha256' in right:
+        raise ValueError('only the R3 arm may execute a permuted input')
     if left != right:
         raise ValueError('complete starting population, RNG, data or optimizer identities differ')
 
@@ -264,7 +274,7 @@ def compare_saved_snapshots(reference_root, reference, candidate_root, candidate
 
 def adjudicate_arms(roots, arm_sha256):
     """Compare independently identified completed arm artifacts; native receipts are checked by the caller."""
-    if set(roots) != set(arm_sha256) or not {'R1', 'R2'} < set(roots) or not set(roots) <= {'R1', 'R2', 'Tsegmented', 'Tdynamic', 'Tfused'}:
+    if set(roots) != set(arm_sha256) or not {'R1', 'R2'} < set(roots) or not set(roots) <= {'R1', 'R2', 'R3', 'Tsegmented', 'Tdynamic', 'Tfused'}:
         raise ValueError('two references and declared treatment arms required')
     arms = {}
     for name, root in roots.items():
@@ -293,10 +303,21 @@ def adjudicate_arms(roots, arm_sha256):
             roots[name], arm['snapshots'][update]) for update in reference['snapshots']}
         if name != 'R2':
             rows[name] = compare_rows(reference['rows'], arms['R2']['rows'], arm['rows'])
-    return dict(schema='ember-cia-trajectory-comparison-v1', arm_sha256=arm_sha256,
+    result = dict(schema='ember-cia-trajectory-comparison-v1', arm_sha256=arm_sha256,
         passed=all(item['passed'] for group in tensors.values() for item in group.values())
             and all(item['passed'] for item in rows.values()), tensors=tensors, rows=rows,
         claim='Bounded tensor, loss and routing comparison only; native receipts and all other qualification gates remain separate')
+    if 'R3' in arms:
+        worst = {update: max([entry[kind]['relative_l2'] for entry in item['tensors'].values() for kind in entry
+                              if isinstance(entry[kind].get('relative_l2'), (int, float))] or [0.0])
+                 for update, item in tensors['R3'].items()}
+        result['permuted_reference_floor'] = dict(
+            document_permutation=arms['R3']['start']['document_permutation'],
+            loss=rows['R3']['loss'], census_difference_updates=rows['R3']['census_difference_updates'],
+            worst_relative_l2_by_update=worst,
+            claim='Sensitivity of the bit-identity instrument to a semantically identical document permutation; '
+                  'a measurement, not an acceptance floor')
+    return result
 
 
 class ReferenceRouting:
@@ -400,6 +421,50 @@ def routing_metrics(data, *, previous=None):
                 health_claim='Reported observations only; no invented health-metric acceptance bound')
 
 
+def checked_document_permutation(value):
+    """R3: exactly 64 rows, each an int permutation of the four documents, not all identity."""
+    if (type(value) is not list or len(value) != UPDATES
+            or any(type(row) is not list or len(row) != 4 or any(type(item) is not int for item in row)
+                   or sorted(row) != [0, 1, 2, 3] for row in value)
+            or all(row == [0, 1, 2, 3] for row in value)):
+        raise ValueError('R3 requires a pinned non-identity document permutation for each of the 64 updates')
+    return [list(row) for row in value]
+
+
+def permute_pack(pack, permutation, *, sequence=1024):
+    """Reorder the four documents of one pack into the pinned order; per-document bytes are unchanged."""
+    if (sorted(permutation) != [0, 1, 2, 3] or pack['document_starts'] != [d * sequence for d in range(4)]
+            or len(pack['token_ids']) != 4 * sequence or len(pack['target_ids']) != 4 * sequence
+            or len(pack['positions']) != 4 * sequence):
+        raise ValueError('document permutation requires the fixed 4x1024 pack geometry')
+    out = dict(pack)
+    for field in ('token_ids', 'target_ids', 'positions'):
+        parts = [pack[field][d * sequence:(d + 1) * sequence] for d in range(4)]
+        out[field] = [item for d in permutation for item in parts[d]]
+    return out
+
+
+def unpermute_routing(data, permutation):
+    """Express an executed pack's routing reports in the original document order.
+
+    Executed slot j held original document permutation[j]; per-chunk entries are indexed slot * 4 + chunk.
+    """
+    if sorted(permutation) != [0, 1, 2, 3]:
+        raise ValueError('document permutation must cover the four documents once')
+    slot = {document: index for index, document in enumerate(permutation)}
+    order = [slot[document] for document in range(4)]
+    out = dict(data)
+    for name in ('priors', 'ranked', 'candidates'):
+        if len(data[name]) != 4:
+            raise ValueError('routing reports must cover the four documents')
+        out[name] = [data[name][s] for s in order]
+    for name in ('winners', 'logits', 'gates'):
+        if any(len(row) != 16 for row in data[name]):
+            raise ValueError('routing reports must cover sixteen document chunks per layer')
+        out[name] = [[row[s * 4 + chunk] for s in order for chunk in range(4)] for row in data[name]]
+    return out
+
+
 def execute_steps(packs, *, step, record, applied, observe):
     """Bind each consumed pack and count a completed, persisted update before optional observations."""
     if len(packs) != UPDATES or [pack['index'] for pack in packs] != list(range(UPDATES)):
@@ -467,6 +532,11 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
                                  eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
                                  **({'fused': True} if definition.get('fused') is True else {}))
+    permutation = identity['trajectory'].get('document_permutation') if name == 'R3' else None
+    if (permutation is None) != (name != 'R3'):
+        raise ValueError('R3 requires, and only R3 carries, a pinned document permutation')
+    packs = prepared['packs'] if permutation is None else [
+        permute_pack(pack, order) for pack, order in zip(prepared['packs'], permutation)]
     first = prepared['packs'][0]
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device, mode=mode,
@@ -489,6 +559,9 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
                  source_sha256=identity['source_sha256'], optimizer=definition, snapshot_plan=plan)
     start['comparison_id'] = identity['trajectory']['comparison_id']
     start['frozen_population_sha256'] = frozen_sha
+    if permutation is not None:
+        start['document_permutation'] = [list(order) for order in permutation]
+        start['executed_input_sha256'] = runner._pack_digest(packs)
     runner._write_new(custody / ('t2-start-' + name + '.json'), dict(start, arm=name, execution_mode=mode))
     runner._write_new(custody / 'model.json', dict(population=runner.POPULATION, parameter_count=len(inventory),
         execution_mode=mode, trajectory=identity['trajectory'], c_compiler=compiler,
@@ -519,10 +592,17 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         nonlocal previous
         update = index + 1
         data = held['observer'].finish() if mode is None else device_routing(**held['routing'])
+        executed_sha = None
+        if permutation is not None:
+            executed_sha = hashlib.sha256(_canonical(data)).hexdigest()
+            data = unpermute_routing(data, permutation[index])
         metrics = routing_metrics(data, previous=previous)
         metrics.update(update=update, arm=name, loss=row['loss'], wall_seconds=row['wall_seconds'],
                        update_delta_relative_l2=_update_delta(held['before'], inventory, device=device),
                        routing_sha256=hashlib.sha256(_canonical(data)).hexdigest())
+        if executed_sha is not None:
+            metrics['executed_routing_sha256'] = executed_sha
+            metrics['document_permutation'] = list(permutation[index])
         held['before'].clear()
         held.clear()
         previous = data
@@ -541,7 +621,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
             finally:
                 buffers.capturing = False
             runner._write_new(custody / 'capture.json', dict(capture.receipt(), arm=name, claim=runner.CLAIM))
-    execute_steps(prepared['packs'], step=step, record=record, applied=applied, observe=observe)
+    execute_steps(packs, step=step, record=record, applied=applied, observe=observe)
     runner.verify_prepared_inputs(prepared)
     if frozen and inventory_sha256(frozen) != frozen_sha:
         raise ValueError('a frozen owner changed during the trajectory')
