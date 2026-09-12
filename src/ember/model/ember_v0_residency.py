@@ -771,7 +771,7 @@ class ResidentExecution:
 
 from dataclasses import dataclass
 import torch
-from ember.model.ember_v0_routing import _global_scores, _local_scores_rows, _unit_task_gate_rows
+from ember.model.ember_v0_routing import _global_scores, _local_scores, _local_scores_rows, _unit_task_gate_rows
 
 
 @dataclass(frozen=True)
@@ -839,7 +839,12 @@ def resident_global_routes(embedded, lengths, global_query, keys):
             torch.stack(ranked),torch.stack(sorted_ids),torch.stack(flags).all())
 
 
-def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, priors, candidates, index=None):
+def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, priors, candidates, index=None,
+                          *, local_routing_mode='batched'):
+    if type(local_routing_mode) is not str or local_routing_mode not in ('batched', 'per-chunk'):
+        raise ValueError('local routing requires an explicit supported mode')
+    if local_routing_mode == 'per-chunk' and index is not None:
+        raise ValueError('per-chunk routing does not consume a batched geometry index')
     if (type(geometry) is not DeviceRouteGeometry or type(sparse_depth) is not int
             or not 0 <= sparse_depth < 12 or hidden.shape != (sum(geometry.lengths),1024)
             or local_query.shape != (1024,1024) or keys.shape != (12,25,1024)
@@ -849,6 +854,23 @@ def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, pri
             or priors.shape[1:] != (25,)):
         raise ValueError('local routing requires its complete same-device global geometry')
     flags=[torch.isfinite(local_query).all(),torch.isfinite(keys).all(),torch.isfinite(priors).all()]
+    if local_routing_mode == 'per-chunk':
+        # Preserve the measured vector-GEMM arithmetic and owner gradient order.
+        rows, ids = [], []
+        for document, offset, start, size, epoch in geometry.chunks:
+            summary = hidden[offset+start-1].float() if start else torch.zeros(1024, device=hidden.device)
+            pair = candidates[epoch]
+            logits = _local_scores(summary, local_query, keys[sparse_depth].index_select(0, pair),
+                                   priors[epoch].index_select(0, pair))
+            flags.extend((torch.isfinite(summary).all(), torch.isfinite(logits).all()))
+            rows.append(logits)
+            ids.append(pair)
+        logits = torch.stack(rows)
+        slots = torch.argmax(logits, dim=1)
+        winners = torch.stack(ids).gather(1, slots[:, None])[:, 0]
+        gates = _unit_task_gate_rows(logits, slots)
+        flags.append(torch.isfinite(gates).all())
+        return winners, logits, gates, torch.stack(flags).all()
     # #1945 batched local router: every chunk of the layer in ONE launch set (the per-chunk loop launched ~30 kernels per
     # chunk forward and ~28 backward; 16 chunks x 12 layers was the ~12k-kernel population of the step). Per chunk the
     # arithmetic is the reference's: the summary is the row before the chunk (a zero summary with NO history gradient for
