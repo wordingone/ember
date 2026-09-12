@@ -136,10 +136,15 @@ def validate_checkpoint_probe(runner, identity):
         raise ValueError('probe checkpoint admission differs from reopened complete bytes')
 
 
+def validate_hour_execution(runner, identity):
+    mode = runner.execution_mode(identity)
+    if mode is not None and (identity['hour']['arm'] != 'treatment' or mode != 'resident-dynamic-capture'):
+        raise ValueError('captured hour requires the declared dynamic treatment')
+
+
 def validate_identity(*, runner, identity):
     from ember.governance.scripts import catalog_train_stream as catalog
-    if runner.execution_mode(identity) is not None:
-        raise ValueError('governed hour currently requires the eager reference execution mode')
+    validate_hour_execution(runner, identity)
     hour, geometry = identity['hour'], identity['geometry']
     if geometry['measured_steps'] < hour['minimum_measured_steps']:
         raise ValueError('declared step capacity cannot satisfy hour minimum')
