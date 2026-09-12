@@ -28,7 +28,7 @@ CONFIG = 'configs/ember-cia-3b.json'
 DISK_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py'
 GIB = 1024 ** 3
 POPULATION = 3_082_539_008
-CLAIM = 'measurement rows only; no checkpoint publication, learning or throughput qualification'
+CLAIM = 'governed execution evidence; model qualification requires its separate acceptance gates'
 JOB_NAMESPACE = 'EmberCIAMeasurement'
 LIMITS = {
     'host_memory_bytes': 40 * GIB, 'total_gpu_bytes': 20 * GIB,
@@ -78,9 +78,9 @@ def positive_int(value, name, maximum):
     return value
 
 
-def geometry_counts(geometry, *, trajectory=False):
-    if type(trajectory) is not bool:
-        raise ValueError('explicit boolean trajectory geometry selection required')
+def geometry_counts(geometry, *, trajectory=False, hour=False):
+    if type(trajectory) is not bool or type(hour) is not bool or (trajectory and hour):
+        raise ValueError('one explicit boolean extended geometry selection required')
     if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
         raise ValueError('geometry fields differ')
     sequence = positive_int(geometry['sequence_length'], 'sequence length', 1024)
@@ -88,9 +88,11 @@ def geometry_counts(geometry, *, trajectory=False):
     warm = geometry['warm_steps']
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
-    measured = positive_int(geometry['measured_steps'], 'measured steps', 63 if trajectory else 8)
+    measured = positive_int(geometry['measured_steps'], 'measured steps', 32768 if hour else 63 if trajectory else 8)
     if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
         raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
+    if hour and ((sequence, documents, warm) != (1024, 4, 1) or measured < 2):
+        raise ValueError('extended worker requires 4x1024 geometry, one warm exemplar and at least two measured updates')
     return sequence, documents, warm, measured
 
 
@@ -99,8 +101,8 @@ def _pack_digest(packs):
     return hashlib.sha256(canonical(body)).hexdigest()
 
 
-def prepare_inputs(data, geometry, *, trajectory=False):
-    """Open the real stream and freeze the whole plan before model allocation."""
+def open_input_stream(data):
+    """Verify the existing receipt and ledger and detach the admitted shard list."""
     if not isinstance(data, dict) or set(data) != DATA_KEYS:
         raise ValueError('data plan fields differ')
     semantic_path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py'
@@ -132,6 +134,12 @@ def prepare_inputs(data, geometry, *, trajectory=False):
     # The existing stream may refresh at shard boundaries. A detached verified
     # list, with no ledger path, makes every later read bounded by this plan.
     stream = replace(stream, shards=[dict(item) for item in stream.shards], shard_ledger_path=None)
+    return stream, receipt, tokenizer, ledger
+
+
+def prepare_inputs(data, geometry, *, trajectory=False):
+    """Open the real stream and freeze the whole short plan before model allocation."""
+    stream, receipt, tokenizer, ledger = open_input_stream(data)
     sequence, documents, warm, measured = geometry_counts(geometry, trajectory=trajectory)
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
@@ -194,9 +202,10 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     positive_int(positions_per_step, 'counted step positions', 4096)
     if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError('prediction arithmetic differs from counted positions')
-    trajectory = trajectory_mode(expected_identity)
-    _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory)
-    if (warm + measured) * wall >= LIMITS['wall_seconds']:
+    trajectory, hour = trajectory_mode(expected_identity), hour_mode(expected_identity)
+    _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory, hour=hour)
+    planned = expected_identity['hour']['minimum_measured_steps'] if hour else measured
+    if (warm + planned) * wall >= resource_limits(expected_identity)['wall_seconds']:
         raise ValueError('predicted steps do not fit the fixed wall bound')
 
 
@@ -325,6 +334,10 @@ def execution_mode(identity):
 def required_sources(identity):
     """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
     additional = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',) if trajectory_mode(identity) else ()
+    if hour_mode(identity):
+        additional += tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
+            ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+        additional += ('src/ember/governance/scripts/catalog_train_stream.py',)
     return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional
 
 
@@ -344,9 +357,26 @@ def trajectory_mode(identity):
 
 def resource_limits(identity):
     limits = dict(LIMITS)
-    if trajectory_mode(identity):
+    if hour_mode(identity):
+        limits.update(wall_seconds=4500, max_b_write_gib=24)
+    elif trajectory_mode(identity):
         limits['max_b_write_gib'] = 8
     return limits
+
+
+def hour_mode(identity):
+    if 'hour' not in identity:
+        return False
+    value = identity['hour']
+    if ('trajectory' in identity or not isinstance(value, dict)
+            or set(value) != {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
+            or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['arm'] not in ('control', 'treatment')
+            or type(value['minimum_wall_seconds']) is not int
+            or type(value['minimum_measured_steps']) is not int
+            or (value['minimum_wall_seconds'], value['minimum_measured_steps']) !=
+               ((3600, 1024) if value['schema'] == 'governed-hour-v1' else (0, 2))):
+        raise ValueError('explicit fixed governed-hour identity required')
+    return True
 
 
 def validate_trajectory_resources(identity):
@@ -367,17 +397,33 @@ def load_trajectory_module():
     return module
 
 
+def load_hour_module():
+    path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/cia_hour.py'
+    spec = importlib.util.spec_from_file_location('cia_governed_hour', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
 def prepare_execution(prediction):
     identity = prediction.get('identity')
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
-    trajectory = trajectory_mode(identity)
+    trajectory, hour = trajectory_mode(identity), hour_mode(identity)
+    if ('production_mixture' in identity) != hour:
+        raise ValueError('production mixture requires the explicit hour identity')
+    if 'checkpoint_probe' in identity and not hour:
+        raise ValueError('checkpoint probe reference requires the explicit hour identity')
     validate_trajectory_resources(identity)
-    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory)
+    if hour:
+        load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
+        mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour)
     validate_prediction(prediction, expected_identity=identity, positions_per_step=sequence * documents)
     outer = identity['dispatch_resources']
     if (not isinstance(outer, dict) or outer.get('profile') != 'cia_measurement'
@@ -427,15 +473,19 @@ def prepare_execution(prediction):
     optimizer = identity['optimizer']
     expected = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],
                 'eps': 1e-8, 'weight_decay': 0.01, 'membership': 'complete_parameter_inventory'}
-    if trajectory and identity['trajectory']['arm'] == 'Tfused':
+    if (trajectory and identity['trajectory']['arm'] == 'Tfused') or (hour and identity['hour']['arm'] == 'treatment'):
         expected['fused'] = True
     if canonical(optimizer) != canonical(expected):
         raise ValueError('fixed optimizer definition differs')
-    prepared = prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory)
+    prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'])
+                if hour else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
+    if hour:
+        prepared['mixture_validation'] = mixture_validation
     actual = dict(identity, input_binding=prepared['binding'], resources=resource_limits(identity))
-    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory)
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour)
     validate_prediction(prediction, expected_identity=actual, positions_per_step=sequence * documents)
-    verify_prepared_inputs(prepared)
+    if not hour:
+        verify_prepared_inputs(prepared)
     return config, prepared
 
 
@@ -655,7 +705,7 @@ def capture_prerequisites(identity):
         raise ValueError('segmented capture needs exactly four declared resident experts')
     if identity.get('batch_documents') is not True:
         raise ValueError('segmented capture needs document-batched steps')
-    _, _, warm, _ = geometry_counts(identity['geometry'], trajectory=trajectory_mode(identity))
+    _, _, warm, _ = geometry_counts(identity['geometry'], trajectory=trajectory_mode(identity), hour=hour_mode(identity))
     if warm < 1:
         raise ValueError('segmented capture needs one warm step as the recorded exemplar')
     return experts
@@ -963,6 +1013,18 @@ def worker(binding_path):
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         torch.manual_seed(prediction['identity']['seed'])
+        if hour_mode(prediction['identity']):
+            def applied(count):
+                nonlocal applied_positions
+                if type(count) is not int or count != 4096:
+                    raise ValueError('hour applied count differs from bound geometry')
+                applied_positions += count
+            load_hour_module().run_hour(runner=sys.modules[__name__], config=config,
+                prepared=prepared, prediction=prediction, binding=binding, custody=custody,
+                device=device, compiler=c_compiler, applied=applied)
+            _write_new(custody / 'worker-terminal.json', dict(status='completed',
+                applied_positions=applied_positions, claim=CLAIM))
+            return 0
         if trajectory_mode(prediction['identity']):
             def applied(count):
                 nonlocal applied_positions
@@ -1094,7 +1156,7 @@ def launch(args, dispatch):
             headroom()
             resource_census()
             result = OwnedProcessRunner(windows_job_factory=factory).run(command,
-                timeout_s=LIMITS['wall_seconds'], cwd=ROOT)
+                timeout_s=resource_limits(prediction['identity'])['wall_seconds'], cwd=ROOT)
     except BaseException as error:
         _write_new(custody / 'owned-failure.json', {'status': 'exception', 'error_type': type(error).__name__,
             'error': str(error), 'cleanup_verified': False, 'claim': CLAIM,
