@@ -57,13 +57,13 @@ class DynamicIntegrationTests(unittest.TestCase):
             return torch.cat(parts)
         original = residency._grouped_swiglu
         backends = []
-        def observed(a, up, gate, down, offs, backend='native'):
+        def observed(a, up, gate, down, offs, backend='native', chunk_ends=None):
             backends.append(backend)
             return original(a, up, gate, down, offs, 'native')
         execution = SimpleNamespace(check=lambda: None, layer_groups=lambda layer: tuple(stores),
                                     pending=0, step_id=4)
         with patch.object(residency.F, 'grouped_mm', cpu_grouped), patch.object(residency, '_grouped_swiglu', observed):
-            actual = residency._ResidentGroupedSwiGLU.apply(value, offsets, execution, 1, 'dynamic', *owners)
+            actual = residency._ResidentGroupedSwiGLU.apply(value, offsets, execution, 1, 'dynamic', None, *owners)
             actual.square().sum().backward()
             actual_grads = [value.grad.clone()] + [p.grad.clone() if p.grad is not None else None for p in owners]
             self.assertEqual(execution.pending, 0)
@@ -107,6 +107,7 @@ class DynamicIntegrationTests(unittest.TestCase):
             with step.record():
                 result, _ = model._resident_documents_forward(documents)
             outputs.append(torch.cat(result).detach())
+            self.assertEqual(model.shared_calls, [f'layers.{layer}.shared' for layer in range(24)])
             self.assertEqual(model._cuda_execution.calls, list(range(1, 24, 2)))
             self.assertEqual(model._cuda_execution.backends, [('dynamic' if dynamic else 'native')] * 12)
         torch.testing.assert_close(outputs[0], outputs[1], rtol=0, atol=0)
