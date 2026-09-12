@@ -49,6 +49,9 @@ SOURCES = (
     'src/ember/model/ember_v0_decoder.py', 'src/ember/model/ember_v0_contract.py',
     'src/ember/model/ember_v0_inventory.py', 'src/ember/model/ember_v0_residency.py',
     'src/ember/model/ember_v0_routing.py',
+    # Universal, not mode-conditional: the decoder imports it at module scope, so it is executed
+    # bytes under every mode and a measurement that omitted it would under-report its own source set.
+    'src/ember/model/ember_v0_document_reduction.py',
 )
 DATA_KEYS = {'receipt_path', 'receipt_sha256', 'tokenizer_path', 'tokenizer_sha256',
              'shards_root', 'shard_ledger_path', 'shard_ledger_sha256', 'cursor'}
