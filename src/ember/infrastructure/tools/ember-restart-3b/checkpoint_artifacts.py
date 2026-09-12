@@ -4268,7 +4268,14 @@ def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=
         device = str(parameter.device)
         begin = parameter.untyped_storage().data_ptr()
         size = parameter.untyped_storage().nbytes()
-        parameter_storage.append((device, begin, begin + size))
+        # Resident expert owners are disjoint contiguous slices of a packed
+        # allocation. Compare their occupied bytes, not the shared allocation.
+        # Keep conservative whole-storage coverage for strided parameters.
+        if parameter.is_contiguous():
+            begin += parameter.storage_offset() * parameter.element_size()
+            size = parameter.numel() * parameter.element_size()
+        if size:
+            parameter_storage.append((device, begin, begin + size))
         parameter_identity[name] = _cia_tensor_identity(parameter)
     for name, fields in state.items():
         if name not in parameters or type(fields) is not dict:
@@ -4425,10 +4432,20 @@ _CIA_CHECKPOINT_SCHEMA = 'ember-cia-checkpoint-v1'
 
 
 def _cia_quiescent_parameters(model):
+    from ember.model.ember_v0_residency import ResidentExecution
     parameters = model.parameter_inventory()
     _cia_physical_placement(parameters)
     execution = model._cuda_execution
-    if execution is not None and (execution.cache.active or execution.cache.pending
+    if isinstance(execution, ResidentExecution):
+        if (execution.model is not model or execution.cache is not execution
+                or execution.active or execution.pending or execution.poisoned or execution.retired
+                or execution.ids != model._resident_experts or execution.device != model._execution_device):
+            raise ValueError('CIA checkpoint requires a quiescent resident execution')
+        capture = execution.segmented
+        if capture is not None and (capture.execution is not execution or capture.captured
+                or capture._recording or capture._recorded):
+            raise ValueError('CIA checkpoint requires invalidated capture operations')
+    elif execution is not None and (execution.cache.active or execution.cache.pending
             or execution.cache.entries or execution.cache.leased or execution.cache.poisoned):
         raise ValueError('CIA checkpoint requires a quiescent candidate cache')
     if any(parameter.grad is not None for parameter in parameters.values()):

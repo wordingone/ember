@@ -22,6 +22,18 @@ subject = load(SOURCE, 'tested_cia_hour') if SOURCE.is_file() else None
 
 
 class HourContractTests(unittest.TestCase):
+    def test_hour_mode_gate_preserves_control_and_requires_declared_dynamic_treatment(self):
+        for arm in ('control', 'treatment'):
+            identity = dict(hour=dict(arm=arm))
+            subject.validate_hour_execution(runner, identity)
+        dynamic = dict(hour=dict(arm='treatment'), execution_mode='resident-dynamic-capture')
+        subject.validate_hour_execution(runner, dynamic)
+        for arm, mode in (('control', 'resident-dynamic-capture'),
+                          ('control', 'resident-segmented-capture'),
+                          ('treatment', 'resident-segmented-capture')):
+            with self.assertRaisesRegex(ValueError, 'declared dynamic treatment'):
+                subject.validate_hour_execution(runner, dict(hour=dict(arm=arm), execution_mode=mode))
+
     def test_probe_execution_mode_cannot_differ_from_consuming_hour(self):
         identity = dict(source_commit='a'*40, source_sha256={}, config_sha256='b'*64,
                         data={}, seed=1, support={}, production_mixture={})
