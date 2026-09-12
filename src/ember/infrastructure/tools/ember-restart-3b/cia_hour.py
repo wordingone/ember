@@ -342,6 +342,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     if mode in runner.MODE_SOURCES:
         buffers = runner.routing_buffers(lengths, device)
         capture = model.bind_segmented_capture(collector=buffers.collector,
+            local_routing_mode=runner.local_routing_mode(identity),
             loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
             static_state=(buffers.raw,), warmup_steps=2,
             **({'capture_experts': True} if mode == 'resident-dynamic-capture' else {}))
