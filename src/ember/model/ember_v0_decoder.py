@@ -703,6 +703,7 @@ class CIADecoder(nn.Module):
             raise ValueError('capture_experts must be an explicit boolean')
         from functools import partial
         from .ember_v0_capture import SegmentSpec, SegmentedStep
+        from .ember_v0_residency import route_index
         execution = self._cuda_execution
         if (not self._resident_experts or execution is None or execution.active
                 or execution.poisoned or execution.retired):
@@ -712,10 +713,13 @@ class CIADecoder(nn.Module):
         lengths = execution._geometry_lengths
         geometry = _resident_geometry(lengths)
         repeats = execution._geometry_repeats
+        # #1945: the local router's geometry index tensors are bound here, outside capture, and reused per segment.
+        local_index = route_index(geometry, execution.device)
         state, seen = [], set()
         expert_state = (execution.routing_valid, execution.id_tensor, execution.slot_tensor) if capture_experts else ()
-        for value in (execution.input_valid, *expert_state, repeats, execution._plan_candidates,
-                      execution._plan_winners, *static_state):
+        for value in (execution.input_valid, *expert_state, repeats, local_index.rows, local_index.started,
+                      local_index.epochs, local_index.zero, execution._plan_candidates, execution._plan_winners,
+                      *static_state):
             if value is None:
                 continue
             if (not isinstance(value, torch.Tensor) or value.requires_grad
@@ -740,7 +744,8 @@ class CIADecoder(nn.Module):
                     owners.add(id(parameter))
                     params.append(parameter)
             fn = partial(self._resident_segment, index, lengths=lengths, geometry=geometry,
-                         repeats=repeats, collector=collector, capture_experts=capture_experts)
+                         repeats=repeats, collector=collector, capture_experts=capture_experts,
+                         local_index=local_index)
             specs.append(SegmentSpec(index, fn, tuple(params), tuple(state), f'dense-{index}'))
         step = SegmentedStep(specs, device=execution.device, warmup_steps=warmup_steps).bind(execution, loss_fn=loss_fn)
         step._cia_lengths, step._cia_collector, step._cia_invalidated = lengths, collector, False
@@ -751,7 +756,8 @@ class CIADecoder(nn.Module):
         execution.segmented = step
         return step
 
-    def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None, capture_experts=False):
+    def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None, capture_experts=False,
+                          local_index=None):
         """One dense forward segment; every differentiable cross-segment value is carried explicitly."""
         from .ember_v0_residency import resident_global_routes, resident_local_routes
         if type(index) is not int or not 0 <= index <= 12:
@@ -788,7 +794,7 @@ class CIADecoder(nn.Module):
                 continue
             winners, logits, gates, valid = resident_local_routes(
                 shared, self._weight('router.local_query.weight'), keys, layer // 2,
-                geometry, priors, candidates)
+                geometry, priors, candidates, index=local_index)
             execution.require_valid(valid, 'routing')
             native_winners = winners
             winners, gates = execution.planned_routes(layer//2, geometry, candidates, winners, logits, gates)

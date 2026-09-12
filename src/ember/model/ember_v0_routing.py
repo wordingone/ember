@@ -31,6 +31,22 @@ def _local_scores(summary, query_weight, keys, log_prior):
     return math.sqrt(1024) * (F.normalize(keys.float(), dim=-1) @ query) + log_prior
 
 
+def _local_scores_rows(summaries, query_weight, keys, log_prior):
+    """Row-batched `_local_scores`: one launch set for every chunk of a sparse layer (#1945 batched local router).
+
+    Per row the arithmetic is `_local_scores(summaries[i], query_weight, keys[i], log_prior[i])`: the query is the
+    normalized projection of that row's own summary, each candidate key is normalized along its last axis, and the two
+    scores are scaled by sqrt(1024) and shifted by that row's log prior. The projection runs as ONE [rows,1024]x[1024,1024]
+    GEMM instead of one vector GEMM per chunk, so fp32 accumulation order differs from the per-chunk reference — this is a
+    DECLARED numerical treatment of the router, adjudicated by winner identity over a governed arm, never assumed neutral.
+    """
+    if summaries.ndim != 2 or keys.shape != (len(summaries), 2, summaries.shape[1]) or log_prior.shape != (len(summaries), 2):
+        raise ValueError('batched local scores need [rows,1024] summaries, [rows,2,1024] keys and [rows,2] priors')
+    query = F.normalize(F.linear(summaries.float(), query_weight.float()), dim=-1)
+    scores = torch.bmm(F.normalize(keys.float(), dim=-1), query[:, :, None])[:, :, 0]
+    return math.sqrt(1024) * scores + log_prior
+
+
 def unit_task_gate(logits, selected_slot):
     """Unit forward residual scale with the selected softmax derivative.
 

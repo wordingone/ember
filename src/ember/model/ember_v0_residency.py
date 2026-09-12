@@ -771,7 +771,7 @@ class ResidentExecution:
 
 from dataclasses import dataclass
 import torch
-from ember.model.ember_v0_routing import _global_scores, _local_scores, _unit_task_gate_rows
+from ember.model.ember_v0_routing import _global_scores, _local_scores_rows, _unit_task_gate_rows
 
 
 @dataclass(frozen=True)
@@ -779,6 +779,34 @@ class DeviceRouteGeometry:
     # document index, document offset, segment start, segment length, epoch index
     chunks: tuple
     lengths: tuple
+
+
+@dataclass(frozen=True)
+class DeviceRouteIndex:
+    """Immutable device tensors derived from one DeviceRouteGeometry, built OUTSIDE any capture (#1945).
+
+    rows[i] is the history row a chunk scores (offset+start-1, or 0 for a chunk starting at 0), started[i] says whether
+    that row is read at all, epochs[i] is the chunk's epoch. A captured caller binds one index per geometry and reuses
+    it, so the captured forward performs no host-to-device construction; an unbound (eager) caller builds it lazily.
+    """
+    chunks: tuple
+    rows: torch.Tensor
+    started: torch.Tensor
+    epochs: torch.Tensor
+    zero: torch.Tensor  # fp32 scalar zero on the device: the summary of a chunk starting at 0
+
+
+def route_index(geometry, device):
+    if type(geometry) is not DeviceRouteGeometry or not geometry.chunks:
+        raise ValueError('route index requires a non-empty device route geometry')
+    device = torch.device(device)
+    chunks = geometry.chunks
+    return DeviceRouteIndex(
+        chunks,
+        torch.tensor([offset+start-1 if start else 0 for _,offset,start,_,_ in chunks], dtype=torch.long, device=device),
+        torch.tensor([bool(start) for _,_,start,_,_ in chunks], dtype=torch.bool, device=device),
+        torch.tensor([epoch for *_,epoch in chunks], dtype=torch.long, device=device),
+        torch.zeros((), dtype=torch.float32, device=device))
 
 
 def resident_global_routes(embedded, lengths, global_query, keys):
@@ -811,7 +839,7 @@ def resident_global_routes(embedded, lengths, global_query, keys):
             torch.stack(ranked),torch.stack(sorted_ids),torch.stack(flags).all())
 
 
-def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, priors, candidates):
+def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, priors, candidates, index=None):
     if (type(geometry) is not DeviceRouteGeometry or type(sparse_depth) is not int
             or not 0 <= sparse_depth < 12 or hidden.shape != (sum(geometry.lengths),1024)
             or local_query.shape != (1024,1024) or keys.shape != (12,25,1024)
@@ -821,19 +849,34 @@ def resident_local_routes(hidden, local_query, keys, sparse_depth, geometry, pri
             or priors.shape[1:] != (25,)):
         raise ValueError('local routing requires its complete same-device global geometry')
     flags=[torch.isfinite(local_query).all(),torch.isfinite(keys).all(),torch.isfinite(priors).all()]
-    rows,ids=[] ,[]
-    for document,offset,start,size,epoch in geometry.chunks:
-        summary=hidden[offset+start-1].float() if start else torch.zeros(1024,device=hidden.device)
-        pair=candidates[epoch]
-        # Same vector GEMM and two-key score shape as the reference.
-        logits=_local_scores(summary,local_query,keys[sparse_depth].index_select(0,pair),
-                             priors[epoch].index_select(0,pair))
-        flags.extend((torch.isfinite(summary).all(),torch.isfinite(logits).all()))
-        rows.append(logits)
-        ids.append(pair)
-    logits=torch.stack(rows)
+    # #1945 batched local router: every chunk of the layer in ONE launch set (the per-chunk loop launched ~30 kernels per
+    # chunk forward and ~28 backward; 16 chunks x 12 layers was the ~12k-kernel population of the step). Per chunk the
+    # arithmetic is the reference's: the summary is the row before the chunk (a zero summary with NO history gradient for
+    # a chunk starting at 0; hidden[offset+start-1] WITH gradient otherwise), the candidate pair and its log priors come
+    # from the chunk's epoch in geometry order, the winner is argmax with the first slot on ties, and the gate is the unit
+    # forward gate with the selected-softmax derivative. The projection is one [chunks,1024]x[1024,1024] GEMM instead of
+    # one vector GEMM per chunk: a DECLARED numerical treatment (fp32 accumulation order), never claimed neutral.
+    # The geometry index tensors are bound once outside any capture (route_index) and reused; a captured caller
+    # passes its bound index, and the only work here is device-side gathers and the batched score.
+    if index is None:
+        index=route_index(geometry,hidden.device)
+    elif (type(index) is not DeviceRouteIndex or index.chunks != geometry.chunks
+          or index.rows.device != hidden.device or index.started.device != hidden.device
+          or index.epochs.device != hidden.device or index.rows.dtype != torch.long
+          or index.started.dtype != torch.bool or index.epochs.dtype != torch.long
+          or index.rows.shape != (len(geometry.chunks),) or index.started.shape != index.rows.shape
+          or index.epochs.shape != index.rows.shape or index.zero.device != hidden.device
+          or index.zero.dtype != torch.float32 or index.zero.shape != ()):
+        raise ValueError('bound route index must match the geometry and device of this local routing')
+    chunks=geometry.chunks
+    summaries=torch.where(index.started[:,None],hidden.index_select(0,index.rows).float(),index.zero)
+    pairs=candidates.index_select(0,index.epochs)
+    layer_keys=keys[sparse_depth].index_select(0,pairs.reshape(-1)).view(len(chunks),2,1024)
+    log_prior=priors.index_select(0,index.epochs).gather(1,pairs)
+    logits=_local_scores_rows(summaries,local_query,layer_keys,log_prior)
+    flags.extend((torch.isfinite(summaries).all(),torch.isfinite(logits).all()))
     slots=torch.argmax(logits,dim=1)
-    winners=torch.stack(ids).gather(1,slots[:,None])[:,0]
+    winners=pairs.gather(1,slots[:,None])[:,0]
     gates=_unit_task_gate_rows(logits,slots)
     flags.append(torch.isfinite(gates).all())
     return winners,logits,gates,torch.stack(flags).all()
