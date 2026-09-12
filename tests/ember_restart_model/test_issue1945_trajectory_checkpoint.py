@@ -159,7 +159,7 @@ class SharedCheckpointPublisherTests(unittest.TestCase):
                                                self.identity, Path('fixture'), child)
 
 class TrajectoryEmissionTests(unittest.TestCase):
-    def execute(self, *, free_gib=282, fail_restore=False, emission=True, captured=False):
+    def execute(self, *, free_gib=282, fail_restore=False, emission=True, captured=False, start_offset=0):
         self.events, self.applied, self.written, self.counts = [], [], {}, {}
         dense = torch.nn.Parameter(torch.ones(1))
         sparse = torch.nn.Parameter(torch.ones(1))
@@ -198,7 +198,7 @@ class TrajectoryEmissionTests(unittest.TestCase):
             self.written[path.name] = value
             self.events.append(path.name)
         runner = SimpleNamespace(POPULATION=2, CLAIM='CPU fixture', GIB=1024**3,
-            LIMITS=dict(min_b_free_bytes=250*1024**3), verify_prepared_inputs=lambda p: None,
+            LIMITS=dict(min_b_free_bytes=250*1024**3), verify_prepared_inputs=real_runner.verify_prepared_inputs,
             trajectory_checkpoint_emission=real_runner.trajectory_checkpoint_emission,
             resource_limits=real_runner.resource_limits,
             headroom=lambda: dict(free_disk_bytes=dict(B=free_gib*1024**3)),
@@ -207,7 +207,7 @@ class TrajectoryEmissionTests(unittest.TestCase):
             prepare_model=lambda *a, **k: (inventory,optimizer), local_routing_mode=lambda i: 'per-chunk',
             expert_owner_index=lambda i: {}, measure_step=measure, _write_new=write)
         identity = dict(seed=1945, optimizer={}, trajectory=dict(schema='reference-noise-floor-64-v1',arm='R1',comparison_id='c'*32),
-            data=dict(cursor=dict(shard_index=8,token_offset=0),shard_ledger_sha256='d'*64),
+            data=dict(cursor=dict(shard_index=8,token_offset=start_offset),shard_ledger_sha256='d'*64),
             support=dict(experts=[]), geometry={}, source_commit='e'*40, source_sha256={}, run_id='f'*32)
         if emission:
             identity['trajectory']['checkpoint_emission'] = True
@@ -216,9 +216,19 @@ class TrajectoryEmissionTests(unittest.TestCase):
         mode = 'resident-dynamic-capture' if captured else None
         if mode:
             identity['execution_mode'] = mode
-        packs = [dict(index=i,phase='warm' if i==0 else 'measured',token_ids=[0]*4096,target_ids=[1]*4096,
-                      positions=[0]*4096,document_starts=[0,1024,2048,3072],
-                      cursor_after=dict(shard_index=8,token_offset=(i+1)*4096)) for i in range(64)]
+        # Exercise the production pack producer; ordinary trajectories bind the
+        # final cursor once, rather than placing cursor_after in each pack.
+        def next_episode(*, shard_index, token_offset, sequence_length):
+            return (dict(token_ids=[0]*sequence_length,target_ids=[1]*sequence_length),
+                    dict(shard_index=shard_index,token_offset=token_offset+sequence_length))
+        stream = SimpleNamespace(check_cursor_span=lambda **k:{},next_episode=next_episode)
+        data = dict(identity['data'],receipt_sha256='0'*64,tokenizer_sha256='0'*64)
+        geometry = dict(sequence_length=1024,documents_per_step=4,warm_steps=1,measured_steps=63)
+        with patch.object(real_runner,'open_input_stream',return_value=(stream,Path('receipt'),Path('tokenizer'),None)), \
+                patch.object(real_runner,'file_sha256',return_value='0'*64):
+            prepared = real_runner.prepare_inputs(data,geometry,trajectory=True)
+        self.assertTrue(all('cursor_after' not in pack for pack in prepared['packs']))
+        real_runner.verify_prepared_inputs(prepared)
         def snapshot(inventory,custody,*,update,budget_bytes):
             self.assertIsNotNone(dense.grad)
             self.events.append('snapshot-'+str(update))
@@ -237,7 +247,7 @@ class TrajectoryEmissionTests(unittest.TestCase):
                 (torch.cuda,'synchronize',lambda *a:None),
             ):
                 stack.enter_context(patch.object(obj,name,value))
-            return trajectory._run_arm(runner=runner,config={},prepared=dict(packs=packs,binding=dict(input_sha256='1'*64)),
+            return trajectory._run_arm(runner=runner,config={},prepared=prepared,
                 prediction=dict(identity=identity),binding=dict(launch=dict(prediction_sha256='2'*64)),
                 custody=Path('B:/fixture'),device=torch.device('cpu'),compiler={},name=arm_name,mode=mode,
                 row_stream=io.BytesIO(),metric_stream=io.BytesIO(),applied=self.applied.append)
@@ -255,6 +265,11 @@ class TrajectoryEmissionTests(unittest.TestCase):
         self.assertEqual(sum(self.applied),262144)
         self.assertEqual(result['zero_parent_manifest_sha256'],'a'*64)
         self.assertEqual(result['child_manifest_sha256'],'b'*64)
+
+    def test_checkpoint_cursor_preserves_nonzero_input_origin(self):
+        self.execute(start_offset=4096)
+        self.assertEqual(self.child_args['cursor'],dict(shard_index=8,token_offset=266240))
+        self.assertEqual(self.child_args['tokens'],262144)
 
     def test_restore_failure_keeps_applied_count_without_successful_arm_record(self):
         with self.assertRaisesRegex(ValueError,'restored model differs'):

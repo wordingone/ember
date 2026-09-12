@@ -658,7 +658,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         optimizer.zero_grad(set_to_none=True)
         torch.cuda.synchronize(device)
         child = publish('trained-child', steps=UPDATES, tokens=applied_tokens,
-                        cursor=packs[-1]['cursor_after'], parent=custody / 'zero-parent')
+                        cursor=prepared['binding']['cursor_end'], parent=custody / 'zero-parent')
         hour.verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
         if any(runner.file_sha256(runner.ROOT / path) != digest for path, digest in identity['source_sha256'].items()):
             raise ValueError('trajectory checkpoint source changed during execution')
