@@ -69,8 +69,9 @@ def rows(a, b, offsets):
             or a.dtype != torch.bfloat16 or b.dtype != a.dtype or offsets.dtype != torch.int32):
         raise ValueError('grouped capture requires aligned positive same-device BF16 geometry')
     out = torch.empty((m, n), device=a.device, dtype=a.dtype)
-    _rows[(triton.cdiv(m, 32), triton.cdiv(n, 64), groups)](
-        a, b, offsets, out, m, k, n, *a.stride(), *b.stride(), num_warps=4)
+    _rows[(triton.cdiv(m, 64), triton.cdiv(n, 128), groups)](
+        a, b, offsets, out, m, k, n, *a.stride(), *b.stride(),
+        BM=64, BN=128, BK=32, num_warps=4)
     return out
 
 
@@ -86,8 +87,9 @@ class DynamicGrouped(torch.autograd.Function):
         k, n = b.shape[1:]
         da = rows(gradient, b.transpose(1, 2), offsets)
         db = torch.empty(b.shape, device=b.device, dtype=b.dtype)
-        _weights[(triton.cdiv(k, 32), triton.cdiv(n, 64), b.shape[0])](
-            a, gradient, offsets, db, k, n, *a.stride(), *gradient.stride(), num_warps=4)
+        _weights[(triton.cdiv(k, 64), triton.cdiv(n, 128), b.shape[0])](
+            a, gradient, offsets, db, k, n, *a.stride(), *gradient.stride(),
+            BM=64, BN=128, BK=32, num_warps=4)
         return da, db, None
 
 

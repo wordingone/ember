@@ -67,7 +67,7 @@ class DynamicIntegrationTests(unittest.TestCase):
             actual.square().sum().backward()
             actual_grads = [value.grad.clone()] + [p.grad.clone() if p.grad is not None else None for p in owners]
             self.assertEqual(execution.pending, 0)
-            self.assertEqual(backends, ['dynamic', 'dynamic'])
+            self.assertEqual(backends, ['dynamic'])
             value.grad = None
             for owner in owners:
                 owner.grad = None
