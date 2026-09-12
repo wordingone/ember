@@ -39,11 +39,14 @@ class DeviceRoutingTests(unittest.TestCase):
                 offset+=length
             reference=routing.select_local_batch(hidden,specs,sparse_depth=3)
             self.assertEqual(tuple(winners.tolist()),reference.experts)
-            torch.testing.assert_close(logits,reference.logits,rtol=0,atol=0)
-            torch.testing.assert_close(gates,reference.gates,rtol=0,atol=0)
+            # #1945 batched local router: the projection is one row-batched GEMM instead of one vector GEMM per
+            # chunk, a DECLARED numerical treatment. Winner identity stays exact; logits, gates and gradients agree
+            # to fp32 accumulation-order tolerance (observed 1.4e-6 absolute on this fixture), never bit-for-bit.
+            torch.testing.assert_close(logits,reference.logits,rtol=1e-5,atol=1e-5)
+            torch.testing.assert_close(gates,reference.gates,rtol=1e-5,atol=1e-5)
             expected_grads=torch.autograd.grad((reference.gates*torch.arange(1,len(gates)+1)).sum(),(hidden,local,keys))
             for actual,expected in zip(actual_grads,expected_grads):
-                torch.testing.assert_close(actual,expected,rtol=0,atol=0)
+                torch.testing.assert_close(actual,expected,rtol=1e-4,atol=1e-5)
             routing.close()
 
     def test_ties_and_nonfinite_predicate(self):
