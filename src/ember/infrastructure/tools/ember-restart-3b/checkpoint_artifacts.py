@@ -3246,6 +3246,7 @@ def write_checkpoint_artifacts(
     optimizer_state_layout: str = "legacy-v1",
     specialist_lineage: Mapping[str, Any] | None = None,
     cia_parent_checkpoint: Path | None = None,
+    cia_owner_update_counts: Mapping[str, int] | None = None,
     max_serialized_bytes: int | None = None,
     max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
@@ -3260,8 +3261,8 @@ def write_checkpoint_artifacts(
             contract_sha256=contract_sha256,expert_genesis_sha256=expert_genesis_sha256,
             max_serialized_bytes=max_serialized_bytes,max_transient_scratch_bytes=max_transient_scratch_bytes,
             host_commit_reserve_bytes=host_commit_reserve_bytes,pre_publish_verifier=pre_publish_verifier,
-            cia_parent_checkpoint=cia_parent_checkpoint)
-    if cia_parent_checkpoint is not None:
+            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts)
+    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None:
         raise ValueError('CIA parent checkpoint cannot supply v2 lineage')
     return _write_checkpoint_artifacts_impl(
         model,
@@ -4094,7 +4095,7 @@ def _cia_validate_named_optimizer_state(model, optimizer, state, *, max_state_by
     names = {id(parameter): name for name, parameter in parameters.items()}
     groups = {names[id(parameter)]: group for group in optimizer.param_groups
               for parameter in group['params']}
-    if any(group.get('capturable') or group.get('fused') or group.get('differentiable')
+    if any(group.get('capturable') or group.get('differentiable')
            for group in optimizer.param_groups) or optimizer.defaults.get('differentiable'):
         raise ValueError('CIA native CPU state does not support this optimizer execution mode')
     _cia_validate_optimizer_fields(parameters, groups, state, max_state_bytes=max_state_bytes)
@@ -4197,8 +4198,8 @@ def _cia_tensor_identity(value):
             value.storage_offset(), value.requires_grad)
 
 
-def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=False):
-    """Bound and snapshot native moments on their parameter devices; clocks stay CPU.
+def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=False, fused_names=frozenset()):
+    """Bound native moments and execution-mode-specific clocks; serialize all state on CPU.
 
     No model/device migration, checkpoint write, optimizer mutation or receipt is
     performed. Do not accept meta storage as physical state. Preserve source
@@ -4210,6 +4211,8 @@ def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=
         raise ValueError('closed copy direction required')
     if type(parameters) is not dict or type(state) is not dict:
         raise ValueError('closed named parameter and state dictionaries required')
+    if not isinstance(fused_names, (set, frozenset)) or not fused_names <= set(parameters):
+        raise ValueError('fused clock owners differ from the parameter inventory')
     before, storage, total, devices = {}, [], 0, set()
     structure = tuple((name, tuple(fields)) for name, fields in state.items())
     parameter_storage = []
@@ -4233,7 +4236,7 @@ def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=
         for key, value in fields.items():
             if key not in ('step', 'exp_avg', 'exp_avg_sq', 'max_exp_avg_sq'):
                 raise ValueError('unknown native moment field')
-            expected_device = torch.device('cpu') if key == 'step' or restore else parameter.device
+            expected_device = torch.device('cpu') if restore or (key == 'step' and name not in fused_names) else parameter.device
             expected_shape = () if key == 'step' else tuple(parameter.shape)
             expected_dtype = torch.float32 if key == 'step' else torch.bfloat16
             if (type(value) is not torch.Tensor or value.device != expected_device
@@ -4264,7 +4267,7 @@ def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=
     for device in devices:
         torch.cuda.synchronize(device)
     snapshot = {name: {key: value.detach().to(
-                            device=parameters[name].device if restore and key != 'step' else 'cpu',
+                            device=parameters[name].device if restore and (key != 'step' or name in fused_names) else 'cpu',
                             copy=True)
                        for key, value in fields.items()} for name, fields in state.items()}
     if structure != tuple((name, tuple(fields)) for name, fields in state.items()):
@@ -4318,7 +4321,9 @@ def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
     names = {id(parameter): name for name, parameter in parameters.items()}
     live_identity = _cia_live_optimizer_state_identity(optimizer)
     state = {names[id(parameter)]: fields for parameter, fields in optimizer.state.items()}
-    snapshot = _cia_snapshot_placed_moments(parameters, state, max_state_bytes=max_state_bytes)
+    fused_names = {names[id(parameter)] for group in optimizer.param_groups if group.get('fused')
+                   for parameter in group['params']}
+    snapshot = _cia_snapshot_placed_moments(parameters, state, max_state_bytes=max_state_bytes, fused_names=fused_names)
     _cia_validate_named_optimizer_state(model, optimizer, snapshot, max_state_bytes=max_state_bytes)
     if _cia_live_optimizer_state_identity(optimizer) != live_identity:
         raise ValueError('CIA live optimizer state changed during capture')
@@ -4355,8 +4360,11 @@ def prepare_cia_placed_optimizer_state(model, optimizer, payload, *, max_state_b
         raise ValueError('CIA placed optimizer identity or placement differs from runtime')
     # Validation does not copy: every field is checked before any device transfer.
     _cia_validate_named_optimizer_state(model, optimizer, payload['state'], max_state_bytes=max_state_bytes)
+    names = {id(parameter): name for name, parameter in parameters.items()}
+    fused_names = {names[id(parameter)] for group in optimizer.param_groups if group.get('fused')
+                   for parameter in group['params']}
     snapshot = _cia_snapshot_placed_moments(parameters, payload['state'],
-                                           max_state_bytes=max_state_bytes, restore=True)
+                                           max_state_bytes=max_state_bytes, restore=True, fused_names=fused_names)
     if (cia_optimizer_identity(model, optimizer) != identity
             or _cia_physical_placement(model.parameter_inventory()) != placement):
         raise ValueError('CIA optimizer identity or placement changed during preparation')
@@ -4557,7 +4565,7 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
     from types import SimpleNamespace
     shapes = {name: SimpleNamespace(shape=shape) for name,(shape,_) in inventory.items()}
     groups = {name: group['hyperparameters'] for group in manifest['optimizer_identity']['param_groups'] for name in group['params']}
-    if any(group.get('capturable') or group.get('fused') or group.get('differentiable') for group in groups.values()):
+    if any(group.get('capturable') or group.get('differentiable') for group in groups.values()):
         raise ValueError('CIA checkpoint optimizer execution mode is unsupported')
     _cia_validate_optimizer_fields(shapes,groups,optimizer['state'],max_state_bytes=cap)
     replay = _cia_read_component(root, manifest['replay'])
@@ -4596,7 +4604,7 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
 def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_state, data_cursor,
         model_config_sha256, contract_sha256, expert_genesis_sha256, max_serialized_bytes,
         max_transient_scratch_bytes, pre_publish_verifier, host_commit_reserve_bytes=None,
-        cia_parent_checkpoint=None):
+        cia_parent_checkpoint=None, cia_owner_update_counts=None):
     """Complete CIA publication through the existing quarantine admission authority.
 
     Caller owns exclusion from updates throughout capture. Native optimizer
@@ -4611,6 +4619,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
     for cap in (max_serialized_bytes, max_transient_scratch_bytes):
         if type(cap) is not int or cap < 1: raise ValueError('CIA checkpoint requires explicit positive byte bounds')
     descendant = cia_parent_checkpoint is not None
+    if not descendant and cia_owner_update_counts is not None:
+        raise ValueError('owner update counts require an actual parent transition')
     if not descendant and (data_cursor.get('global_step') != 0 or data_cursor.get('tokens_seen') != 0):
         raise ValueError('CIA descendant publication requires a verified parent-lineage consumer')
     parameters = _cia_quiescent_parameters(model)
@@ -4679,7 +4689,7 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
-                parent,parent_facts,manifest,facts)
+                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts)
         if (_cia_parameter_snapshot_identity(_cia_quiescent_parameters(model)) != before or cia_optimizer_identity(model,optimizer) != identity
                 or _cia_live_optimizer_state_identity(optimizer) != live_optimizer):
             raise ValueError('CIA model or optimizer identity changed during checkpoint capture')
