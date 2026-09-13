@@ -403,15 +403,22 @@ def _validate_resident_group(parameters, storage):
             or storage.storage_offset() != 0 or storage.dtype != torch.bfloat16
             or storage.untyped_storage().nbytes() != storage.numel() * storage.element_size()):
         raise ValueError('resident group backing storage declaration differs')
+    shape, stride = storage.shape[1:], storage.stride()[1:]
+    row_stride, element_size = storage.stride(0), storage.element_size()
+    backing = storage.untyped_storage()
+    backing_pointer, backing_bytes = backing.data_ptr(), backing.nbytes()
+    pointer, offset = storage.data_ptr(), storage.storage_offset()
     for index, parameter in enumerate(parameters):
-        expected = storage[index]
+        row_offset = offset + index * row_stride
+        # Empty slices retain their storage offset but report a null data pointer.
+        row_pointer = pointer + index * row_stride * element_size if storage.numel() else 0
         if (type(parameter) is not torch.nn.Parameter or parameter.device != storage.device
-                or parameter.dtype != storage.dtype or parameter.shape != expected.shape
-                or parameter.stride() != expected.stride()
-                or parameter.data_ptr() != expected.data_ptr()
-                or parameter.storage_offset() != expected.storage_offset()
-                or parameter.untyped_storage().data_ptr() != storage.untyped_storage().data_ptr()
-                or parameter.untyped_storage().nbytes() != storage.untyped_storage().nbytes()):
+                or parameter.dtype != storage.dtype or parameter.shape != shape
+                or parameter.stride() != stride
+                or parameter.data_ptr() != row_pointer
+                or parameter.storage_offset() != row_offset
+                or parameter.untyped_storage().data_ptr() != backing_pointer
+                or parameter.untyped_storage().nbytes() != backing_bytes):
             raise ValueError('resident Parameter does not own its exact declared group slice')
 
 
