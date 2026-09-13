@@ -990,8 +990,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             raise ValueError('segmented capture requires the resident routing buffers')
         if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
             raise ValueError('segmented capture is not bound to this model execution')
-        optimizer.zero_grad(set_to_none=False)  # static-accumulate: the captured backward owns the grad storage
-        capture.zero_grad()
+        capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
     else:
         optimizer.zero_grad(set_to_none=True)
     staged = time.perf_counter()
@@ -1390,8 +1389,7 @@ def worker(binding_path):
                 gc_rows.flush()
                 applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
-                    optimizer.zero_grad(set_to_none=False)  # full retained membership, eager expert owners included
-                    capture.zero_grad()
+                    capture.zero_grad(optimizer=optimizer)  # full retained membership, eager expert owners included
                     buffers.capturing = True
                     try:
                         capture.capture(optimizer=optimizer)  # state proof inside; refuses instead of measuring a drifted model
