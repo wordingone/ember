@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
-from .ember_v0_document_reduction import document_reduced_linear
+from .ember_v0_document_reduction import document_reduced_head, document_reduced_linear
 from .ember_v0_inventory import equation_inventory, update_support
 from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
@@ -827,7 +827,9 @@ class CIADecoder(nn.Module):
             shared, residual, _, row_gates, positions, keys, priors, ranked, candidates, history = carry
             values = shared + residual * row_gates[:, None].to(residual.dtype)
             if index == 12:
-                logits = self._linear(self._norm(values, 'final_norm.weight'), 'embedding.weight')
+                logits = document_reduced_head(
+                    self._norm(values, 'final_norm.weight'), self._weight('embedding.weight'),
+                    lengths, self._DOCUMENT_REDUCTION_ORDER)
                 return logits, ranked, history
         sizes = tuple(row[3] for row in geometry.chunks)
         equal = len(set(sizes)) == 1

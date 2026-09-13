@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Per-document weight-gradient reduction with the forward left merged.
+"""Per-document backward reductions with the forward left merged.
 
 CONTRACT. `document_reduced_linear(values, weight, lengths, order)`:
   forward         F.linear(values, weight) on the merged rows, byte-identical.
@@ -9,6 +9,10 @@ CONTRACT. `document_reduced_linear(values, weight, lengths, order)`:
   weight gradient sum of per-document partials, each dY_i^T @ X_i at that document's own row
                   count, summed sequentially in `order` and cast to the weight dtype. No wider
                   accumulator: matching the reference means matching its rounding.
+
+`document_reduced_head` also computes the input gradient separately per document.
+Its merged forward is unchanged; the vocabulary projection's backward GEMM shapes
+follow the per-document reference for both inputs and weights.
 
 `order` is REQUIRED and has no default. In bf16 a per-document sum is not associative, so the
 order is part of the reference rather than a design choice, and a default would decide it by
@@ -41,6 +45,7 @@ __all__ = [
     "document_boundaries",
     "document_spans",
     "document_reduced_linear",
+    "document_reduced_head",
     "reduce_weight_gradient",
     "resolve_order_against_reference",
 ]
@@ -124,6 +129,31 @@ def document_reduced_linear(values, weight, lengths, order):
     `order` is required and comes from resolve_order_against_reference, never from a guess.
     """
     return _DocumentReducedLinear.apply(values, weight, lengths, order)
+
+
+class _DocumentReducedHead(_DocumentReducedLinear):
+    """Keep merged logits, but preserve document shapes for both backward products."""
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        values, weight = ctx.saved_tensors
+        grad_input = None
+        if ctx.needs_input_grad[0]:
+            # These spans place output rows; ctx.order controls only weight-gradient summation.
+            grad_input = torch.cat([
+                grad_output[start:end] @ weight
+                for start, end in document_spans(ctx.lengths, "ascending")
+            ], dim=0)
+        grad_weight = None
+        if ctx.needs_input_grad[1]:
+            grad_weight = reduce_weight_gradient(
+                values, grad_output, ctx.lengths, ctx.order, dtype=weight.dtype)
+        return grad_input, grad_weight, None, None
+
+
+def document_reduced_head(values, weight, lengths, order):
+    """Merged vocabulary projection with document-sized input and weight gradients."""
+    return _DocumentReducedHead.apply(values, weight, lengths, order)
 
 
 def resolve_order_against_reference(values, upstream, lengths, actual_gradient):
