@@ -174,7 +174,8 @@ class CIADecoder(nn.Module):
         self.parameter_inventory()
 
     def parameter_inventory(self):
-        expected = {spec.name: spec.shape for spec in equation_inventory()}
+        specs = equation_inventory()
+        expected = {spec.name: spec.shape for spec in specs}
         registered = {name for name, _ in self.named_parameters(remove_duplicate=False)}
         if registered != {"weights." + name.replace(".", "__") for name in expected}:
             raise ValueError("undeclared or missing registered model parameters")
@@ -189,7 +190,7 @@ class CIADecoder(nn.Module):
             raise ValueError('resident layout and capacity must retain their exact declarations')
         if type(self._resident_experts) is not tuple:
             raise ValueError('resident identities must retain their exact tuple declaration')
-        resident_names = {spec.name for spec in equation_inventory() if spec.expert in self._resident_experts}
+        resident_names = {spec.name for spec in specs if spec.expert in self._resident_experts}
         if self._resident_experts:
             if self._parameter_device != 'cuda':
                 raise ValueError('resident owners require declared CUDA placement')
