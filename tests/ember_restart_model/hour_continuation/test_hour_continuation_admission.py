@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 import cia_hour
+import cia_step_runner as step_runner
 
 
 class AdmissionTests(unittest.TestCase):
@@ -23,6 +24,7 @@ class AdmissionTests(unittest.TestCase):
         self.root.mkdir()
         (self.root.parent/'operator').mkdir()
         self.runner = SimpleNamespace(GIB=1024**3,
+            attention_selection=lambda identity: step_runner.attention_selection(identity),
             checked_sha=lambda value: value,
             file_sha256=lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest())
         self.prior = dict(run_id='a'*32, source_commit='old-head',
@@ -90,6 +92,13 @@ class AdmissionTests(unittest.TestCase):
         self.bind()
         with self.assertRaisesRegex(ValueError, 'source hour rows differ'):
             cia_hour.validate_continuation(self.runner, self.identity)
+
+    def test_source_hour_attention_selection_cannot_change_before_reference(self):
+        for key, value in (('attention_backend', 'math'),
+                           ('attention_recompute', 'non_reentrant_checkpoint')):
+            selected = dict(self.identity, **{key: value})
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'attention'):
+                cia_hour.validate_continuation(self.runner, selected)
 
 
 if __name__ == '__main__':
