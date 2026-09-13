@@ -535,6 +535,45 @@ def optimizer_kwargs(definition):
     return kwargs
 
 
+def attention_selection(identity):
+    """Normalize defaults; admit attention changes only for an explicit fused resident treatment."""
+    backend = identity.get('attention_backend', 'unforced')
+    recompute = identity.get('attention_recompute', 'none')
+    if (('attention_backend' in identity and backend != 'math')
+            or ('attention_recompute' in identity and recompute != 'non_reentrant_checkpoint')
+            or ((backend == 'math') != (recompute == 'non_reentrant_checkpoint'))):
+        raise ValueError('attention selection must explicitly bind MATH and non-reentrant recomputation')
+    if backend == 'math':
+        if (execution_mode(identity) != 'resident-dynamic-capture'
+                or type(identity.get('optimizer')) is not dict or identity['optimizer'].get('fused') is not True
+                or expected_optimizer(identity).get('fused') is not True):
+            raise ValueError('attention selection requires the declared fused resident treatment')
+    return dict(attention_backend=backend, attention_recompute=recompute)
+
+
+@contextlib.contextmanager
+def attention_context(identity):
+    """Keep the selected arithmetic through exemplars, backward capture and replay, then restore it."""
+    if attention_selection(identity)['attention_backend'] == 'unforced':
+        yield
+        return
+    import torch
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+    reduction = torch.backends.cuda.fp16_bf16_reduction_math_sdp_allowed()
+    try:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(False)
+        with sdpa_kernel(SDPBackend.MATH):
+            yield
+    finally:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(reduction)
+
+
+def decoder_kwargs(identity):
+    """Omit the constructor option for the unchanged default execution path."""
+    return ({'attention_recompute': True}
+            if attention_selection(identity)['attention_recompute'] == 'non_reentrant_checkpoint' else {})
+
+
 def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
@@ -605,11 +644,12 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
     local_routing_mode(identity)
+    attention_selection(identity)
     if ('production_mixture' in identity) != hour:
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
@@ -1261,11 +1301,13 @@ def worker(binding_path):
     verify_worker(binding, binding_path)
     custody = binding_path.parent
     applied_positions = 0
+    attention_scope = contextlib.ExitStack()
     try:
         prediction, _ = load_prediction(custody / 'prediction.json', binding['launch']['prediction_sha256'])
         if prediction['identity']['run_id'] != run_id or prediction['identity']['gpu_uuid'] != binding['launch']['gpu_uuid']:
             raise ValueError('prediction differs from owned run or selected GPU')
         config, prepared = prepare_execution(prediction)
+        attention_scope.enter_context(attention_context(prediction['identity']))
         import torch
         from ember.model.ember_v0_decoder import CIADecoder, bind_triton_c_compiler
         from ember.model.ember_v0_contract import validate_cia_architecture
@@ -1311,7 +1353,7 @@ def worker(binding_path):
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
                 applied_positions=applied_positions, claim=CLAIM))
             return 0
-        model = CIADecoder(architecture_config=config).materialize_cpu(seed=prediction['identity']['seed'])
+        model = CIADecoder(architecture_config=config, **decoder_kwargs(prediction['identity'])).materialize_cpu(seed=prediction['identity']['seed'])
         mode = execution_mode(prediction['identity'])
         definition = prediction['identity']['optimizer']
         measurement = measurement_mode(prediction['identity'])
@@ -1334,7 +1376,8 @@ def worker(binding_path):
             'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
             'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'c_compiler': c_compiler,
             'execution_mode': mode, 'resident_experts': (list(support['experts']) if mode is not None else None),
-            'optimizer': dict(definition), 'measurement': prediction['identity'].get('measurement'), 'claim': CLAIM})
+            'optimizer': dict(definition), 'measurement': prediction['identity'].get('measurement'),
+            **attention_selection(prediction['identity']), 'claim': CLAIM})
         expert_owners = expert_owner_index(inventory)
         capture = None
         if mode in MODE_SOURCES:
@@ -1414,6 +1457,8 @@ def worker(binding_path):
             'error': str(error), 'traceback': traceback.format_exc(), 'applied_positions': applied_positions,
             'claim': CLAIM})
         raise
+    finally:
+        attention_scope.close()
 
 
 def launch(args, dispatch):

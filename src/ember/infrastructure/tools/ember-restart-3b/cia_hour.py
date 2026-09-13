@@ -87,6 +87,8 @@ def validate_probe_inputs(runner, prior, identity):
     for name in ('source_commit','source_sha256','config_sha256','data','seed','support','production_mixture'):
         if prior.get(name) != identity[name]:
             raise ValueError('checkpoint probe differs from the hour source or inputs: ' + name)
+    if runner.attention_selection(prior) != runner.attention_selection(identity):
+        raise ValueError('checkpoint probe attention selection differs from the hour')
     if runner.execution_mode(prior) != runner.execution_mode(identity):
         raise ValueError('checkpoint probe execution mode differs from the hour')
 
@@ -404,6 +406,10 @@ def verify_continuation_accounting(runner, custody, hour, identity, physical_pos
             or checkpoint['global_step'] != identity['geometry']['warm_steps'] + hour['measured_updates']
             or checkpoint['stream_receipt_sha256'] != identity['data']['receipt_sha256']):
         raise ValueError('continuation terminal identity differs')
+    for key, value in runner.attention_selection(identity).items():
+        default = 'unforced' if key == 'attention_backend' else 'none'
+        if reference['execution_path'].get(key, default) != value or terminal.get(key, default) != value:
+            raise ValueError('continuation attention selection differs: ' + key)
     before, after = reference['before'], reference['after']
     if (before['facts'] != terminal['terminal_facts']
             or before['rng_state_sha256'] != terminal['terminal_rng_state_sha256']
@@ -451,6 +457,8 @@ def validate_continuation(runner, identity):
                 'production_mixture', 'checkpoint_probe', 'execution_mode', 'local_routing_mode'):
         if prior.get(key) != identity.get(key):
             raise ValueError('continuation source hour identity differs: ' + key)
+    if runner.attention_selection(prior) != runner.attention_selection(identity):
+        raise ValueError('continuation source hour attention selection differs')
     outcome_path = root.parent/'operator/operator-outcome.json'
     outcome = json.loads(outcome_path.read_bytes())
     if (outcome['run_id'] != prior['run_id'] or outcome['success'] is not True
@@ -508,7 +516,7 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
     from ember.model.ember_v0_decoder import CIADecoder
     identity = prediction['identity']
     source = prepared['continuation']
-    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
+    model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     lengths = runner.document_lengths(tuple(source['pack']['document_starts']), len(source['pack']['token_ids']))
     def optimizer_factory(inventory):
         if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
@@ -554,7 +562,8 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
     path = dict(mode=runner.execution_mode(identity), local_routing_mode=runner.local_routing_mode(identity),
                 capture_phase='fresh-record' if capture is not None else 'eager',
-                optimizer='torch-adamw-fused' if identity['hour']['arm'] == 'treatment' else 'torch-adamw')
+                optimizer='torch-adamw-fused' if identity['hour']['arm'] == 'treatment' else 'torch-adamw',
+                **runner.attention_selection(identity))
     try:
         row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
             run_id=identity['run_id'], capture=capture, record=capture is not None,
@@ -596,6 +605,7 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
         geometry=dict(microbatch=identity['geometry']['documents_per_step'],
                       sequence=identity['geometry']['sequence_length'], positions_per_update=positions_per_update),
         terminal_checkpoint=checkpoint_identity, terminal_facts=terminal_state['facts'],
+        **runner.attention_selection(identity),
         terminal_rng_state_sha256=terminal_state['rng_state_sha256'], terminal_data_cursor=terminal_state['data_cursor'],
         live_state_verified_before_restore=True, governed_wall_seconds=governed_wall, energy=energy_binding)
     runner._write_new(custody / 'continuation-hour.json', hour_binding)
@@ -640,7 +650,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     hour = identity['hour']
     mode = runner.execution_mode(identity)
     probe = hour['schema'] == 'checkpoint-probe-v1'
-    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
+    model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
     definition = identity['optimizer']
@@ -657,6 +667,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     runner._write_new(custody / 'model.json', dict(population=runner.POPULATION,
         optimizer_membership=list(inventory), trainable_parameters=sum(p.numel() for p in inventory.values() if p.requires_grad),
         input_binding=prepared['binding'], hour=hour, c_compiler=compiler,
+        **runner.attention_selection(identity),
         claim='Complete-model execution inventory; no model qualification'))
     publish, owner_update_counts = checkpoint_publisher(
         runner, model, optimizer, inventory, identity, binding, custody, device)

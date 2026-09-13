@@ -239,6 +239,14 @@ def compare_start_identity(reference, candidate, *, arm):
     left_sources, right_sources = left.pop('source_sha256'), right.pop('source_sha256')
     if not set(left_sources) <= set(right_sources) or any(right_sources[k] != v for k, v in left_sources.items()):
         raise ValueError('starting source identities differ')
+    default_attention = ('unforced', 'none')
+    left_attention = (left.pop('attention_backend', 'unforced'), left.pop('attention_recompute', 'none'))
+    right_attention = (right.pop('attention_backend', 'unforced'), right.pop('attention_recompute', 'none'))
+    allowed_attention = {default_attention}
+    if arm == 'Tfused':
+        allowed_attention.add(('math', 'non_reentrant_checkpoint'))
+    if left_attention != default_attention or right_attention not in allowed_attention:
+        raise ValueError('attention starting identity differs from the declared treatment')
     if arm == 'Tfused':
         right['optimizer'] = dict(right['optimizer'])
         if right['optimizer'].pop('fused', None) is not True:
@@ -536,7 +544,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         runner._write_new(custody / 'checkpoint-reservation.json', dict(
             free_bytes=free_bytes, floor_bytes=floor_bytes, reserved_write_bytes=write_bytes))
     runner.verify_prepared_inputs(prepared)
-    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
+    model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     definition = identity['optimizer']
     def optimizer_factory(inventory):
         if sum(value.numel() for value in inventory.values()) != runner.POPULATION:
@@ -571,6 +579,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
                  source_sha256=identity['source_sha256'], optimizer=definition, snapshot_plan=plan)
     start['comparison_id'] = identity['trajectory']['comparison_id']
     start['local_routing_mode'] = runner.local_routing_mode(identity)
+    start.update(runner.attention_selection(identity))
     start['frozen_population_sha256'] = frozen_sha
     if permutation is not None:
         start['document_permutation'] = [list(order) for order in permutation]
@@ -579,7 +588,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
     runner._write_new(custody / 'model.json', dict(population=runner.POPULATION, parameter_count=len(inventory),
         execution_mode=mode, trajectory=identity['trajectory'], c_compiler=compiler,
         resident_experts=list(identity['support']['experts']), input_binding=prepared['binding'],
-        snapshot_plan=plan, claim=runner.CLAIM))
+        snapshot_plan=plan, **runner.attention_selection(identity), claim=runner.CLAIM))
     if emission:
         hour = runner.load_hour_module()
         publish, owner_update_counts = hour.checkpoint_publisher(
