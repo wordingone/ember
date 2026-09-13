@@ -43,6 +43,7 @@ class Execution:
 
 class SmallDenseModel(torch.nn.Module):
     """Real routing and decoder sequencing; small elementwise dense/expert fixtures."""
+    _DOCUMENT_REDUCTION_ORDER = candidate.CIADecoder._DOCUMENT_REDUCTION_ORDER
     def __init__(self, decoder):
         super().__init__()
         torch.manual_seed(1945)
@@ -67,6 +68,7 @@ class SmallDenseModel(torch.nn.Module):
         result.update({f'layers.{i}.attention.query.weight':self.scale for i in range(24)})
         return {name.replace('.','__'):value for name,value in result.items()}
     def _weight(self, name):
+        if name == 'embedding.weight': return self.output
         if name == 'router.global_query.weight': return self.global_query
         if name == 'router.local_query.weight': return self.local_query
         return self.keys[int(name.split('.')[2]) // 2]
@@ -80,7 +82,14 @@ class SmallDenseModel(torch.nn.Module):
         assert sum(lengths) == len(values)
         self.shared_calls.append(prefix)
         return self._swiglu(values, prefix)
-    def _linear(self, values, name): return torch.nn.functional.linear(values, self.output)
+    def _linear(self, values, name):
+        # Keep the original merged forward. Build the backward oracle independently with
+        # per-document autograd; this small CPU geometry is not forward grouping-invariant.
+        lengths = self._cuda_execution._geometry_lengths
+        per_document = torch.cat([torch.nn.functional.linear(piece, self.output)
+                                  for piece in values.split(lengths)])
+        merged = torch.nn.functional.linear(values, self.output)
+        return merged.detach() + (per_document - per_document.detach())
 
 class SegmentTests(unittest.TestCase):
     def test_plan_rebinding_requires_fresh_capture_binding(self):
