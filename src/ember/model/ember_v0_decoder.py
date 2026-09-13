@@ -11,10 +11,12 @@ and learning qualification require their own execution evidence.
 import dataclasses
 import hashlib
 import os
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
 from .ember_v0_document_reduction import document_reduced_head, document_reduced_linear
 from .ember_v0_inventory import equation_inventory, update_support
@@ -154,13 +156,16 @@ def fused_elementwise(name):
 class CIADecoder(nn.Module):
     """Complete parameter ownership, CPU reference and guarded CUDA candidate path."""
 
-    def __init__(self, *, architecture_config=None):
+    def __init__(self, *, architecture_config=None, attention_recompute=False):
         # Reject undeclared semantics before any parameter storage is created.
+        if type(attention_recompute) is not bool:
+            raise ValueError('attention_recompute requires an explicit bool')
         validated_config = validate_cia_architecture(
             cia_architecture_config() if architecture_config is None else architecture_config
         )
         super().__init__()
         self.config = validated_config
+        self._attention_recompute = attention_recompute
         self._parameter_device = "meta"
         self._execution_device = torch.device('meta')
         self._cuda_execution = None
@@ -173,7 +178,39 @@ class CIADecoder(nn.Module):
         })
         self.parameter_inventory()
 
+    @property
+    def attention_recompute(self):
+        """Default-off, instance-bound recomputation of resident document attention."""
+        return self._attention_recompute
+
+    def _document_attention(self, q, k, v, lengths):
+        if not self.attention_recompute:
+            return _document_sdpa(q, k, v, lengths)
+
+        def require_math():
+            if (not torch.backends.cuda.math_sdp_enabled()
+                    or torch.backends.cuda.flash_sdp_enabled()
+                    or torch.backends.cuda.mem_efficient_sdp_enabled()
+                    or torch.backends.cuda.cudnn_sdp_enabled()
+                    or torch.backends.cuda.fp16_bf16_reduction_math_sdp_allowed()):
+                raise ValueError('attention recomputation requires exclusive MATH with full-precision reduction')
+
+        @contextmanager
+        def recomputation():
+            # Backward may run after the caller exits its forward backend context.
+            # Refuse before recomputed kernels instead of silently changing arithmetic.
+            require_math()
+            yield
+
+        require_math()
+        # Freeze document membership for backward even if the caller supplied a list.
+        return checkpoint(_document_sdpa, q, k, v, tuple(lengths),
+                          use_reentrant=False, preserve_rng_state=False,
+                          context_fn=lambda: (nullcontext(), recomputation()))
+
     def parameter_inventory(self):
+        if type(self._attention_recompute) is not bool:
+            raise ValueError('attention_recompute must retain its exact bool declaration')
         specs = equation_inventory()
         expected = {spec.name: spec.shape for spec in specs}
         registered = {name for name, _ in self.named_parameters(remove_duplicate=False)}
@@ -228,7 +265,7 @@ class CIADecoder(nn.Module):
         return dict(self.named_parameters(remove_duplicate=False))
 
     def owner_declaration(self):
-        """Exact-type value snapshot of the non-tensor inputs to parameter_inventory: config and placement.
+        """Exact-type snapshot of config, placement and selected execution semantics.
 
         Compared by the residency cache at every check. Types travel with the values, so a config replaced by
         its repr string, a placement replaced by a plain string, a different object, or a moved placement is
@@ -245,8 +282,12 @@ class CIADecoder(nn.Module):
                 fields = repr(value)
             return (type(value).__module__, type(value).__qualname__, fields)
         from .ember_v0_residency import resident_layout_declaration
-        return (typed(self.config), typed(self._parameter_device), typed(self._execution_device),
-                typed(self._resident_experts), typed(self._resident_capacity), resident_layout_declaration(self))
+        declaration = (typed(self.config), typed(self._parameter_device), typed(self._execution_device),
+                       typed(self._resident_experts), typed(self._resident_capacity), resident_layout_declaration(self))
+        # Preserve the default identity while binding enabled and wrong-type selections
+        # into the existing residency and graph-capture declaration checks.
+        return (declaration if self._attention_recompute is False else
+                declaration + (('attention_recompute', typed(self._attention_recompute)),))
 
     def _apply(self, fn, recurse=True):
         raise ValueError('generic module migration cannot bypass explicit CIA placement')
@@ -575,6 +616,8 @@ class CIADecoder(nn.Module):
         return tuple(self._swiglu(value, f"experts.{expert}.layers.{layer}") for value in values)
 
     def _attention(self, values, positions, prefix):
+        if self.attention_recompute and not self._resident_experts:
+            raise ValueError('attention recomputation requires resident execution')
         length = len(values)
         q = self._linear(values, prefix + ".q.weight").view(length, 16, 64)
         k = self._linear(values, prefix + ".k.weight").view(length, 4, 64)
@@ -584,7 +627,7 @@ class CIADecoder(nn.Module):
         k = k.repeat_interleave(4, dim=1)
         v = v.repeat_interleave(4, dim=1)
         if self._resident_experts:
-            out = _document_sdpa(q, k, v, (length,))
+            out = self._document_attention(q, k, v, (length,))
             return self._linear(out.reshape(length, 1024), prefix + ".o.weight")
         out = F.scaled_dot_product_attention(q.transpose(0, 1), k.transpose(0, 1),
                                              v.transpose(0, 1), is_causal=True)
@@ -687,6 +730,8 @@ class CIADecoder(nn.Module):
         attention call. Ragged documents use trailing padding; valid queries cannot
         attend to padded keys. Full-model numerical qualification remains required.
         """
+        if self.attention_recompute and not self._resident_experts:
+            raise ValueError('attention recomputation requires resident execution')
         if self._resident_experts:
             total = len(values)
             # Query/output retain merged forwards and use descending document weight-gradient
@@ -708,8 +753,8 @@ class CIADecoder(nn.Module):
                                    values, lengths).view(total, 4, 64)
             q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
             k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
-            out = _document_sdpa(q, k.repeat_interleave(4, dim=1),
-                                 v.repeat_interleave(4, dim=1), lengths)
+            out = self._document_attention(q, k.repeat_interleave(4, dim=1),
+                                           v.repeat_interleave(4, dim=1), lengths)
             return self._document_linear(out.reshape(total, 1024), prefix + ".o.weight", lengths)
         total = len(values)
         q = self._per_document(lambda piece: self._linear(piece, prefix + ".q.weight"), values, lengths).view(total, 16, 64)
