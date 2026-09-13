@@ -1343,7 +1343,7 @@ def worker(binding_path):
             # expert owners in the segment surface); the published G1 default takes no such argument.
             dynamic = {'capture_experts': True} if mode == 'resident-dynamic-capture' else {}
             capture = model.bind_segmented_capture(
-                local_routing_mode=local_routing_mode(identity),
+                local_routing_mode=local_routing_mode(prediction['identity']),
                 collector=buffers.collector,
                 loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
                 static_state=(buffers.raw,), warmup_steps=2, **dynamic)
