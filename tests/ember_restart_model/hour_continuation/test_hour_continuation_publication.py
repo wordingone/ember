@@ -102,6 +102,32 @@ class PublicationTests(NextUpdateTests):
         self.assertEqual(self.packs.index, 2)
         self.assertFalse((self.custody/'continuation-reference.json').exists())
 
+    def test_rehashed_reference_or_terminal_attention_change_refuses(self):
+        descriptor = self.publish()
+        ref_path, terminal_path = (self.custody/name for name in
+            ('continuation-reference.json', 'continuation-hour.json'))
+        original_reference = json.loads(ref_path.read_bytes())
+        original_terminal = json.loads(terminal_path.read_bytes())
+        self.assertEqual(original_reference['execution_path'].get('attention_backend'), 'unforced')
+        self.assertEqual(original_terminal.get('attention_recompute'), 'none')
+        hour = dict(continuation=descriptor, applied_positions=12, measured_updates=1,
+                    child_manifest_sha256='manifest')
+        for target in ('reference', 'terminal'):
+            for key, value in (('attention_backend', 'math'),
+                               ('attention_recompute', 'non_reentrant_checkpoint')):
+                reference, terminal = copy.deepcopy(original_reference), copy.deepcopy(original_terminal)
+                if target == 'reference':
+                    reference['execution_path'][key] = value
+                else:
+                    terminal[key] = value
+                terminal_path.write_text(json.dumps(terminal))
+                descriptor['hour_binding_sha256'] = self.runner.file_sha256(terminal_path)
+                reference['hour_binding_sha256'] = descriptor['hour_binding_sha256']
+                ref_path.write_text(json.dumps(reference))
+                descriptor['reference_sha256'] = self.runner.file_sha256(ref_path)
+                with self.subTest(target=target, key=key), self.assertRaisesRegex(ValueError, 'attention'):
+                    cia_hour.verify_continuation_accounting(self.runner, self.custody, hour, self.identity, 18)
+
 
 if __name__ == '__main__':
     unittest.main()

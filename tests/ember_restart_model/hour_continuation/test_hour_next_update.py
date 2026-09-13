@@ -16,6 +16,7 @@ import torch
 import checkpoint_artifacts as artifacts
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cia_hour
+import cia_step_runner as step_runner
 
 
 class NextUpdateTests(unittest.TestCase):
@@ -37,6 +38,7 @@ class NextUpdateTests(unittest.TestCase):
         self.capture = SimpleNamespace(invalidate=Mock())
         self.applied = Mock()
         self.runner = SimpleNamespace(GIB=1024**3,
+            attention_selection=lambda identity: step_runner.attention_selection(identity),
             INPUT_FIELDS=('token_ids', 'target_ids', 'positions', 'document_starts'),
             canonical=lambda value: json.dumps(value, sort_keys=True).encode(),
             document_lengths=lambda starts, total: (3, 3),
@@ -92,6 +94,14 @@ class NextUpdateTests(unittest.TestCase):
         self.capture.invalidate.assert_called_once()
         self.applied.assert_not_called()
         self.assertIsNone(self.active.grad)
+
+    def test_auxiliary_execution_records_explicit_attention_settings(self):
+        self.identity.update(execution_mode='resident-dynamic-capture', optimizer={'fused': True},
+            hour=dict(schema='governed-hour-v1', arm='treatment', minimum_wall_seconds=3600, minimum_measured_steps=1024),
+            attention_backend='math', attention_recompute='non_reentrant_checkpoint')
+        reference = self.execute()
+        self.assertEqual(reference['execution_path'].get('attention_backend'), 'math')
+        self.assertEqual(reference['execution_path'].get('attention_recompute'), 'non_reentrant_checkpoint')
 
 
 if __name__ == '__main__':
