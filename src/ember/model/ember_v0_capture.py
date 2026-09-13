@@ -317,10 +317,14 @@ class SegmentedStep:
                 raise CaptureStateError("owner grad not zero after capture")
 
     # ---- runner helpers ---------------------------------------------------------------------------------------------
-    def zero_grad(self):
-        """Static-accumulate: zero in place, never set_to_none, so the captured backward keeps its grad storage."""
+    def zero_grad(self, *, optimizer=None):
+        """Clear the optimizer/capture owner union in place, preserving gradient storage and absence."""
+        cleared = set()
+        if optimizer is not None:
+            optimizer.zero_grad(set_to_none=False)
+            cleared = {id(parameter) for group in optimizer.param_groups for parameter in group["params"]}
         for parameter in self.params:
-            if parameter.grad is not None:
+            if id(parameter) not in cleared and parameter.grad is not None:
                 parameter.grad.zero_()
 
     def loss(self, logits, targets):
