@@ -152,7 +152,7 @@ def validate_identity(*, runner, identity):
         raise ValueError('checkpoint probe requires exactly two measured updates')
     walls = identity['dispatch_resources'].get('disk_write_walls')
     if (not isinstance(walls, list) or len(walls) != 1 or walls[0].get('volume_root') != 'B:/'
-            or walls[0].get('maximum_write_bytes') != 24 * runner.GIB):
+            or walls[0].get('maximum_write_bytes') != runner.resource_limits(identity)['max_b_write_gib'] * runner.GIB):
         raise ValueError('hour native disk wall differs from worker envelope')
     mixture, data = identity['production_mixture'], identity['data']
     required = {'admission_receipt_path', 'admission_receipt_sha256', 'catalog_binding',
@@ -256,14 +256,17 @@ def prepare_inputs(runner, data, geometry):
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('hour cursor fields differ')
-    positions = (warm + maximum) * sequence * documents
+    # Reserve the independently checked next update without adding throughput credit.
+    reference_positions = sequence * documents
+    positions = (warm + maximum) * sequence * documents + reference_positions
     span = stream.check_cursor_span(**cursor, tokens=positions)
     identity = dict(receipt_sha256=data['receipt_sha256'], tokenizer_sha256=data['tokenizer_sha256'],
                     shard_ledger_sha256=data['shard_ledger_sha256'], cursor_start=cursor,
-                    geometry=geometry, span=span, maximum_planned_positions=positions)
+                    geometry=geometry, span=span, maximum_planned_positions=positions,
+                    reference_positions_reserved=reference_positions)
     binding = dict(identity, input_sha256=hashlib.sha256(runner.canonical(identity)).hexdigest(),
                    input_digest_grammar='receipt-ledger-cursor-span-v1', shard_ledger_path=str(ledger))
-    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum, sequence=sequence, documents=documents)
+    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents)
     first = packs.next_pack()
     for path, expected in ((receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256']),
                            (ledger, data['shard_ledger_sha256'])):
@@ -314,9 +317,17 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     return publish, owner_update_counts
 
 
-def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child):
+def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None):
     import checkpoint_artifacts as artifacts
+    import parameter_counter as counter
     cap = 10 * runner.GIB
+    expected = {}
+    counter._cia_realization_receipt(custody / 'trained-child', child,
+        model_config_sha256=identity['config_sha256'], _facts=expected)
+    if before is not None and (before['facts'] != expected
+            or before['data_cursor'] != child['data_cursor']
+            or before['rng_state_sha256'] != child['rng_state_sha256']):
+        raise ValueError('terminal live state differs from independently reopened checkpoint bytes')
     restored = artifacts.load_checkpoint_artifacts(model, optimizer, custody / 'trained-child', child,
         max_transient_scratch_bytes=cap, host_commit_reserve_bytes=16 * runner.GIB)
     if restored['data_cursor'] != child['data_cursor']:
@@ -325,12 +336,297 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
     facts = artifacts._cia_lineage_facts(inventory, native['state'])
-    import parameter_counter as counter
-    expected = {}
-    counter._cia_realization_receipt(custody / 'trained-child', child,
-        model_config_sha256=identity['config_sha256'], _facts=expected)
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
+
+
+def continuation_state(runner, model, optimizer, cursor, device):
+    """Collect complete native state facts at an owned update boundary."""
+    import torch
+    import checkpoint_artifacts as artifacts
+    if device.type == 'cuda':
+        torch.cuda.synchronize(device)
+    native = artifacts.capture_cia_placed_optimizer_state(
+        model, optimizer, max_state_bytes=10 * runner.GIB)
+    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'])
+    del native
+    states = {'cpu': torch.get_rng_state(),
+              'cuda': torch.cuda.get_rng_state(device) if device.type == 'cuda'
+              else torch.empty(0, dtype=torch.uint8)}
+    rng = {name: hashlib.sha256(value.cpu().numpy().tobytes()).hexdigest()
+           for name, value in states.items()}
+    return dict(facts=facts, rng_state_sha256=rng, data_cursor=dict(cursor))
+
+
+def bind_hour_capture(runner, model, identity, lengths, device):
+    """Use the same fresh exemplar binding for hour startup and next-update reproduction."""
+    mode = runner.execution_mode(identity)
+    if mode not in runner.MODE_SOURCES:
+        return None, None
+    import torch
+    buffers = runner.routing_buffers(lengths, device)
+    capture = model.bind_segmented_capture(collector=buffers.collector,
+        local_routing_mode=runner.local_routing_mode(identity),
+        loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
+        static_state=(buffers.raw,), warmup_steps=2,
+        **({'capture_experts': True} if mode == 'resident-dynamic-capture' else {}))
+    return capture, buffers
+
+
+def verify_continuation_accounting(runner, custody, hour, identity, physical_positions):
+    """Reconcile physical work against a separately bound auxiliary reference."""
+    if type(physical_positions) is not int or type(hour['applied_positions']) is not int:
+        raise ValueError('continuation position counts must be integers')
+    count = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
+    descriptor = hour.get('continuation')
+    if descriptor is None:
+        if physical_positions != hour['applied_positions']:
+            raise ValueError('legacy hour physical positions differ')
+        return 0
+    reference = bound_json(runner, custody/'continuation-reference.json', descriptor['reference_sha256'])
+    terminal = bound_json(runner, custody/'continuation-hour.json', descriptor['hour_binding_sha256'])
+    pack = bound_json(runner, custody/'continuation-next-pack.json', descriptor['next_pack_sha256'])
+    for key in ('hour_binding_sha256', 'next_pack_sha256'):
+        if reference[key] != descriptor[key]:
+            raise ValueError('continuation reference binding differs')
+    geometry = dict(microbatch=identity['geometry']['documents_per_step'],
+                    sequence=identity['geometry']['sequence_length'], positions_per_update=count)
+    checkpoint = terminal['terminal_checkpoint']
+    if (reference['geometry'] != geometry or terminal['geometry'] != geometry
+            or reference['run_id'] != identity['run_id']
+            or reference['source_identity'] != identity['source_sha256']
+            or terminal['source_identity'] != identity['source_sha256']
+            or reference['device'] != identity['gpu_uuid'] or terminal['device'] != identity['gpu_uuid']
+            or checkpoint != reference['restored_from']
+            or checkpoint['run_id'] != identity['run_id']
+            or checkpoint['manifest_sha256'] != hour['child_manifest_sha256']
+            or checkpoint['tokens_seen'] != hour['applied_positions']
+            or checkpoint['global_step'] != identity['geometry']['warm_steps'] + hour['measured_updates']
+            or checkpoint['stream_receipt_sha256'] != identity['data']['receipt_sha256']):
+        raise ValueError('continuation terminal identity differs')
+    before, after = reference['before'], reference['after']
+    if (before['facts'] != terminal['terminal_facts']
+            or before['rng_state_sha256'] != terminal['terminal_rng_state_sha256']
+            or before['data_cursor'] != terminal['terminal_data_cursor']
+            or before['data_cursor']['global_step'] != checkpoint['global_step']
+            or before['data_cursor']['tokens_seen'] != checkpoint['tokens_seen']
+            or after['data_cursor']['global_step'] != checkpoint['global_step'] + 1
+            or after['data_cursor']['tokens_seen'] != checkpoint['tokens_seen'] + count
+            or len(pack['token_ids']) != count or len(pack['target_ids']) != count
+            or reference['executed_input_sha256'] != hashlib.sha256(
+                runner.canonical({key: pack[key] for key in runner.INPUT_FIELDS})).hexdigest()):
+        raise ValueError('continuation update state or input differs')
+    for item in (descriptor, reference['accounting']):
+        if (type(item['positions_physically_applied']) is not int or item['positions_physically_applied'] != count
+                or type(item['credited_toward_governed_hour']) is not int or item['credited_toward_governed_hour'] != 0
+                or item['included_in_published_terminal_lineage'] is not False):
+            raise ValueError('continuation auxiliary accounting differs')
+    if reference['published_state_restored'] is not True or descriptor['published_state_restored'] is not True:
+        raise ValueError('continuation published state was not restored')
+    if physical_positions != hour['applied_positions'] + count:
+        raise ValueError('continuation physical positions differ')
+    return count
+
+
+def validate_continuation(runner, identity):
+    """Open a completed hour through its bound native outcomes and retained artifacts."""
+    request = identity['continuation']
+    if not isinstance(request, dict) or set(request) != {'source_hour_result_path', 'source_hour_result_sha256'}:
+        raise ValueError('continuation source hour fields differ')
+    path = Path(request['source_hour_result_path']).resolve(strict=True)
+    if path.name != 'hour-result.json':
+        raise ValueError('continuation source must name the hour result')
+    hour = bound_json(runner, path, request['source_hour_result_sha256'])
+    root = path.parent
+    prior_prediction = bound_json(runner, root/'prediction.json', hour['prediction_sha256'])
+    prior = prior_prediction['identity']
+    if (root.name != 'measurement-' + prior['run_id'] or hour['run_id'] != prior['run_id']
+            or prior['run_id'] == identity['run_id'] or 'continuation' in prior
+            or hour['hour']['schema'] != 'governed-hour-v1'
+            or not hour_complete(measured_updates=hour['measured_updates'], elapsed_seconds=hour['pre_checkpoint_wall_seconds'])
+            or hour['restored_state_matches'] is not True):
+        raise ValueError('continuation requires a completed separate governed hour')
+    for key in ('source_commit', 'source_sha256', 'config_sha256', 'data', 'seed', 'support',
+                'optimizer', 'geometry', 'batch_documents', 'input_binding', 'gpu_uuid', 'hour',
+                'production_mixture', 'checkpoint_probe', 'execution_mode', 'local_routing_mode'):
+        if prior.get(key) != identity.get(key):
+            raise ValueError('continuation source hour identity differs: ' + key)
+    outcome_path = root.parent/'operator/operator-outcome.json'
+    outcome = json.loads(outcome_path.read_bytes())
+    if (outcome['run_id'] != prior['run_id'] or outcome['success'] is not True
+            or outcome['daemon_cleanup_verified'] is not True
+            or outcome['measurement_files']['hour-result.json'] != request['source_hour_result_sha256']):
+        raise ValueError('continuation hour native outcome differs')
+    for name in ('owned.json', 'disk.json', 'worker-terminal.json', 'rows.jsonl'):
+        if runner.file_sha256(root/name) != outcome['measurement_files'][name]:
+            raise ValueError('continuation hour terminal bytes differ')
+    owned = json.loads((root/'owned.json').read_bytes())
+    disk = json.loads((root/'disk.json').read_bytes())
+    terminal = json.loads((root/'worker-terminal.json').read_bytes())
+    if (owned['status'] != 'completed' or owned['returncode'] != 0 or owned['cleanup_verified'] is not True
+            or owned.get('supervisor_failure') is not None
+            or disk['outcome'] != 'COMPLETED' or disk['stop_reason'] is not None
+            or disk['runner_exit_code'] != 0 or disk['child_exit_code'] != 0
+            or disk['operating_reserve_breaches'] != []
+            or terminal['status'] != 'completed'):
+        raise ValueError('continuation source hour did not complete its resource envelope')
+    rows = [json.loads(line) for line in (root/'rows.jsonl').read_bytes().splitlines()]
+    geometry = identity['geometry']
+    count = geometry['sequence_length'] * geometry['documents_per_step']
+    if (len(rows) != geometry['warm_steps'] + hour['measured_updates']
+            or hour['rows_sha256'] != runner.file_sha256(root/'rows.jsonl')
+            or [row['phase'] for row in rows] != ['warm'] * geometry['warm_steps'] + ['measured'] * hour['measured_updates']
+            or any(row['run_id'] != prior['run_id'] or row['prediction_sha256'] != hour['prediction_sha256']
+                   or type(row['applied_positions']) is not int or row['applied_positions'] != count for row in rows)
+            or sum(row['applied_positions'] for row in rows) != hour['applied_positions']):
+        raise ValueError('continuation source hour rows differ')
+    verify_continuation_accounting(runner, root, hour, prior, terminal['applied_positions'])
+    if hour.get('continuation') is None:
+        raise ValueError('continuation requires the independently bound next-update reference')
+    descriptor = hour['continuation']
+    reference = bound_json(runner, root/'continuation-reference.json', descriptor['reference_sha256'])
+    hour_binding = bound_json(runner, root/'continuation-hour.json', descriptor['hour_binding_sha256'])
+    pack = bound_json(runner, root/'continuation-next-pack.json', descriptor['next_pack_sha256'])
+    child = bound_json(runner, root/'trained-child/checkpoint-manifest.json', hour['child_manifest_sha256'])
+    child['checkpoint_manifest_sha256'] = hour['child_manifest_sha256']
+    if child['data_cursor'] != hour_binding['terminal_data_cursor']:
+        raise ValueError('continuation checkpoint cursor differs from the hour terminal')
+    stream, receipt, tokenizer, ledger = runner.open_input_stream(identity['data'])
+    cursor = dict(shard_index=int(child['data_cursor']['shard']), token_offset=child['data_cursor']['record_index'])
+    geometry = identity['geometry']
+    regenerated = HourPacks(stream, cursor, maximum_steps=1, sequence=geometry['sequence_length'],
+                            documents=geometry['documents_per_step']).next_pack()
+    for key in (*runner.INPUT_FIELDS, 'cursor_before', 'cursor_after'):
+        if regenerated[key] != pack[key]:
+            raise ValueError('continuation pack differs from the admitted stream: ' + key)
+    return dict(root=root, hour=hour, reference=reference, hour_binding=hour_binding, pack=pack, child=child)
+
+
+def run_continuation(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
+    """A new native worker restores the hour checkpoint and independently executes its next update."""
+    import torch
+    from ember.model.ember_v0_decoder import CIADecoder
+    identity = prediction['identity']
+    source = prepared['continuation']
+    model = CIADecoder(architecture_config=config).materialize_cpu(seed=identity['seed'])
+    lengths = runner.document_lengths(tuple(source['pack']['document_starts']), len(source['pack']['token_ids']))
+    def optimizer_factory(inventory):
+        if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
+            raise ValueError('continuation optimizer population is incomplete')
+        return torch.optim.AdamW(list(inventory.values()), **runner.optimizer_kwargs(identity['optimizer']))
+    inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
+        mode=runner.execution_mode(identity), optimizer_factory=optimizer_factory)
+    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, source['root'], source['child'])
+    before = continuation_state(runner, model, optimizer, source['child']['data_cursor'], device)
+    expected = source['reference']['before']
+    if before != expected:
+        raise ValueError('fresh continuation restore differs from the hour terminal')
+    reproduced = next_update_reference(runner, model, optimizer, inventory, identity, source['pack'],
+        source['child'], before, device, applied)
+    reproduced.update(restored_from=source['hour_binding']['terminal_checkpoint'],
+        hour_binding_sha256=source['hour']['continuation']['hour_binding_sha256'],
+        reference_sha256=source['hour']['continuation']['reference_sha256'],
+        next_pack_sha256=source['hour']['continuation']['next_pack_sha256'],
+        source_hour_result_sha256=identity['continuation']['source_hour_result_sha256'],
+        c_compiler=compiler, prediction_sha256=binding['launch']['prediction_sha256'],
+        claim='Observed next update from a separate owned worker; independent comparison remains required.')
+    if any(runner.file_sha256(runner.ROOT/name) != digest for name, digest in identity['source_sha256'].items()):
+        raise ValueError('source changed during continuation reproduction')
+    if runner.file_sha256(source['root']/'trained-child/checkpoint-manifest.json') != source['child']['checkpoint_manifest_sha256']:
+        raise ValueError('source checkpoint manifest changed during continuation reproduction')
+    runner._write_new(custody/'continuation-reproduced.json', reproduced)
+
+
+def next_update_reference(runner, model, optimizer, inventory, identity, pack, child,
+                          terminal_state, device, applied):
+    """Execute one uncredited auxiliary update from the published terminal state."""
+    cursor = child['data_cursor']
+    if pack['cursor_before'] != dict(shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
+        raise ValueError('continuation pack does not start at the published cursor')
+    geometry = identity['geometry']
+    positions = geometry['sequence_length'] * geometry['documents_per_step']
+    if len(pack['token_ids']) != positions or len(pack['target_ids']) != positions:
+        raise ValueError('continuation pack geometry differs')
+    before = continuation_state(runner, model, optimizer, cursor, device)
+    if before != terminal_state:
+        raise ValueError('continuation starting state differs from the verified terminal state')
+    lengths = runner.document_lengths(tuple(pack['document_starts']), positions)
+    capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
+    path = dict(mode=runner.execution_mode(identity), local_routing_mode=runner.local_routing_mode(identity),
+                capture_phase='fresh-record' if capture is not None else 'eager',
+                optimizer='torch-adamw-fused' if identity['hour']['arm'] == 'treatment' else 'torch-adamw')
+    try:
+        row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
+            run_id=identity['run_id'], capture=capture, record=capture is not None,
+            expert_owners=runner.expert_owner_index(inventory))
+        # The real resource callback records physical work even though no hour
+        # throughput or published checkpoint credit is assigned to this update.
+        applied(row['applied_positions'])
+        if row['applied_positions'] != positions:
+            raise ValueError('continuation applied position count differs')
+        present = sorted(name for name, parameter in inventory.items() if parameter.grad is not None)
+        if not present:
+            raise ValueError('continuation observed no participating gradients')
+        next_cursor = dict(shard=str(pack['cursor_after']['shard_index']),
+            record_index=pack['cursor_after']['token_offset'], global_step=cursor['global_step']+1,
+            tokens_seen=cursor['tokens_seen']+positions)
+        after = continuation_state(runner, model, optimizer, next_cursor, device)
+        return dict(run_id=identity['run_id'], source_identity=identity['source_sha256'], device=identity['gpu_uuid'],
+            geometry=dict(microbatch=geometry['documents_per_step'], sequence=geometry['sequence_length'],
+                          positions_per_update=positions), execution_path=path,
+            executed_input_sha256=hashlib.sha256(runner.canonical({key: pack[key] for key in runner.INPUT_FIELDS})).hexdigest(),
+            gradient_present=present, gradient_present_source='parameter.grad is not None after runner.measure_step with torch.optim.AdamW',
+            loss=row['loss'], before=before, after=after,
+            accounting=dict(positions_physically_applied=positions, credited_toward_governed_hour=0,
+                            included_in_published_terminal_lineage=False))
+    finally:
+        if capture is not None:
+            capture.invalidate()
+        optimizer.zero_grad(set_to_none=True)
+
+
+def publish_continuation_reference(runner, model, optimizer, inventory, identity, custody, child,
+                                   terminal_state, prepared, device, applied, governed_wall, energy_binding):
+    positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
+    total_steps, positions = child['data_cursor']['global_step'], child['data_cursor']['tokens_seen']
+    checkpoint_identity = dict(manifest_sha256=child['checkpoint_manifest_sha256'],
+        run_id=identity['run_id'], global_step=total_steps, tokens_seen=positions,
+        stream_receipt_sha256=identity['data']['receipt_sha256'])
+    hour_binding = dict(source_identity=identity['source_sha256'], device=identity['gpu_uuid'],
+        geometry=dict(microbatch=identity['geometry']['documents_per_step'],
+                      sequence=identity['geometry']['sequence_length'], positions_per_update=positions_per_update),
+        terminal_checkpoint=checkpoint_identity, terminal_facts=terminal_state['facts'],
+        terminal_rng_state_sha256=terminal_state['rng_state_sha256'], terminal_data_cursor=terminal_state['data_cursor'],
+        live_state_verified_before_restore=True, governed_wall_seconds=governed_wall, energy=energy_binding)
+    runner._write_new(custody / 'continuation-hour.json', hour_binding)
+    saved_cursor, saved_index = dict(prepared['packs'].cursor), prepared['packs'].index
+    reference_started = time.perf_counter()
+    try:
+        next_pack = prepared['packs'].next_pack()
+        runner._write_new(custody / 'continuation-next-pack.json', next_pack)
+        reference = next_update_reference(runner, model, optimizer, inventory, identity, next_pack,
+                                          child, terminal_state, device, applied)
+    finally:
+        # S+1 is never published. Restore S even when the reference step refuses.
+        try:
+            verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
+        finally:
+            prepared['packs'].cursor, prepared['packs'].index = saved_cursor, saved_index
+        if continuation_state(runner, model, optimizer, child['data_cursor'], device) != terminal_state:
+            raise ValueError('continuation cleanup failed to restore the published terminal state')
+    reference.update(restored_from=checkpoint_identity, published_state_restored=True,
+        auxiliary_wall_seconds=time.perf_counter()-reference_started,
+        hour_binding_sha256=runner.file_sha256(custody / 'continuation-hour.json'),
+        next_pack_sha256=runner.file_sha256(custody / 'continuation-next-pack.json'))
+    if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
+        raise ValueError('hour source changed during continuation execution')
+    runner._write_new(custody / 'continuation-reference.json', reference)
+    continuation = dict(reference_sha256=runner.file_sha256(custody / 'continuation-reference.json'),
+        hour_binding_sha256=reference['hour_binding_sha256'], next_pack_sha256=reference['next_pack_sha256'],
+        positions_physically_applied=positions_per_update, credited_toward_governed_hour=0,
+        included_in_published_terminal_lineage=False, published_state_restored=True,
+        auxiliary_wall_seconds=reference['auxiliary_wall_seconds'])
+    return continuation
 
 
 def run_hour(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
@@ -338,6 +634,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     import torch
     from ember.model.ember_v0_decoder import CIADecoder
     identity = prediction['identity']
+    positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
+    import cia_hour_energy
+    energy = cia_hour_energy.load(runner=runner, identity=identity, custody=custody, device=device)
     hour = identity['hour']
     mode = runner.execution_mode(identity)
     probe = hour['schema'] == 'checkpoint-probe-v1'
@@ -364,14 +663,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
-    capture = None
-    if mode in runner.MODE_SOURCES:
-        buffers = runner.routing_buffers(lengths, device)
-        capture = model.bind_segmented_capture(collector=buffers.collector,
-            local_routing_mode=runner.local_routing_mode(identity),
-            loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
-            static_state=(buffers.raw,), warmup_steps=2,
-            **({'capture_experts': True} if mode == 'resident-dynamic-capture' else {}))
+    capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
     owners = runner.expert_owner_index(inventory)
     measured, positions, total_steps = 0, 0, 0
     started = None
@@ -415,6 +707,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 # Warm-to-measured transition (the hour's single warm update is step 1), outside every timed interval,
                 # eager control and captured treatment alike; the governed clock starts after it.
                 runner._write_new(custody / 'gc-freeze.json', runner.freeze_resident_object_graph(**gc_identity))
+                energy.begin()
                 started = time.perf_counter()
             else:
                 measured += 1
@@ -436,19 +729,27 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     child = publish('trained-child', steps=total_steps, tokens=positions,
                     cursor=pack['cursor_after'], parent=custody / 'zero-parent')
     checkpoint_finished = time.perf_counter()
-    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
+    terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
+    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
+    restore_finished = time.perf_counter()
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
+    energy_binding = energy.end()
+    # These endpoints are immutable before auxiliary work. The additional update
+    # belongs only to the resource ledger and the continuation comparison.
+    continuation = None if probe else publish_continuation_reference(
+        runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
+        device, applied, governed_wall, energy_binding)
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
     p10 = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)]
     runner._write_new(custody / 'hour-result.json', dict(schema='ember-cia-hour-result-v1', hour=hour,
-        measured_updates=measured, measured_positions=measured * 4096, applied_positions=positions,
+        measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
         governed_wall_seconds=governed_wall, pre_checkpoint_wall_seconds=elapsed_before_checkpoint,
         checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
-        restore_and_verification_seconds=time.perf_counter() - checkpoint_finished,
+        restore_and_verification_seconds=restore_finished - checkpoint_finished,
         complete_step_p10_positions_per_second=p10, quantile='nearest-rank-p10',
-        overall_measured_positions_per_second=measured * 4096 / governed_wall,
+        overall_measured_positions_per_second=measured * positions_per_update / governed_wall,
         parent_manifest_sha256=parent['checkpoint_manifest_sha256'],
         child_manifest_sha256=child['checkpoint_manifest_sha256'], lineage=child['lineage'],
         rows_sha256=runner.file_sha256(custody / 'rows.jsonl'), restored_state_matches=True,
@@ -456,5 +757,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         gc_freeze_sha256=runner.file_sha256(custody / 'gc-freeze.json'),
         input_binding=prepared['binding'], source_commit=identity['source_commit'], run_id=identity['run_id'],
         prediction_sha256=binding['launch']['prediction_sha256'],
+        energy=energy_binding,
+        continuation=continuation,
         production_mixture_validation=prepared['mixture_validation'],
         claim='Checkpoint probe only' if probe else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+

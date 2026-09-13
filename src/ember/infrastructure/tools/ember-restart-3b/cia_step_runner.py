@@ -301,7 +301,8 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory, hour=hour,
                                            measurement=measurement_mode(expected_identity))
     planned = expected_identity['hour']['minimum_measured_steps'] if hour else measured
-    if (warm + planned) * wall >= resource_limits(expected_identity)['wall_seconds']:
+    executed_steps = 1 if 'continuation' in expected_identity else warm + planned
+    if executed_steps * wall >= resource_limits(expected_identity)['wall_seconds']:
         raise ValueError('predicted steps do not fit the fixed wall bound')
 
 
@@ -446,6 +447,8 @@ def required_sources(identity):
             ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
     if hour_mode(identity):
         additional += ('src/ember/governance/scripts/catalog_train_stream.py',)
+        additional += tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
+                            ('cia_hour_energy.py', 'boundary_energy_collector.py'))
     return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional
 
 
@@ -536,6 +539,8 @@ def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
         limits.update(wall_seconds=4500, max_b_write_gib=24)
+        if 'continuation' in identity:
+            limits.update(wall_seconds=900, max_b_write_gib=1)
     elif trajectory_mode(identity):
         if trajectory_checkpoint_emission(identity):
             limits.update(wall_seconds=1800, max_b_write_gib=32)
@@ -548,6 +553,8 @@ def resource_limits(identity):
 
 def hour_mode(identity):
     if 'hour' not in identity:
+        if 'continuation' in identity:
+            raise ValueError('continuation requires a bound governed hour')
         return False
     value = identity['hour']
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
@@ -558,6 +565,8 @@ def hour_mode(identity):
             or (value['minimum_wall_seconds'], value['minimum_measured_steps']) !=
                ((3600, 1024) if value['schema'] == 'governed-hour-v1' else (0, 2))):
         raise ValueError('explicit fixed governed-hour identity required')
+    if 'continuation' in identity and value['schema'] != 'governed-hour-v1':
+        raise ValueError('continuation requires the completed governed hour')
     return True
 
 
@@ -596,7 +605,7 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
@@ -664,6 +673,8 @@ def prepare_execution(prediction):
                 if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
     if hour:
         prepared['mixture_validation'] = mixture_validation
+        if 'continuation' in identity:
+            prepared['continuation'] = load_hour_module().validate_continuation(sys.modules[__name__], identity)
     actual = dict(identity, input_binding=prepared['binding'], resources=resource_limits(identity))
     sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
                                                 measurement=measurement)
@@ -1277,10 +1288,13 @@ def worker(binding_path):
         if hour_mode(prediction['identity']):
             def applied(count):
                 nonlocal applied_positions
-                if type(count) is not int or count != 4096:
+                geometry = prediction['identity']['geometry']
+                if type(count) is not int or count != geometry['sequence_length'] * geometry['documents_per_step']:
                     raise ValueError('hour applied count differs from bound geometry')
                 applied_positions += count
-            load_hour_module().run_hour(runner=sys.modules[__name__], config=config,
+            hour_module = load_hour_module()
+            execute = hour_module.run_continuation if 'continuation' in prediction['identity'] else hour_module.run_hour
+            execute(runner=sys.modules[__name__], config=config,
                 prepared=prepared, prediction=prediction, binding=binding, custody=custody,
                 device=device, compiler=c_compiler, applied=applied)
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
