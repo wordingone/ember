@@ -115,11 +115,38 @@ class HourContractTests(unittest.TestCase):
             runner.hour_mode(dict(identity, trajectory={}))
         with self.assertRaises(ValueError):
             runner.hour_mode(dict(hour=dict(identity['hour'], minimum_wall_seconds=3599)))
-        geometry = dict(sequence_length=1024, documents_per_step=4, warm_steps=1, measured_steps=32768)
-        self.assertEqual(runner.geometry_counts(geometry, hour=True), (1024, 4, 1, 32768))
+        geometry = dict(sequence_length=1024, documents_per_step=4, warm_steps=1, measured_steps=131072)
+        self.assertEqual(runner.geometry_counts(geometry, hour=True), (1024, 4, 1, 131072))
         with self.assertRaises(ValueError):
             runner.geometry_counts(geometry)
 
+    def test_hour_capacity_covers_80000_and_reserves_continuation(self):
+        import math
+        target = math.ceil(80000 * 3600 / 4096)
+        self.assertEqual(target, 70313)
+        geometry = dict(sequence_length=1024, documents_per_step=4, warm_steps=1, measured_steps=131072)
+        self.assertEqual(runner.geometry_counts(geometry, hour=True)[3], 131072)
+        with self.assertRaises(ValueError):
+            runner.geometry_counts(dict(geometry, measured_steps=131073), hour=True)
+        with self.assertRaises(ValueError):
+            subject.require_remaining_hour_capacity(32768, 32768)
+        subject.require_remaining_hour_capacity(target, 131072)
+        self.assertTrue(subject.hour_complete(measured_updates=target, elapsed_seconds=3600))
+        class Stream:
+            def next_episode(self, *, shard_index, token_offset, sequence_length):
+                return dict(token_ids=[0]*sequence_length, target_ids=[0]*sequence_length), dict(shard_index=shard_index, token_offset=token_offset+sequence_length)
+        # Boundary simulation skips allocation of the preceding complete packs.
+        packs = subject.HourPacks(Stream(), dict(shard_index=0, token_offset=(1+target)*4096), maximum_steps=1+131072+1)
+        packs.index = 1+target
+        continuation = packs.next_pack()
+        self.assertEqual(len(continuation['target_ids']),4096)
+        self.assertEqual(continuation['cursor_after']['token_offset'],(1+target+1)*4096)
+        packs.index = 1+131072
+        with self.assertRaises(ValueError):
+            subject.require_remaining_hour_capacity(131072,131072)
+        self.assertEqual(len(packs.next_pack()['target_ids']),4096)
+        with self.assertRaises(ValueError):
+            packs.next_pack()
     def test_hour_completion_requires_both_observed_wall_and_updates(self):
         self.assertIsNotNone(subject)
         self.assertFalse(subject.hour_complete(measured_updates=1024, elapsed_seconds=3599.9))
