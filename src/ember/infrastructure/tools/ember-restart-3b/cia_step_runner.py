@@ -94,7 +94,7 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
     measured = positive_int(geometry['measured_steps'], 'measured steps',
-                            32768 if hour else MEASUREMENT_UPDATES if measurement else 63 if trajectory else 8)
+                            131072 if hour else MEASUREMENT_UPDATES if measurement else 63 if trajectory else 8)
     if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
         raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
     if measurement and (sequence, documents, warm, measured) != (1024, 4, 1, MEASUREMENT_UPDATES):

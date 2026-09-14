@@ -284,6 +284,11 @@ def hour_complete(*, measured_updates, elapsed_seconds):
     return measured_updates >= 1024 and elapsed_seconds >= 3600
 
 
+def require_remaining_hour_capacity(measured_updates, maximum):
+    if measured_updates >= maximum:
+        raise ValueError('declared measured hour capacity exhausted before completion')
+
+
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
@@ -727,6 +732,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 if ((probe and measured == 2) or
                         (not probe and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
                     break
+            # Keep the one independently checked continuation pack reserved.
+            # The finite measured allowance is not the hour completion condition.
+            require_remaining_hour_capacity(measured, identity['geometry']['measured_steps'])
             pack = prepared['packs'].next_pack()
         closing_instant = time.perf_counter()
         gc_rows.write(runner.canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
