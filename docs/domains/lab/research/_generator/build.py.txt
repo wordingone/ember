@@ -289,7 +289,15 @@ def build(out_dir, check_only):
     for src_name in ('build.py', 'render.py', 'sources.py', 'verify.py',
                      'article-fp16-kernel-selection.md'):
         body = io.open(os.path.join(here, src_name), encoding='utf-8').read()
-        with io.open(os.path.join(gen, src_name), 'w', encoding='utf-8',
+        # Published with a .txt suffix ON PURPOSE. These four scripts and the article
+        # source live in the operator's seat tooling, OUTSIDE this repository, and
+        # never execute here -- they are published so a reader can inspect how the
+        # account was produced. Writing them as .py would enrol another tree's tooling
+        # into this repository's tracked-Python surface, where the self-location guard
+        # would read a seat-root derivation as a wrong repo-root derivation, because
+        # the published copy sits at a different depth than the original. Text is the
+        # honest classification of a file that documents rather than executes.
+        with io.open(os.path.join(gen, src_name + '.txt'), 'w', encoding='utf-8',
                      newline='\n') as fh:
             fh.write(body)
 
