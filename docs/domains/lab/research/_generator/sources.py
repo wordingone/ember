@@ -1,0 +1,427 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Read the existing research record at a permitted boundary; allowlist, sanitize, join, report coverage.
+
+WHAT THIS IS. A READER. It opens three existing local records -- the loop event log, the attempt
+registry, and a small explicitly named set of receipts -- and produces a publication bundle from an
+allowlist of their fields. It is not a research ledger, not an acceptance authority, and not a state
+machine: it writes nothing back to any record it reads, and no verdict, criterion, stage or successor
+edge originates here. Every one of those is copied verbatim from the record that owns it.
+
+WHAT IT MAY NOT DO, and each of these is a real constraint on this host rather than a style note:
+
+  - It imports no instrument module. Reading a receipt is opening a JSON file; importing the script
+    that wrote it can execute research code, so nothing under scripts/issue1945/ is imported here.
+  - It walks no directory on B: and hashes nothing. It opens the files it is told to open, by name.
+    A directory walk over the receipt store is banned while any run is live and the store is large.
+  - It reads only files named in RECEIPT_ALLOWLIST. There is no glob over the receipt store.
+  - It refuses to run while the GPU-window marker is up (build.py enforces it), because any python
+    touching the receipt directory during a window has already cost one refused governed run.
+
+THE SANITIZER IS NOT A FORMALITY. Free-text fields are inspected, not just numeric ones: local
+absolute paths carry the host account name, and a receipt written by an instrument can quote one.
+Anything scrubbed is counted and reported, so a silent removal cannot pass for a clean source.
+"""
+import hashlib
+import io
+import json
+import os
+import re
+import time
+
+# ---------------------------------------------------------------------------
+# Roots. The seat workspace's state/ directory is NOT an ember repository-relative
+# path -- it is this seat's own workspace, excluded from ember by .git/info/exclude.
+# It is resolved explicitly and never guessed.
+#
+# The default is derived from THIS FILE's location: the canonical copy lives at
+# <seat root>/scripts/research_site/sources.py, so two directories up is the seat
+# root. No host path is written into these bytes, which is also what lets this
+# generator be published alongside the site it builds. A copy of this file placed
+# anywhere else resolves somewhere wrong, and _p() refuses rather than guessing --
+# set EMBER_RESEARCH_SEAT_ROOT to run it from another location.
+# ---------------------------------------------------------------------------
+_DEFAULT_SEAT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
+SEAT_ROOT = (os.environ.get('EMBER_RESEARCH_SEAT_ROOT')
+             or _DEFAULT_SEAT_ROOT).replace('\\', '/')
+REGISTRY = 'state/attempt-registry.jsonl'
+LOOP = 'state/issue1945-loop.jsonl'
+
+# Named, not globbed. Adding a receipt here is a deliberate publication act.
+RECEIPT_ALLOWLIST = {
+    'wave-boundary-sweep': 'state/issue1945-receipts/wave-boundary-sweep-20260915T1730Z.json',
+    'kernel-identity-audit': 'state/issue1945-receipts/which-kernel-actually-ran-20260915T1820Z.json',
+    'fp16-timeweighted': 'state/issue1945-receipts/fp16-accum-timeweighted-20260915T1715Z.json',
+    'machine-fill': 'state/issue1945-receipts/machine-fill-vs-precision-gain-20260915T1743Z.json',
+}
+
+# ---------------------------------------------------------------------------
+# Publication allowlists. A field absent here is OMITTED and counted, never
+# silently dropped -- the coverage block names every omitted field and why.
+# ---------------------------------------------------------------------------
+REGISTRY_PUBLISH = (
+    'id', 'title', 'kind', 'issue', 'status', 'date', 'basis', 'treatment', 'condition',
+    'evidence', 'source', 'not_closed', 'bounds', 'loop_hypothesis', 'moves_gate', 'summary',
+    'withdrawn', 'superseded_by', 'correction', 'prior_work', 'claim', 'loop_verdict', 'note',
+    'finding_that_refutes_the_reviewer',
+)
+REGISTRY_OMIT_REASON = {
+    'owner': 'internal seat name; carries no research content',
+    'digests': 'bulk file hashes; a hash establishes identity and is not independently inspectable here',
+    'run_id': 'host-local run handle',
+}
+LOOP_PUBLISH = (
+    'ts', 'stage', 'observation', 'hypothesis', 'refuted_if', 'supported_if',
+    'instrument', 'receipt', 'verdict', 'because', 'successor', 'note', 'gpu', 'aborted',
+)
+
+# Receipt fields published for the selected table/figure. Whole receipts are NOT copied.
+RECEIPT_PUBLISH = {
+    'wave-boundary-sweep': ('schema', 'verdict_token', 'verdict_note', 'device', 'sm_count',
+                            'k', 'n', 'm_values', 'tile_premised', 'repeats', 'warmup', 'iters',
+                            'step_dominance_required', 'largest_jump', 'runner_up_jump',
+                            'jump_dominates', 'jump_at_wave_boundary', 'claim_boundary', 'rows'),
+    'kernel-identity-audit': ('schema', 'verdict_token', 'verdict_reason', 'device', 'sm_count',
+                              'k', 'n', 'm_values', 'anchor_lo', 'dip', 'anchor_hi',
+                              'profile_iters', 'tiles_named_by_kernels',
+                              'rows_with_unreadable_tile', 'tile_premised_by_prior_cycles',
+                              'claims', 'rows'),
+    'fp16-timeweighted': None,      # header only; see header_only()
+    'machine-fill': None,
+}
+RECEIPT_HEADER_FIELDS = ('schema', 'verdict_token', 'verdict_note', 'verdict_reason',
+                         'claim_boundary', 'claims', 'device', 'k', 'n')
+
+# ---------------------------------------------------------------------------
+# Sanitizer
+# ---------------------------------------------------------------------------
+_HOST_ACCOUNT = re.compile(r'[A-Za-z]:[\\/]Users[\\/][^\\/\s"\']+', re.I)
+_DRIVE_ABS = re.compile(r'\b[ABCE]:[\\/][^\s"\',;)]*', re.I)
+_OPERATOR_NAMES = tuple(
+    n for n in os.environ.get('EMBER_RESEARCH_OPERATOR_NAMES', 'Jun').split(',') if n.strip())
+_CRED = re.compile(r'(?i)\b(api[_-]?key|secret|password|bearer\s+[A-Za-z0-9._-]{8,}|ghp_[A-Za-z0-9]{10,}|xox[baprs]-)')
+
+# Seat names are the personal handles of the agents working the campaign, and the
+# ember repository refuses them in tracked content by policy -- the same rule that
+# keeps the operator's name out. They are replaced by the ROLE, which is what a
+# reader actually needs: that a second seat produced an artifact matters, which
+# handle it was does not.
+#
+# The table is keyed by SHA256, not by the name. This generator is published beside
+# the site it builds, so a plaintext list of the names it scrubs would itself be a
+# tracked artifact carrying those names -- the scrubber would fail the very rule it
+# exists to satisfy. Hashing mirrors the mechanism the repository already uses for
+# its own denylist: nothing reversible is published and the check still runs. A
+# digest with no role mapped to it becomes the generic role rather than passing
+# through, so adding a name is a one-line change and never a silent omission.
+_SEAT_ROLE_BY_SHA256 = {
+    '8535e86c8118bbbb0a18ac72d15d3a2b37b18d1bce1611fc60165f322cf57386': 'this seat',
+    'f844ad6231ada5aa202a39fe48b28f113d32dfb0ab109e3d75110335b462e1a0':
+        'the counterpart seat',
+    '27037fccea3062ee8ebaea07a9e2bf8dcb6511fd860ae993442aee0c512b8bbf': 'a build seat',
+    'f78b6cb9224209fe21027f4f6addf57ef2fdf4392e9362095ea8de7377f5451e': 'a seat',
+    '4c75ea444d4c645ae142ec0fc4159b01d5973c9d7d6c4e97602137a3791f6873': 'a seat',
+    'fbd8dafe1f79f47371dd79d334d9a6c1aaab28c14b9533417462629d576639f3': 'a seat',
+    '7134aac53eddcc48c4c906674adf1a86633c0d5e14be5f686d3da69f316c1fa3': 'a seat',
+    'b1e3c2ec1a80a8ccdbcdb04b26a5896ea2c7ef8b3774dbb004bd3b1aaa195bec': 'a seat',
+    '0f066c9b74c216ddd215acefdc27957bfebfe665448b1be8fa82270b091cbf8d': 'a seat',
+    '3c38aafb0579dafe18bb584dce2786ccaab6835245f2979af4bb7dd2b6b90775': 'a seat',
+    'dcd69bed70a827d5fdda1d28272d508c795fb32cebab243d5208ec9ef89f6453': 'a seat',
+}
+# Same token shape the repository's own hashed check uses, so a name it would catch
+# is a name this scrubs.
+_TOKEN = re.compile(r'[A-Za-z]{3,}/?')
+
+
+def _seat_role(token):
+    """Role for a bare token, or None. The lookup is on the lowercased name only."""
+    return _SEAT_ROLE_BY_SHA256.get(
+        hashlib.sha256(token.lower().encode('utf-8')).hexdigest())
+
+
+
+class Sanitizer(object):
+    """Scrub, count, and expose what was scrubbed. Never silent."""
+
+    def __init__(self):
+        self.host_paths = 0
+        self.abs_paths = 0
+        self.operator_names = 0
+        self.seat_names = 0
+        self.credential_flags = []
+
+    def text(self, s, where=''):
+        if not isinstance(s, str):
+            return s
+        for m in _CRED.finditer(s):
+            self.credential_flags.append((where, m.group(0)[:24]))
+        def _host(m):
+            self.host_paths += 1
+            return '<host-local path>'
+        s = _HOST_ACCOUNT.sub(_host, s)
+        def _abs(m):
+            # Keep the tail so an evidence reference stays recognizable; drop the host root.
+            self.abs_paths += 1
+            tail = m.group(0).replace('\\', '/').split('/')
+            keep = [p for p in tail if p in ('state', 'scripts', 'receipts', 'docs', 'src')]
+            if keep:
+                i = tail.index(keep[0])
+                return '/'.join(tail[i:])
+            return '<host-local path>'
+        s = _DRIVE_ABS.sub(_abs, s)
+        for name in _OPERATOR_NAMES:
+            pat = re.compile(r'\b%s\b' % re.escape(name.strip()), re.I)
+            s, n = pat.subn('the operator', s)
+            self.operator_names += n
+        def _seat(m):
+            tok = m.group(0)
+            slash = tok.endswith('/')
+            role = _seat_role(tok[:-1] if slash else tok)
+            if role is None:
+                return tok
+            self.seat_names += 1
+            return (role + "'s ") if slash else role
+        s = _TOKEN.sub(_seat, s)
+        return s
+
+    def walk(self, obj, where=''):
+        if isinstance(obj, dict):
+            return dict((k, self.walk(v, where + '.' + str(k))) for k, v in obj.items())
+        if isinstance(obj, list):
+            return [self.walk(v, where + '[]') for v in obj]
+        return self.text(obj, where)
+
+    def report(self):
+        return {
+            'host_account_paths_removed': self.host_paths,
+            'absolute_local_paths_normalized': self.abs_paths,
+            'operator_name_occurrences_replaced': self.operator_names,
+            'seat_name_occurrences_replaced': self.seat_names,
+            'credential_shaped_strings_flagged': len(self.credential_flags),
+            'credential_flag_sites': [w for w, _ in self.credential_flags][:20],
+        }
+
+
+# ---------------------------------------------------------------------------
+# Loaders
+# ---------------------------------------------------------------------------
+def _p(rel):
+    if not os.path.isdir(SEAT_ROOT):
+        raise SystemExit(
+            'REFUSED: the seat root %r does not exist. This generator reads the '
+            'research record from a workspace outside the ember repository; set '
+            'EMBER_RESEARCH_SEAT_ROOT to that workspace.' % SEAT_ROOT)
+    return os.path.join(SEAT_ROOT, rel).replace('\\', '/')
+
+
+def _read_jsonl(rel):
+    path = _p(rel)
+    if not os.path.exists(path):
+        raise SystemExit('REFUSED: source %s does not exist; nothing is published from a guess' % path)
+    rows, bad = [], 0
+    for ln in io.open(path, encoding='utf-8'):
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            rows.append(json.loads(ln))
+        except ValueError:
+            bad += 1
+    st = os.stat(path)
+    return rows, {'path': rel, 'bytes': st.st_size,
+                  'mtime_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(st.st_mtime)),
+                  'records_in_source': len(rows) + bad, 'unparseable_records': bad}
+
+
+def load_registry(san):
+    raw, meta = _read_jsonl(REGISTRY)
+    out, omitted = [], {}
+    for r in raw:
+        keep = {}
+        for k, v in r.items():
+            if k in REGISTRY_PUBLISH:
+                keep[k] = san.walk(v, 'registry.' + k)
+            else:
+                omitted[k] = omitted.get(k, 0) + 1
+        out.append(keep)
+    meta['included'] = len(out)
+    meta['omitted_fields'] = dict(
+        (k, {'occurrences': n, 'reason': REGISTRY_OMIT_REASON.get(k, 'not on the publication allowlist')})
+        for k, n in sorted(omitted.items()))
+    return out, meta
+
+
+def load_loop(san):
+    raw, meta = _read_jsonl(LOOP)
+    by, order, omitted = {}, [], {}
+    for e in raw:
+        hid = e.get('id')
+        if not hid:
+            continue
+        if hid not in by:
+            by[hid] = []
+            order.append(hid)
+        keep = {}
+        for k, v in e.items():
+            if k == 'id':
+                continue
+            if k in LOOP_PUBLISH:
+                keep[k] = san.walk(v, 'loop.' + k)
+            else:
+                omitted[k] = omitted.get(k, 0) + 1
+        by[hid].append(keep)
+    hyps = []
+    for hid in order:
+        evs = by[hid]
+        stages = [e.get('stage') for e in evs]
+        rec = {
+            'id': hid,
+            'stage': stages[-1] if stages else None,
+            'stages_seen': stages,
+            'first_ts': evs[0].get('ts'),
+            'last_ts': evs[-1].get('ts'),
+            'events': evs,
+        }
+        # Hoist the fields a reader navigates by. Verbatim from the owning event.
+        for e in evs:
+            st = e.get('stage')
+            if st == 'OBSERVED' and e.get('observation'):
+                rec['observation'] = e['observation']
+            elif st == 'EXPLAINED' and e.get('hypothesis'):
+                rec['explanation'] = e['hypothesis']
+            elif st == 'PREDICTED':
+                if e.get('refuted_if'):
+                    rec['criterion'] = e['refuted_if']
+                if e.get('supported_if'):
+                    rec['criterion_supported_if'] = e['supported_if']
+                if e.get('instrument'):
+                    rec['instrument'] = e['instrument']
+            elif st == 'MEASURED' and e.get('receipt'):
+                rec.setdefault('receipts', []).append(e['receipt'])
+            elif st == 'RULED':
+                if e.get('verdict'):
+                    rec['verdict'] = e['verdict']
+                if e.get('because'):
+                    rec['ruling'] = e['because']
+            elif st == 'UPDATED' and e.get('hypothesis'):
+                rec['not_closed'] = e['hypothesis']
+            elif st == 'CLOSED' and e.get('because'):
+                rec['closing'] = e['because']
+            if e.get('successor'):
+                rec['successor'] = e['successor']
+        hyps.append(rec)
+    meta['hypotheses'] = len(hyps)
+    meta['included'] = len(raw)
+    meta['omitted_fields'] = dict(
+        (k, {'occurrences': n, 'reason': 'not on the publication allowlist'})
+        for k, n in sorted(omitted.items()))
+    return hyps, meta
+
+
+def header_only(doc):
+    return dict((k, doc[k]) for k in RECEIPT_HEADER_FIELDS if k in doc)
+
+
+def load_receipts(san):
+    out, meta = {}, []
+    for key, rel in sorted(RECEIPT_ALLOWLIST.items()):
+        path = _p(rel)
+        if not os.path.exists(path):
+            meta.append({'key': key, 'path': rel, 'status': 'ABSENT',
+                         'note': 'named on the allowlist and not present; nothing is substituted'})
+            continue
+        doc = json.load(io.open(path, encoding='utf-8'))
+        fields = RECEIPT_PUBLISH.get(key)
+        if fields is None:
+            keep = header_only(doc)
+            mode = 'header-only'
+        else:
+            keep = dict((k, doc[k]) for k in fields if k in doc)
+            mode = 'selected-fields'
+        st = os.stat(path)
+        out[key] = san.walk(keep, 'receipt.' + key)
+        meta.append({'key': key, 'path': rel, 'status': 'READ', 'mode': mode,
+                     'bytes': st.st_size,
+                     'fields_in_source': len(doc), 'fields_published': len(keep),
+                     'fields_omitted': sorted(set(doc) - set(keep))})
+    return out, meta
+
+
+# ---------------------------------------------------------------------------
+# Join. A join that cannot be established is reported as unjoined, never guessed.
+# ---------------------------------------------------------------------------
+def join(registry, hyps):
+    by_hyp = dict((h['id'], h) for h in hyps)
+    linked = 0
+    unresolved = []
+    for r in registry:
+        raw = r.get('loop_hypothesis')
+        if not raw:
+            continue
+        # Historical rows wrote this field as free text: an id, sometimes shortened, sometimes
+        # followed by a parenthetical verdict. Strip the parenthetical and try exact then prefix.
+        # A reference that resolves to neither is reported UNRESOLVED on the row -- it is never
+        # attached to a plausible neighbour, and a near-miss is not a join.
+        stem = re.split(r'\s*\(', str(raw))[0].strip()
+        hid = None
+        if stem in by_hyp:
+            hid = stem
+            basis = 'the row names the hypothesis id'
+        else:
+            cands = [k for k in by_hyp if k == stem or k.startswith(stem + '-')]
+            if len(cands) == 1:
+                hid = cands[0]
+                basis = 'the row names a unique prefix of the hypothesis id'
+        if hid:
+            r['_hypothesis'] = hid
+            r['_join_basis'] = basis
+            by_hyp[hid].setdefault('_registry_rows', []).append(r['id'])
+            linked += 1
+        else:
+            r['_join_unresolved'] = str(raw)
+            unresolved.append({'registry_row': r['id'], 'names': str(raw)})
+    # Second pass: match on the evidence receipt when no explicit link exists.
+    by_receipt = {}
+    for h in hyps:
+        for rc in h.get('receipts', []):
+            by_receipt[os.path.basename(str(rc).replace('\\', '/'))] = h['id']
+    inferred = 0
+    for r in registry:
+        if r.get('_hypothesis') or not r.get('evidence'):
+            continue
+        base = os.path.basename(str(r['evidence']).replace('\\', '/'))
+        if base in by_receipt:
+            r['_hypothesis'] = by_receipt[base]
+            r['_join_basis'] = 'matched on the evidence receipt filename'
+            by_hyp[by_receipt[base]].setdefault('_registry_rows', []).append(r['id'])
+            inferred += 1
+    return {'explicit_loop_hypothesis_links': linked,
+            'links_inferred_from_evidence_filename': inferred,
+            'registry_rows_with_no_hypothesis': sum(1 for r in registry if not r.get('_hypothesis')),
+            'unresolved_references': [u for u in unresolved
+                                      if not next(x for x in registry
+                                                  if x['id'] == u['registry_row']).get('_hypothesis')],
+            'join_errors': []}
+
+
+def searchable(rec):
+    """Every explanatory field, not just ids and titles. This is the whole point of the index."""
+    parts = []
+    def add(v):
+        if isinstance(v, str):
+            parts.append(v)
+        elif isinstance(v, list):
+            for x in v:
+                add(x)
+        elif isinstance(v, dict):
+            for x in v.values():
+                add(x)
+        elif v is not None:
+            parts.append(str(v))
+    for k, v in rec.items():
+        if k.startswith('_') or k in ('events', 'stages_seen'):
+            continue
+        add(v)
+    return ' '.join(parts)
