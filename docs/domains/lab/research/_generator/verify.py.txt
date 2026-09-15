@@ -336,7 +336,7 @@ def case_f():
     notes.append('every internal link in %d pages resolves and is relative' % len(pages))
 
     art = rd(os.path.join(SITE, 'fp16-kernel-selection.html'))
-    nojs = re.sub(r'<script.*?</script>', '', art, flags=re.S)
+    nojs = re.sub(r'<script.*?</script\s*>', '', art, flags=re.S | re.I)
     floor = {
         'narrative': 'The finding that outranks the verdict' in nojs,
         'results table': '<table>' in nojs and '1.6584' in nojs,
@@ -351,7 +351,7 @@ def case_f():
 
     led = rd(os.path.join(SITE, 'hypotheses.html'))
     cs = cards(led)
-    nojs_led = re.sub(r'<script.*?</script>', '', led, flags=re.S)
+    nojs_led = re.sub(r'<script.*?</script\s*>', '', led, flags=re.S | re.I)
     all_present = all(cid in nojs_led for cid, _, _ in cs)
     ok = ok and all_present
     notes.append('all %d records render without JavaScript; search only reorders an '

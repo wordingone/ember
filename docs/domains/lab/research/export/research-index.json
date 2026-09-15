@@ -1,17 +1,17 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "scripts/research_site/build.py",
- "source_events_through": "2026-09-15T19:22:00Z",
- "generated_at": "2026-09-15T19:29:07Z",
+ "source_events_through": "2026-09-15T19:35:41Z",
+ "generated_at": "2026-09-15T19:56:03Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
    "path": "state/attempt-registry.jsonl",
-   "bytes": 441287,
-   "mtime_utc": "2026-09-15T19:22:00Z",
-   "records_in_source": 119,
+   "bytes": 445446,
+   "mtime_utc": "2026-09-15T19:35:49Z",
+   "records_in_source": 120,
    "unparseable_records": 0,
-   "included": 119,
+   "included": 120,
    "omitted_fields": {
     "digests": {
      "occurrences": 8,
@@ -29,12 +29,12 @@
   },
   "loop": {
    "path": "state/issue1945-loop.jsonl",
-   "bytes": 729887,
-   "mtime_utc": "2026-09-15T19:22:00Z",
-   "records_in_source": 519,
+   "bytes": 738542,
+   "mtime_utc": "2026-09-15T19:35:41Z",
+   "records_in_source": 527,
    "unparseable_records": 0,
-   "hypotheses": 67,
-   "included": 519,
+   "hypotheses": 68,
+   "included": 527,
    "omitted_fields": {}
   },
   "receipts": [
@@ -126,7 +126,7 @@
   },
   "join": {
    "explicit_loop_hypothesis_links": 43,
-   "links_inferred_from_evidence_filename": 9,
+   "links_inferred_from_evidence_filename": 10,
    "registry_rows_with_no_hypothesis": 67,
    "unresolved_references": [],
    "join_errors": []
@@ -5025,6 +5025,79 @@
    "ruling": "All three frozen clauses hold at the installed torch header, and the verdict is SUPPORTED in the direction that costs me the margin.\n\n(1) The inner per-node record is opened inside Node::operator(), which is the single entry point every autograd node invocation passes through. (2) The only condition guarding it is C10_UNLIKELY(step_callbacks.has_value()), where step_callbacks comes from at::getStepCallbacksUnlessEmpty(at::RecordScope::BACKWARD_FUNCTION). No term in that guard refers to gradient state, accumulation, assignment or stealing -- the instrument searched for grad, accumulate, defined(), steal and assign and found none. (3) The record is opened BEFORE the call to apply(), so it cannot depend on anything apply does, including which of accumulateGrad's cases runs.\n\nTHEREFORE THE BENIGN EXPLANATION IS REFUTED. A leaf whose .grad is assigned rather than accumulated still runs the same operator() and still emits the same record. Assignment versus accumulation cannot produce the 48-per-step gap.\n\nBOTH REDS HELD ON DIFFERENT GROUNDS: a mutated header whose guard tests inputs[0].grad().defined() reports REFUTED on clause 2 while clauses 1 and 3 still pass, so clause 2 is carrying its own weight; a mutated header with the emission deleted REFUSES rather than ruling either way, so the instrument cannot report an answer from a file that is not the emission site.",
    "not_closed": "WHAT THIS DOES TO THE 471 FIGURE. It removes its explanation and leaves its arithmetic standing. The registry recorded the 48-per-step gap as CONSISTENT WITH leaves whose gradient is assigned rather than accumulated, and explicitly refused to call that demonstrated. It is now refuted: the emission is unconditional on the gradient path. So 48 nodes per step have an outer evaluate_function record and no record of their own, and nothing readable here says why.\n\nTHE HONEST POSITION ON THE UNIT. At 471 engine nodes the ratio to 351 stepped tensors is 1.3419; at 423 inner ops it is 1.2051. Both clear the 1.20 line the predecessor row froze for itself, so the CONCLUSION -- more leaves receive gradients than have optimizer state -- survives either unit. The MARGIN does not: 0.14 versus 0.005. Every statement of that finding now carries both numbers, and the excess is 120 leaves per step at one unit and 72 at the other.\n\nWHAT IS STILL OPEN, NARROWED TO ONE THING. The wheel does not ship engine.cpp, so what makes the ENGINE emit an outer evaluate_function record for a node whose own record never appears is not readable on this host. The candidate mechanism worth testing next is the engine's exec_info needed_ path -- a node reached by the graph walk but not executed because nothing downstream needs it -- which would make the 48 nodes evaluated-but-skipped rather than executed, and would make the INNER op the right unit. That is a source question, not a trace question, and settling it needs either a torch source distribution or a fresh capture that distinguishes the two.\n\nWHAT THIS DOES NOT CLOSE. It says nothing about which leaves are in the excess, nothing about cost -- still a count of graph work and not microseconds -- and nothing about any rate or ceiling. NO GATE MOVES.",
    "closing": "Ruled SUPPORTED on all three frozen clauses, both reds held. The inner per-node profiler record is emitted inside Node::operator(), guarded only by the presence of backward-scope profiler callbacks, before apply() is called. Assignment versus accumulation therefore cannot suppress it, and the benign explanation for the 48-per-step gap between 2,826 outer and 2,538 inner events is refuted. The 471 unit loses its justification while its arithmetic stands: the ratio is 1.3419 at the engine node and 1.2051 at the inner op, and both clear the frozen 1.20 line, so the conclusion survives either unit and the margin does not. Not closed: the engine's own emission rule is not readable on this host, and the exec_info needed_ skip path is the candidate mechanism nobody has tested."
+  },
+  {
+   "id": "do-the-unpaired-accumulategrad-engine-nodes-do-any-work-20260915",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-09-15T19:34:09Z",
+   "last_ts": "2026-09-15T19:35:41Z",
+   "events": [
+    {
+     "ts": "2026-09-15T19:34:09Z",
+     "stage": "OBSERVED",
+     "observation": "The cycle that closed an hour ago refuted the benign explanation for the 48-per-step gap and left exactly one candidate mechanism named and untested. The capture carries 2,826 outer engine-node events and 2,538 inner per-node events; the gap is 288, a stable 48 per step across all six buckets. The reading that those 48 are leaves whose gradient is assigned rather than accumulated is dead: the inner record is opened inside Node::operator(), guarded only by profiler-callback presence, before apply() runs. So 48 nodes per step have an outer record and no record of their own, and nothing on file says why. The unit for a leaf receiving a gradient is open between 471 and 423, and the conclusion survives both while the margin collapses from 0.14 to 0.005. The candidate named in the not_closed line was the engine's exec_info needed_ skip path: a node reached by the graph walk but never executed."
+    },
+    {
+     "ts": "2026-09-15T19:34:09Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The wheel ships no engine.cpp, so the engine's own emission rule is not READABLE on this host. It is nonetheless MEASURABLE, because the two candidate states have different costs and the trace already carries host durations for every outer event. A node that the engine evaluates and skips pays for the graph walk and its bookkeeping and nothing else. A node that runs a real accumulation pays for apply() -- a kernel launch and its surrounding record-keeping -- on top of the same bookkeeping. So if the 48 are skips, their outer durations collapse against the paired population's; if instead they run a real accumulation whose inner record merely failed to appear, the two populations overlap. That second reading is the one that would keep 471 standing as the unit, and it is the one this can kill. Pairing is by nesting: an inner event whose whole interval lies inside an outer event's interval on the same thread. Analysis-only on a trace already on disk -- no card, no lease, no window, no import of any instrument module."
+    },
+    {
+     "ts": "2026-09-15T19:34:09Z",
+     "stage": "PREDICTED",
+     "refuted_if": "REFUTED if the pairing is one-to-one and the two duration populations are NOT separated: either the unpaired p90 is at or above the paired p10, or the unpaired median is at or above half the paired median. Either failure means the unpaired nodes are doing work comparable to the paired ones, the evaluated-but-skipped reading is wrong, and 471 keeps its standing as the unit for a leaf that received a gradient.",
+     "supported_if": "SUPPORTED -- meaning the unpaired nodes do essentially no work, which is consistent with an evaluated-but-skipped path and inconsistent with a real accumulation whose record failed to appear -- if all three hold: (1) the pairing is one-to-one, with no outer containing more than one inner and the paired count equal to the total inner count; (2) the unpaired population's p90 duration falls below the paired population's p10; and (3) the unpaired median falls below half the paired median. REFUSED rather than ruled if clause 1 fails, because an ambiguous pairing means the two populations are not the ones the question is about. A SUPPORTED verdict is consistency with a near-zero-work path and never a proof that the mechanism is exec_info specifically; that is not settleable from a trace and this cycle does not claim it.",
+     "instrument": "scripts/issue1945/do_the_unpaired_engine_nodes_do_any_work.py"
+    },
+    {
+     "ts": "2026-09-15T19:34:09Z",
+     "stage": "RUNNING",
+     "gpu": false
+    },
+    {
+     "ts": "2026-09-15T19:35:41Z",
+     "stage": "MEASURED",
+     "receipt": "state\\issue1945-receipts\\unpaired-engine-node-work.json"
+    },
+    {
+     "ts": "2026-09-15T19:35:41Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "All three frozen clauses hold, and the separation is not marginal.\n\n(1) The pairing is one-to-one: 2,538 of 2,538 inner events nest inside exactly one outer event on the same thread, and no outer contains two. 2,826 outers, 2,538 paired, 288 unpaired -- 48.0 per step, the same figure the count route produced by a different method. (2) The unpaired p90 is 1.600 us against a paired p10 of 15.100 us: the populations do not overlap at all. (3) The unpaired median is 1.300 us against half the paired median at 9.350 us -- a factor of 14.4 below the paired median of 18.700 us.\n\nTHEREFORE THE 48 NODES PER STEP DO ESSENTIALLY NO WORK. A node costing 1.3 us is paying for the engine's graph walk and its own bookkeeping. It is not launching a kernel and it is not running an accumulation. The reading that would have kept 471 standing -- that these are real accumulations whose inner record merely failed to appear -- is dead: a real accumulation costs 18.7 us on this trace and these cost 1.3.\n\nBOTH REDS HELD ON DIFFERENT GROUNDS. Nesting a second inner event inside one outer makes the pairing ambiguous and the instrument REFUSES rather than ruling, so clause 1 is a real admissibility gate and not decoration. Redrawing the unpaired durations from the paired distribution makes the two populations coincide and the instrument reports REFUTED on clauses 2 and 3 with clause 1 still passing, so the separation clauses are carrying their own weight."
+    },
+    {
+     "ts": "2026-09-15T19:35:41Z",
+     "stage": "UPDATED",
+     "hypothesis": "THE UNIT IS SETTLED AND IT IS NOT THE ONE I PUBLISHED. The 48 unpaired engine nodes per step are evaluated and skipped, not executed. So the count of leaves that actually RECEIVE a gradient per step is 423, not 471, and the ratio against 351 stepped tensors is 1.2051, not 1.3419. Both figures clear the 1.20 line the parent row froze, so the CONCLUSION stands unchanged -- more leaves receive gradients than have optimizer state -- but the margin is 0.005 and not 0.14, and the excess is 72 leaves per step and not 120. Every future statement of that finding uses 423, 1.2051 and 72.\n\nTHAT MARGIN IS THIN ENOUGH TO BE ITS OWN FINDING. 1.2051 against a frozen 1.20 is a difference of about half a percent on a single capture with no matched-run variation. The parent row is not withdrawn -- its arithmetic is correct at both units and the direction of the conclusion is the same -- but a finding whose margin is 0.005 on one run is not a finding anyone should build a treatment on, and that is now said out loud rather than left to a reader to notice.\n\nWHAT THIS DOES NOT CLOSE. It does not name exec_info. A near-zero-work outer event is consistent with the engine's needed_ skip path and with any other reason a node is walked and not run; the wheel ships no engine.cpp and no trace will distinguish them. The 1.3 us figure is also a host duration from a profiled capture, so it is evidence about relative work and not about cost. WHAT IS NOW WORTH ASKING, and is a different question from the one this answered: WHY 72. A skipped node is a node the graph walk reached whose output nothing downstream needs -- so the 72 leaves in the excess are receiving gradients that ARE consumed by something, while 48 per step are reached and discarded. Which 72, and whether they correspond to the require-grad-without-state placements in the checkpoint manifest, is still unknown: the trace carries shapes and not names. NO RATE, NO CEILING, NO COST SHARE, NO GATE MOVES."
+    },
+    {
+     "ts": "2026-09-15T19:35:41Z",
+     "stage": "CLOSED",
+     "because": "Ruled SUPPORTED on all three frozen clauses, both reds held on different grounds. The 288 unpaired outer engine-node events have a median host duration of 1.300 us against 18.700 us for the 2,538 paired ones, with p90 1.600 entirely below p10 15.100 -- two disjoint populations. The unpaired nodes are evaluated and skipped, not executed, so the inner op is the right unit and the per-step figure is 423 rather than 471. The ratio against 351 stepped tensors is 1.2051, which still clears the frozen 1.20 line, so the parent conclusion stands with a margin of 0.005 and an excess of 72 leaves per step. Not closed: this does not name exec_info specifically, and which 72 leaves are in the excess is unknown because the trace carries shapes and not names."
+    }
+   ],
+   "observation": "The cycle that closed an hour ago refuted the benign explanation for the 48-per-step gap and left exactly one candidate mechanism named and untested. The capture carries 2,826 outer engine-node events and 2,538 inner per-node events; the gap is 288, a stable 48 per step across all six buckets. The reading that those 48 are leaves whose gradient is assigned rather than accumulated is dead: the inner record is opened inside Node::operator(), guarded only by profiler-callback presence, before apply() runs. So 48 nodes per step have an outer record and no record of their own, and nothing on file says why. The unit for a leaf receiving a gradient is open between 471 and 423, and the conclusion survives both while the margin collapses from 0.14 to 0.005. The candidate named in the not_closed line was the engine's exec_info needed_ skip path: a node reached by the graph walk but never executed.",
+   "explanation": "The wheel ships no engine.cpp, so the engine's own emission rule is not READABLE on this host. It is nonetheless MEASURABLE, because the two candidate states have different costs and the trace already carries host durations for every outer event. A node that the engine evaluates and skips pays for the graph walk and its bookkeeping and nothing else. A node that runs a real accumulation pays for apply() -- a kernel launch and its surrounding record-keeping -- on top of the same bookkeeping. So if the 48 are skips, their outer durations collapse against the paired population's; if instead they run a real accumulation whose inner record merely failed to appear, the two populations overlap. That second reading is the one that would keep 471 standing as the unit, and it is the one this can kill. Pairing is by nesting: an inner event whose whole interval lies inside an outer event's interval on the same thread. Analysis-only on a trace already on disk -- no card, no lease, no window, no import of any instrument module.",
+   "criterion": "REFUTED if the pairing is one-to-one and the two duration populations are NOT separated: either the unpaired p90 is at or above the paired p10, or the unpaired median is at or above half the paired median. Either failure means the unpaired nodes are doing work comparable to the paired ones, the evaluated-but-skipped reading is wrong, and 471 keeps its standing as the unit for a leaf that received a gradient.",
+   "criterion_supported_if": "SUPPORTED -- meaning the unpaired nodes do essentially no work, which is consistent with an evaluated-but-skipped path and inconsistent with a real accumulation whose record failed to appear -- if all three hold: (1) the pairing is one-to-one, with no outer containing more than one inner and the paired count equal to the total inner count; (2) the unpaired population's p90 duration falls below the paired population's p10; and (3) the unpaired median falls below half the paired median. REFUSED rather than ruled if clause 1 fails, because an ambiguous pairing means the two populations are not the ones the question is about. A SUPPORTED verdict is consistency with a near-zero-work path and never a proof that the mechanism is exec_info specifically; that is not settleable from a trace and this cycle does not claim it.",
+   "instrument": "scripts/issue1945/do_the_unpaired_engine_nodes_do_any_work.py",
+   "receipts": [
+    "state\\issue1945-receipts\\unpaired-engine-node-work.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "All three frozen clauses hold, and the separation is not marginal.\n\n(1) The pairing is one-to-one: 2,538 of 2,538 inner events nest inside exactly one outer event on the same thread, and no outer contains two. 2,826 outers, 2,538 paired, 288 unpaired -- 48.0 per step, the same figure the count route produced by a different method. (2) The unpaired p90 is 1.600 us against a paired p10 of 15.100 us: the populations do not overlap at all. (3) The unpaired median is 1.300 us against half the paired median at 9.350 us -- a factor of 14.4 below the paired median of 18.700 us.\n\nTHEREFORE THE 48 NODES PER STEP DO ESSENTIALLY NO WORK. A node costing 1.3 us is paying for the engine's graph walk and its own bookkeeping. It is not launching a kernel and it is not running an accumulation. The reading that would have kept 471 standing -- that these are real accumulations whose inner record merely failed to appear -- is dead: a real accumulation costs 18.7 us on this trace and these cost 1.3.\n\nBOTH REDS HELD ON DIFFERENT GROUNDS. Nesting a second inner event inside one outer makes the pairing ambiguous and the instrument REFUSES rather than ruling, so clause 1 is a real admissibility gate and not decoration. Redrawing the unpaired durations from the paired distribution makes the two populations coincide and the instrument reports REFUTED on clauses 2 and 3 with clause 1 still passing, so the separation clauses are carrying their own weight.",
+   "not_closed": "THE UNIT IS SETTLED AND IT IS NOT THE ONE I PUBLISHED. The 48 unpaired engine nodes per step are evaluated and skipped, not executed. So the count of leaves that actually RECEIVE a gradient per step is 423, not 471, and the ratio against 351 stepped tensors is 1.2051, not 1.3419. Both figures clear the 1.20 line the parent row froze, so the CONCLUSION stands unchanged -- more leaves receive gradients than have optimizer state -- but the margin is 0.005 and not 0.14, and the excess is 72 leaves per step and not 120. Every future statement of that finding uses 423, 1.2051 and 72.\n\nTHAT MARGIN IS THIN ENOUGH TO BE ITS OWN FINDING. 1.2051 against a frozen 1.20 is a difference of about half a percent on a single capture with no matched-run variation. The parent row is not withdrawn -- its arithmetic is correct at both units and the direction of the conclusion is the same -- but a finding whose margin is 0.005 on one run is not a finding anyone should build a treatment on, and that is now said out loud rather than left to a reader to notice.\n\nWHAT THIS DOES NOT CLOSE. It does not name exec_info. A near-zero-work outer event is consistent with the engine's needed_ skip path and with any other reason a node is walked and not run; the wheel ships no engine.cpp and no trace will distinguish them. The 1.3 us figure is also a host duration from a profiled capture, so it is evidence about relative work and not about cost. WHAT IS NOW WORTH ASKING, and is a different question from the one this answered: WHY 72. A skipped node is a node the graph walk reached whose output nothing downstream needs -- so the 72 leaves in the excess are receiving gradients that ARE consumed by something, while 48 per step are reached and discarded. Which 72, and whether they correspond to the require-grad-without-state placements in the checkpoint manifest, is still unknown: the trace carries shapes and not names. NO RATE, NO CEILING, NO COST SHARE, NO GATE MOVES.",
+   "closing": "Ruled SUPPORTED on all three frozen clauses, both reds held on different grounds. The 288 unpaired outer engine-node events have a median host duration of 1.300 us against 18.700 us for the 2,538 paired ones, with p90 1.600 entirely below p10 15.100 -- two disjoint populations. The unpaired nodes are evaluated and skipped, not executed, so the inner op is the right unit and the per-step figure is 423 rather than 471. The ratio against 351 stepped tensors is 1.2051, which still clears the frozen 1.20 line, so the parent conclusion stands with a margin of 0.005 and an excess of 72 leaves per step. Not closed: this does not name exec_info specifically, and which 72 leaves are in the excess is unknown because the trace carries shapes and not names."
   }
  ],
  "registry": [
@@ -7083,6 +7156,18 @@
    "source": "schema ember-1945-inner-accumulategrad-record-conditionality-v1; verdict_token SUPPORTED computed by the instrument from three clauses frozen at loop.py predict; loop cycle is-the-inner-accumulategrad-record-conditional-on-the-gradient-path-20260915. Header read: the installed torch include tree torch/csrc/autograd/function.h on this host.",
    "condition": "Node::operator() in the installed torch autograd function.h opens the per-node record as at::RecordFunction guard(std::move(*step_callbacks)) under exactly one condition, C10_UNLIKELY(step_callbacks.has_value()), where step_callbacks comes from at::getStepCallbacksUnlessEmpty(at::RecordScope::BACKWARD_FUNCTION). The guard contains no gradient-state term (searched: grad, accumulate, defined(), steal, assign) and is opened BEFORE return apply(...). Trace cia-captured-trace-20260914T183257Z.json re-read in the same run: 2,826 outer engine-node events, 2,538 inner per-node events, gap 288 = 48.0 per step across six steps. BOTH REDS HELD: a guard mutated to test inputs[0].grad().defined() reports REFUTED on clause 2 with clauses 1 and 3 still passing; a header with the emission deleted REFUSES rather than ruling.",
    "not_closed": "THE GAP IS NOW UNEXPLAINED RATHER THAN EXPLAINED, which is a worse position and the honest one. WHAT THIS DOES NOT ESTABLISH: the wheel ships no engine.cpp, so the ENGINE side -- what makes an outer evaluate_function record appear for a node whose own record never does -- is not readable on this host. THE CANDIDATE MECHANISM NOBODY HAS TESTED is the engine exec_info needed_ path: a node reached by the graph walk but not executed because nothing downstream needs its output would be evaluated-but-skipped, which would make the INNER op the right unit and the per-step figure 423. Settling it needs a torch source distribution or a capture that distinguishes the two; neither has run. THE INSTALLED HEADER IS NOT PROVED TO BE THE ONE THE CAPTURE RAN AGAINST -- same host, same installation, which is evidence and not a binding. CONSEQUENCE FOR THE PARENT FINDING: the ratio is 1.3419 at the engine node and 1.2051 at the inner op, both above the frozen 1.20 SUPPORTED line, so the conclusion survives either unit while the margin collapses from 0.14 to 0.005; the excess is 120 leaves per step at one unit and 72 at the other. NO RATE, NO CEILING, NO COST, NO GATE MOVES."
+  },
+  {
+   "id": "the-48-unpaired-engine-nodes-per-step-do-no-work-so-the-unit-is-423-not-471-20260915",
+   "treatment": "MEASUREMENT, analysis-only, no card and no lease: pair each outer AccumulateGrad engine-node event with the inner per-node event nested in its own interval on the same thread, and compare the host-duration distributions of the paired and unpaired populations. Instrument scripts/issue1945/do_the_unpaired_engine_nodes_do_any_work.py. Reads one trace already on disk; no import of any instrument module.",
+   "status": "COMPLETED",
+   "date": "2026-09-15",
+   "basis": "RECEIPT-DERIVED",
+   "evidence": "state/issue1945-receipts/unpaired-engine-node-work.json",
+   "correction": "CORRECTS THE UNIT IN the-backward-evaluates-471-accumulategrad-nodes-per-step-against-351-stepped-tensors-20260915. That row took the engine node as the unit for a leaf receiving a gradient and published 471 per step at a ratio of 1.3419 with an excess of 120 leaves. The 48 unpaired nodes per step are evaluated and skipped, so the unit is the inner op: 423 per step, ratio 1.2051, excess 72. THE CONCLUSION IS UNCHANGED -- both figures clear the 1.20 line that row froze for itself -- and the MARGIN collapses from 0.14 to 0.005. This also RESOLVES the question the-inner-accumulategrad-record-is-unconditional-so-the-48-per-step-gap-has-no-benign-explanation-20260915 left open, in the direction that costs the margin: the gap is not a missing record, it is a node that never ran. NEITHER PRIOR ROW IS EDITED; both recorded the unit as unverified and named it the likely place for a further correction, which is what it was.",
+   "source": "schema ember-1945-unpaired-engine-node-work-v1; verdict_token SUPPORTED computed by the instrument from three clauses frozen at loop.py predict; loop cycle do-the-unpaired-accumulategrad-engine-nodes-do-any-work-20260915. Trace cia-captured-trace-20260914T183257Z.json.",
+   "condition": "Trace cia-captured-trace-20260914T183257Z.json, CIA-3B at 4 documents x 1,024 positions on one RTX 4090, captured UNDER PROFILING INSTRUMENTATION. 2,826 outer engine-node events, 2,538 inner per-node events, pairing one-to-one by interval nesting on the same thread with zero outers containing two inners and 2,538 of 2,538 inner events matched. 288 unpaired outers = 48.0 per step across six optimizer steps. Host durations in microseconds: paired p10 15.100, median 18.700, p90 30.000; unpaired p10 1.000, median 1.300, p90 1.600. Clause 2 unpaired p90 < paired p10 holds at 1.600 vs 15.100; clause 3 unpaired median < half the paired median holds at 1.300 vs 9.350. BOTH REDS HELD: a second inner nested in one outer makes the instrument REFUSE rather than rule; unpaired durations redrawn from the paired distribution report REFUTED on clauses 2 and 3 with clause 1 still passing.",
+   "not_closed": "THIS DOES NOT NAME exec_info. A near-zero-work outer event is CONSISTENT WITH the engine reaching a node by the graph walk and not executing it; it does not establish WHICH mechanism skipped it, and no trace can, because the wheel ships no engine.cpp. THE DURATIONS ARE HOST DURATIONS FROM A PROFILED CAPTURE: they are evidence about relative work between two populations in one trace, not about cost, not a rate, and not a removable share. THE MARGIN IS NOW 0.005 ON ONE CAPTURE with no matched-run variation, which is thin enough that the parent conclusion should not carry a treatment on its own; a second capture is owed before anything is built on it. WHICH 72 LEAVES ARE IN THE EXCESS IS UNKNOWN -- the trace carries shapes and not names -- and 72 has not been reconciled against the 74 require-grad-without-state placements in the 2026-09-12 manifest, which is a different checkpoint at a different head; the near-agreement of 72 and 74 is suggestive and is NOT claimed as a match. THE NEW QUESTION THIS OPENS: why are 48 leaves per step reached by the backward walk and then discarded at all -- a node whose gradient nothing needs is graph construction that could be avoided, and its cost at 1.3 us each is about 62 us per step of host time, which is a MEASURED host figure and still not a device cost. NO RATE, NO CEILING, NO ARM, NO GATE MOVES."
   }
  ]
 }
