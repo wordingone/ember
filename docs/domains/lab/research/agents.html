@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>How this page is made</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"><style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Agents</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"><style>
 :root{
   --paper:#f7f6f3; --panel:#fffefb; --rule:#ddd9d0; --rule-2:#eae6de;
   --ink:#1b1c20; --ink-2:#4b4d55; --ink-3:#7c7f88;
@@ -300,4 +300,87 @@ table.attempts tr:target{background:var(--amber-soft)}
   .conds li{grid-template-columns:1fr;gap:7px}
   .pill{justify-self:start}
 }
-</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html">Overview</a><a href="research.html">Research</a><a href="agents.html" aria-current="page">Agents</a></nav></div></header><main><div class="wrap"><h1>How this page is made</h1><p class="lede">One command reads three existing records, validates the joins, and regenerates every page and the structured export. Nothing here writes back to a research record, and a validation failure produces no page at all.</p><h2>Refresh</h2><div class="panel"><code>python -B scripts/research_site/build.py</code><p class="meta" style="margin:10px 0 0">Add <code>--check</code> to validate and print coverage without writing. The command refuses outright while a GPU window is open, so an export never contends with a measurement; in that case the last published snapshot stays as it is, dated. Publishing is never a prerequisite for the next experiment.</p></div><h2>Four timestamps, kept separate</h2><div class="tablewrap"><table><tbody><tr><th>Source events included through</th><td class="num">2026-09-15T23:27:37Z</td></tr><tr><th>Export generated</th><td class="num">2026-09-15T23:30:12Z</td></tr><tr><th>Interpretation reviewed through</th><td class="num">2026-09-15T18:20:00Z</td></tr><tr><th>Publication time and source revision</th><td>set by the deployment that serves these files; a deployment timestamp is not an evidence timestamp</td></tr></tbody></table></div><p class="prose">A result newer than the interpretation timestamp is marked awaiting interpretation rather than slipped in under an older explanation. This page states what its export contains; it cannot and does not claim there are no newer local events, because only a fresh source check could establish that.</p><h2>Search aliases</h2><p class="prose">Search covers every explanatory field &mdash; observation, explanation, frozen criterion, ruling, and the not-closed list &mdash; not ids or titles. Four aliases are authored by hand, each because a real retrieval failure demonstrated the mismatch. There is no embedding service, no language-model search and no semantic index.</p><div class="tablewrap"><table><thead><tr><th>Term</th><th>Also matches</th><th>Incident that warranted it</th></tr></thead><tbody><tr><td><code>occupancy</code></td><td><code>waves, ctas, machine fill</code></td><td>No occupancy counter is measured anywhere in this campaign; the nearest measured quantities are CTA counts and wave numbers at a premised tile. The alias routes the question to what actually exists rather than returning nothing.</td></tr><tr><td><code>residual</code></td><td><code>other, unattributed, partition</code></td><td>The duplicated row is indexed under &quot;other&quot;, &quot;partition&quot; and &quot;instrument artifact&quot;; a reader arriving with the word &quot;residual&quot; finds nothing without this.</td></tr><tr><td><code>serialization</code></td><td><code>concurrency, single-stream, overlap</code></td><td>On 2026-09-14 a cycle searched &quot;class census bandwidth compute overlap stream serialization&quot; and missed the row that had already answered it. Five of those seven terms are in that row’s full text; &quot;stream&quot; and &quot;serialization&quot; are not — they belong to its sibling row on device-timeline concurrency.</td></tr><tr><td><code>stream</code></td><td><code>concurrency, single-stream, serialization</code></td><td>Same incident, other direction: the concurrency row and the partition row are siblings and each is findable only under the other’s vocabulary.</td></tr></tbody></table></div><h2>What is published, and what is held back</h2><p class="prose">Registry rows and loop events are published field by field from an allowlist. Receipts are read by name from a short list &mdash; no directory is walked and no receipt outside the list is opened.</p><div class="tablewrap"><table><thead><tr><th>Receipt</th><th>Path</th><th>Mode</th><th>Fields published</th></tr></thead><tbody><tr><td><code>fp16-timeweighted</code></td><td>state/issue1945-receipts/fp16-accum-timeweighted-20260915T1715Z.json</td><td>header-only</td><td class="num">3 of 22</td></tr><tr><td><code>kernel-identity-audit</code></td><td>state/issue1945-receipts/which-kernel-actually-ran-20260915T1820Z.json</td><td>selected-fields</td><td class="num">17 of 19</td></tr><tr><td><code>machine-fill</code></td><td>state/issue1945-receipts/machine-fill-vs-precision-gain-20260915T1743Z.json</td><td>header-only</td><td class="num">3 of 16</td></tr><tr><td><code>wave-boundary-sweep</code></td><td>state/issue1945-receipts/wave-boundary-sweep-20260915T1730Z.json</td><td>selected-fields</td><td class="num">19 of 19</td></tr></tbody></table></div><h3>Fields omitted from every registry row</h3><div class="tablewrap"><table><thead><tr><th>Field</th><th>Rows</th><th>Why</th></tr></thead><tbody><tr><td><code>corrects</code></td><td class="num">2</td><td>not on the publication allowlist</td></tr><tr><td><code>digests</code></td><td class="num">8</td><td>bulk file hashes; a hash establishes identity and is not independently inspectable here</td></tr><tr><td><code>owner</code></td><td class="num">60</td><td>internal seat name; carries no research content</td></tr><tr><td><code>run_id</code></td><td class="num">1</td><td>host-local run handle</td></tr><tr><td><code>verdict</code></td><td class="num">4</td><td>not on the publication allowlist</td></tr></tbody></table></div><h3>Sanitizer</h3><p class="prose">Free-text fields are inspected, not just numeric ones. This run removed 4 host-account paths, normalized 88 absolute local paths, replaced 0 occurrences of the operator&rsquo;s name with &ldquo;the operator&rdquo;, and flagged 0 credential-shaped strings. A credential flag stops the build.</p><h2>Evidence you can and cannot check here</h2><p class="prose">Measurements shown in the article&rsquo;s table and figure are in <code>export/fp16-sweep-audit.json</code> at row level, so a displayed comparison can be recomputed. Receipts referenced elsewhere are named but not served: those are reported summaries whose underlying evidence is not publicly inspectable, and they are shown as plain names rather than links, because a link that cannot resolve is worse than a name. A hash would establish identity and would still not make an inaccessible file inspectable.</p><h2>Joins</h2><p class="prose">A registry row links a hypothesis through its own <code>loop_hypothesis</code> field, or, failing that, by matching the evidence receipt filename. Rows that join by neither are listed in their own section rather than attached to a plausible neighbour. The article&rsquo;s figure joins two different experiments on (m, k, n, device, arm) at the 5 shapes both measured; shapes measured by only one are shown as such and never completed with an assumed value.</p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T23:27:37Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T23:30:12Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>
+</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html">Overview</a><a href="research.html">Research</a><a href="agents.html" aria-current="page">Agents</a></nav></div></header><main><div class="wrap"><h1>Agents</h1><p class="lede">A machine-oriented entry point to the same records the other two tabs render. Nothing here is a second copy of a scientific result: every item is either a state summary, a stable identifier, or a link into the record that owns it.</p><p class="asof ui"><span>As of</span><b>2026-09-15T23:30:12Z</b><span>&middot; source events through</span><b>2026-09-15T23:27:37Z</b></p><h2>Current state</h2><pre class="panel mono" style="overflow-x:auto;white-space:pre;font-size:12.5px">{
+ &quot;schema&quot;: &quot;ember-research-state-v1&quot;,
+ &quot;generated_at&quot;: &quot;2026-09-15T23:30:12Z&quot;,
+ &quot;source_events_through&quot;: &quot;2026-09-15T23:27:37Z&quot;,
+ &quot;featured_issue&quot;: 1945,
+ &quot;featured_url&quot;: &quot;https://github.com/wordingone/ember/issues/1945&quot;,
+ &quot;measurement&quot;: {
+  &quot;label&quot;: &quot;Applied positions per second&quot;,
+  &quot;units&quot;: &quot;positions/s&quot;,
+  &quot;basis&quot;: &quot;governed&quot;,
+  &quot;statistic&quot;: &quot;nearest-rank-p10&quot;,
+  &quot;comparator&quot;: &quot;strictly greater than&quot;,
+  &quot;value&quot;: 23380.183126331838,
+  &quot;target&quot;: 80000.0,
+  &quot;updates&quot;: 21116,
+  &quot;seconds&quot;: 3600.1137625000047,
+  &quot;receipt&quot;: &quot;state/issue1945-receipts/gate-b-verdict-20260914T1352Z.json&quot;,
+  &quot;receipt_sha256&quot;: &quot;953ba5531c537a8675031e725fa818bcbea9744a92f4a4abff084f7cc1637649&quot;
+ },
+ &quot;conditions&quot;: [
+  {
+   &quot;key&quot;: &quot;A&quot;,
+   &quot;state&quot;: &quot;REMAINING&quot;,
+   &quot;name&quot;: &quot;Speed, measured over at least 1,024 warmed updates&quot;
+  },
+  {
+   &quot;key&quot;: &quot;B&quot;,
+   &quot;state&quot;: &quot;REMAINING&quot;,
+   &quot;name&quot;: &quot;Speed, sustained for a continuous governed hour&quot;
+  },
+  {
+   &quot;key&quot;: &quot;C&quot;,
+   &quot;state&quot;: &quot;REMAINING&quot;,
+   &quot;name&quot;: &quot;No worse learning&quot;
+  },
+  {
+   &quot;key&quot;: &quot;D&quot;,
+   &quot;state&quot;: &quot;REMAINING&quot;,
+   &quot;name&quot;: &quot;Protected evaluation minimum&quot;
+  },
+  {
+   &quot;key&quot;: &quot;E&quot;,
+   &quot;state&quot;: &quot;MET&quot;,
+   &quot;name&quot;: &quot;Frozen production data mixture&quot;
+  },
+  {
+   &quot;key&quot;: &quot;F&quot;,
+   &quot;state&quot;: &quot;MET&quot;,
+   &quot;name&quot;: &quot;One card, truthful accounting, receipts intact&quot;
+  }
+ ],
+ &quot;conditions_met&quot;: 2,
+ &quot;conditions_total&quot;: 6,
+ &quot;current_session&quot;: {
+  &quot;started&quot;: &quot;2026-09-15T15:13:55Z&quot;,
+  &quot;ended&quot;: &quot;2026-09-15T23:27:37Z&quot;,
+  &quot;attempts&quot;: 36
+ },
+ &quot;sessions&quot;: [
+  {
+   &quot;index&quot;: 2,
+   &quot;is_current&quot;: true,
+   &quot;started&quot;: &quot;2026-09-15T15:13:55Z&quot;,
+   &quot;ended&quot;: &quot;2026-09-15T23:27:37Z&quot;,
+   &quot;hypotheses&quot;: 36,
+   &quot;boundary_basis&quot;: &quot;derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it&quot;
+  },
+  {
+   &quot;index&quot;: 1,
+   &quot;is_current&quot;: false,
+   &quot;started&quot;: &quot;2026-09-14T19:08:31Z&quot;,
+   &quot;ended&quot;: &quot;2026-09-15T06:23:56Z&quot;,
+   &quot;hypotheses&quot;: 43,
+   &quot;boundary_basis&quot;: &quot;derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it&quot;
+  }
+ ],
+ &quot;acceptance_source&quot;: {
+  &quot;path&quot;: &quot;.claude/rules/1945-completion-is-the-acceptance-bar.md&quot;,
+  &quot;sha256&quot;: &quot;04a75df2a509868f4a109bb8213c972f89f4ae219fce47f8fd1b96699f7a3c57&quot;,
+  &quot;audited&quot;: &quot;2026-09-13&quot;,
+  &quot;note&quot;: &quot;The conditions below are TRANSCRIBED from that file&#x27;s audited table. The build refuses if the file&#x27;s digest no longer matches, so the transcription cannot drift silently. No score is computed here: this page reports which conditions are met and which remain, and nothing else.&quot;
+ },
+ &quot;no_score&quot;: &quot;Conditions are binary. No composite is computed here, and the measurement is not a completion fraction.&quot;
+}</pre><h2>Exports</h2><div class="tablewrap"><table><thead><tr><th>Export</th><th>Contains</th></tr></thead><tbody><tr><td><code><a href="export/research-index.json">export/research-index.json</a></code></td><td>Every hypothesis with its stages, frozen criterion, verdict, ruling, limitations and receipt references; every attempt-registry row; the full coverage and sanitizer report; and the featured-work block rendered above.</td></tr><tr><td><code><a href="export/fp16-sweep-audit.json">export/fp16-sweep-audit.json</a></code></td><td>The two experiments behind the figure, joined only on shapes both measured, with the unjoined shapes listed on each side.</td></tr></tbody></table></div><h2>Stable identifiers</h2><p class="prose">A hypothesis id is stable and is the anchor on the ledger page: <code>hypotheses.html#&lt;id&gt;</code>. A registry row id is stable and appears on the row it names. Receipt paths are given relative to the research workspace and are the names the instruments wrote, not renderings of them.</p><h2>Source revisions</h2><div class="tablewrap"><table><thead><tr><th>Record</th><th>Path</th><th>Records</th><th>Source mtime (UTC)</th></tr></thead><tbody><tr><td>Loop log</td><td><code>state/issue1945-loop.jsonl</code></td><td class="num">611</td><td>2026-09-15T23:27:37Z</td></tr><tr><td>Attempt registry</td><td><code>state/attempt-registry.jsonl</code></td><td class="num">134</td><td>2026-09-15T23:17:06Z</td></tr><tr><td>Acceptance source</td><td><code>.claude/rules/1945-completion-is-the-acceptance-bar.md</code></td><td class="num">2026-09-13</td><td>sha256 04a75df2a509868f</td></tr></tbody></table></div><h2>Sessions</h2><div class="tablewrap"><table><thead><tr><th>#</th><th>Started (UTC)</th><th>Ended (UTC)</th><th>Attempts</th><th>State</th></tr></thead><tbody><tr><td class="num">2</td><td>2026-09-15T15:13:55Z</td><td>2026-09-15T23:27:37Z</td><td class="num">36</td><td>current</td></tr><tr><td class="num">1</td><td>2026-09-14T19:08:31Z</td><td>2026-09-15T06:23:56Z</td><td class="num">43</td><td>closed</td></tr></tbody></table></div><p class="meta">derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it</p><h2>Published receipts</h2><div class="tablewrap"><table><thead><tr><th>Key</th><th>Mode</th><th>Bytes</th></tr></thead><tbody><tr><td><code>fp16-timeweighted</code></td><td>header-only</td><td class="num">16745</td></tr><tr><td><code>kernel-identity-audit</code></td><td>selected-fields</td><td class="num">5826</td></tr><tr><td><code>machine-fill</code></td><td>header-only</td><td class="num">12074</td></tr><tr><td><code>wave-boundary-sweep</code></td><td>selected-fields</td><td class="num">6552</td></tr></tbody></table></div><p class="meta"><a href="method.html">How this page is made, what it omits, and how to regenerate it &rarr;</a> &nbsp;&middot;&nbsp; generator source is published under <code>_generator/</code>.</p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T23:27:37Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T23:30:12Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>
