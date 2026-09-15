@@ -1,0 +1,123 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>How this page is made</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"><style>
+:root{
+  --paper:#f7f6f3; --panel:#fffefb; --rule:#ddd9d0; --rule-2:#eae6de;
+  --ink:#1b1c20; --ink-2:#4b4d55; --ink-3:#7c7f88;
+  --amber:#a8621b; --amber-soft:#f0e3d2; --deep:#23252c;
+  --mono-bg:#f1efe9;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}}
+:root[data-theme="dark"]{
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);margin:0;
+  font:400 16px/1.62 "Source Serif 4",Georgia,"Times New Roman",serif;}
+.ui,button,input,select,th,.chip,.meta,nav,footer,.label{
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+code,kbd,.mono,.hid{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.86em;}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0;}
+a{color:var(--amber);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+header.site{border-bottom:1px solid var(--rule);background:var(--panel);
+  padding-block:18px calc(18px + env(safe-area-inset-top,0px));}
+header.site .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
+.brand{font:600 19px/1.1 "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:var(--ink)}
+.brand span{color:var(--amber)}
+nav{display:flex;gap:18px;flex-wrap:wrap;font-size:14px}
+nav a{color:var(--ink-2)}
+nav a[aria-current="page"]{color:var(--ink);font-weight:600;border-bottom:1.5px solid var(--amber)}
+
+main{padding-block:38px 10px}
+h1{font:600 clamp(26px,4vw,36px)/1.18 "IBM Plex Sans",sans-serif;letter-spacing:-.02em;
+   margin:0 0 10px;text-wrap:balance}
+h2{font:600 21px/1.28 "IBM Plex Sans",sans-serif;margin:38px 0 12px;text-wrap:balance;
+   padding-top:14px;border-top:1px solid var(--rule-2)}
+h3{font:600 16px/1.3 "IBM Plex Sans",sans-serif;margin:24px 0 8px}
+.lede{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0 0 20px}
+.prose{max-width:66ch}
+.prose p{margin:0 0 14px}
+.prose ol,.prose ul{max-width:64ch;padding-left:22px}
+.prose li{margin:0 0 8px}
+
+.label{font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3)}
+.meta{font-size:13px;color:var(--ink-3)}
+.chip{display:inline-block;font:600 10.5px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;
+  padding:5px 8px;border-radius:2px;white-space:nowrap;vertical-align:baseline}
+.v-ref{background:var(--deep);color:var(--paper)}
+.v-sup{background:transparent;color:var(--amber);border:1.5px solid var(--amber)}
+.v-inc{background:transparent;color:var(--ink-3);border:1.5px dashed var(--ink-3)}
+.v-open{background:var(--rule-2);color:var(--ink-2)}
+
+.note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:14px 16px;
+  margin:20px 0;max-width:66ch;font-size:15px}
+.note p{margin:0 0 10px} .note p:last-child{margin:0}
+.note .label{color:var(--amber);display:block;margin-bottom:6px}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 18px;margin:18px 0}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:13px 15px}
+.stat b{display:block;font:600 24px/1.1 "IBM Plex Sans",sans-serif;font-variant-numeric:tabular-nums;
+  margin-bottom:4px;letter-spacing:-.02em}
+
+.tablewrap{overflow-x:auto;margin:16px 0;border:1px solid var(--rule);border-radius:3px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-family:"IBM Plex Sans",sans-serif}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+th{font-weight:600;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+   white-space:nowrap;background:var(--mono-bg)}
+tbody tr:last-child td{border-bottom:none}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",monospace}
+td.none{color:var(--ink-3);font-style:italic}
+
+details{border-top:1px solid var(--rule-2);padding:10px 0}
+details>summary{cursor:pointer;font:600 13px/1.4 "IBM Plex Sans",sans-serif;color:var(--ink-2);
+  list-style:none;display:flex;gap:8px;align-items:baseline}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"+";color:var(--amber);font-weight:700;width:11px;flex:none}
+details[open]>summary::before{content:"\2212"}
+details .body{padding:10px 0 4px 19px;font-size:14.5px;color:var(--ink-2);max-width:70ch}
+details .body p{margin:0 0 10px}
+
+.hyp{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:15px 17px;margin:0 0 12px}
+.hyp .hid{font-size:12.5px;color:var(--ink-3);word-break:break-all;display:block;margin-bottom:7px}
+.hyp h3{margin:0 0 9px;font-size:15.5px;line-height:1.38}
+.hyp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:9px}
+.hyp .snip{font-size:14px;color:var(--ink-2);margin:0 0 2px;max-width:82ch}
+.nc{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-2)}
+.nc li{margin:0 0 6px}
+
+.searchbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);
+  padding:12px 0;border-bottom:1px solid var(--rule);margin-bottom:18px}
+.searchbar .in{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=search]{flex:1 1 280px;min-width:0;padding:9px 12px;font-size:15px;border-radius:3px;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink);
+  font-family:"IBM Plex Sans",sans-serif}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{padding:7px 11px;font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.07em;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink-2);border-radius:2px;cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--deep);color:var(--paper);border-color:var(--deep)}
+#count{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif}
+.nojs{font-size:13px;color:var(--ink-3);margin:8px 0 0}
+
+figure{margin:22px 0;padding:0}
+figure svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:13.5px;color:var(--ink-2);margin-top:12px;max-width:74ch;
+  font-family:"IBM Plex Sans",sans-serif;line-height:1.55}
+.svgbox{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 12px}
+
+footer{border-top:1px solid var(--rule);margin-top:48px;padding-block:22px
+  calc(26px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--ink-3);
+  font-family:"IBM Plex Sans",sans-serif}
+footer .wrap>div{margin-bottom:6px}
+@media (max-width:640px){ h2{margin-top:30px} .stat b{font-size:20px} }
+</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html">Overview</a><a href="hypotheses.html">Hypothesis ledger</a><a href="fp16-kernel-selection.html">FP16 &amp; kernel selection</a><a href="method.html" aria-current="page">How this page is made</a></nav></div></header><main><div class="wrap"><h1>How this page is made</h1><p class="lede">One command reads three existing records, validates the joins, and regenerates every page and the structured export. Nothing here writes back to a research record, and a validation failure produces no page at all.</p><h2>Refresh</h2><div class="panel"><code>python -B scripts/research_site/build.py</code><p class="meta" style="margin:10px 0 0">Add <code>--check</code> to validate and print coverage without writing. The command refuses outright while a GPU window is open, so an export never contends with a measurement; in that case the last published snapshot stays as it is, dated. Publishing is never a prerequisite for the next experiment.</p></div><h2>Four timestamps, kept separate</h2><div class="tablewrap"><table><tbody><tr><th>Source events included through</th><td class="num">2026-09-15T19:22:00Z</td></tr><tr><th>Export generated</th><td class="num">2026-09-15T19:29:07Z</td></tr><tr><th>Interpretation reviewed through</th><td class="num">2026-09-15T18:20:00Z</td></tr><tr><th>Publication time and source revision</th><td>set by the deployment that serves these files; a deployment timestamp is not an evidence timestamp</td></tr></tbody></table></div><p class="prose">A result newer than the interpretation timestamp is marked awaiting interpretation rather than slipped in under an older explanation. This page states what its export contains; it cannot and does not claim there are no newer local events, because only a fresh source check could establish that.</p><h2>Search aliases</h2><p class="prose">Search covers every explanatory field &mdash; observation, explanation, frozen criterion, ruling, and the not-closed list &mdash; not ids or titles. Four aliases are authored by hand, each because a real retrieval failure demonstrated the mismatch. There is no embedding service, no language-model search and no semantic index.</p><div class="tablewrap"><table><thead><tr><th>Term</th><th>Also matches</th><th>Incident that warranted it</th></tr></thead><tbody><tr><td><code>occupancy</code></td><td><code>waves, ctas, machine fill</code></td><td>No occupancy counter is measured anywhere in this campaign; the nearest measured quantities are CTA counts and wave numbers at a premised tile. The alias routes the question to what actually exists rather than returning nothing.</td></tr><tr><td><code>residual</code></td><td><code>other, unattributed, partition</code></td><td>The duplicated row is indexed under &quot;other&quot;, &quot;partition&quot; and &quot;instrument artifact&quot;; a reader arriving with the word &quot;residual&quot; finds nothing without this.</td></tr><tr><td><code>serialization</code></td><td><code>concurrency, single-stream, overlap</code></td><td>On 2026-09-14 a cycle searched &quot;class census bandwidth compute overlap stream serialization&quot; and missed the row that had already answered it. Five of those seven terms are in that row’s full text; &quot;stream&quot; and &quot;serialization&quot; are not — they belong to its sibling row on device-timeline concurrency.</td></tr><tr><td><code>stream</code></td><td><code>concurrency, single-stream, serialization</code></td><td>Same incident, other direction: the concurrency row and the partition row are siblings and each is findable only under the other’s vocabulary.</td></tr></tbody></table></div><h2>What is published, and what is held back</h2><p class="prose">Registry rows and loop events are published field by field from an allowlist. Receipts are read by name from a short list &mdash; no directory is walked and no receipt outside the list is opened.</p><div class="tablewrap"><table><thead><tr><th>Receipt</th><th>Path</th><th>Mode</th><th>Fields published</th></tr></thead><tbody><tr><td><code>fp16-timeweighted</code></td><td>state/issue1945-receipts/fp16-accum-timeweighted-20260915T1715Z.json</td><td>header-only</td><td class="num">3 of 22</td></tr><tr><td><code>kernel-identity-audit</code></td><td>state/issue1945-receipts/which-kernel-actually-ran-20260915T1820Z.json</td><td>selected-fields</td><td class="num">17 of 19</td></tr><tr><td><code>machine-fill</code></td><td>state/issue1945-receipts/machine-fill-vs-precision-gain-20260915T1743Z.json</td><td>header-only</td><td class="num">3 of 16</td></tr><tr><td><code>wave-boundary-sweep</code></td><td>state/issue1945-receipts/wave-boundary-sweep-20260915T1730Z.json</td><td>selected-fields</td><td class="num">19 of 19</td></tr></tbody></table></div><h3>Fields omitted from every registry row</h3><div class="tablewrap"><table><thead><tr><th>Field</th><th>Rows</th><th>Why</th></tr></thead><tbody><tr><td><code>digests</code></td><td class="num">8</td><td>bulk file hashes; a hash establishes identity and is not independently inspectable here</td></tr><tr><td><code>owner</code></td><td class="num">46</td><td>internal seat name; carries no research content</td></tr><tr><td><code>run_id</code></td><td class="num">1</td><td>host-local run handle</td></tr></tbody></table></div><h3>Sanitizer</h3><p class="prose">Free-text fields are inspected, not just numeric ones. This run removed 1 host-account paths, normalized 74 absolute local paths, replaced 0 occurrences of the operator&rsquo;s name with &ldquo;the operator&rdquo;, and flagged 0 credential-shaped strings. A credential flag stops the build.</p><h2>Evidence you can and cannot check here</h2><p class="prose">Measurements shown in the article&rsquo;s table and figure are in <code>export/fp16-sweep-audit.json</code> at row level, so a displayed comparison can be recomputed. Receipts referenced elsewhere are named but not served: those are reported summaries whose underlying evidence is not publicly inspectable, and they are shown as plain names rather than links, because a link that cannot resolve is worse than a name. A hash would establish identity and would still not make an inaccessible file inspectable.</p><h2>Joins</h2><p class="prose">A registry row links a hypothesis through its own <code>loop_hypothesis</code> field, or, failing that, by matching the evidence receipt filename. Rows that join by neither are listed in their own section rather than attached to a plausible neighbour. The article&rsquo;s figure joins two different experiments on (m, k, n, device, arm) at the 5 shapes both measured; shapes measured by only one are shown as such and never completed with an assumed value.</p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T19:22:00Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T19:29:07Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>

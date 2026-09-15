@@ -1,0 +1,519 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""THE ONE COMMAND. Read the selected records, validate the joins and publication fields, regenerate
+the HTML and the compact data export.
+
+    python -B scripts/research_site/build.py [--out <dir>] [--check]
+
+It trains nothing, evaluates nothing, profiles nothing, launches nothing, and executes no notebook.
+It imports no instrument module. It refuses to run while a GPU window is open, because python
+touching the receipt directory during a window has already cost one refused governed run.
+
+--check validates and prints coverage without writing. Exit 2 on any refusal, 3 on a validation
+failure. A validation failure NEVER produces a page: a broken join, a missing receipt, or an
+over-length article stops the build rather than rendering something that looks valid.
+"""
+import argparse
+import io
+import json
+import os
+import re
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+import render                                        # noqa: E402
+import sources                                       # noqa: E402
+
+DEFAULT_OUT = 'state/research-site'
+ARTICLE = os.path.join(HERE, 'article-fp16-kernel-selection.md')
+
+# A small, explicitly authored alias map. Each entry cites the incident that demonstrated the
+# mismatch. Nothing is added here on a hunch -- an unsourced alias is a guess about vocabulary.
+ALIASES = {
+    'serialization': ['concurrency', 'single-stream', 'overlap'],
+    'stream': ['concurrency', 'single-stream', 'serialization'],
+    'residual': ['other', 'unattributed', 'partition'],
+    'occupancy': ['waves', 'ctas', 'machine fill'],
+}
+ALIAS_SOURCE = {
+    'serialization': 'On 2026-09-14 a cycle searched "class census bandwidth compute overlap stream '
+                     'serialization" and missed the row that had already answered it. Five of those '
+                     'seven terms are in that row’s full text; "stream" and "serialization" are '
+                     'not — they belong to its sibling row on device-timeline concurrency.',
+    'stream': 'Same incident, other direction: the concurrency row and the partition row are '
+              'siblings and each is findable only under the other’s vocabulary.',
+    'residual': 'The duplicated row is indexed under "other", "partition" and "instrument artifact"; '
+                'a reader arriving with the word "residual" finds nothing without this.',
+    'occupancy': 'No occupancy counter is measured anywhere in this campaign; the nearest measured '
+                 'quantities are CTA counts and wave numbers at a premised tile. The alias routes '
+                 'the question to what actually exists rather than returning nothing.',
+}
+
+ARTICLE_WORD_CAP = 2000
+OPENING_WORD_CAP = 150
+DECISION_CAP = 5
+
+
+def refuse(msg):
+    sys.stderr.write('REFUSED: %s\n' % msg)
+    sys.exit(2)
+
+
+def fail(msg):
+    sys.stderr.write('VALIDATION FAILED: %s\n' % msg)
+    sys.exit(3)
+
+
+def words(s):
+    return len([w for w in re.split(r'\s+', re.sub(r'[`*_#\[\]]', ' ', s or '')) if w])
+
+
+def parse_article(path):
+    raw = io.open(path, encoding='utf-8').read()
+    m = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', raw, re.S)
+    if not m:
+        fail('%s has no front matter' % path)
+    fm, body = {}, m.group(2)
+    key = None
+    for ln in m.group(1).split('\n'):
+        if re.match(r'^\s+-\s', ln):
+            fm.setdefault(key, []).append(ln.strip()[2:].strip())
+        elif ':' in ln:
+            key, val = ln.split(':', 1)
+            key, val = key.strip(), val.strip()
+            fm[key] = val if val else []
+    secs, cur = [], None
+    for ln in body.split('\n'):
+        h = re.match(r'^##\s+(.*)$', ln)
+        if h:
+            cur = {'title': h.group(1).strip(), 'lines': []}
+            secs.append(cur)
+        elif cur is not None:
+            cur['lines'].append(ln)
+    for s in secs:
+        s['text'] = '\n'.join(s['lines']).strip()
+    return fm, secs
+
+
+def md_inline(s):
+    s = render.esc(s)
+    s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+    s = re.sub(r'`(.+?)`', r'<code>\1</code>', s)
+    s = re.sub(r'(?<!\*)\*([^*]+?)\*(?!\*)', r'<em>\1</em>', s)
+    return s
+
+
+def md_block(text):
+    out, buf, lst, ol = [], [], [], False
+    def flushp():
+        if buf:
+            out.append('<p>%s</p>' % md_inline(' '.join(buf).strip()))
+            del buf[:]
+    def flushl():
+        if lst:
+            out.append('<%s>%s</%s>' % ('ol' if ol else 'ul',
+                                        ''.join('<li>%s</li>' % md_inline(x) for x in lst),
+                                        'ol' if ol else 'ul'))
+            del lst[:]
+    for ln in text.split('\n'):
+        st = ln.strip()
+        mo = re.match(r'^(\d+)\.\s+(.*)$', st)
+        mu = re.match(r'^[-*]\s+(.*)$', st)
+        if mo:
+            flushp(); ol = True; lst.append(mo.group(2)); continue
+        if mu:
+            flushp(); ol = False; lst.append(mu.group(1)); continue
+        if not st:
+            flushp(); flushl(); continue
+        if lst:
+            lst[-1] += ' ' + st
+            continue
+        buf.append(st)
+    flushp(); flushl()
+    return ''.join(out)
+
+
+def build(out_dir, check_only):
+    # --- refusals before any read -------------------------------------------------
+    marker = os.path.join(sources.SEAT_ROOT, 'state/gpu-window-open').replace('\\', '/')
+    if os.path.exists(marker):
+        refuse('the GPU-window marker %s is up. Export is deferred; the last published snapshot '
+               'stays dated as it is. No python touches the receipt store during a window.' % marker)
+    if not os.environ.get('PYTHONDONTWRITEBYTECODE') and not sys.dont_write_bytecode:
+        refuse('run with -B or PYTHONDONTWRITEBYTECODE=1; a stray __pycache__ contaminates a census')
+
+    san = sources.Sanitizer()
+    registry, rmeta = sources.load_registry(san)
+    hyps, lmeta = sources.load_loop(san)
+    receipts, recmeta = sources.load_receipts(san)
+    joinmeta = sources.join(registry, hyps)
+
+    for h in hyps:
+        h['_search'] = sources.searchable(h)
+    for r in registry:
+        r['_search'] = sources.searchable(r)
+
+    coverage = {'registry': rmeta, 'loop': lmeta, 'receipts': recmeta, 'sanitizer': san.report(),
+                'join': joinmeta}
+
+    # --- validation ---------------------------------------------------------------
+    absent = [x for x in recmeta if x['status'] != 'READ']
+    if absent:
+        fail('allowlisted receipts absent: %s. Nothing is substituted and no figure is drawn from '
+             'a partial set.' % ', '.join(x['key'] for x in absent))
+    if joinmeta['join_errors']:
+        fail('join errors: %s' % '; '.join(joinmeta['join_errors']))
+    for u in joinmeta['unresolved_references']:
+        print('  NOTE unresolved hypothesis reference in registry row %s -> %r'
+              % (u['registry_row'], u['names'][:70]))
+    if san.credential_flags:
+        fail('credential-shaped strings found at %s; inspect before publishing'
+             % ', '.join(w for w, _ in san.credential_flags))
+
+    sweep, audit = receipts['wave-boundary-sweep'], receipts['kernel-identity-audit']
+    if sweep.get('k') != audit.get('k') or sweep.get('n') != audit.get('n') \
+            or sweep.get('device') != audit.get('device'):
+        fail('the sweep and the audit are not on a common (k, n, device); they may not be joined')
+    sm = set(r['m'] for r in sweep['rows'])
+    am = set(r['m'] for r in audit['rows'])
+    joined = sorted(sm & am)
+    if len(joined) < 2:
+        fail('the sweep and the audit overlap on %d shapes; too few to show a relationship' % len(joined))
+
+    fm, secs = parse_article(ARTICLE)
+    total = sum(words(s['text']) for s in secs)
+    if total > ARTICLE_WORD_CAP:
+        fail('article is %d words against a %d cap' % (total, ARTICLE_WORD_CAP))
+    opening = [s for s in secs if s['title'].lower() == 'opening']
+    if not opening:
+        fail('article has no Opening section')
+    if words(opening[0]['text']) > OPENING_WORD_CAP:
+        fail('article opening is %d words against a %d cap' % (words(opening[0]['text']), OPENING_WORD_CAP))
+    for hid in fm.get('hypotheses', []):
+        if hid not in set(h['id'] for h in hyps):
+            fail('article names hypothesis %r which is not in the loop log' % hid)
+    for rk in fm.get('receipts', []):
+        if rk not in receipts:
+            fail('article names receipt key %r which is not on the allowlist' % rk)
+
+    newest = max([h.get('last_ts') or '' for h in hyps] + [''])
+    stamp = {
+        'source_events_through': newest,
+        'generated_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'interpretation_reviewed': fm.get('interpretation_of_events_through', 'unstated'),
+        'article_words': total,
+    }
+
+    print('COVERAGE')
+    print('  registry  %s : %d records, %d published, omitted fields %s'
+          % (rmeta['path'], rmeta['records_in_source'], rmeta['included'],
+             ', '.join(rmeta['omitted_fields']) or 'none'))
+    print('  loop      %s : %d events, %d hypotheses' % (lmeta['path'], lmeta['records_in_source'],
+                                                         lmeta['hypotheses']))
+    print('  receipts  %d read by name, %d absent' % (len(recmeta) - len(absent), len(absent)))
+    for x in recmeta:
+        print('      %-22s %-14s %s published of %s fields'
+              % (x['key'], x['status'], x.get('fields_published', '-'), x.get('fields_in_source', '-')))
+    print('  join      %d explicit, %d by evidence filename, %d unjoined, %d unresolved references'
+          % (joinmeta['explicit_loop_hypothesis_links'],
+             joinmeta['links_inferred_from_evidence_filename'],
+             joinmeta['registry_rows_with_no_hypothesis'],
+             len(joinmeta['unresolved_references'])))
+    print('  figure    sweep %d shapes, audit %d shapes, joined on %d: %s'
+          % (len(sm), len(am), len(joined), joined))
+    print('  sanitizer %s' % json.dumps(san.report()))
+    print('  article   %d words (cap %d), opening %d (cap %d)'
+          % (total, ARTICLE_WORD_CAP, words(opening[0]['text']), OPENING_WORD_CAP))
+    print('  events through %s' % newest)
+    if check_only:
+        print('\n--check: validated, nothing written.')
+        return 0
+
+    # --- emit ---------------------------------------------------------------------
+    outp = os.path.join(sources.SEAT_ROOT, out_dir).replace('\\', '/') \
+        if not os.path.isabs(out_dir) else out_dir
+    exp = os.path.join(outp, 'export').replace('\\', '/')
+    for d in (outp, exp):
+        if not os.path.isdir(d):
+            os.makedirs(d)
+
+    def w(rel, text):
+        p = os.path.join(outp, rel).replace('\\', '/')
+        with io.open(p, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(text)
+        return p
+
+    w('hypotheses.html', render.ledger_page(hyps, registry, joinmeta, coverage, ALIASES, stamp))
+    w('fp16-kernel-selection.html',
+      article_page(fm, secs, receipts, sweep, audit, joined, stamp, recmeta))
+    w('index.html', index_page(hyps, registry, receipts, coverage, fm, stamp))
+    w('method.html', method_page(coverage, stamp, joined))
+
+    idx = {
+        'schema': 'ember-research-index-v1',
+        'produced_by': 'scripts/research_site/build.py',
+        'source_events_through': newest,
+        'generated_at': stamp['generated_at'],
+        'is_complete_research_history': False,
+        'coverage': coverage,
+        'aliases': ALIASES,
+        'alias_sources': ALIAS_SOURCE,
+        'hypotheses': [dict((k, v) for k, v in h.items() if not k.startswith('_')) for h in hyps],
+        'registry': [dict((k, v) for k, v in r.items() if not k.startswith('_')) for r in registry],
+    }
+    with io.open(os.path.join(exp, 'research-index.json'), 'w', encoding='utf-8', newline='\n') as fh:
+        json.dump(idx, fh, indent=1, sort_keys=False)
+    fig = {
+        'schema': 'ember-research-fp16-sweep-audit-v1',
+        'note': ('Two experiments on a common (k, n, device). The sweep is a repeated timing run; '
+                 'the audit ran under a profiler and its own receipt states that no duration in it '
+                 'is a rate. Joined ONLY on (m, k, n, device, arm), and only where both measured '
+                 'the same shape.'),
+        'joined_shapes': joined,
+        'sweep_only_shapes': sorted(sm - am),
+        'audit_only_shapes': sorted(am - sm),
+        'sweep': sweep,
+        'kernel_audit': audit,
+    }
+    with io.open(os.path.join(exp, 'fp16-sweep-audit.json'), 'w', encoding='utf-8', newline='\n') as fh:
+        json.dump(fig, fh, indent=1)
+
+    gen = os.path.join(outp, '_generator').replace('\\', '/')
+    if not os.path.isdir(gen):
+        os.makedirs(gen)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for src_name in ('build.py', 'render.py', 'sources.py', 'verify.py',
+                     'article-fp16-kernel-selection.md'):
+        body = io.open(os.path.join(here, src_name), encoding='utf-8').read()
+        with io.open(os.path.join(gen, src_name), 'w', encoding='utf-8',
+                     newline='\n') as fh:
+            fh.write(body)
+
+    print('\nWROTE -> %s' % outp)
+    for f in sorted(os.listdir(outp)):
+        p = os.path.join(outp, f)
+        if os.path.isfile(p):
+            print('   %-34s %8d bytes' % (f, os.path.getsize(p)))
+    for f in sorted(os.listdir(exp)):
+        print('   export/%-26s %8d bytes' % (f, os.path.getsize(os.path.join(exp, f))))
+    return 0
+
+
+# ---------------------------------------------------------------------------
+def article_page(fm, secs, receipts, sweep, audit, joined, stamp, recmeta):
+    sweep_only = sorted(set(r['m'] for r in sweep['rows']) - set(r['m'] for r in audit['rows']))
+    audit_only = sorted(set(r['m'] for r in audit['rows']) - set(r['m'] for r in sweep['rows']))
+    body = ['<h1>%s</h1>' % render.esc(fm.get('title')),
+            '<p class="lede">%s</p>' % render.esc(fm.get('subtitle')),
+            '<p class="meta">Research question: %s &nbsp;&middot;&nbsp; issue #%s &nbsp;&middot;&nbsp; '
+            'interpretation covers events through %s</p>'
+            % (render.esc(fm.get('question')), render.esc(fm.get('issue')),
+               render.esc(fm.get('interpretation_of_events_through')))]
+    for s in secs:
+        if s['title'].lower() == 'opening':
+            body.append('<div class="prose">%s</div>' % md_block(s['text']))
+        else:
+            body.append('<h2>%s</h2><div class="prose">%s</div>'
+                        % (render.esc(s['title']), md_block(s['text'])))
+        if s['title'].lower().startswith('the finding that outranks'):
+            body.append(figure_block(sweep, audit, joined, sweep_only, audit_only))
+    body.append(
+        '<h2>Hypotheses this article interprets</h2>'
+        '<p class="meta">Each keeps its own identity, its own frozen criterion and its own original '
+        'verdict in the ledger. Nothing here relabels one.</p><ul class="prose">%s</ul>'
+        % ''.join('<li><a href="hypotheses.html#%s"><code>%s</code></a></li>'
+                  % (render.esc(h), render.esc(h)) for h in fm.get('hypotheses', [])))
+    meta_by_key = dict((x['key'], x) for x in recmeta)
+    ev = ''.join(
+        '<tr><td><code>%s</code></td><td><code>%s</code></td><td>%s</td>'
+        '<td class="num">%s of %s</td></tr>'
+        % (render.esc(k), render.esc(meta_by_key.get(k, {}).get('path', '')),
+           render.esc(meta_by_key.get(k, {}).get('mode', '-')),
+           meta_by_key.get(k, {}).get('fields_published', '-'),
+           meta_by_key.get(k, {}).get('fields_in_source', '-'))
+        for k in fm.get('receipts', []))
+    body.append(
+        '<h2>Evidence behind this article</h2>'
+        '<p class="meta">Local source paths, and how much of each receipt is published. A receipt '
+        'published header-only is named so a reader knows the number rests on an artifact they '
+        'cannot open here; the selected rows of the two published in full are in '
+        '<code>export/fp16-sweep-audit.json</code> beside this page.</p>'
+        '<div class="tablewrap"><table><thead><tr><th>receipt</th><th>local source</th>'
+        '<th>published</th><th>fields</th></tr></thead><tbody>%s</tbody></table></div>' % ev)
+    body.append(
+        '<div class="note"><span class="label">Correction annotation</span>'
+        '<p>The kernel-identity finding recorded on 2026-09-15 changes the <em>interpretation</em> of '
+        'two earlier results in this thread and changes neither their measurements nor their '
+        'verdicts. The time-weighted cycle stays REFUTED at 1.359x against its 1.50x bar. The '
+        'machine-fill cycle stays INCONCLUSIVE. What is withdrawn is the attribution of the measured '
+        'ratio to accumulator precision alone, because the two arms did not run the same kernel. '
+        'Neither receipt has been edited; no receipt schema in this campaign has an invalidation '
+        'field, so this annotation is the carrier.</p></div>')
+    return render.shell(fm.get('title'), 'article', ''.join(body), stamp)
+
+
+def figure_block(sweep, audit, joined, sweep_only, audit_only):
+    return (
+        '<figure><div class="svgbox">%s</div>'
+        '<figcaption><strong>Figure 1.</strong> Measured speedup of the 16-bit compute-type request '
+        'over the 32-bit request, against m, at k = n = 1024 on one RTX 4090. '
+        'The curve is the twelve-point sweep: repeated timings, %d repeats, %d warmup, %d iters, '
+        'with per-point spread in the table below. The kernel tiles are from a separate, later run '
+        'under a profiler; that receipt states that none of its durations is a rate, so no duration '
+        'from it appears in this chart. The two are joined only on (m, k, n, device, arm) and only '
+        'at the %d shapes both measured &mdash; %s. The %d sweep shapes with no audit row are drawn '
+        'as open circles and carry <em>no</em> tile: the earlier cycles&rsquo; assumed 128x128 tile '
+        'is exactly what the audit refuted, so filling them in would reintroduce the error. '
+        '%d audit shapes (%s) are not on the sweep and appear only in the table. Isolated shapes, '
+        'single capture, no matched-run variation; no gate moves.</figcaption></figure>%s'
+        '<p class="meta">Every displayed number below is in <code>export/fp16-sweep-audit.json</code>. '
+        'The audit ratio column is the quotient of two profiled durations, shown because it '
+        'corroborates the sweep independently &mdash; it is not a timing and may not be quoted as one.</p>'
+        % (render.figure_svg(sweep, audit), sweep.get('repeats'), sweep.get('warmup'),
+           sweep.get('iters'), len(joined), ', '.join('m=%d' % m for m in joined),
+           len(sweep_only), len(audit_only), ', '.join('m=%d' % m for m in audit_only),
+           render.figure_table(sweep, audit)))
+
+
+def index_page(hyps, registry, receipts, coverage, fm, stamp):
+    by_v = {}
+    for h in hyps:
+        by_v[h.get('verdict') or 'open'] = by_v.get(h.get('verdict') or 'open', 0) + 1
+    recent = sorted(hyps, key=lambda x: x.get('last_ts') or '', reverse=True)[:6]
+    rows = ''.join(
+        '<tr><td><code>%s</code></td><td>%s</td><td class="num">%s</td></tr>'
+        % (render.esc(h['id']), render._chip(h.get('verdict')), render.esc(h.get('last_ts')))
+        for h in recent)
+    body = (
+        '<h1>Ember Research</h1>'
+        '<p class="lede">A rendering of an existing research record: hypotheses with frozen '
+        'criteria, their original verdicts, the evidence behind them, and what each refutation '
+        'does <em>not</em> close. Generated from the loop log and the attempt registry &mdash; '
+        'not re-modelled, not re-scored.</p>'
+        '<div class="grid">'
+        '<div class="stat"><b>%d</b><span class="meta">hypotheses, OBSERVED &rarr; CLOSED</span></div>'
+        '<div class="stat"><b>%d</b><span class="meta">registry rows of prior attempts</span></div>'
+        '<div class="stat"><b>%d</b><span class="meta">loop events read</span></div>'
+        '<div class="stat"><b>%d</b><span class="meta">receipts published in full or in part</span></div>'
+        '</div>'
+        '<h2>Read</h2>'
+        '<div class="panel"><h3 style="margin-top:0"><a href="fp16-kernel-selection.html">%s</a></h3>'
+        '<p class="prose" style="margin:0 0 6px">%s</p>'
+        '<p class="meta">Research question: %s</p></div>'
+        '<div class="panel"><h3 style="margin-top:0"><a href="hypotheses.html">Hypothesis ledger</a></h3>'
+        '<p class="prose" style="margin:0">Search every hypothesis and prior attempt across its '
+        'explanatory text, not just its id. Built to answer &ldquo;has this already been '
+        'tried?&rdquo; before a cycle opens.</p></div>'
+        '<h2>Campaign view &mdash; issue #1945</h2>'
+        '<p class="prose">All hypotheses currently in the record belong to the throughput campaign '
+        'tracked as issue #1945. This page carries <strong>no campaign progress score</strong>: the '
+        'acceptance authority for that issue is the issue and its rules, and duplicating a composite '
+        'here would create a second scoring authority that could disagree with it.</p>'
+        '<div class="tablewrap"><table><thead><tr><th>Most recent hypotheses</th><th>Original verdict</th>'
+        '<th>Last event (UTC)</th></tr></thead><tbody>%s</tbody></table></div>'
+        '<p class="meta">Verdict tally across the record: %s.</p>'
+        '<h2>What this is not</h2>'
+        '<p class="prose">It is not the complete research history: a selected subset of receipts is '
+        'published, and the rest are referenced by name. It records no new verdicts, edits no '
+        'receipt, and holds no acceptance criterion. Where a later finding changes how an earlier '
+        'result should be read, it is carried as a dated annotation beside that result &mdash; the '
+        'original verdict is never rewritten.</p>'
+        '<p class="meta"><a href="method.html">How this page is made, what it omits, and how to '
+        'regenerate it &rarr;</a></p>'
+        % (len(hyps), len(registry), coverage['loop']['records_in_source'],
+           len([x for x in coverage['receipts'] if x['status'] == 'READ']),
+           render.esc(fm.get('title')), render.esc(fm.get('subtitle')),
+           render.esc(fm.get('question')), rows,
+           ', '.join('%s %d' % (k, v) for k, v in sorted(by_v.items()))))
+    return render.shell('Ember Research', 'index', body, stamp)
+
+
+def method_page(coverage, stamp, joined):
+    al = ''.join('<tr><td><code>%s</code></td><td><code>%s</code></td><td>%s</td></tr>'
+                 % (render.esc(k), render.esc(', '.join(v)), render.esc(ALIAS_SOURCE.get(k, '')))
+                 for k, v in sorted(ALIASES.items()))
+    om = ''.join('<tr><td><code>%s</code></td><td class="num">%d</td><td>%s</td></tr>'
+                 % (render.esc(k), v['occurrences'], render.esc(v['reason']))
+                 for k, v in sorted(coverage['registry']['omitted_fields'].items()))
+    rc = ''.join('<tr><td><code>%s</code></td><td>%s</td><td>%s</td><td class="num">%s of %s</td></tr>'
+                 % (render.esc(x['key']), render.esc(x['path']), render.esc(x.get('mode', '-')),
+                    x.get('fields_published', '-'), x.get('fields_in_source', '-'))
+                 for x in coverage['receipts'])
+    body = (
+        '<h1>How this page is made</h1>'
+        '<p class="lede">One command reads three existing records, validates the joins, and '
+        'regenerates every page and the structured export. Nothing here writes back to a research '
+        'record, and a validation failure produces no page at all.</p>'
+        '<h2>Refresh</h2>'
+        '<div class="panel"><code>python -B scripts/research_site/build.py</code>'
+        '<p class="meta" style="margin:10px 0 0">Add <code>--check</code> to validate and print '
+        'coverage without writing. The command refuses outright while a GPU window is open, so an '
+        'export never contends with a measurement; in that case the last published snapshot stays '
+        'as it is, dated. Publishing is never a prerequisite for the next experiment.</p></div>'
+        '<h2>Four timestamps, kept separate</h2>'
+        '<div class="tablewrap"><table><tbody>'
+        '<tr><th>Source events included through</th><td class="num">%s</td></tr>'
+        '<tr><th>Export generated</th><td class="num">%s</td></tr>'
+        '<tr><th>Interpretation reviewed through</th><td class="num">%s</td></tr>'
+        '<tr><th>Publication time and source revision</th><td>set by the deployment that serves '
+        'these files; a deployment timestamp is not an evidence timestamp</td></tr>'
+        '</tbody></table></div>'
+        '<p class="prose">A result newer than the interpretation timestamp is marked awaiting '
+        'interpretation rather than slipped in under an older explanation. This page states what '
+        'its export contains; it cannot and does not claim there are no newer local events, because '
+        'only a fresh source check could establish that.</p>'
+        '<h2>Search aliases</h2>'
+        '<p class="prose">Search covers every explanatory field &mdash; observation, explanation, '
+        'frozen criterion, ruling, and the not-closed list &mdash; not ids or titles. Four aliases '
+        'are authored by hand, each because a real retrieval failure demonstrated the mismatch. '
+        'There is no embedding service, no language-model search and no semantic index.</p>'
+        '<div class="tablewrap"><table><thead><tr><th>Term</th><th>Also matches</th>'
+        '<th>Incident that warranted it</th></tr></thead><tbody>%s</tbody></table></div>'
+        '<h2>What is published, and what is held back</h2>'
+        '<p class="prose">Registry rows and loop events are published field by field from an '
+        'allowlist. Receipts are read by name from a short list &mdash; no directory is walked and '
+        'no receipt outside the list is opened.</p>'
+        '<div class="tablewrap"><table><thead><tr><th>Receipt</th><th>Path</th><th>Mode</th>'
+        '<th>Fields published</th></tr></thead><tbody>%s</tbody></table></div>'
+        '<h3>Fields omitted from every registry row</h3>'
+        '<div class="tablewrap"><table><thead><tr><th>Field</th><th>Rows</th><th>Why</th></tr></thead>'
+        '<tbody>%s</tbody></table></div>'
+        '<h3>Sanitizer</h3>'
+        '<p class="prose">Free-text fields are inspected, not just numeric ones. This run removed '
+        '%d host-account paths, normalized %d absolute local paths, replaced %d occurrences of the '
+        'operator&rsquo;s name with &ldquo;the operator&rdquo;, and flagged %d credential-shaped '
+        'strings. A credential flag stops the build.</p>'
+        '<h2>Evidence you can and cannot check here</h2>'
+        '<p class="prose">Measurements shown in the article&rsquo;s table and figure are in '
+        '<code>export/fp16-sweep-audit.json</code> at row level, so a displayed comparison can be '
+        'recomputed. Receipts referenced elsewhere are named but not served: those are reported '
+        'summaries whose underlying evidence is not publicly inspectable, and they are shown as '
+        'plain names rather than links, because a link that cannot resolve is worse than a name. '
+        'A hash would establish identity and would still not make an inaccessible file '
+        'inspectable.</p>'
+        '<h2>Joins</h2>'
+        '<p class="prose">A registry row links a hypothesis through its own <code>loop_hypothesis</code> '
+        'field, or, failing that, by matching the evidence receipt filename. Rows that join by '
+        'neither are listed in their own section rather than attached to a plausible neighbour. '
+        'The article&rsquo;s figure joins two different experiments on (m, k, n, device, arm) at the '
+        '%d shapes both measured; shapes measured by only one are shown as such and never completed '
+        'with an assumed value.</p>'
+        % (render.esc(stamp['source_events_through']), render.esc(stamp['generated_at']),
+           render.esc(stamp['interpretation_reviewed']), al, rc, om,
+           coverage['sanitizer']['host_account_paths_removed'],
+           coverage['sanitizer']['absolute_local_paths_normalized'],
+           coverage['sanitizer']['operator_name_occurrences_replaced'],
+           coverage['sanitizer']['credential_shaped_strings_flagged'], len(joined)))
+    return render.shell('How this page is made', 'method', body, stamp)
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--out', default=DEFAULT_OUT)
+    ap.add_argument('--check', action='store_true')
+    a = ap.parse_args()
+    sys.exit(build(a.out, a.check))

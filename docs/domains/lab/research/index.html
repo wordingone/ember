@@ -1,0 +1,123 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Ember Research</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"><style>
+:root{
+  --paper:#f7f6f3; --panel:#fffefb; --rule:#ddd9d0; --rule-2:#eae6de;
+  --ink:#1b1c20; --ink-2:#4b4d55; --ink-3:#7c7f88;
+  --amber:#a8621b; --amber-soft:#f0e3d2; --deep:#23252c;
+  --mono-bg:#f1efe9;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}}
+:root[data-theme="dark"]{
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);margin:0;
+  font:400 16px/1.62 "Source Serif 4",Georgia,"Times New Roman",serif;}
+.ui,button,input,select,th,.chip,.meta,nav,footer,.label{
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+code,kbd,.mono,.hid{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.86em;}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0;}
+a{color:var(--amber);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+header.site{border-bottom:1px solid var(--rule);background:var(--panel);
+  padding-block:18px calc(18px + env(safe-area-inset-top,0px));}
+header.site .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
+.brand{font:600 19px/1.1 "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:var(--ink)}
+.brand span{color:var(--amber)}
+nav{display:flex;gap:18px;flex-wrap:wrap;font-size:14px}
+nav a{color:var(--ink-2)}
+nav a[aria-current="page"]{color:var(--ink);font-weight:600;border-bottom:1.5px solid var(--amber)}
+
+main{padding-block:38px 10px}
+h1{font:600 clamp(26px,4vw,36px)/1.18 "IBM Plex Sans",sans-serif;letter-spacing:-.02em;
+   margin:0 0 10px;text-wrap:balance}
+h2{font:600 21px/1.28 "IBM Plex Sans",sans-serif;margin:38px 0 12px;text-wrap:balance;
+   padding-top:14px;border-top:1px solid var(--rule-2)}
+h3{font:600 16px/1.3 "IBM Plex Sans",sans-serif;margin:24px 0 8px}
+.lede{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0 0 20px}
+.prose{max-width:66ch}
+.prose p{margin:0 0 14px}
+.prose ol,.prose ul{max-width:64ch;padding-left:22px}
+.prose li{margin:0 0 8px}
+
+.label{font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3)}
+.meta{font-size:13px;color:var(--ink-3)}
+.chip{display:inline-block;font:600 10.5px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;
+  padding:5px 8px;border-radius:2px;white-space:nowrap;vertical-align:baseline}
+.v-ref{background:var(--deep);color:var(--paper)}
+.v-sup{background:transparent;color:var(--amber);border:1.5px solid var(--amber)}
+.v-inc{background:transparent;color:var(--ink-3);border:1.5px dashed var(--ink-3)}
+.v-open{background:var(--rule-2);color:var(--ink-2)}
+
+.note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:14px 16px;
+  margin:20px 0;max-width:66ch;font-size:15px}
+.note p{margin:0 0 10px} .note p:last-child{margin:0}
+.note .label{color:var(--amber);display:block;margin-bottom:6px}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 18px;margin:18px 0}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:13px 15px}
+.stat b{display:block;font:600 24px/1.1 "IBM Plex Sans",sans-serif;font-variant-numeric:tabular-nums;
+  margin-bottom:4px;letter-spacing:-.02em}
+
+.tablewrap{overflow-x:auto;margin:16px 0;border:1px solid var(--rule);border-radius:3px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-family:"IBM Plex Sans",sans-serif}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+th{font-weight:600;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+   white-space:nowrap;background:var(--mono-bg)}
+tbody tr:last-child td{border-bottom:none}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",monospace}
+td.none{color:var(--ink-3);font-style:italic}
+
+details{border-top:1px solid var(--rule-2);padding:10px 0}
+details>summary{cursor:pointer;font:600 13px/1.4 "IBM Plex Sans",sans-serif;color:var(--ink-2);
+  list-style:none;display:flex;gap:8px;align-items:baseline}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"+";color:var(--amber);font-weight:700;width:11px;flex:none}
+details[open]>summary::before{content:"\2212"}
+details .body{padding:10px 0 4px 19px;font-size:14.5px;color:var(--ink-2);max-width:70ch}
+details .body p{margin:0 0 10px}
+
+.hyp{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:15px 17px;margin:0 0 12px}
+.hyp .hid{font-size:12.5px;color:var(--ink-3);word-break:break-all;display:block;margin-bottom:7px}
+.hyp h3{margin:0 0 9px;font-size:15.5px;line-height:1.38}
+.hyp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:9px}
+.hyp .snip{font-size:14px;color:var(--ink-2);margin:0 0 2px;max-width:82ch}
+.nc{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-2)}
+.nc li{margin:0 0 6px}
+
+.searchbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);
+  padding:12px 0;border-bottom:1px solid var(--rule);margin-bottom:18px}
+.searchbar .in{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=search]{flex:1 1 280px;min-width:0;padding:9px 12px;font-size:15px;border-radius:3px;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink);
+  font-family:"IBM Plex Sans",sans-serif}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{padding:7px 11px;font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.07em;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink-2);border-radius:2px;cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--deep);color:var(--paper);border-color:var(--deep)}
+#count{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif}
+.nojs{font-size:13px;color:var(--ink-3);margin:8px 0 0}
+
+figure{margin:22px 0;padding:0}
+figure svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:13.5px;color:var(--ink-2);margin-top:12px;max-width:74ch;
+  font-family:"IBM Plex Sans",sans-serif;line-height:1.55}
+.svgbox{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 12px}
+
+footer{border-top:1px solid var(--rule);margin-top:48px;padding-block:22px
+  calc(26px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--ink-3);
+  font-family:"IBM Plex Sans",sans-serif}
+footer .wrap>div{margin-bottom:6px}
+@media (max-width:640px){ h2{margin-top:30px} .stat b{font-size:20px} }
+</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html" aria-current="page">Overview</a><a href="hypotheses.html">Hypothesis ledger</a><a href="fp16-kernel-selection.html">FP16 &amp; kernel selection</a><a href="method.html">How this page is made</a></nav></div></header><main><div class="wrap"><h1>Ember Research</h1><p class="lede">A rendering of an existing research record: hypotheses with frozen criteria, their original verdicts, the evidence behind them, and what each refutation does <em>not</em> close. Generated from the loop log and the attempt registry &mdash; not re-modelled, not re-scored.</p><div class="grid"><div class="stat"><b>67</b><span class="meta">hypotheses, OBSERVED &rarr; CLOSED</span></div><div class="stat"><b>119</b><span class="meta">registry rows of prior attempts</span></div><div class="stat"><b>519</b><span class="meta">loop events read</span></div><div class="stat"><b>4</b><span class="meta">receipts published in full or in part</span></div></div><h2>Read</h2><div class="panel"><h3 style="margin-top:0"><a href="fp16-kernel-selection.html">What a four-cycle FP16 thread actually established</a></h3><p class="prose" style="margin:0 0 6px">A chain that produced three unwelcome verdicts and one finding that outranks all of them.</p><p class="meta">Research question: Does requesting FP16 accumulation on this card&#x27;s dense contractions buy enough to matter, and if it does, what is the mechanism?</p></div><div class="panel"><h3 style="margin-top:0"><a href="hypotheses.html">Hypothesis ledger</a></h3><p class="prose" style="margin:0">Search every hypothesis and prior attempt across its explanatory text, not just its id. Built to answer &ldquo;has this already been tried?&rdquo; before a cycle opens.</p></div><h2>Campaign view &mdash; issue #1945</h2><p class="prose">All hypotheses currently in the record belong to the throughput campaign tracked as issue #1945. This page carries <strong>no campaign progress score</strong>: the acceptance authority for that issue is the issue and its rules, and duplicating a composite here would create a second scoring authority that could disagree with it.</p><div class="tablewrap"><table><thead><tr><th>Most recent hypotheses</th><th>Original verdict</th><th>Last event (UTC)</th></tr></thead><tbody><tr><td><code>is-the-inner-accumulategrad-record-conditional-on-the-gradient-path-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T19:22:00Z</td></tr><tr><td><code>how-many-leaves-per-step-receive-a-gradient-that-no-optimizer-state-consumes-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:47:50Z</td></tr><tr><td><code>the-twelve-optimizer-step-annotations-are-six-steps-counted-twice-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:43:45Z</td></tr><tr><td><code>the-gradient-count-behind-todays-work-removal-finding-was-double-counted-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:37:15Z</td></tr><tr><td><code>does-the-backward-compute-gradients-for-parameters-that-never-take-a-step-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:05:24Z</td></tr><tr><td><code>do-the-measured-levers-compose-to-the-factor-the-terminal-needs-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T17:56:15Z</td></tr></tbody></table></div><p class="meta">Verdict tally across the record: INCONCLUSIVE 9, REFUTED 21, SUPPORTED 33, open 4.</p><h2>What this is not</h2><p class="prose">It is not the complete research history: a selected subset of receipts is published, and the rest are referenced by name. It records no new verdicts, edits no receipt, and holds no acceptance criterion. Where a later finding changes how an earlier result should be read, it is carried as a dated annotation beside that result &mdash; the original verdict is never rewritten.</p><p class="meta"><a href="method.html">How this page is made, what it omits, and how to regenerate it &rarr;</a></p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T19:22:00Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T19:29:07Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>
