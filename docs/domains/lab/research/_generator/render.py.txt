@@ -63,8 +63,10 @@ CSS = """
   --mono-bg:#23262d;
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{background:var(--paper);color:var(--ink);margin:0;
   font:400 16px/1.62 "Source Serif 4",Georgia,"Times New Roman",serif;}
+img,svg,video{max-width:100%}
 .ui,button,input,select,th,.chip,.meta,nav,footer,.label{
   font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
 code,kbd,.mono,.hid{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.86em;}
@@ -164,7 +166,81 @@ footer{border-top:1px solid var(--rule);margin-top:48px;padding-block:22px
   calc(26px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--ink-3);
   font-family:"IBM Plex Sans",sans-serif}
 footer .wrap>div{margin-bottom:6px}
-@media (max-width:640px){ h2{margin-top:30px} .stat b{font-size:20px} }
+
+/* ---------- multi-device ----------------------------------------------------------
+   The page is read on phones as well as desktops. Three things break at a narrow
+   column and each is handled where it breaks, rather than by a global override:
+   long identifiers overflow, the figure's labels shrink below legibility, and the
+   controls are too small for a finger. */
+
+/* A hypothesis id, a receipt filename or an absolute path is one unbroken token that
+   is wider than a phone column. Without this the token sets the page's minimum width
+   and the whole body scrolls sideways. */
+.prose p,.prose li,.hyp .snip,.hyp h3,.nc li,details .body,.lede,figcaption,.meta,
+footer .wrap>div{overflow-wrap:anywhere}
+.hyp .hid{overflow-wrap:anywhere}
+
+/* The figure is a 940-unit viewBox with 10-11px labels. Scaling it into a 360px column
+   renders that text near 4px. Below the width where it stays legible it gets its own
+   horizontal scroller and keeps a readable minimum -- the same treatment the tables
+   already have, and the reason neither is allowed to scroll the page body. */
+.svgbox{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fig-narrow{display:none}
+@media (max-width:720px){
+  .fig-wide{display:none}
+  .fig-narrow{display:block}
+  .svgbox{padding:12px 10px}
+  figure svg{min-width:320px}
+}
+
+/* Tables already scroll in .tablewrap; make the affordance reachable by touch and stop
+   a long cell forcing a second scroll surface. */
+.tablewrap{-webkit-overflow-scrolling:touch}
+
+@media (max-width:760px){
+  .wrap{padding-inline:16px}
+  main{padding-block:26px 8px}
+  h2{margin-top:30px}
+  .grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat b{font-size:20px}
+  .panel{padding:14px 15px}
+  .hyp{padding:13px 14px}
+  .note{padding:12px 14px}
+  .searchbar .in{gap:8px}
+  nav{gap:14px;width:100%}
+}
+
+@media (max-width:430px){
+  .wrap{padding-inline:13px}
+  body{font-size:15.5px}
+  .lede{font-size:16.5px}
+  .grid{grid-template-columns:1fr}
+  .stat b{font-size:19px}
+  header.site .wrap{gap:6px 14px}
+  .brand{font-size:17px}
+  nav{font-size:13px;gap:12px}
+  details .body{padding-left:14px}
+  .nc{padding-left:15px}
+  input[type=search]{flex:1 1 100%}
+  .filters{width:100%}
+}
+
+/* Finger-driven devices: the filter buttons and the search field were sized for a
+   cursor. Only the hit area grows; the type scale is untouched. */
+@media (pointer:coarse){
+  .filters button{min-height:44px;padding:0 15px;display:inline-flex;align-items:center}
+  input[type=search]{min-height:44px;padding:0 13px}
+  details>summary{padding:6px 0}
+  nav a{display:inline-block;padding:6px 0}
+  .hyp .hid{padding:2px 0}
+}
+
+/* A viewer who asks for less motion gets none. The page has no animation today; this
+   keeps that true if one is ever added. */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
 """
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
@@ -388,14 +464,36 @@ def coverage_block(cov, joinmeta):
 # Figure: speedup vs m, with kernel identity shown ONLY where the audit measured it
 # ---------------------------------------------------------------------------
 def figure_svg(sweep, audit):
+    """Two layouts of one chart: wide with the key beside the plot, narrow with it below.
+
+    The page shows one or the other by media query. Neither is a summary of the other --
+    both carry every point and every kernel row, so a phone reader is not given less.
+    """
+    return ('<div class="fig-wide">%s</div><div class="fig-narrow">%s</div>'
+            % (_figure_svg(sweep, audit, WIDE_FIG), _figure_svg(sweep, audit, NARROW_FIG)))
+
+
+# Geometry only. W/H are the viewBox; L/R/T/B are the plot's margins inside it; when
+# key_below is set the kernel key is laid out under the plot from key_y instead of in the
+# right margin, which is why the narrow layout can give R back to the data.
+WIDE_FIG = dict(W=940, H=430, L=62, R=250, T=26, B=68,
+                key_below=False, key_y=0, key_x=None, title_wrap=False)
+# R=22 holds the right half of the "16384" tick, which is centred on the plot's right edge.
+# W=362 is what the content needs once the key sits below, and it is close enough to a phone
+# column that the type scales to about 0.96 rather than 0.4.
+NARROW_FIG = dict(W=362, H=648, L=44, R=22, T=40, B=378,
+                  key_below=True, key_y=336, key_x=8, title_wrap=True)
+
+
+def _figure_svg(sweep, audit, g):
     srows = sweep['rows']
     arows = audit['rows']
     aud = {}
     for a in arows:
         aud.setdefault(a['m'], {})[a['arm']] = a
 
-    W, H = 940, 430
-    L, R, T, B = 62, 250, 26, 68
+    W, H = g['W'], g['H']
+    L, R, T, B = g['L'], g['R'], g['T'], g['B']
     xs = [r['m'] for r in srows]
     x0, x1 = math.log(min(xs)), math.log(max(xs))
     y0, y1 = 0.90, 1.80
@@ -406,6 +504,7 @@ def figure_svg(sweep, audit):
     def py(v):
         return T + (y1 - v) / (y1 - y0) * (H - T - B)
 
+    axis_y = py(y0)
     p = ['<svg viewBox="0 0 %d %d" role="img" xmlns="http://www.w3.org/2000/svg" '
          'aria-label="Measured speedup of the 16-bit compute-type request over the 32-bit request, '
          'against m, with kernel identity marked only at the five shapes the audit measured.">' % (W, H),
@@ -424,28 +523,34 @@ def figure_svg(sweep, audit):
     for v in (1.0, 1.2, 1.4, 1.6, 1.8):
         p.append('<line class="gr" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>' % (L, py(v), W - R, py(v)))
         p.append('<text class="tkm" x="%.1f" y="%.1f" text-anchor="end">%.1fx</text>' % (L - 8, py(v) + 4, v))
-    p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>' % (L, py(y0), W - R, py(y0)))
-    p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>' % (L, T, L, py(y0)))
+    p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>' % (L, axis_y, W - R, axis_y))
+    p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>' % (L, T, L, axis_y))
     # parity line
     p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke-dasharray="2 4"/>'
              % (L, py(1.0), W - R, py(1.0)))
     # x ticks
     for m in xs:
         p.append('<line class="ax" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
-                 % (px(m), py(y0), px(m), py(y0) + 4))
+                 % (px(m), axis_y, px(m), axis_y + 4))
     for m in (512, 1024, 2048, 4096, 8192, 16384):
         p.append('<text class="tkm" x="%.1f" y="%.1f" text-anchor="middle">%d</text>'
-                 % (px(m), py(y0) + 18, m))
+                 % (px(m), axis_y + 18, m))
     p.append('<text class="tk" x="%.1f" y="%.1f" text-anchor="middle">m  (k = n = 1024, log scale)</text>'
-             % ((L + W - R) / 2.0, H - 16))
-    p.append('<text class="ttl" x="%.1f" y="%.1f">speedup: 16-bit compute-type request '
-             'over 32-bit</text>' % (L, T - 8))
+             % ((L + W - R) / 2.0, axis_y + 38))
+    if g['title_wrap']:
+        p.append('<text class="ttl" x="%.1f" y="%.1f">speedup: 16-bit compute-type</text>'
+                 % (L - 36, T - 22))
+        p.append('<text class="ttl" x="%.1f" y="%.1f">request over 32-bit</text>'
+                 % (L - 36, T - 8))
+    else:
+        p.append('<text class="ttl" x="%.1f" y="%.1f">speedup: 16-bit compute-type request '
+                 'over 32-bit</text>' % (L, T - 8))
     # line
     p.append('<polyline class="ln" points="%s"/>' % ' '.join(
         '%.1f,%.1f' % (px(r['m']), py(r['speedup_16f_over_32f'])) for r in srows))
     # dip marker
     p.append('<line class="dip" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f"/>'
-             % (px(2048), T + 4, px(2048), py(y0)))
+             % (px(2048), T + 4, px(2048), axis_y))
     p.append('<text class="kn" x="%.1f" y="%.1f" text-anchor="middle">dip, unexplained</text>'
              % (px(2048), T + 1))
     # points
@@ -458,11 +563,12 @@ def figure_svg(sweep, audit):
         else:
             p.append('<circle cx="%.1f" cy="%.1f" r="4" fill="var(--paper)" '
                      'stroke="var(--ink-2)" stroke-width="1.5"/>' % (px(m), py(v)))
-    # right-hand kernel key, only for joined shapes
-    y = T + 16
-    p.append('<text class="lgb" x="%.1f" y="%.1f">Kernel actually selected</text>' % (W - R + 10, y))
+    # kernel key, only for joined shapes: right margin when wide, under the plot when narrow
+    kx = g['key_x'] if g['key_below'] else W - R + 10
+    y = g['key_y'] if g['key_below'] else T + 16
+    p.append('<text class="lgb" x="%.1f" y="%.1f">Kernel actually selected</text>' % (kx, y))
     y += 13
-    p.append('<text class="lg" x="%.1f" y="%.1f">(profiled audit; 5 shapes only)</text>' % (W - R + 10, y))
+    p.append('<text class="lg" x="%.1f" y="%.1f">(profiled audit; 5 shapes only)</text>' % (kx, y))
     y += 19
     for m in sorted(aud):
         if not (m in [r['m'] for r in srows]):
@@ -470,18 +576,18 @@ def figure_svg(sweep, audit):
         a32, a16 = aud[m].get('32F'), aud[m].get('16F')
         if not (a32 and a16):
             continue
-        p.append('<text class="lgb" x="%.1f" y="%.1f">m = %d</text>' % (W - R + 10, y, m))
+        p.append('<text class="lgb" x="%.1f" y="%.1f">m = %d</text>' % (kx, y, m))
         y += 14
-        p.append('<text class="kn" x="%.1f" y="%.1f">32F tile %s</text>' % (W - R + 10, y, a32['tile_in_name']))
+        p.append('<text class="kn" x="%.1f" y="%.1f">32F tile %s</text>' % (kx, y, a32['tile_in_name']))
         y += 13
-        p.append('<text class="kn" x="%.1f" y="%.1f">16F tile %s</text>' % (W - R + 10, y, a16['tile_in_name']))
+        p.append('<text class="kn" x="%.1f" y="%.1f">16F tile %s</text>' % (kx, y, a16['tile_in_name']))
         y += 18
-    p.append('<rect x="%.1f" y="%.1f" width="8" height="8" fill="var(--amber)"/>' % (W - R + 10, y - 7))
-    p.append('<text class="lg" x="%.1f" y="%.1f">kernel evidence</text>' % (W - R + 24, y))
+    p.append('<rect x="%.1f" y="%.1f" width="8" height="8" fill="var(--amber)"/>' % (kx, y - 7))
+    p.append('<text class="lg" x="%.1f" y="%.1f">kernel evidence</text>' % (kx + 14, y))
     y += 16
     p.append('<circle cx="%.1f" cy="%.1f" r="4" fill="var(--paper)" stroke="var(--ink-2)" '
-             'stroke-width="1.5"/>' % (W - R + 14, y - 4))
-    p.append('<text class="lg" x="%.1f" y="%.1f">no kernel evidence</text>' % (W - R + 24, y))
+             'stroke-width="1.5"/>' % (kx + 4, y - 4))
+    p.append('<text class="lg" x="%.1f" y="%.1f">no kernel evidence</text>' % (kx + 14, y))
     p.append('</svg>')
     return ''.join(p)
 

@@ -1,24 +1,24 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "scripts/research_site/build.py",
- "source_events_through": "2026-09-15T19:35:41Z",
- "generated_at": "2026-09-15T19:56:03Z",
+ "source_events_through": "2026-09-15T20:22:36Z",
+ "generated_at": "2026-09-15T20:45:33Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
    "path": "state/attempt-registry.jsonl",
-   "bytes": 445446,
-   "mtime_utc": "2026-09-15T19:35:49Z",
-   "records_in_source": 120,
+   "bytes": 458214,
+   "mtime_utc": "2026-09-15T20:23:12Z",
+   "records_in_source": 123,
    "unparseable_records": 0,
-   "included": 120,
+   "included": 123,
    "omitted_fields": {
     "digests": {
      "occurrences": 8,
      "reason": "bulk file hashes; a hash establishes identity and is not independently inspectable here"
     },
     "owner": {
-     "occurrences": 46,
+     "occurrences": 49,
      "reason": "internal seat name; carries no research content"
     },
     "run_id": {
@@ -29,12 +29,12 @@
   },
   "loop": {
    "path": "state/issue1945-loop.jsonl",
-   "bytes": 738542,
-   "mtime_utc": "2026-09-15T19:35:41Z",
-   "records_in_source": 527,
+   "bytes": 746118,
+   "mtime_utc": "2026-09-15T20:22:36Z",
+   "records_in_source": 535,
    "unparseable_records": 0,
-   "hypotheses": 68,
-   "included": 527,
+   "hypotheses": 69,
+   "included": 535,
    "omitted_fields": {}
   },
   "receipts": [
@@ -118,16 +118,16 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 1,
-   "absolute_local_paths_normalized": 74,
+   "absolute_local_paths_normalized": 77,
    "operator_name_occurrences_replaced": 0,
    "seat_name_occurrences_replaced": 9,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
   "join": {
-   "explicit_loop_hypothesis_links": 43,
-   "links_inferred_from_evidence_filename": 10,
-   "registry_rows_with_no_hypothesis": 67,
+   "explicit_loop_hypothesis_links": 44,
+   "links_inferred_from_evidence_filename": 11,
+   "registry_rows_with_no_hypothesis": 68,
    "unresolved_references": [],
    "join_errors": []
   }
@@ -5098,6 +5098,77 @@
    "ruling": "All three frozen clauses hold, and the separation is not marginal.\n\n(1) The pairing is one-to-one: 2,538 of 2,538 inner events nest inside exactly one outer event on the same thread, and no outer contains two. 2,826 outers, 2,538 paired, 288 unpaired -- 48.0 per step, the same figure the count route produced by a different method. (2) The unpaired p90 is 1.600 us against a paired p10 of 15.100 us: the populations do not overlap at all. (3) The unpaired median is 1.300 us against half the paired median at 9.350 us -- a factor of 14.4 below the paired median of 18.700 us.\n\nTHEREFORE THE 48 NODES PER STEP DO ESSENTIALLY NO WORK. A node costing 1.3 us is paying for the engine's graph walk and its own bookkeeping. It is not launching a kernel and it is not running an accumulation. The reading that would have kept 471 standing -- that these are real accumulations whose inner record merely failed to appear -- is dead: a real accumulation costs 18.7 us on this trace and these cost 1.3.\n\nBOTH REDS HELD ON DIFFERENT GROUNDS. Nesting a second inner event inside one outer makes the pairing ambiguous and the instrument REFUSES rather than ruling, so clause 1 is a real admissibility gate and not decoration. Redrawing the unpaired durations from the paired distribution makes the two populations coincide and the instrument reports REFUTED on clauses 2 and 3 with clause 1 still passing, so the separation clauses are carrying their own weight.",
    "not_closed": "THE UNIT IS SETTLED AND IT IS NOT THE ONE I PUBLISHED. The 48 unpaired engine nodes per step are evaluated and skipped, not executed. So the count of leaves that actually RECEIVE a gradient per step is 423, not 471, and the ratio against 351 stepped tensors is 1.2051, not 1.3419. Both figures clear the 1.20 line the parent row froze, so the CONCLUSION stands unchanged -- more leaves receive gradients than have optimizer state -- but the margin is 0.005 and not 0.14, and the excess is 72 leaves per step and not 120. Every future statement of that finding uses 423, 1.2051 and 72.\n\nTHAT MARGIN IS THIN ENOUGH TO BE ITS OWN FINDING. 1.2051 against a frozen 1.20 is a difference of about half a percent on a single capture with no matched-run variation. The parent row is not withdrawn -- its arithmetic is correct at both units and the direction of the conclusion is the same -- but a finding whose margin is 0.005 on one run is not a finding anyone should build a treatment on, and that is now said out loud rather than left to a reader to notice.\n\nWHAT THIS DOES NOT CLOSE. It does not name exec_info. A near-zero-work outer event is consistent with the engine's needed_ skip path and with any other reason a node is walked and not run; the wheel ships no engine.cpp and no trace will distinguish them. The 1.3 us figure is also a host duration from a profiled capture, so it is evidence about relative work and not about cost. WHAT IS NOW WORTH ASKING, and is a different question from the one this answered: WHY 72. A skipped node is a node the graph walk reached whose output nothing downstream needs -- so the 72 leaves in the excess are receiving gradients that ARE consumed by something, while 48 per step are reached and discarded. Which 72, and whether they correspond to the require-grad-without-state placements in the checkpoint manifest, is still unknown: the trace carries shapes and not names. NO RATE, NO CEILING, NO COST SHARE, NO GATE MOVES.",
    "closing": "Ruled SUPPORTED on all three frozen clauses, both reds held on different grounds. The 288 unpaired outer engine-node events have a median host duration of 1.300 us against 18.700 us for the 2,538 paired ones, with p90 1.600 entirely below p10 15.100 -- two disjoint populations. The unpaired nodes are evaluated and skipped, not executed, so the inner op is the right unit and the per-step figure is 423 rather than 471. The ratio against 351 stepped tensors is 1.2051, which still clears the frozen 1.20 line, so the parent conclusion stands with a margin of 0.005 and an excess of 72 leaves per step. Not closed: this does not name exec_info specifically, and which 72 leaves are in the excess is unknown because the trace carries shapes and not names."
+  },
+  {
+   "id": "gradients-for-72-unstepped-leaves-per-step-are-discarded-work",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-09-15T20:15:41Z",
+   "last_ts": "2026-09-15T20:22:36Z",
+   "events": [
+    {
+     "ts": "2026-09-15T20:15:41Z",
+     "stage": "OBSERVED",
+     "observation": "Every named RATE route on this graph is now priced below the 1.5x arm bar: elementwise fusion 1.3202x, rescheduling 1.4726x generous, FP16 accumulation 1.176x generous. The registry's standing conclusion is that the factor must come from doing LESS WORK or at a HIGHER RATE, so the rate half is closed and the work half is unattempted. One measured instance of discarded work already exists: the backward evaluates 423 AccumulateGrad inner ops per step against 351 tensors that take an optimizer step, so 72 leaves per step receive gradients that no optimizer state consumes. The observation is that those 72 gradients are produced by real backward arithmetic whose device cost has never been measured, and if that cost is material it is work the step does not need."
+    },
+    {
+     "ts": "2026-09-15T20:16:03Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The mechanism is a mismatch between what requires_grad marks and what the optimizer enrols. The backward engine walks every leaf reachable from the loss whose requires_grad is true and runs AccumulateGrad on it, because that is the only criterion the engine has. Optimizer enrolment is a separate act performed at construction over a parameter group, and nothing reconciles the two sets. So a parameter that is left requiring grad but is excluded from the optimizer -- a frozen support expert, a tied or duplicated placement, a buffer promoted to a parameter, a module constructed but not routed -- still causes the full backward chain feeding it to be evaluated: every matmul, reduction and elementwise op on the path from the loss to that leaf runs, its result is written into .grad, and no step ever reads it. The cost is therefore NOT the 72 AccumulateGrad calls themselves, which correction five measured at about 62 us per step of host time; it is whatever device arithmetic exists on the exclusive paths that feed only those leaves. If those leaves share their entire backward path with stepped leaves, the discarded work is near zero and only the accumulation is wasted. If any of them sit behind a path no stepped leaf needs, that whole subgraph is work the step does not need."
+    },
+    {
+     "ts": "2026-09-15T20:16:16Z",
+     "stage": "PREDICTED",
+     "refuted_if": "REFUTED if the exclusive backward subgraph feeding the unstepped leaves accounts for less than 1.0 percent of measured device time per step. The measurement: over the existing capture, partition backward device kernels by whether their producing op lies on a path reachable ONLY from an unstepped leaf, versus shared with at least one stepped leaf. If exclusive-path device time is below 1.0 percent of the step's device total, the discarded-work thread carries no factor and is refuted as a throughput lever, whatever its hygiene value. Also REFUTED if the trace cannot distinguish the two path classes at all, in which case the row is INCONCLUSIVE rather than REFUTED and says so. SUPPORTED only if exclusive-path device time is at or above 1.0 percent AND the partition is established from the trace rather than assumed from the parameter manifest."
+    },
+    {
+     "ts": "2026-09-15T20:16:23Z",
+     "stage": "RUNNING",
+     "gpu": false
+    },
+    {
+     "ts": "2026-09-15T20:21:24Z",
+     "stage": "MEASURED",
+     "receipt": "state/issue1945-receipts/discarded-gradient-work-20260915T2030Z.json"
+    },
+    {
+     "ts": "2026-09-15T20:21:35Z",
+     "stage": "RULED",
+     "verdict": "INCONCLUSIVE",
+     "because": "The frozen criterion says: 'Also REFUTED if the trace cannot distinguish the two path classes at all, in which case the row is INCONCLUSIVE rather than REFUTED and says so.' That is the branch taken. All eight tensor-identity fields are absent across 215,100 cpu_op events, so no backward op can be attributed to the leaf its gradient reaches, and the exclusive-path partition the criterion is about is not constructible from this capture. Re-censused rather than inherited from the registry. What the run DID establish, as a floor and never as the criterion's quantity: device time is 130,996.2 us per step by interval union; the AccumulateGrad nodes themselves carry 7,658.0 us per step across 2,538 correlated launches; the 72 unstepped leaves are 17.02 percent of the 423 accumulations, giving a prorated discarded floor of 1,303.49 us per step = 0.9951 percent of device time. That floor sits just BELOW the 1.0 percent line, and it excludes every upstream op on any exclusive path, so it neither refutes nor supports the criterion's term. The deliberate reds both held: injecting a tensor-identity field made the partition available and produced a real ruling, and inflating the unstepped share to 100 percent did not produce the REFUTED its red forbids."
+    },
+    {
+     "ts": "2026-09-15T20:22:23Z",
+     "stage": "UPDATED",
+     "hypothesis": "WHAT THE INCONCLUSIVE DOES NOT CLOSE. It does not say the discarded-work thread is small; it says THIS CAPTURE CANNOT WEIGH IT. The measured floor counts only the accumulation, prorated, and lands at 0.9951 percent of device time -- within a rounding error of the 1.0 percent line while excluding every upstream op on any exclusive path, which is the whole term the criterion was about. A floor that nearly clears the bar on its own while omitting the dominant term is the opposite of a reassuring result. It also does not close the hygiene question: 72 leaves per step carry gradients no optimizer state consumes, and that is a real defect in the parameter/optimizer reconciliation whatever its device cost turns out to be. THE SUCCESSOR IS AN INSTRUMENT QUESTION, NOT A TREATMENT. The blocker is a missing capture field, not a missing idea: torch profiler's with_stack or a record_function-tagged backward would let a backward op be attributed to the leaf it feeds, and profile_memory adds the allocation identity this trace lacks entirely. Before any capture is proposed, the standing constraints bind: a profiled number is not a governed number, the separation clause forbids composing across that boundary, and nothing about this justifies a GPU window until the field set is named and checked against what the profiler actually emits on this torch build. The cheap first leg is a source read of the profiler options, not a run. ALSO STILL OPEN from the parent thread and untouched here: why 48 leaves per step are reached by the backward walk and discarded, which 72 leaves are in the excess -- the trace carries shapes and not names -- and the reconciliation of 72 against the 74 require-grad-without-state placements in a different checkpoint at a different head, which is suggestive and is NOT claimed as a match. The 1.2051 ratio still rests on one capture with no matched-run variation, and nothing should be built on a 0.005 margin until a second capture exists.",
+     "successor": "the-discarded-work-question-needs-a-capture-with-tensor-identity"
+    },
+    {
+     "ts": "2026-09-15T20:22:36Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete: INCONCLUSIVE against its frozen criterion, receipt landed, successor named as an instrument question. No gate moved."
+    }
+   ],
+   "observation": "Every named RATE route on this graph is now priced below the 1.5x arm bar: elementwise fusion 1.3202x, rescheduling 1.4726x generous, FP16 accumulation 1.176x generous. The registry's standing conclusion is that the factor must come from doing LESS WORK or at a HIGHER RATE, so the rate half is closed and the work half is unattempted. One measured instance of discarded work already exists: the backward evaluates 423 AccumulateGrad inner ops per step against 351 tensors that take an optimizer step, so 72 leaves per step receive gradients that no optimizer state consumes. The observation is that those 72 gradients are produced by real backward arithmetic whose device cost has never been measured, and if that cost is material it is work the step does not need.",
+   "explanation": "The mechanism is a mismatch between what requires_grad marks and what the optimizer enrols. The backward engine walks every leaf reachable from the loss whose requires_grad is true and runs AccumulateGrad on it, because that is the only criterion the engine has. Optimizer enrolment is a separate act performed at construction over a parameter group, and nothing reconciles the two sets. So a parameter that is left requiring grad but is excluded from the optimizer -- a frozen support expert, a tied or duplicated placement, a buffer promoted to a parameter, a module constructed but not routed -- still causes the full backward chain feeding it to be evaluated: every matmul, reduction and elementwise op on the path from the loss to that leaf runs, its result is written into .grad, and no step ever reads it. The cost is therefore NOT the 72 AccumulateGrad calls themselves, which correction five measured at about 62 us per step of host time; it is whatever device arithmetic exists on the exclusive paths that feed only those leaves. If those leaves share their entire backward path with stepped leaves, the discarded work is near zero and only the accumulation is wasted. If any of them sit behind a path no stepped leaf needs, that whole subgraph is work the step does not need.",
+   "criterion": "REFUTED if the exclusive backward subgraph feeding the unstepped leaves accounts for less than 1.0 percent of measured device time per step. The measurement: over the existing capture, partition backward device kernels by whether their producing op lies on a path reachable ONLY from an unstepped leaf, versus shared with at least one stepped leaf. If exclusive-path device time is below 1.0 percent of the step's device total, the discarded-work thread carries no factor and is refuted as a throughput lever, whatever its hygiene value. Also REFUTED if the trace cannot distinguish the two path classes at all, in which case the row is INCONCLUSIVE rather than REFUTED and says so. SUPPORTED only if exclusive-path device time is at or above 1.0 percent AND the partition is established from the trace rather than assumed from the parameter manifest.",
+   "receipts": [
+    "state/issue1945-receipts/discarded-gradient-work-20260915T2030Z.json"
+   ],
+   "verdict": "INCONCLUSIVE",
+   "ruling": "The frozen criterion says: 'Also REFUTED if the trace cannot distinguish the two path classes at all, in which case the row is INCONCLUSIVE rather than REFUTED and says so.' That is the branch taken. All eight tensor-identity fields are absent across 215,100 cpu_op events, so no backward op can be attributed to the leaf its gradient reaches, and the exclusive-path partition the criterion is about is not constructible from this capture. Re-censused rather than inherited from the registry. What the run DID establish, as a floor and never as the criterion's quantity: device time is 130,996.2 us per step by interval union; the AccumulateGrad nodes themselves carry 7,658.0 us per step across 2,538 correlated launches; the 72 unstepped leaves are 17.02 percent of the 423 accumulations, giving a prorated discarded floor of 1,303.49 us per step = 0.9951 percent of device time. That floor sits just BELOW the 1.0 percent line, and it excludes every upstream op on any exclusive path, so it neither refutes nor supports the criterion's term. The deliberate reds both held: injecting a tensor-identity field made the partition available and produced a real ruling, and inflating the unstepped share to 100 percent did not produce the REFUTED its red forbids.",
+   "not_closed": "WHAT THE INCONCLUSIVE DOES NOT CLOSE. It does not say the discarded-work thread is small; it says THIS CAPTURE CANNOT WEIGH IT. The measured floor counts only the accumulation, prorated, and lands at 0.9951 percent of device time -- within a rounding error of the 1.0 percent line while excluding every upstream op on any exclusive path, which is the whole term the criterion was about. A floor that nearly clears the bar on its own while omitting the dominant term is the opposite of a reassuring result. It also does not close the hygiene question: 72 leaves per step carry gradients no optimizer state consumes, and that is a real defect in the parameter/optimizer reconciliation whatever its device cost turns out to be. THE SUCCESSOR IS AN INSTRUMENT QUESTION, NOT A TREATMENT. The blocker is a missing capture field, not a missing idea: torch profiler's with_stack or a record_function-tagged backward would let a backward op be attributed to the leaf it feeds, and profile_memory adds the allocation identity this trace lacks entirely. Before any capture is proposed, the standing constraints bind: a profiled number is not a governed number, the separation clause forbids composing across that boundary, and nothing about this justifies a GPU window until the field set is named and checked against what the profiler actually emits on this torch build. The cheap first leg is a source read of the profiler options, not a run. ALSO STILL OPEN from the parent thread and untouched here: why 48 leaves per step are reached by the backward walk and discarded, which 72 leaves are in the excess -- the trace carries shapes and not names -- and the reconciliation of 72 against the 74 require-grad-without-state placements in a different checkpoint at a different head, which is suggestive and is NOT claimed as a match. The 1.2051 ratio still rests on one capture with no matched-run variation, and nothing should be built on a 0.005 margin until a second capture exists.",
+   "successor": "the-discarded-work-question-needs-a-capture-with-tensor-identity",
+   "closing": "Cycle complete: INCONCLUSIVE against its frozen criterion, receipt landed, successor named as an instrument question. No gate moved."
   }
  ],
  "registry": [
@@ -7168,6 +7239,74 @@
    "source": "schema ember-1945-unpaired-engine-node-work-v1; verdict_token SUPPORTED computed by the instrument from three clauses frozen at loop.py predict; loop cycle do-the-unpaired-accumulategrad-engine-nodes-do-any-work-20260915. Trace cia-captured-trace-20260914T183257Z.json.",
    "condition": "Trace cia-captured-trace-20260914T183257Z.json, CIA-3B at 4 documents x 1,024 positions on one RTX 4090, captured UNDER PROFILING INSTRUMENTATION. 2,826 outer engine-node events, 2,538 inner per-node events, pairing one-to-one by interval nesting on the same thread with zero outers containing two inners and 2,538 of 2,538 inner events matched. 288 unpaired outers = 48.0 per step across six optimizer steps. Host durations in microseconds: paired p10 15.100, median 18.700, p90 30.000; unpaired p10 1.000, median 1.300, p90 1.600. Clause 2 unpaired p90 < paired p10 holds at 1.600 vs 15.100; clause 3 unpaired median < half the paired median holds at 1.300 vs 9.350. BOTH REDS HELD: a second inner nested in one outer makes the instrument REFUSE rather than rule; unpaired durations redrawn from the paired distribution report REFUTED on clauses 2 and 3 with clause 1 still passing.",
    "not_closed": "THIS DOES NOT NAME exec_info. A near-zero-work outer event is CONSISTENT WITH the engine reaching a node by the graph walk and not executing it; it does not establish WHICH mechanism skipped it, and no trace can, because the wheel ships no engine.cpp. THE DURATIONS ARE HOST DURATIONS FROM A PROFILED CAPTURE: they are evidence about relative work between two populations in one trace, not about cost, not a rate, and not a removable share. THE MARGIN IS NOW 0.005 ON ONE CAPTURE with no matched-run variation, which is thin enough that the parent conclusion should not carry a treatment on its own; a second capture is owed before anything is built on it. WHICH 72 LEAVES ARE IN THE EXCESS IS UNKNOWN -- the trace carries shapes and not names -- and 72 has not been reconciled against the 74 require-grad-without-state placements in the 2026-09-12 manifest, which is a different checkpoint at a different head; the near-agreement of 72 and 74 is suggestive and is NOT claimed as a match. THE NEW QUESTION THIS OPENS: why are 48 leaves per step reached by the backward walk and then discarded at all -- a node whose gradient nothing needs is graph construction that could be avoided, and its cost at 1.3 us each is about 62 us per step of host time, which is a MEASURED host figure and still not a device cost. NO RATE, NO CEILING, NO ARM, NO GATE MOVES."
+  },
+  {
+   "id": "fp16-accumulation-is-priced-at-1_176x-generous-and-no-named-route-clears-the-bar-20260915",
+   "treatment": "Change the accumulation type at the dense GEMM and attention sites from FP32 accumulation to FP16 accumulation, on the premise that Ada carries the same published 330.3 dense rate for FP16 accumulation as for FP8, so the rate lever was never FP8-only.",
+   "status": "COMPLETED",
+   "date": "2026-09-15",
+   "evidence": "state/issue1945-receipts/captured-gemm-efficiency-20260914T161846Z.json",
+   "basis": "RECEIPT-DERIVED",
+   "issue": "1945",
+   "kind": "measurement",
+   "title": "FP16 accumulation acts on 52.5 ms of a 175.2 ms governed step, so even at a perfect 2x rate its ceiling is 1.176x -- below the 1.5x arm bar -- which prices the last named above-bar route and leaves NO named route on this graph clearing the bar.",
+   "condition": "Sites and times from the captured-gemm-efficiency receipt at head 20338ddc764c54bf2fc8322d49aaef000abde905: resident-dynamic-capture, 4096 positions per step at 4 documents of 1024, resident capacity 4, support experts (0,1,8,18), fused AdamW, single RTX 4090, torch profiler with record_shapes True over 6 measured steps, TF32 disabled. The affected population is the three shape-comparable dense mma rows (32,005.5 + 8,517.7 + 152.8 = 40,676.0 us) plus the cutlass memory-efficient attention row (12,017.7 us) = 52,693.7 us per step, which is the population the parent row's not_closed clause (c) names as the one FP8 and FP16 accumulation act on. The denominator is the governed p10 of 23,380.183126331838 applied positions/s at 4,096 positions per step = 175,192 us per step. THE ARITHMETIC IS ONE DIVISION AND IS NOT THE LOAD-BEARING PART: the premise is that an accumulation-type change HALVES device time at these sites, which is a specification-rate claim and has never been measured on this arm. 175,192 / (175,192 - 52,693.7/2) = 175,192 / 148,845 = 1.1771x. Rounded to 1.176x on the receipt's own us figures.",
+   "source": "state/attempt-registry.jsonl row gemm-mma-shape-s1688-vs-s16816-20260914 (its not_closed clause (c) names this population), the captured-gemm-efficiency receipt above, and the governed p10 from state/issue-progress.json. No new run, no GPU window, no profiler capture: this is a division over two figures already on disk.",
+   "moves_gate": "no -- gate A stays UNMET at 23,380.183126331838 of 80,000 applied positions/s, composite 10%",
+   "not_closed": [
+    "The premise itself is UNMEASURED and the one adjacent measurement runs AGAINST it. the-2x-fp8-tensor-rate-premise-is-not-observed-at-either-measured-site-20260914 measured contraction speedup at 1.0597x (m4096) and 1.2196x (m256), both far below 2x, with end-to-end 0.8071x and 0.6565x -- FP8 was SLOWER. If FP16 accumulation behaves like FP8 did at these sites, the realised factor is well under 1.176x, so 1.176x is a generous upper bound and not a forecast.",
+    "This prices the route; it does not refute the MECHANISM. FP16 accumulation may still be worth running as a stacked component alongside another treatment, and clause 2 of 1945-multiplicative-movement-only requires treatments to STACK into one arm rather than be measured one at a time. What this row forbids is naming it as a standalone arm, which clause 1 refuses by arithmetic.",
+    "The attention row's 12,017.7 us carries no shape-comparable FLOPs in the parent receipt, so its inclusion in the 52.5 ms population is inherited from the parent's not_closed text rather than independently established here. If attention does not respond to an accumulation change, the population is 40.7 ms and the ceiling falls further, to 1.131x.",
+    "Numerical admissibility is untouched. Any accumulation-type change is a declared numerical treatment under the unchanged #1413 loss bar and would need the floor-relative equivalence instrument to license it. Nothing here says it would pass.",
+    "The small-matmul batching site from the parent row's clause (a) -- [256,1024]x[1024,1024] at 82.2 TF/s over 1.25 ms per step -- is a different lever and is NOT priced by this row.",
+    "Reducing the FLOPs themselves is untouched, and the registry's standing conclusion from rescheduling-cannot-contain-the-factor-1.47x-generous-20260914 stands: the factor must come from doing LESS WORK or at a HIGHER RATE. With every named RATE route now priced below the bar, the unpriced half of that sentence is doing less work, and nothing in the registry has attempted it.",
+    "No matched-run variation exists behind any figure in this row. Both the 52.5 ms population and the 175.2 ms step are single-capture quantities, and governed-run-evidence-requirements section 8 requires independent matched-run variation behind any ceiling claim."
+   ]
+  },
+  {
+   "id": "fp16-accumulation-is-priced-at-1_176x-generous-and-no-named-route-clears-the-bar-20260915",
+   "treatment": "Change the accumulation type at the dense GEMM and attention sites from FP32 to FP16 accumulation, priced by ceiling arithmetic over the captured-gemm-efficiency site population.",
+   "status": "ABANDONED",
+   "date": "2026-09-15",
+   "evidence": "state/issue1945-receipts/fp16-accum-timeweighted-20260915T1715Z.json",
+   "basis": "RECEIPT-DERIVED",
+   "issue": "1945",
+   "kind": "measurement",
+   "title": "WITHDRAWN AS A DUPLICATE WITH A FALSE HEADLINE. This row derived a 1.176x ceiling for FP16 accumulation from a specification premise and concluded that no named route clears the 1.5x bar. Both halves are superseded by rows written EARLIER THE SAME DAY: fp16-accumulation-is-real-and-time-weighted-1-36x-below-the-1-5x-bar-20260915 MEASURED the route at 1.3591x time-weighted over four independent runs, and its own text records the scheduling route at 1.828x, which is ABOVE the bar.",
+   "condition": "The row was produced by a ceiling division over the captured-gemm-efficiency receipt while the question had already been answered by direct measurement. Nothing in it is a new measurement.",
+   "source": "Withdrawn on reading state/completion-push-ledger.md, whose tail names the two FP16 rows appended earlier the same day.",
+   "moves_gate": "no -- gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10%",
+   "withdrawn": "BOTH claims are withdrawn. (1) The 1.176x figure: a ceiling from an unmeasured 2x-rate premise, superseded by a measured 1.3591x over four independent runs (1.3357, 1.3474, 1.3591, 1.3836) with the accumulator identity positively proved and a deliberate red at exactly 0.000e+00 on 13 of 13. A measured number supersedes a ceiling over the same route, and quoting the ceiling afterwards would understate a real speedup. (2) The claim that NO named route clears the bar: false as written. The prior row records the scheduling route at 1.828x with no numerical change and therefore no loss-bar cost, which is above the 1.5x line. The correct standing statement is that every PRECISION route measured so far is below the bar while the scheduling route is above it and, by that row's own words, necessary and not sufficient.",
+   "superseded_by": "fp16-accumulation-is-real-and-time-weighted-1-36x-below-the-1-5x-bar-20260915",
+   "not_closed": [
+    "The withdrawal is of MY row, not of the route. FP16 accumulation stands REFUTED as a standalone carrier at the 1.5x bar and the precision route as a whole is explicitly NOT closed by the superseding row.",
+    "The defect that produced this row is the one the registry rules already name: I queried the registry with the vocabulary of the artifact that suggested the idea (mma shape, dense rate, Ada, premise) rather than the proposition's own nouns, and the terms that would have hit -- time-weighted, accumulator, cuBLAS compute type -- never entered the query. Widening after a thin result is the clause I skipped.",
+    "The second-order miss is worse than the first: the answer was not merely in the registry, it was in the LAST THREE LINES of the push ledger I am required to read every fire. A duplicate produced while the answer sits in the file the hourly cadence puts in front of me is a cadence failure, not a search failure."
+   ]
+  },
+  {
+   "id": "this-capture-cannot-weigh-discarded-gradient-work-and-the-floor-alone-is-0_9951-percent-20260915",
+   "treatment": "Stop producing gradients for the leaves that require grad but hold no optimizer state, so the backward does less work: 72 of the 423 accumulated leaves per step.",
+   "status": "INCONCLUSIVE",
+   "date": "2026-09-15",
+   "evidence": "state/issue1945-receipts/discarded-gradient-work-20260915T2030Z.json",
+   "basis": "RECEIPT-DERIVED",
+   "issue": "1945",
+   "kind": "measurement",
+   "loop_hypothesis": "gradients-for-72-unstepped-leaves-per-step-are-discarded-work",
+   "title": "The exclusive backward subgraph feeding the 72 unstepped leaves cannot be weighed from this capture -- all eight tensor-identity fields are absent across 215,100 cpu_op events -- and the accumulation-only FLOOR alone is 1,303.49 us per step, 0.9951 percent of device time, which sits a rounding error below the 1.0 percent line while omitting the dominant term.",
+   "condition": "Analysis-only over cia-captured-trace-20260914T183257Z.json, the existing profiled capture: 452,272 events, 6 real steps, no card, no lease, no window, no instrument import. Device time is an INTERVAL UNION over kernel, gpu_memcpy and gpu_memset events -- 785,977.2 us total, 130,996.2 us per step -- never a sum of overlapping durations. AccumulateGrad device work is obtained by containment: cuda_runtime launches nested in an inner torch::autograd::AccumulateGrad cpu_op interval on the same thread, then correlation id to the device event; 2,538 correlations, 45,948.1 us total, 7,658.0 us per step. The unstepped share is 72/423 = 0.170213, taken from correction five's measured per-step counts (423 inner ops, 351 stepped tensors) and applied as a PRORATION, not a measurement of those particular leaves. Criterion frozen at the loop PREDICT stage before the instrument existed. The capture is profiled and its wall time is dominated by instrumentation, so only device-to-device RATIOS are used and no governed rate is derived from it.",
+   "source": "scripts/issue1945/discarded_gradient_work.py at this head, over the trace above. Both deliberate reds proved: --prove-red-identity injects a tensor-identity field and the instrument stops reporting the partition unavailable and issues a real ruling; --prove-red-inflate raises the unstepped share to 100 percent (5.846 percent of device) and the instrument does NOT report the REFUTED that red forbids, because the partition is still unavailable.",
+   "moves_gate": "no -- gate A stays UNMET at 23,380.183126331838 of 80,000 applied positions/s, composite 10%",
+   "not_closed": [
+    "THE VERDICT IS ABOUT THE INSTRUMENT, NOT THE THREAD. INCONCLUSIVE here means this capture cannot weigh the question, not that the answer is small. The criterion named this branch in advance precisely so an unweighable question could not be recorded as a refutation.",
+    "The floor is the WRONG QUANTITY and it nearly clears the bar anyway. 0.9951 percent counts only the accumulation, prorated, and excludes every upstream matmul, reduction and elementwise op on any path reachable only from an unstepped leaf -- which is the term the criterion was about. A floor that lands within a rounding error of the line while omitting the dominant term argues for measuring properly, not for dropping the thread.",
+    "The proration is an assumption. It takes the unstepped leaves to cost the same per accumulation as the stepped ones. Their shapes are not known -- the trace carries shapes but not names -- so the per-leaf cost could differ in either direction.",
+    "The successor is an INSTRUMENT question, not a treatment: with_stack, a record_function-tagged backward, or profile_memory would supply the attribution this trace lacks. The cheap first leg is a source read of the profiler options against this torch build, NOT a capture, and certainly not a GPU window.",
+    "The HYGIENE defect stands independently of any device cost. 72 leaves per step requiring grad with no optimizer state is a real parameter/optimizer reconciliation gap, and it is worth curing whether or not it is worth milliseconds.",
+    "Still open from the parent thread and untouched here: why 48 leaves per step are reached by the backward walk and discarded; which 72 leaves are in the excess; and the reconciliation of 72 against the 74 require-grad-without-state placements at a DIFFERENT checkpoint and head, which is suggestive and is explicitly NOT claimed as a match.",
+    "No matched-run variation. The 1.2051 ratio behind this thread rests on one capture with a margin of 0.005 over the line its parent row froze, and governed-run-evidence-requirements section 8 requires independent matched-run variation behind any ceiling or improvement claim."
+   ]
   }
  ]
 }

@@ -18,8 +18,10 @@
   --mono-bg:#23262d;
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{background:var(--paper);color:var(--ink);margin:0;
   font:400 16px/1.62 "Source Serif 4",Georgia,"Times New Roman",serif;}
+img,svg,video{max-width:100%}
 .ui,button,input,select,th,.chip,.meta,nav,footer,.label{
   font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
 code,kbd,.mono,.hid{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.86em;}
@@ -119,5 +121,79 @@ footer{border-top:1px solid var(--rule);margin-top:48px;padding-block:22px
   calc(26px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--ink-3);
   font-family:"IBM Plex Sans",sans-serif}
 footer .wrap>div{margin-bottom:6px}
-@media (max-width:640px){ h2{margin-top:30px} .stat b{font-size:20px} }
-</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html" aria-current="page">Overview</a><a href="hypotheses.html">Hypothesis ledger</a><a href="fp16-kernel-selection.html">FP16 &amp; kernel selection</a><a href="method.html">How this page is made</a></nav></div></header><main><div class="wrap"><h1>Ember Research</h1><p class="lede">A rendering of an existing research record: hypotheses with frozen criteria, their original verdicts, the evidence behind them, and what each refutation does <em>not</em> close. Generated from the loop log and the attempt registry &mdash; not re-modelled, not re-scored.</p><div class="grid"><div class="stat"><b>68</b><span class="meta">hypotheses, OBSERVED &rarr; CLOSED</span></div><div class="stat"><b>120</b><span class="meta">registry rows of prior attempts</span></div><div class="stat"><b>527</b><span class="meta">loop events read</span></div><div class="stat"><b>4</b><span class="meta">receipts published in full or in part</span></div></div><h2>Read</h2><div class="panel"><h3 style="margin-top:0"><a href="fp16-kernel-selection.html">What a four-cycle FP16 thread actually established</a></h3><p class="prose" style="margin:0 0 6px">A chain that produced three unwelcome verdicts and one finding that outranks all of them.</p><p class="meta">Research question: Does requesting FP16 accumulation on this card&#x27;s dense contractions buy enough to matter, and if it does, what is the mechanism?</p></div><div class="panel"><h3 style="margin-top:0"><a href="hypotheses.html">Hypothesis ledger</a></h3><p class="prose" style="margin:0">Search every hypothesis and prior attempt across its explanatory text, not just its id. Built to answer &ldquo;has this already been tried?&rdquo; before a cycle opens.</p></div><h2>Campaign view &mdash; issue #1945</h2><p class="prose">All hypotheses currently in the record belong to the throughput campaign tracked as issue #1945. This page carries <strong>no campaign progress score</strong>: the acceptance authority for that issue is the issue and its rules, and duplicating a composite here would create a second scoring authority that could disagree with it.</p><div class="tablewrap"><table><thead><tr><th>Most recent hypotheses</th><th>Original verdict</th><th>Last event (UTC)</th></tr></thead><tbody><tr><td><code>do-the-unpaired-accumulategrad-engine-nodes-do-any-work-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T19:35:41Z</td></tr><tr><td><code>is-the-inner-accumulategrad-record-conditional-on-the-gradient-path-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T19:22:00Z</td></tr><tr><td><code>how-many-leaves-per-step-receive-a-gradient-that-no-optimizer-state-consumes-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:47:50Z</td></tr><tr><td><code>the-twelve-optimizer-step-annotations-are-six-steps-counted-twice-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:43:45Z</td></tr><tr><td><code>the-gradient-count-behind-todays-work-removal-finding-was-double-counted-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:37:15Z</td></tr><tr><td><code>does-the-backward-compute-gradients-for-parameters-that-never-take-a-step-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:05:24Z</td></tr></tbody></table></div><p class="meta">Verdict tally across the record: INCONCLUSIVE 9, REFUTED 21, SUPPORTED 34, open 4.</p><h2>What this is not</h2><p class="prose">It is not the complete research history: a selected subset of receipts is published, and the rest are referenced by name. It records no new verdicts, edits no receipt, and holds no acceptance criterion. Where a later finding changes how an earlier result should be read, it is carried as a dated annotation beside that result &mdash; the original verdict is never rewritten.</p><p class="meta"><a href="method.html">How this page is made, what it omits, and how to regenerate it &rarr;</a></p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T19:35:41Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T19:56:03Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>
+
+/* ---------- multi-device ----------------------------------------------------------
+   The page is read on phones as well as desktops. Three things break at a narrow
+   column and each is handled where it breaks, rather than by a global override:
+   long identifiers overflow, the figure's labels shrink below legibility, and the
+   controls are too small for a finger. */
+
+/* A hypothesis id, a receipt filename or an absolute path is one unbroken token that
+   is wider than a phone column. Without this the token sets the page's minimum width
+   and the whole body scrolls sideways. */
+.prose p,.prose li,.hyp .snip,.hyp h3,.nc li,details .body,.lede,figcaption,.meta,
+footer .wrap>div{overflow-wrap:anywhere}
+.hyp .hid{overflow-wrap:anywhere}
+
+/* The figure is a 940-unit viewBox with 10-11px labels. Scaling it into a 360px column
+   renders that text near 4px. Below the width where it stays legible it gets its own
+   horizontal scroller and keeps a readable minimum -- the same treatment the tables
+   already have, and the reason neither is allowed to scroll the page body. */
+.svgbox{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fig-narrow{display:none}
+@media (max-width:720px){
+  .fig-wide{display:none}
+  .fig-narrow{display:block}
+  .svgbox{padding:12px 10px}
+  figure svg{min-width:320px}
+}
+
+/* Tables already scroll in .tablewrap; make the affordance reachable by touch and stop
+   a long cell forcing a second scroll surface. */
+.tablewrap{-webkit-overflow-scrolling:touch}
+
+@media (max-width:760px){
+  .wrap{padding-inline:16px}
+  main{padding-block:26px 8px}
+  h2{margin-top:30px}
+  .grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat b{font-size:20px}
+  .panel{padding:14px 15px}
+  .hyp{padding:13px 14px}
+  .note{padding:12px 14px}
+  .searchbar .in{gap:8px}
+  nav{gap:14px;width:100%}
+}
+
+@media (max-width:430px){
+  .wrap{padding-inline:13px}
+  body{font-size:15.5px}
+  .lede{font-size:16.5px}
+  .grid{grid-template-columns:1fr}
+  .stat b{font-size:19px}
+  header.site .wrap{gap:6px 14px}
+  .brand{font-size:17px}
+  nav{font-size:13px;gap:12px}
+  details .body{padding-left:14px}
+  .nc{padding-left:15px}
+  input[type=search]{flex:1 1 100%}
+  .filters{width:100%}
+}
+
+/* Finger-driven devices: the filter buttons and the search field were sized for a
+   cursor. Only the hit area grows; the type scale is untouched. */
+@media (pointer:coarse){
+  .filters button{min-height:44px;padding:0 15px;display:inline-flex;align-items:center}
+  input[type=search]{min-height:44px;padding:0 13px}
+  details>summary{padding:6px 0}
+  nav a{display:inline-block;padding:6px 0}
+  .hyp .hid{padding:2px 0}
+}
+
+/* A viewer who asks for less motion gets none. The page has no animation today; this
+   keeps that true if one is ever added. */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html" aria-current="page">Overview</a><a href="hypotheses.html">Hypothesis ledger</a><a href="fp16-kernel-selection.html">FP16 &amp; kernel selection</a><a href="method.html">How this page is made</a></nav></div></header><main><div class="wrap"><h1>Ember Research</h1><p class="lede">A rendering of an existing research record: hypotheses with frozen criteria, their original verdicts, the evidence behind them, and what each refutation does <em>not</em> close. Generated from the loop log and the attempt registry &mdash; not re-modelled, not re-scored.</p><div class="grid"><div class="stat"><b>69</b><span class="meta">hypotheses, OBSERVED &rarr; CLOSED</span></div><div class="stat"><b>123</b><span class="meta">registry rows of prior attempts</span></div><div class="stat"><b>535</b><span class="meta">loop events read</span></div><div class="stat"><b>4</b><span class="meta">receipts published in full or in part</span></div></div><h2>Read</h2><div class="panel"><h3 style="margin-top:0"><a href="fp16-kernel-selection.html">What a four-cycle FP16 thread actually established</a></h3><p class="prose" style="margin:0 0 6px">A chain that produced three unwelcome verdicts and one finding that outranks all of them.</p><p class="meta">Research question: Does requesting FP16 accumulation on this card&#x27;s dense contractions buy enough to matter, and if it does, what is the mechanism?</p></div><div class="panel"><h3 style="margin-top:0"><a href="hypotheses.html">Hypothesis ledger</a></h3><p class="prose" style="margin:0">Search every hypothesis and prior attempt across its explanatory text, not just its id. Built to answer &ldquo;has this already been tried?&rdquo; before a cycle opens.</p></div><h2>Campaign view &mdash; issue #1945</h2><p class="prose">All hypotheses currently in the record belong to the throughput campaign tracked as issue #1945. This page carries <strong>no campaign progress score</strong>: the acceptance authority for that issue is the issue and its rules, and duplicating a composite here would create a second scoring authority that could disagree with it.</p><div class="tablewrap"><table><thead><tr><th>Most recent hypotheses</th><th>Original verdict</th><th>Last event (UTC)</th></tr></thead><tbody><tr><td><code>gradients-for-72-unstepped-leaves-per-step-are-discarded-work</code></td><td><span class="chip v-inc">INCONCLUSIVE</span></td><td class="num">2026-09-15T20:22:36Z</td></tr><tr><td><code>do-the-unpaired-accumulategrad-engine-nodes-do-any-work-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T19:35:41Z</td></tr><tr><td><code>is-the-inner-accumulategrad-record-conditional-on-the-gradient-path-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T19:22:00Z</td></tr><tr><td><code>how-many-leaves-per-step-receive-a-gradient-that-no-optimizer-state-consumes-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:47:50Z</td></tr><tr><td><code>the-twelve-optimizer-step-annotations-are-six-steps-counted-twice-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:43:45Z</td></tr><tr><td><code>the-gradient-count-behind-todays-work-removal-finding-was-double-counted-20260915</code></td><td><span class="chip v-sup">SUPPORTED</span></td><td class="num">2026-09-15T18:37:15Z</td></tr></tbody></table></div><p class="meta">Verdict tally across the record: INCONCLUSIVE 10, REFUTED 21, SUPPORTED 34, open 4.</p><h2>What this is not</h2><p class="prose">It is not the complete research history: a selected subset of receipts is published, and the rest are referenced by name. It records no new verdicts, edits no receipt, and holds no acceptance criterion. Where a later finding changes how an earlier result should be read, it is carried as a dated annotation beside that result &mdash; the original verdict is never rewritten.</p><p class="meta"><a href="method.html">How this page is made, what it omits, and how to regenerate it &rarr;</a></p></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-15T20:22:36Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-15T20:45:33Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>
