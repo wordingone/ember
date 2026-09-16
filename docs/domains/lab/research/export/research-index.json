@@ -1,17 +1,17 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "scripts/research_site/build.py",
- "source_events_through": "2026-09-15T23:27:37Z",
- "generated_at": "2026-09-15T23:30:12Z",
+ "source_events_through": "2026-09-16T00:28:14Z",
+ "generated_at": "2026-09-16T00:33:00Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
    "path": "state/attempt-registry.jsonl",
-   "bytes": 498441,
-   "mtime_utc": "2026-09-15T23:17:06Z",
-   "records_in_source": 134,
+   "bytes": 508430,
+   "mtime_utc": "2026-09-16T00:28:14Z",
+   "records_in_source": 137,
    "unparseable_records": 0,
-   "included": 134,
+   "included": 137,
    "omitted_fields": {
     "corrects": {
      "occurrences": 2,
@@ -22,7 +22,7 @@
      "reason": "bulk file hashes; a hash establishes identity and is not independently inspectable here"
     },
     "owner": {
-     "occurrences": 60,
+     "occurrences": 63,
      "reason": "internal seat name; carries no research content"
     },
     "run_id": {
@@ -37,12 +37,12 @@
   },
   "loop": {
    "path": "state/issue1945-loop.jsonl",
-   "bytes": 829614,
-   "mtime_utc": "2026-09-15T23:27:37Z",
-   "records_in_source": 611,
+   "bytes": 850005,
+   "mtime_utc": "2026-09-16T00:28:14Z",
+   "records_in_source": 631,
    "unparseable_records": 0,
-   "hypotheses": 79,
-   "included": 611,
+   "hypotheses": 81,
+   "included": 631,
    "omitted_fields": {}
   },
   "receipts": [
@@ -133,7 +133,7 @@
    "credential_flag_sites": []
   },
   "join": {
-   "explicit_loop_hypothesis_links": 53,
+   "explicit_loop_hypothesis_links": 56,
    "links_inferred_from_evidence_filename": 11,
    "registry_rows_with_no_hypothesis": 70,
    "unresolved_references": [],
@@ -160,8 +160,8 @@
     "index": 2,
     "is_current": true,
     "started": "2026-09-15T15:13:55Z",
-    "ended": "2026-09-15T23:27:37Z",
-    "hypotheses": 36,
+    "ended": "2026-09-16T00:28:14Z",
+    "hypotheses": 38,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -5961,15 +5961,19 @@
   },
   {
    "id": "separate-the-per-document-reduction-loop-from-the-dx-matmul-inside-the-same-backward-20260915",
-   "stage": "RUNNING",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
-    "RUNNING"
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-15T23:27:37Z",
-   "last_ts": "2026-09-15T23:27:37Z",
+   "last_ts": "2026-09-15T23:53:17Z",
    "events": [
     {
      "ts": "2026-09-15T23:27:37Z",
@@ -5993,13 +5997,183 @@
      "ts": "2026-09-15T23:27:37Z",
      "stage": "RUNNING",
      "gpu": false
+    },
+    {
+     "ts": "2026-09-15T23:53:16Z",
+     "stage": "MEASURED",
+     "receipt": "state\\issue1945-receipts\\reduction-loop-vs-dx-separation-20260915T2351Z.json"
+    },
+    {
+     "ts": "2026-09-15T23:53:16Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "SUPPORTED against the frozen criterion, all three clauses held. (1) EXHAUSTIVE AND DISJOINT: 3,648 aten::mm calls across 1,452 backward instances, every one assigned to exactly one population, zero unassigned, zero instances without a loop group. (2) LOOP SHAPE: no loop group has an output leading dimension equal to its own contracted-dimension sum, so every loop-assigned call is weight-shaped. (3) DX SHAPE: all 720 dX calls have a leading dimension equal to the sum of the loop contracted dimensions in the SAME backward instance, 720 of 720. Clause 3 is the load-bearing one: it is an agreement between two independently derived quantities rather than a property either was defined to have, and a misclassification would have to reproduce that agreement in every one of 1,452 instances to survive it. MEASURED RESULT: the per-document weight-gradient loop carries 88,542 us of the 150,411 us of aten::mm device time inside the document-reduced backward, 58.87 percent, from 2,928 of 3,648 calls; the dX matmul carries the remaining 61,869 us from 720 calls. This is the first measured number for the loop itself rather than for the trunk that contains it."
+    },
+    {
+     "ts": "2026-09-15T23:53:16Z",
+     "stage": "UPDATED",
+     "hypothesis": "INSTRUMENT DEFECT FIRST, because it is the part that would otherwise be invisible. The clause-2 deliberate red did NOT fire as first written: it inverted the classifier so the dX call became the loop population, on my expectation that its output leading dimension would then equal its own contracted-dimension sum. It returned SUPPORTED. The expectation was wrong -- the dX leading dimension equals the LOOP contracted-dim sum, never its own -- so no classifier error of any kind can make clause 2 fail. Clause 2 therefore protects against a shape-level anomaly and NOT against a misclassification, which is a narrower thing than the criterion text implies. One principled repair, recorded in the instrument: the red now injects the anomaly directly, and all three reds then fire on their own clause with the other two holding. Clause 2 held in the real leg both before and after the repair. (2) WHAT 58.87 PERCENT IS NOT: it is a share of aten::mm DEVICE TIME INSIDE the document-reduced backward. It is not a share of the backward, not of the step, and not of anything that can be turned into a saving. No ceiling, no multiplier, no saving is asserted anywhere in this cycle, and a batched reduction that collapsed all 2,928 calls into fewer launches would still have to do the arithmetic. (3) WHAT A BATCHED REDUCTION WOULD COST NUMERICALLY IS MEASURED BUT NOT RULED: 3.6e-3 relative L2 against a same-order floor of exactly 0.0, with fp32 accumulation changing nothing, so the spread is the final bf16 cast rather than the accumulator width. Whether 3.6e-3 is admissible is the #1413 loss bar question and this cycle does not answer it. (4) The device time here is NOT the reduction arithmetic alone: the loop population is the dW matmuls, and any elementwise add between partials is a separate class this instrument does not count. (5) One profiled trace, 6 measured steps, no matched-run variation, shapes as the trace recorded them. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14."
+    },
+    {
+     "ts": "2026-09-15T23:53:17Z",
+     "stage": "CLOSED",
+     "because": "Ruled SUPPORTED with all three clauses held and each red firing on its own clause after one recorded repair to the clause-2 red, which did not fire as first written. The per-document weight-gradient loop carries 58.87 percent of the aten::mm device time inside the document-reduced backward, which is the first measured number for the loop rather than for the dense trunk that contains it, and the 88.80 percent figure from the previous cycle is now bounded by a measurement instead of by a caveat."
     }
    ],
    "observation": "The device-time cycle closed SUPPORTED at 88.80 percent and bounded itself in the same breath: the ancestor set is the whole _DocumentReducedLinear Function, which is the dense trunk, so the number says nothing about the serial per-document weight-gradient loop. The loop own device share is UNKNOWN -- not small, not large, unmeasured. Two censuses written to rule nothing now sit on disk. The shape census reports 1,452 backward instances, 3,648 mm calls, 150,411 us and 8 shape groups that separate at calls-per-backward-instance 1.0 versus 4.0. The order sensitivity census reports 3.6e-3 relative L2 for a reordered bf16 sum against a same-order floor of exactly 0.0, with fp32 accumulation changing nothing, so the spread is dominated by the final bf16 cast rather than by the accumulator width.",
    "explanation": "STRUCTURE, not timing, is what separates the two populations, and the trace records it. The dX matmul is one call per backward over the full row block, producing an ACTIVATION-shaped output whose leading dimension is the block row count. The per-document weight-gradient matmuls are one call per document, each over that document row slice, producing a WEIGHT-shaped output whose dimensions are the layer dimensions and do NOT depend on how many rows the document has. So a classifier keyed on calls-per-backward-instance can be CHECKED against the recorded input dims rather than believed: if the classification is right, every loop-assigned call has a row-count operand that is a strict fraction of the block and a shape-invariant output, and every dX-assigned call spans the whole block. The thing that could be wrong is the classifier itself -- a shared FFN call, a bias path, or a second per-instance family would land in the wrong population and the resulting share would be a true number about the wrong set, which is exactly the failure the 88.80 percent cycle already produced once.",
    "criterion": "REFUTED if any of these three clauses fails. (1) EXHAUSTIVE AND DISJOINT: the two populations do not together account for every aten::mm call under a DocumentReduced*Backward instance, or any call is assigned to both. (2) LOOP SHAPE: any call assigned to the per-document loop has an output whose dimensions vary across calls within one backward instance, i.e. it is activation-shaped rather than weight-shaped, or its contracted row dimension equals the full block row count rather than a strict fraction of it. (3) DX SHAPE: any call assigned to dX has a contracted or leading dimension that is not the full block row count. Any clause failing means the per-instance-count classifier does not recover the structural split and no device share may be quoted from it.",
    "criterion_supported_if": "SUPPORTED if all three clauses hold, in which case the per-document reduction loop device share of the document-reduced backward is reported as a MEASURED quantity for the first time, with its complement being the dX matmul. The share itself is an output of the cycle, not a term in the criterion -- no threshold is frozen on it, because every number this criterion could be fitted to is already on disk.",
-   "instrument": "scripts/issue1945/separate_reduction_loop_from_dx.py"
+   "instrument": "scripts/issue1945/separate_reduction_loop_from_dx.py",
+   "receipts": [
+    "state\\issue1945-receipts\\reduction-loop-vs-dx-separation-20260915T2351Z.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "SUPPORTED against the frozen criterion, all three clauses held. (1) EXHAUSTIVE AND DISJOINT: 3,648 aten::mm calls across 1,452 backward instances, every one assigned to exactly one population, zero unassigned, zero instances without a loop group. (2) LOOP SHAPE: no loop group has an output leading dimension equal to its own contracted-dimension sum, so every loop-assigned call is weight-shaped. (3) DX SHAPE: all 720 dX calls have a leading dimension equal to the sum of the loop contracted dimensions in the SAME backward instance, 720 of 720. Clause 3 is the load-bearing one: it is an agreement between two independently derived quantities rather than a property either was defined to have, and a misclassification would have to reproduce that agreement in every one of 1,452 instances to survive it. MEASURED RESULT: the per-document weight-gradient loop carries 88,542 us of the 150,411 us of aten::mm device time inside the document-reduced backward, 58.87 percent, from 2,928 of 3,648 calls; the dX matmul carries the remaining 61,869 us from 720 calls. This is the first measured number for the loop itself rather than for the trunk that contains it.",
+   "not_closed": "INSTRUMENT DEFECT FIRST, because it is the part that would otherwise be invisible. The clause-2 deliberate red did NOT fire as first written: it inverted the classifier so the dX call became the loop population, on my expectation that its output leading dimension would then equal its own contracted-dimension sum. It returned SUPPORTED. The expectation was wrong -- the dX leading dimension equals the LOOP contracted-dim sum, never its own -- so no classifier error of any kind can make clause 2 fail. Clause 2 therefore protects against a shape-level anomaly and NOT against a misclassification, which is a narrower thing than the criterion text implies. One principled repair, recorded in the instrument: the red now injects the anomaly directly, and all three reds then fire on their own clause with the other two holding. Clause 2 held in the real leg both before and after the repair. (2) WHAT 58.87 PERCENT IS NOT: it is a share of aten::mm DEVICE TIME INSIDE the document-reduced backward. It is not a share of the backward, not of the step, and not of anything that can be turned into a saving. No ceiling, no multiplier, no saving is asserted anywhere in this cycle, and a batched reduction that collapsed all 2,928 calls into fewer launches would still have to do the arithmetic. (3) WHAT A BATCHED REDUCTION WOULD COST NUMERICALLY IS MEASURED BUT NOT RULED: 3.6e-3 relative L2 against a same-order floor of exactly 0.0, with fp32 accumulation changing nothing, so the spread is the final bf16 cast rather than the accumulator width. Whether 3.6e-3 is admissible is the #1413 loss bar question and this cycle does not answer it. (4) The device time here is NOT the reduction arithmetic alone: the loop population is the dW matmuls, and any elementwise add between partials is a separate class this instrument does not count. (5) One profiled trace, 6 measured steps, no matched-run variation, shapes as the trace recorded them. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14.",
+   "closing": "Ruled SUPPORTED with all three clauses held and each red firing on its own clause after one recorded repair to the clause-2 red, which did not fire as first written. The per-document weight-gradient loop carries 58.87 percent of the aten::mm device time inside the document-reduced backward, which is the first measured number for the loop rather than for the dense trunk that contains it, and the 88.80 percent figure from the previous cycle is now bounded by a measurement instead of by a caveat."
+  },
+  {
+   "id": "the-reduction-arithmetic-remainder-turns-the-88542us-floor-into-a-measured-total-20260915",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-09-16T00:08:57Z",
+   "last_ts": "2026-09-16T00:10:58Z",
+   "events": [
+    {
+     "ts": "2026-09-16T00:08:57Z",
+     "stage": "OBSERVED",
+     "observation": "The separating cycle measured the per-document weight-gradient loop at 88,542 us of the 150,411 us of aten::mm device time inside the document-reduced backward, 58.87 percent, and its FIRST not_closed line says that figure is a FLOOR and not a measurement: the loop population is the dW matmuls only, and any elementwise add between partials is a separate class the mm-only instrument does not count. So the reduction arithmetic total is at least 88,542 us and its remainder is unmeasured. The registry was queried on this proposition own nouns before the cycle opened -- elementwise, add_, accumulation, non-mm, aten::add, reduction loop, device time class -- and the two rows it returned that are scoped to the elementwise class (the corrected byte model, and the launch-bound tail versus streaming body split at 7,017 us) are both STEP-WIDE. Neither is scoped to the DocumentReduced*Backward ancestor, so neither answers what share of THIS backward is non-mm."
+    },
+    {
+     "ts": "2026-09-16T00:08:57Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The mechanism is arithmetic the mm-only filter cannot see. reduce_weight_gradient accumulates per-document partials, so between the 2,928 dW matmuls there is elementwise work -- adds into an accumulator, zero fills, and whatever data movement the accumulation buffer needs -- and every one of those kernels sits under the same backward while carrying a non-mm innermost cpu_op. Removing the mm filter and partitioning ALL device time under that ancestor by operation class measures the remainder directly. The join must attribute each kernel to the INNERMOST cpu_op carrying its External id rather than to every op in the nest, because a PyTorch trace shares one id across the whole stack of an invocation and attributing at every level would count the same device time once per nesting depth."
+    },
+    {
+     "ts": "2026-09-16T00:08:58Z",
+     "stage": "PREDICTED",
+     "refuted_if": "REFUTED if ANY of three clauses fails, checked in order, each with a deliberate red proved before the reading and each red constructed to satisfy every clause above the one it targets. (1) MM RECOVERY AGREES: the aten::mm device time this instrument recovers under DocumentReduced*Backward differs from the prior cycle 150,411 us by more than 1 percent. Two instruments over one population agree or one of them is measuring a different population, and this is the clause that catches an innermost-op resolution that drifts. Red: inflate the reported recovery by 5 percent. (2) EVERY OP NAME CLASSIFIED EXACTLY ONCE: any op name contributing device time under the backward falls in no declared class, or in two. An unclassified or double-claimed residue makes the remainder unreadable whatever its size. Red: claim one name in two classes. (3) CLASS TIMES PARTITION THE BACKWARD TOTAL: the per-class device times do not sum to the backward total within 0.1 us. Red: drop the largest class from the sum. No clause is a threshold fitted to numbers already on disk: clause 1 compares against a figure published by a different instrument before this one existed, and clauses 2 and 3 are structural.",
+     "supported_if": "SUPPORTED if all three clauses hold, in which case the reduction arithmetic remainder is the measured non-mm device time under the backward, named by operation class, and 88,542 us stops being a floor under an unmeasured total and becomes a share of a measured one. No ceiling, no saving and no multiplier follows: a fused reduction still has to do the arithmetic."
+    },
+    {
+     "ts": "2026-09-16T00:08:58Z",
+     "stage": "RUNNING",
+     "gpu": false
+    },
+    {
+     "ts": "2026-09-16T00:10:57Z",
+     "stage": "MEASURED",
+     "receipt": "state\\issue1945-receipts\\reduction-remainder-under-backward-20260916T0009Z.json"
+    },
+    {
+     "ts": "2026-09-16T00:10:58Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "SUPPORTED against the frozen criterion, all three clauses held and each of the three deliberate reds refused on its own clause with the other two holding. (1) MM RECOVERY: this instrument recovers 150,410.8 us of aten::mm device time under DocumentReduced*Backward against the prior cycle 150,411.0 us, a relative difference of 1e-6, by a DIFFERENT join path -- innermost cpu_op per External id over every kernel, rather than a per-instance shape classifier over mm calls alone. The two instruments share no code and agree to five significant figures. (2) Every op name contributing device time under the backward falls in exactly one declared class; nothing unclassified, nothing double-claimed. (3) The per-class device times sum to the backward total exactly. MEASURED RESULT: the document-reduced backward carries 164,611 us of device time in this trace. aten::mm is 150,410.8 us, 91.37 percent. The non-mm remainder is 14,200.1 us, 8.63 percent, and it is almost entirely elementwise arithmetic at 14,145.2 us with 54.7 us of data movement. So the 88,542 us the separating cycle measured for the per-document weight-gradient loop is now bounded ABOVE as well as below: the reduction arithmetic total cannot exceed 88,542 + 14,145 = 102,687 us, which is 62.4 percent of the backward device time."
+    },
+    {
+     "ts": "2026-09-16T00:10:58Z",
+     "stage": "UPDATED",
+     "hypothesis": "(1) THE 14,145 US IS AN UPPER BOUND ON THE REMAINDER, NOT THE REMAINDER. It is ALL elementwise arithmetic under the backward, not only the adds between partials. The dX path and any other elementwise work inside the same ancestor are in that figure, and this instrument does not separate them -- doing so needs the same per-instance classification the separating cycle applied to mm, applied to the elementwise population. So the reduction arithmetic total is somewhere in [88,542 , 102,687] us and the interval is not narrowed here. (2) WHAT 8.63 PERCENT IS NOT: a share of the step, a saving, or a ceiling. It says the non-matmul work inside this backward is small relative to the matmuls, which is a fact about where the time is and not about what a treatment could collect. A fused reduction still has to do the arithmetic. (3) THE DATA MOVEMENT FIGURE IS SUSPICIOUSLY SMALL AND IS NOT INVESTIGATED. 54.7 us of copy/fill under a backward that accumulates 2,928 per-document partials is consistent with accumulation in place, and it is equally consistent with copies being attributed to an ancestor outside this backward or to a fused wrapper. Nothing here discriminates those, and the copy-mass attribution cycle already found that a copy issued beneath a fused wrapper is attributed to that wrapper. (4) THE INNERMOST-OP RESOLUTION IS SHORTEST-DURATION AMONG OPS SHARING AN EXTERNAL ID. That is the standard reading and clause 1 now gives it strong independent support, but it is a resolution rule and not a recorded parent edge; a trace whose nesting is flatter would not exercise it the same way. (5) One profiled trace, 6 measured steps, no matched-run variation, no measured device traffic and no occupancy counter. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14."
+    },
+    {
+     "ts": "2026-09-16T00:10:58Z",
+     "stage": "CLOSED",
+     "because": "Ruled SUPPORTED. The document-reduced backward carries 164,611 us of device time, 91.37 percent of it aten::mm, and the non-mm remainder is 14,200 us of which 14,145 is elementwise arithmetic. The 88,542 us floor from the separating cycle is now bounded above at 102,687 us. The successor is the one that narrows that interval: classify the elementwise population under the backward the same way the mm population was classified, so the adds between partials are separated from the rest of the elementwise work."
+    }
+   ],
+   "observation": "The separating cycle measured the per-document weight-gradient loop at 88,542 us of the 150,411 us of aten::mm device time inside the document-reduced backward, 58.87 percent, and its FIRST not_closed line says that figure is a FLOOR and not a measurement: the loop population is the dW matmuls only, and any elementwise add between partials is a separate class the mm-only instrument does not count. So the reduction arithmetic total is at least 88,542 us and its remainder is unmeasured. The registry was queried on this proposition own nouns before the cycle opened -- elementwise, add_, accumulation, non-mm, aten::add, reduction loop, device time class -- and the two rows it returned that are scoped to the elementwise class (the corrected byte model, and the launch-bound tail versus streaming body split at 7,017 us) are both STEP-WIDE. Neither is scoped to the DocumentReduced*Backward ancestor, so neither answers what share of THIS backward is non-mm.",
+   "explanation": "The mechanism is arithmetic the mm-only filter cannot see. reduce_weight_gradient accumulates per-document partials, so between the 2,928 dW matmuls there is elementwise work -- adds into an accumulator, zero fills, and whatever data movement the accumulation buffer needs -- and every one of those kernels sits under the same backward while carrying a non-mm innermost cpu_op. Removing the mm filter and partitioning ALL device time under that ancestor by operation class measures the remainder directly. The join must attribute each kernel to the INNERMOST cpu_op carrying its External id rather than to every op in the nest, because a PyTorch trace shares one id across the whole stack of an invocation and attributing at every level would count the same device time once per nesting depth.",
+   "criterion": "REFUTED if ANY of three clauses fails, checked in order, each with a deliberate red proved before the reading and each red constructed to satisfy every clause above the one it targets. (1) MM RECOVERY AGREES: the aten::mm device time this instrument recovers under DocumentReduced*Backward differs from the prior cycle 150,411 us by more than 1 percent. Two instruments over one population agree or one of them is measuring a different population, and this is the clause that catches an innermost-op resolution that drifts. Red: inflate the reported recovery by 5 percent. (2) EVERY OP NAME CLASSIFIED EXACTLY ONCE: any op name contributing device time under the backward falls in no declared class, or in two. An unclassified or double-claimed residue makes the remainder unreadable whatever its size. Red: claim one name in two classes. (3) CLASS TIMES PARTITION THE BACKWARD TOTAL: the per-class device times do not sum to the backward total within 0.1 us. Red: drop the largest class from the sum. No clause is a threshold fitted to numbers already on disk: clause 1 compares against a figure published by a different instrument before this one existed, and clauses 2 and 3 are structural.",
+   "criterion_supported_if": "SUPPORTED if all three clauses hold, in which case the reduction arithmetic remainder is the measured non-mm device time under the backward, named by operation class, and 88,542 us stops being a floor under an unmeasured total and becomes a share of a measured one. No ceiling, no saving and no multiplier follows: a fused reduction still has to do the arithmetic.",
+   "receipts": [
+    "state\\issue1945-receipts\\reduction-remainder-under-backward-20260916T0009Z.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "SUPPORTED against the frozen criterion, all three clauses held and each of the three deliberate reds refused on its own clause with the other two holding. (1) MM RECOVERY: this instrument recovers 150,410.8 us of aten::mm device time under DocumentReduced*Backward against the prior cycle 150,411.0 us, a relative difference of 1e-6, by a DIFFERENT join path -- innermost cpu_op per External id over every kernel, rather than a per-instance shape classifier over mm calls alone. The two instruments share no code and agree to five significant figures. (2) Every op name contributing device time under the backward falls in exactly one declared class; nothing unclassified, nothing double-claimed. (3) The per-class device times sum to the backward total exactly. MEASURED RESULT: the document-reduced backward carries 164,611 us of device time in this trace. aten::mm is 150,410.8 us, 91.37 percent. The non-mm remainder is 14,200.1 us, 8.63 percent, and it is almost entirely elementwise arithmetic at 14,145.2 us with 54.7 us of data movement. So the 88,542 us the separating cycle measured for the per-document weight-gradient loop is now bounded ABOVE as well as below: the reduction arithmetic total cannot exceed 88,542 + 14,145 = 102,687 us, which is 62.4 percent of the backward device time.",
+   "not_closed": "(1) THE 14,145 US IS AN UPPER BOUND ON THE REMAINDER, NOT THE REMAINDER. It is ALL elementwise arithmetic under the backward, not only the adds between partials. The dX path and any other elementwise work inside the same ancestor are in that figure, and this instrument does not separate them -- doing so needs the same per-instance classification the separating cycle applied to mm, applied to the elementwise population. So the reduction arithmetic total is somewhere in [88,542 , 102,687] us and the interval is not narrowed here. (2) WHAT 8.63 PERCENT IS NOT: a share of the step, a saving, or a ceiling. It says the non-matmul work inside this backward is small relative to the matmuls, which is a fact about where the time is and not about what a treatment could collect. A fused reduction still has to do the arithmetic. (3) THE DATA MOVEMENT FIGURE IS SUSPICIOUSLY SMALL AND IS NOT INVESTIGATED. 54.7 us of copy/fill under a backward that accumulates 2,928 per-document partials is consistent with accumulation in place, and it is equally consistent with copies being attributed to an ancestor outside this backward or to a fused wrapper. Nothing here discriminates those, and the copy-mass attribution cycle already found that a copy issued beneath a fused wrapper is attributed to that wrapper. (4) THE INNERMOST-OP RESOLUTION IS SHORTEST-DURATION AMONG OPS SHARING AN EXTERNAL ID. That is the standard reading and clause 1 now gives it strong independent support, but it is a resolution rule and not a recorded parent edge; a trace whose nesting is flatter would not exercise it the same way. (5) One profiled trace, 6 measured steps, no matched-run variation, no measured device traffic and no occupancy counter. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14.",
+   "closing": "Ruled SUPPORTED. The document-reduced backward carries 164,611 us of device time, 91.37 percent of it aten::mm, and the non-mm remainder is 14,200 us of which 14,145 is elementwise arithmetic. The 88,542 us floor from the separating cycle is now bounded above at 102,687 us. The successor is the one that narrows that interval: classify the elementwise population under the backward the same way the mm population was classified, so the adds between partials are separated from the rest of the elementwise work."
+  },
+  {
+   "id": "the-adds-between-partials-are-separable-from-the-rest-of-the-elementwise-work-under-the-backward-20260915",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-09-16T00:26:32Z",
+   "last_ts": "2026-09-16T00:28:14Z",
+   "events": [
+    {
+     "ts": "2026-09-16T00:26:32Z",
+     "stage": "OBSERVED",
+     "observation": "The remainder cycle measured 164,611 us of device time under the document-reduced backward, 150,410.8 us of it aten::mm and 14,200.1 us non-mm, of which 14,145.2 us is elementwise arithmetic and 54.7 us data movement. Its FIRST not_closed line says the 14,145.2 us is an UPPER BOUND on the reduction remainder and not the remainder: it is ALL elementwise work under that ancestor, the dX path included, and nothing separated the accumulation adds from the rest. So the reduction arithmetic total is known only as the interval [88,542 , 102,687] us. The registry was queried on this proposition own nouns before the cycle opened and the rows scoped to the elementwise class are all STEP-WIDE; none is scoped to this ancestor and none separates accumulation from the rest of the elementwise population."
+    },
+    {
+     "ts": "2026-09-16T00:26:32Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The mechanism is the classifier the separating cycle already validated, applied to a different population. An add that accumulates a per-document partial into the weight-gradient accumulator writes a WEIGHT-shaped tensor -- the same [out, in] the dW matmuls produce -- and it happens once per document, so within one backward instance its leading operand shape equals a shape the mm loop produced in that same instance. Elementwise work on the dX path is activation-shaped and carries the row count instead. Defining the accumulation population by agreement with the OTHER population shapes, measured by a different instrument in the same instance, is a cross-population check rather than a name match or a guess."
+    },
+    {
+     "ts": "2026-09-16T00:26:33Z",
+     "stage": "PREDICTED",
+     "refuted_if": "REFUTED if ANY of three clauses fails, checked in order, each with a deliberate red proved before the reading and each red constructed to satisfy every clause above the one it targets. (1) TOTAL AGREES: the elementwise device time this instrument sees under the backward differs from the remainder cycle 14,145.2 us by more than 0.1 percent, which would mean the two instruments are not looking at the same population. Red: inflate the reported total by 2 percent. (2) EVERY CALL ASSIGNED EXACTLY ONCE: any elementwise call under a backward cannot be assigned to accumulation or to other. Red: drop the shape from one call per instance. (3) ACCUMULATION CALLS CARRY A WEIGHT SHAPE FROM THE SAME INSTANCE: any call assigned to accumulation has a shape the mm loop did not produce in that instance. This is the agreement the classifier rests on, so it is the clause that matters. Red: inject a mismatch into the accumulation population directly, because no classifier error can produce one -- the population is DEFINED by the match, and that is exactly the defect recorded in the separating cycle clause-2 red, applied as a lesson rather than repeated.",
+     "supported_if": "SUPPORTED if all three clauses hold, in which case the reduction arithmetic total is 88,542 us of dW matmul plus the measured accumulation device time, and the [88,542 , 102,687] us interval collapses to a number. No ceiling, no saving and no multiplier follows."
+    },
+    {
+     "ts": "2026-09-16T00:26:33Z",
+     "stage": "RUNNING",
+     "gpu": false
+    },
+    {
+     "ts": "2026-09-16T00:28:14Z",
+     "stage": "MEASURED",
+     "receipt": "state\\issue1945-receipts\\accumulation-adds-under-backward-20260916T0026Z.json"
+    },
+    {
+     "ts": "2026-09-16T00:28:14Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "SUPPORTED against the frozen criterion, all three clauses held and each of the three deliberate reds refused on its own clause with the other two holding. (1) TOTAL AGREES: this instrument sees 14,145.2 us of elementwise device time under the backward against the remainder cycle 14,145.2 us, by a different traversal -- per-instance shape collection rather than innermost-op class partition. (2) All 2,466 elementwise calls under a backward are assigned to exactly one population, none unassigned. (3) All 2,178 calls assigned to accumulation carry a leading operand shape the mm loop produced in the SAME backward instance, which is the cross-population agreement the classifier rests on. MEASURED RESULT: the accumulation adds between partials carry 11,004.4 us from 2,178 calls; the remaining elementwise work under the backward is 3,140.8 us from 288 calls. THE INTERVAL COLLAPSES: the reduction arithmetic total is 88,542 us of dW matmul plus 11,004.4 us of accumulation = 99,546.4 us, where the remainder cycle could only bound it to [88,542 , 102,687]. That is 60.5 percent of the 164,611 us of device time under the document-reduced backward."
+    },
+    {
+     "ts": "2026-09-16T00:28:14Z",
+     "stage": "UPDATED",
+     "hypothesis": "(1) 2,178 ACCUMULATION CALLS AGAINST 2,928 dW MATMULS IS NOT ONE ADD PER MATMUL, AND THIS CYCLE DOES NOT ESTABLISH WHY. A first partial needing no add, an accumulation fused into the matmul epilogue, an add issued at a shape the mm loop never produces, and a foreach-style batched add covering several partials in one call are all consistent with the deficit of 750. Whichever it is changes what a batched reduction would actually replace, so it is the successor. (2) THE CLASSIFIER IS DEFINED BY SHAPE AGREEMENT, SO AN ACCUMULATION PERFORMED AT A SHAPE THE MM LOOP NEVER PRODUCES IS CLASSED AS OTHER. The 3,140.8 us other population is therefore an upper bound on non-accumulation elementwise work, not a measurement of it, and the 11,004.4 us is a lower bound on accumulation. The direction of the error is stated because it runs against the cycle claim, which is the direction my own record says to check hardest. (3) WHAT 99,546.4 US IS NOT: a share of the step, a saving, or a ceiling. It is device time inside one backward in one profiled trace. A batched reduction still has to do the arithmetic, and the numerical cost of reordering it -- 3.6e-3 relative L2 -- remains an unruled #1413 loss bar question. (4) One profiled trace, 6 measured steps, no matched-run variation, no measured device traffic and no occupancy counter. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14."
+    },
+    {
+     "ts": "2026-09-16T00:28:14Z",
+     "stage": "CLOSED",
+     "because": "Ruled SUPPORTED. The adds between partials carry 11,004.4 us from 2,178 calls, so the reduction arithmetic total is 99,546.4 us -- 60.5 percent of the document-reduced backward device time -- and the interval the remainder cycle left open is closed. The successor is the call-count deficit: 2,178 accumulation calls against 2,928 dW matmuls, which decides what a batched reduction would actually replace."
+    }
+   ],
+   "observation": "The remainder cycle measured 164,611 us of device time under the document-reduced backward, 150,410.8 us of it aten::mm and 14,200.1 us non-mm, of which 14,145.2 us is elementwise arithmetic and 54.7 us data movement. Its FIRST not_closed line says the 14,145.2 us is an UPPER BOUND on the reduction remainder and not the remainder: it is ALL elementwise work under that ancestor, the dX path included, and nothing separated the accumulation adds from the rest. So the reduction arithmetic total is known only as the interval [88,542 , 102,687] us. The registry was queried on this proposition own nouns before the cycle opened and the rows scoped to the elementwise class are all STEP-WIDE; none is scoped to this ancestor and none separates accumulation from the rest of the elementwise population.",
+   "explanation": "The mechanism is the classifier the separating cycle already validated, applied to a different population. An add that accumulates a per-document partial into the weight-gradient accumulator writes a WEIGHT-shaped tensor -- the same [out, in] the dW matmuls produce -- and it happens once per document, so within one backward instance its leading operand shape equals a shape the mm loop produced in that same instance. Elementwise work on the dX path is activation-shaped and carries the row count instead. Defining the accumulation population by agreement with the OTHER population shapes, measured by a different instrument in the same instance, is a cross-population check rather than a name match or a guess.",
+   "criterion": "REFUTED if ANY of three clauses fails, checked in order, each with a deliberate red proved before the reading and each red constructed to satisfy every clause above the one it targets. (1) TOTAL AGREES: the elementwise device time this instrument sees under the backward differs from the remainder cycle 14,145.2 us by more than 0.1 percent, which would mean the two instruments are not looking at the same population. Red: inflate the reported total by 2 percent. (2) EVERY CALL ASSIGNED EXACTLY ONCE: any elementwise call under a backward cannot be assigned to accumulation or to other. Red: drop the shape from one call per instance. (3) ACCUMULATION CALLS CARRY A WEIGHT SHAPE FROM THE SAME INSTANCE: any call assigned to accumulation has a shape the mm loop did not produce in that instance. This is the agreement the classifier rests on, so it is the clause that matters. Red: inject a mismatch into the accumulation population directly, because no classifier error can produce one -- the population is DEFINED by the match, and that is exactly the defect recorded in the separating cycle clause-2 red, applied as a lesson rather than repeated.",
+   "criterion_supported_if": "SUPPORTED if all three clauses hold, in which case the reduction arithmetic total is 88,542 us of dW matmul plus the measured accumulation device time, and the [88,542 , 102,687] us interval collapses to a number. No ceiling, no saving and no multiplier follows.",
+   "receipts": [
+    "state\\issue1945-receipts\\accumulation-adds-under-backward-20260916T0026Z.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "SUPPORTED against the frozen criterion, all three clauses held and each of the three deliberate reds refused on its own clause with the other two holding. (1) TOTAL AGREES: this instrument sees 14,145.2 us of elementwise device time under the backward against the remainder cycle 14,145.2 us, by a different traversal -- per-instance shape collection rather than innermost-op class partition. (2) All 2,466 elementwise calls under a backward are assigned to exactly one population, none unassigned. (3) All 2,178 calls assigned to accumulation carry a leading operand shape the mm loop produced in the SAME backward instance, which is the cross-population agreement the classifier rests on. MEASURED RESULT: the accumulation adds between partials carry 11,004.4 us from 2,178 calls; the remaining elementwise work under the backward is 3,140.8 us from 288 calls. THE INTERVAL COLLAPSES: the reduction arithmetic total is 88,542 us of dW matmul plus 11,004.4 us of accumulation = 99,546.4 us, where the remainder cycle could only bound it to [88,542 , 102,687]. That is 60.5 percent of the 164,611 us of device time under the document-reduced backward.",
+   "not_closed": "(1) 2,178 ACCUMULATION CALLS AGAINST 2,928 dW MATMULS IS NOT ONE ADD PER MATMUL, AND THIS CYCLE DOES NOT ESTABLISH WHY. A first partial needing no add, an accumulation fused into the matmul epilogue, an add issued at a shape the mm loop never produces, and a foreach-style batched add covering several partials in one call are all consistent with the deficit of 750. Whichever it is changes what a batched reduction would actually replace, so it is the successor. (2) THE CLASSIFIER IS DEFINED BY SHAPE AGREEMENT, SO AN ACCUMULATION PERFORMED AT A SHAPE THE MM LOOP NEVER PRODUCES IS CLASSED AS OTHER. The 3,140.8 us other population is therefore an upper bound on non-accumulation elementwise work, not a measurement of it, and the 11,004.4 us is a lower bound on accumulation. The direction of the error is stated because it runs against the cycle claim, which is the direction my own record says to check hardest. (3) WHAT 99,546.4 US IS NOT: a share of the step, a saving, or a ceiling. It is device time inside one backward in one profiled trace. A batched reduction still has to do the arithmetic, and the numerical cost of reordering it -- 3.6e-3 relative L2 -- remains an unruled #1413 loss bar question. (4) One profiled trace, 6 measured steps, no matched-run variation, no measured device traffic and no occupancy counter. Gate A stays UNMET at 23,380.183126331838 of 80,000, composite 10 percent, unchanged since 2026-09-14.",
+   "closing": "Ruled SUPPORTED. The adds between partials carry 11,004.4 us from 2,178 calls, so the reduction arithmetic total is 99,546.4 us -- 60.5 percent of the document-reduced backward device time -- and the interval the remainder cycle left open is closed. The successor is the call-count deficit: 2,178 accumulation calls against 2,928 dW matmuls, which decides what a batched reduction would actually replace."
   }
  ],
  "registry": [
@@ -8374,6 +8548,71 @@
     "No ceiling, saving or multiplier is asserted. A launch collapsed is not a millisecond saved, and nothing here says the class is launch-bound at these shapes.",
     "The mechanism premise the cycle was opened on -- many small matmuls -- is refuted by the per-kernel sizes, which is evidence about the population rather than about the loop.",
     "One profiled trace, 6 steps, no matched-run variation; a share of the aten::mm class, never of the step."
+   ]
+  },
+  {
+   "id": "per-document-reduction-loop-carries-59-percent-of-backward-mm-device-time-20260915",
+   "issue": 1945,
+   "kind": "measurement",
+   "loop_hypothesis": "separate-the-per-document-reduction-loop-from-the-dx-matmul-inside-the-same-backward-20260915",
+   "treatment": "MEASUREMENT: separate the per-document weight-gradient loop from the dX matmul inside the same document-reduced backward, so the loop has a device number of its own rather than inheriting the dense trunk 88.80 percent.",
+   "title": "The per-document weight-gradient loop carries 88,542 us of the 150,411 us of aten::mm device time inside the document-reduced backward (58.87%), from 2,928 of 3,648 calls; dX carries 61,869 us from 720 calls. The split is validated structurally: in all 1,452 backward instances the dX leading dimension equals the sum of the loop contracted dimensions, 720 of 720 dX calls.",
+   "status": "COMPLETED",
+   "date": "2026-09-15",
+   "basis": "RECEIPT-DERIVED",
+   "condition": "One chrome trace, cia-captured-trace-20260914T183257Z.json, 6 measured steps, CIA-3B at head 20338ddc, captured UNDER PROFILING INSTRUMENTATION, no matched-run variation. Classifier is calls-per-backward-instance within one backward, validated against the recorded Input Dims by three clauses. A share of the aten::mm device time INSIDE the document-reduced backward, never of the backward and never of the step.",
+   "source": "scripts/issue1945/separate_reduction_loop_from_dx.py with three deliberate reds, each firing its own clause alone: --prove-red-partition (726 instances refused), --prove-red-loop-shape (732 groups refused, after one recorded repair), --prove-red-dx-shape (720 calls refused).",
+   "evidence": "state/issue1945-receipts/reduction-loop-vs-dx-separation-20260915T2351Z.json and its three red receipts; state/issue1945-loop.jsonl",
+   "moves_gate": "no -- gate A UNMET at governed p10 23,380.183126331838 of 80,000, unchanged since 2026-09-14; composite 10%",
+   "not_closed": [
+    "THE CLAUSE-2 RED DID NOT FIRE AS FIRST WRITTEN, so clause 2 briefly carried no information. The reason is a finding: the dX leading dimension equals the LOOP contracted-dim sum, never its own, so no classifier error can make clause 2 fail. Clause 2 protects against a shape-level anomaly only. One repair, recorded in the instrument.",
+    "58.87 percent is a share of aten::mm device time INSIDE the document-reduced backward. Not of the backward, not of the step, and not convertible into a saving. No ceiling and no multiplier is asserted.",
+    "The numerical cost of reordering the sum is measured (3.6e-3 relative L2 against a same-order floor of 0.0, fp32 accumulation changing nothing) but NOT ruled admissible; that is the #1413 loss bar question and is untouched here.",
+    "The loop population is the dW matmuls only. Any elementwise add between partials is a separate class this instrument does not count, so the reduction arithmetic total is at least 88,542 us and its remainder is unmeasured.",
+    "One profiled trace, 6 steps, no matched-run variation; shapes are what the trace recorded, not what the source declares."
+   ]
+  },
+  {
+   "id": "the-document-reduced-backward-is-91-percent-matmul-and-its-non-mm-remainder-is-14200us-20260915",
+   "issue": 1945,
+   "kind": "measurement",
+   "loop_hypothesis": "the-reduction-arithmetic-remainder-turns-the-88542us-floor-into-a-measured-total-20260915",
+   "treatment": "MEASUREMENT, analysis-only, no card and no lease: partition ALL device time under DocumentReduced*Backward by operation class, removing the mm filter the separating cycle used, so the 88,542 us reduction-loop figure is bounded above as well as below.",
+   "title": "The document-reduced backward carries 164,611 us of device time: aten::mm 150,410.8 us (91.37%), non-mm remainder 14,200.1 us (8.63%) of which elementwise arithmetic is 14,145.2 us and data movement 54.7 us. The reduction arithmetic total is therefore in [88,542 , 102,687] us, at most 62.4% of the backward.",
+   "status": "COMPLETED",
+   "date": "2026-09-15",
+   "basis": "RECEIPT-DERIVED",
+   "condition": "Trace cia-captured-trace-20260914T183257Z.json, 1,452 backward instances, 27,966 External ids under them, CIA-3B at the governed geometry, UNDER PROFILING INSTRUMENTATION, 6 measured steps, no matched-run variation. Device time is a SUM over kernels, never an interval union. Kernel-to-op join by the trace own External id attributed to the SHORTEST-DURATION cpu_op carrying that id, because a PyTorch trace shares one id across the whole nest and attributing at every level counts the same device time once per depth. Backward membership by interval containment per thread. A share of device time INSIDE this backward, never of the backward wall and never of the step.",
+   "source": "scripts/issue1945/reduction_remainder_under_backward.py with three deliberate reds, each firing its own clause alone and each satisfying every clause above it: --prove-red-mm-recovery, --prove-red-classification, --prove-red-partition.",
+   "evidence": "state/issue1945-receipts/reduction-remainder-under-backward-20260916T0009Z.json and its three red receipts; state/issue1945-loop.jsonl. INDEPENDENT AGREEMENT: recovered aten::mm 150,410.8 us against the separating cycle 150,411.0 us, relative difference 1e-6, by a join path sharing no code with it.",
+   "moves_gate": "no -- gate A UNMET at governed p10 23,380.183126331838 of 80,000, unchanged since 2026-09-14; composite 10%",
+   "not_closed": [
+    "14,145 US IS AN UPPER BOUND ON THE REMAINDER, NOT THE REMAINDER. It is ALL elementwise arithmetic under the backward, including the dX path, not only the adds between partials. The reduction arithmetic total is in [88,542 , 102,687] us and this cycle does not narrow the interval. THE SUCCESSOR IS NAMED: classify the elementwise population under the backward the way the mm population was classified.",
+    "8.63 percent is not a share of the step, not a saving and not a ceiling. It locates time and says nothing about what a treatment could collect.",
+    "THE 54.7 US OF DATA MOVEMENT IS SUSPICIOUSLY SMALL AND IS NOT INVESTIGATED. It is consistent with accumulation in place and equally consistent with copies attributed to an ancestor outside this backward or to a fused wrapper -- the copy-mass attribution cycle already established that a copy beneath a fused wrapper is attributed to the wrapper. Nothing here discriminates them.",
+    "The innermost-op resolution is shortest-duration among ops sharing an External id. Clause 1 gives it strong independent support on THIS trace; it remains a resolution rule rather than a recorded parent edge.",
+    "One profiled trace, 6 steps, no matched-run variation, no measured device traffic and no occupancy counter anywhere in this campaign."
+   ]
+  },
+  {
+   "id": "the-reduction-arithmetic-total-is-99546us-60-percent-of-the-document-reduced-backward-20260915",
+   "issue": 1945,
+   "kind": "measurement",
+   "loop_hypothesis": "the-adds-between-partials-are-separable-from-the-rest-of-the-elementwise-work-under-the-backward-20260915",
+   "treatment": "MEASUREMENT, analysis-only, no card and no lease: separate the accumulation adds between per-document partials from the rest of the elementwise work under the document-reduced backward, by matching each elementwise call leading operand shape against the mm output shapes in the SAME backward instance.",
+   "title": "The adds between partials carry 11,004.4 us from 2,178 calls; other elementwise work under the backward is 3,140.8 us from 288 calls. With the 88,542 us of dW matmul the reduction arithmetic total is 99,546.4 us, 60.5% of the 164,611 us of device time under the document-reduced backward. The [88,542 , 102,687] interval is closed.",
+   "status": "COMPLETED",
+   "date": "2026-09-15",
+   "basis": "RECEIPT-DERIVED",
+   "condition": "Trace cia-captured-trace-20260914T183257Z.json, 1,452 backward instances, CIA-3B at the governed geometry, UNDER PROFILING INSTRUMENTATION, 6 measured steps, no matched-run variation. Device time is a SUM over kernels, never an interval union. The accumulation population is DEFINED by its leading operand shape matching an mm output shape in the same backward instance, so it is a cross-population agreement and not a name match; an accumulation at a shape the mm loop never produces is classed as other, which makes 11,004.4 us a lower bound and 3,140.8 us an upper bound.",
+   "source": "scripts/issue1945/separate_accumulation_adds_under_backward.py with three deliberate reds, each firing its own clause alone and each satisfying every clause above it: --prove-red-total-agreement, --prove-red-partition, --prove-red-shape-agreement.",
+   "evidence": "state/issue1945-receipts/accumulation-adds-under-backward-20260916T0026Z.json and its three red receipts; state/issue1945-loop.jsonl. INDEPENDENT AGREEMENT: elementwise total 14,145.2 us against the remainder cycle 14,145.2 us by a different traversal.",
+   "moves_gate": "no -- gate A UNMET at governed p10 23,380.183126331838 of 80,000, unchanged since 2026-09-14; composite 10%",
+   "not_closed": [
+    "2,178 ACCUMULATION CALLS AGAINST 2,928 dW MATMULS IS NOT ONE ADD PER MATMUL AND THE DEFICIT OF 750 IS UNEXPLAINED. A first partial needing no add, an accumulation fused into the matmul epilogue, an add at a shape the mm loop never produces, and a batched foreach add covering several partials are all consistent with it. THE SUCCESSOR IS NAMED: resolve the deficit, because it decides what a batched reduction would actually replace.",
+    "The classifier is defined by shape agreement, so 11,004.4 us is a LOWER bound on accumulation and 3,140.8 us an UPPER bound on the rest. The error direction runs against this cycle own claim and is stated for that reason.",
+    "99,546.4 us is not a share of the step, not a saving and not a ceiling. A batched reduction still has to do the arithmetic, and the 3.6e-3 relative L2 cost of reordering it is an unruled #1413 loss bar question.",
+    "One profiled trace, 6 steps, no matched-run variation, no measured device traffic and no occupancy counter anywhere in this campaign."
    ]
   }
  ]
