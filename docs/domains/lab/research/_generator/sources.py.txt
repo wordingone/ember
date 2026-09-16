@@ -324,6 +324,138 @@ def header_only(doc):
     return dict((k, doc[k]) for k in RECEIPT_HEADER_FIELDS if k in doc)
 
 
+FEATURED = 'state/research-site-featured.json'
+
+# A working session is not a field in any record, so it is DERIVED rather than asserted: the
+# largest quiet interval in the loop log above this threshold is the boundary. The record and
+# the boundary cannot disagree, which an authored start time could.
+SESSION_GAP_HOURS = 4.0
+
+
+def _dig(doc, path):
+    """Field path into a receipt. Returns None when any segment is missing -- never a default."""
+    cur = doc
+    for seg in path.split('.'):
+        if not isinstance(cur, dict) or seg not in cur:
+            return None
+        cur = cur[seg]
+    return cur
+
+
+def load_featured(san):
+    """The featured work, its plain-language goal, its acceptance conditions and its number.
+
+    Refuses rather than publishing a stale transcription: the acceptance conditions are copied
+    from a source file that this loader re-hashes on every build.
+    """
+    path = _p(FEATURED)
+    if not os.path.exists(path):
+        raise SystemExit('REFUSED: %s does not exist; the site leads with a selected piece of '
+                         'work and will not invent one' % path)
+    doc = json.load(io.open(path, encoding='utf-8'))
+    f = doc.get('featured') or {}
+    meta = {'path': FEATURED, 'issue': f.get('issue')}
+
+    # -- the transcription drift guard ------------------------------------------------
+    src = f.get('acceptance_source') or {}
+    spath = _p(src.get('path') or '')
+    if not src.get('path') or not os.path.exists(spath):
+        raise SystemExit('REFUSED: the acceptance source %r named by %s does not exist. The '
+                         'conditions on this page are a transcription and may not be published '
+                         'without the source they transcribe.' % (src.get('path'), FEATURED))
+    actual = hashlib.sha256(open(spath, 'rb').read()).hexdigest()
+    if actual != src.get('sha256'):
+        raise SystemExit(
+            'REFUSED: the acceptance source has changed since its conditions were transcribed.\n'
+            '  source   %s\n  recorded %s\n  actual   %s\n'
+            'Re-read the source, update the conditions in %s, and record the new digest. '
+            'Publishing the old transcription against a changed source is exactly the drift '
+            'this check exists to make impossible.'
+            % (src.get('path'), src.get('sha256'), actual, FEATURED))
+    meta['acceptance_source_verified'] = {'path': src.get('path'), 'sha256': actual,
+                                          'bytes': os.path.getsize(spath),
+                                          'audited': src.get('audited')}
+
+    # -- the measurement, read from the receipt, never transcribed --------------------
+    m = dict(f.get('measurement') or {})
+    rel = m.get('receipt')
+    mpath = _p(rel) if rel else None
+    if not mpath or not os.path.exists(mpath):
+        m['status'] = 'UNKNOWN'
+        m['why'] = ('the adjudication receipt named for this measurement is not present, so no '
+                    'number is shown; nothing is substituted')
+        meta['measurement'] = {'path': rel, 'status': 'ABSENT'}
+    else:
+        rdoc = json.load(io.open(mpath, encoding='utf-8'))
+        m['status'] = 'READ'
+        m['value'] = _dig(rdoc, m.get('value_path') or '')
+        m['target'] = _dig(rdoc, m.get('target_path') or '')
+        m['statistic'] = _dig(rdoc, m.get('statistic_path') or '')
+        m['comparator'] = _dig(rdoc, m.get('comparator_path') or '')
+        m['updates'] = _dig(rdoc, m.get('updates_path') or '')
+        m['seconds'] = _dig(rdoc, m.get('seconds_path') or '')
+        st = os.stat(mpath)
+        m['receipt_mtime_utc'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(st.st_mtime))
+        m['receipt_sha256'] = hashlib.sha256(open(mpath, 'rb').read()).hexdigest()
+        if m.get('value') is None or m.get('target') is None:
+            raise SystemExit(
+                'REFUSED: %s names field paths that the receipt does not carry (value_path %r -> %r, '
+                'target_path %r -> %r). A measurement whose field path has moved must be re-pointed, '
+                'not rendered as a blank.'
+                % (FEATURED, m.get('value_path'), m.get('value'),
+                   m.get('target_path'), m.get('target')))
+        meta['measurement'] = {'path': rel, 'status': 'READ', 'bytes': st.st_size,
+                               'sha256': m['receipt_sha256']}
+    f['measurement'] = m
+    doc['featured'] = f
+    return san.walk(doc, 'featured'), meta
+
+
+def split_sessions(hyps, gap_hours=SESSION_GAP_HOURS):
+    """Partition the hypotheses into working sessions at the quiet intervals in the record.
+
+    Returns newest-session-first. Each session carries its own boundary timestamps so the page
+    can state them rather than implying them. A campaign spans sessions: nothing here resets,
+    and every earlier session stays in the list.
+    """
+    dated = sorted([h for h in hyps if h.get('first_ts')], key=lambda x: x['first_ts'])
+    if not dated:
+        return []
+    gap = gap_hours * 3600.0
+    groups, cur = [], [dated[0]]
+    for prev, h in zip(dated, dated[1:]):
+        prev_end = prev.get('last_ts') or prev.get('first_ts')
+        if _epoch(h['first_ts']) - _epoch(prev_end) > gap:
+            groups.append(cur)
+            cur = []
+        cur.append(h)
+    groups.append(cur)
+    out = []
+    for i, g in enumerate(groups):
+        out.append({
+            'index': i + 1,
+            'is_current': i == len(groups) - 1,
+            'started': g[0].get('first_ts'),
+            'ended': max((h.get('last_ts') or h.get('first_ts')) for h in g),
+            'hypotheses': g,
+            'boundary_basis': ('derived from the loop log: a quiet interval longer than %g hours '
+                               'separates this group of events from the one before it'
+                               % gap_hours),
+        })
+    out.reverse()
+    return out
+
+
+def _epoch(ts):
+    if not ts:
+        return 0.0
+    s = str(ts).replace('Z', '')[:19]
+    try:
+        return time.mktime(time.strptime(s, '%Y-%m-%dT%H:%M:%S')) - time.timezone
+    except ValueError:
+        return 0.0
+
+
 def load_receipts(san):
     out, meta = {}, []
     for key, rel in sorted(RECEIPT_ALLOWLIST.items()):

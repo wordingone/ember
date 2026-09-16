@@ -151,6 +151,8 @@ def build(out_dir, check_only):
     hyps, lmeta = sources.load_loop(san)
     receipts, recmeta = sources.load_receipts(san)
     joinmeta = sources.join(registry, hyps)
+    featured, fmeta = sources.load_featured(san)
+    sessions = sources.split_sessions(hyps)
 
     for h in hyps:
         h['_search'] = sources.searchable(h)
@@ -158,7 +160,11 @@ def build(out_dir, check_only):
         r['_search'] = sources.searchable(r)
 
     coverage = {'registry': rmeta, 'loop': lmeta, 'receipts': recmeta, 'sanitizer': san.report(),
-                'join': joinmeta}
+                'join': joinmeta, 'featured': fmeta,
+                'sessions': [{'index': s['index'], 'is_current': s['is_current'],
+                              'started': s['started'], 'ended': s['ended'],
+                              'hypotheses': len(s['hypotheses']),
+                              'boundary_basis': s['boundary_basis']} for s in sessions]}
 
     # --- validation ---------------------------------------------------------------
     absent = [x for x in recmeta if x['status'] != 'READ']
@@ -250,7 +256,9 @@ def build(out_dir, check_only):
     w('hypotheses.html', render.ledger_page(hyps, registry, joinmeta, coverage, ALIASES, stamp))
     w('fp16-kernel-selection.html',
       article_page(fm, secs, receipts, sweep, audit, joined, stamp, recmeta))
-    w('index.html', index_page(hyps, registry, receipts, coverage, fm, stamp))
+    w('index.html', overview_page(featured, sessions, registry, stamp))
+    w('research.html', research_page(featured, sessions, hyps, registry, fm, coverage, stamp))
+    w('agents.html', agents_page(featured, sessions, coverage, stamp))
     w('method.html', method_page(coverage, stamp, joined))
 
     idx = {
@@ -260,6 +268,7 @@ def build(out_dir, check_only):
         'generated_at': stamp['generated_at'],
         'is_complete_research_history': False,
         'coverage': coverage,
+        'featured': featured,
         'aliases': ALIASES,
         'alias_sources': ALIAS_SOURCE,
         'hypotheses': [dict((k, v) for k, v in h.items() if not k.startswith('_')) for h in hyps],
@@ -361,7 +370,7 @@ def article_page(fm, secs, receipts, sweep, audit, joined, stamp, recmeta):
         'ratio to accumulator precision alone, because the two arms did not run the same kernel. '
         'Neither receipt has been edited; no receipt schema in this campaign has an invalidation '
         'field, so this annotation is the carrier.</p></div>')
-    return render.shell(fm.get('title'), 'article', ''.join(body), stamp)
+    return render.shell(fm.get('title'), 'research', ''.join(body), stamp)
 
 
 def figure_block(sweep, audit, joined, sweep_only, audit_only):
@@ -387,57 +396,320 @@ def figure_block(sweep, audit, joined, sweep_only, audit_only):
            render.figure_table(sweep, audit)))
 
 
-def index_page(hyps, registry, receipts, coverage, fm, stamp):
+def _rows_by_hyp(registry):
+    out = {}
+    for r in registry:
+        if r.get('_hypothesis'):
+            out.setdefault(r['_hypothesis'], []).append(r)
+    return out
+
+
+def _session_start_value(featured, sessions):
+    """The comparable measurement as it stood when this session began.
+
+    The receipt that carries the current number is dated; if it was already the standing
+    adjudication before this session's first event, then the session opened at that value and
+    the change across the session is nil. If a NEWER adjudication had landed mid-session there
+    would be an earlier one to difference against, and finding it is a record lookup rather than
+    an assumption. Where neither holds, the answer is unknown and the page says unknown.
+    """
+    m = (featured.get('featured') or {}).get('measurement') or {}
+    if m.get('status') != 'READ' or not sessions:
+        return None
+    started = sessions[0].get('started') or ''
+    landed = m.get('receipt_mtime_utc') or ''
+    if landed and started and landed < started:
+        return m.get('value')
+    return None
+
+
+def _next_test(h):
+    """The next test, SELECTED from the record's own words -- never composed.
+
+    The loop has no successor field: its `update` stage writes what the result does not close,
+    and the next test lives inside that text. So the sentence is picked from `not_closed` by its
+    own forward-looking language. When no sentence carries any, this returns None and the page
+    says the record does not name one -- which is a statement about the record, not a guess.
+    """
+    text = h.get('successor') or h.get('not_closed') or ''
+    if not text:
+        return None
+    if h.get('successor'):
+        return render._sentence(text, cap=240)
+    cues = ('further cycle', 'next cycle', 'the next ', 'remains to', 'is a further',
+            'would settle', 'has not been', 'is owed', 'still needs')
+    for part in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9(])', ' '.join(str(text).split())):
+        low = part.lower()
+        if any(c in low for c in cues):
+            return part if len(part) <= 240 else part[:240].rsplit(' ', 1)[0] + '\u2026'
+    return None
+
+
+def overview_page(featured, sessions, registry, stamp):
+    f = featured.get('featured') or {}
+    e = featured.get('ember') or {}
+    m = f.get('measurement') or {}
+    cur = sessions[0] if sessions else None
+    prev = _session_start_value(featured, sessions)
+    rows_by_hyp = _rows_by_hyp(registry)
+
+    body = [
+        '<h1>%s</h1>' % render.esc(e.get('name') or 'Ember'),
+        '<div class="hero prose"><p class="lede">%s</p><p>%s</p></div>'
+        % (render.esc(e.get('what')), render.esc(e.get('why'))),
+        render.as_of(stamp),
+
+        '<div class="feature">'
+        '<div class="eyebrow"><span class="label">Current research</span>'
+        '<span class="meta"><a href="%s">issue #%s</a></span></div>'
+        '<h2>%s</h2>'
+        '<p class="goal">%s</p>'
+        '<p class="why">%s</p></div>'
+        % (render.esc(f.get('url')), render.esc(f.get('issue')),
+           render.esc(f.get('title')), render.esc(f.get('goal_plain')),
+           render.esc(f.get('goal_why'))),
+
+        render.measure_block(m, prev),
+        '<p class="meta">Measurement read from <code>%s</code>. %s</p>'
+        % (render.esc(m.get('receipt')), render.esc(m.get('note'))),
+
+        '<h2>What remains for completion</h2>',
+        render.conditions_block(f.get('conditions') or []),
+        '<p class="meta">Conditions transcribed from <code>%s</code> as audited %s, and the build '
+        'refuses if that file changes without the transcription being refreshed. The measurement '
+        'above belongs to the first condition; being part-way along it does not partly complete '
+        'the campaign.</p>'
+        % (render.esc((f.get('acceptance_source') or {}).get('path')),
+           render.esc((f.get('acceptance_source') or {}).get('audited'))),
+    ]
+
+    if cur:
+        latest = sorted(cur['hypotheses'], key=lambda x: x.get('last_ts') or '')[-1]
+        line = render._sentence(latest.get('ruling'), prefer_digit=True, cap=240)
+        nxt = _next_test(latest)
+        body.append(
+            '<h2>Active investigation</h2>'
+            '<p class="prose">The last published line of inquiry asked whether <strong>%s</strong>, '
+            'and it was ruled <strong>%s</strong>: %s %s '
+            '<a href="#a-%s">methods, evidence and limitations &rarr;</a></p>'
+            % (render.esc(render.humanise(latest['id']).lower()),
+               render.esc(str(latest.get('verdict') or 'open').lower()),
+               render.esc(line),
+               ('The next test it names: %s' % render.esc(nxt)) if nxt else
+               ('The record does not yet name a next test for it; what the result leaves open is '
+                'in its limitations.'),
+               render.esc(latest['id'])))
+
+        body.append('<h2>Work tried this session</h2>')
+        body.append(
+            '<p class="prose">One row per attempt, not per log event. Verdicts are the original '
+            'ones from the record and are not restated here. A <em>diagnostic</em> result measures '
+            'where time goes under instrumentation that itself changes the timing; it moves no '
+            'acceptance condition and earns no progress credit. Every row expands to its frozen '
+            'criterion, its instrument, its evidence and its limitations.</p>')
+        body.append(render.session_bar(cur, len(sessions)))
+        body.append(render.attempts_table(cur['hypotheses'], rows_by_hyp))
+        if len(sessions) > 1:
+            body.append(
+                '<p class="meta">%d earlier session%s of this campaign remain recorded and are '
+                'listed under <a href="research.html#sessions">Research</a>. A new session does not '
+                'reset campaign progress.</p>'
+                % (len(sessions) - 1, '' if len(sessions) == 2 else 's'))
+    else:
+        body.append('<h2>Work tried this session</h2>'
+                    '<p class="prose">No attempts are recorded. Unknown rather than none.</p>')
+
+    body.append(
+        '<p class="meta"><a href="research.html">Read the research in depth &rarr;</a> &nbsp;'
+        '<a href="agents.html">Machine-readable state and exports &rarr;</a></p>')
+    return render.shell('Ember Research', 'index', ''.join(body), stamp)
+
+
+def research_page(featured, sessions, hyps, registry, fm, coverage, stamp):
+    """The deeper read: conclusions first, supporting detail underneath."""
+    f = featured.get('featured') or {}
+    rows_by_hyp = _rows_by_hyp(registry)
     by_v = {}
     for h in hyps:
         by_v[h.get('verdict') or 'open'] = by_v.get(h.get('verdict') or 'open', 0) + 1
-    recent = sorted(hyps, key=lambda x: x.get('last_ts') or '', reverse=True)[:6]
-    rows = ''.join(
-        '<tr><td><code>%s</code></td><td>%s</td><td class="num">%s</td></tr>'
-        % (render.esc(h['id']), render._chip(h.get('verdict')), render.esc(h.get('last_ts')))
-        for h in recent)
-    body = (
-        '<h1>Ember Research</h1>'
-        '<p class="lede">A rendering of an existing research record: hypotheses with frozen '
-        'criteria, their original verdicts, the evidence behind them, and what each refutation '
-        'does <em>not</em> close. Generated from the loop log and the attempt registry &mdash; '
-        'not re-modelled, not re-scored.</p>'
-        '<div class="grid">'
-        '<div class="stat"><b>%d</b><span class="meta">hypotheses, OBSERVED &rarr; CLOSED</span></div>'
-        '<div class="stat"><b>%d</b><span class="meta">registry rows of prior attempts</span></div>'
-        '<div class="stat"><b>%d</b><span class="meta">loop events read</span></div>'
-        '<div class="stat"><b>%d</b><span class="meta">receipts published in full or in part</span></div>'
-        '</div>'
-        '<h2>Read</h2>'
-        '<div class="panel"><h3 style="margin-top:0"><a href="fp16-kernel-selection.html">%s</a></h3>'
+
+    standing = [h for h in hyps if (h.get('verdict') or '').upper() == 'SUPPORTED'
+                and h.get('not_closed')]
+    standing = sorted(standing, key=lambda x: x.get('last_ts') or '', reverse=True)[:5]
+    concl = ''.join(
+        '<li><strong>%s.</strong> %s <a href="hypotheses.html#%s">evidence &rarr;</a></li>'
+        % (render.esc(render.humanise(h['id'])),
+           render.esc(render._sentence(h.get('ruling'), prefer_digit=True, cap=260)),
+           render.esc(h['id']))
+        for h in standing)
+
+    body = [
+        '<h1>Research</h1>',
+        '<p class="lede">Questions, how each was made falsifiable, what the measurement said, and '
+        'what it does not settle. Conclusions first; the record underneath.</p>',
+        render.as_of(stamp),
+
+        '<h2>What currently stands</h2>',
+        '<p class="prose">The most recent results whose criterion was met, each stated as its own '
+        'ruling states it. A conclusion here is a conclusion about a mechanism, not about the '
+        'campaign: none of these moved an acceptance condition.</p>',
+        '<ul class="prose">%s</ul>' % concl,
+
+        '<h2>Method</h2>',
+        '<p class="prose">Every question runs the same cycle: an observation from the record, a '
+        'mechanism that would explain it, a falsification criterion <strong>frozen before the '
+        'measurement</strong>, the run, the ruling quoted against that criterion, and an explicit '
+        'statement of what the result does not close. A criterion chosen after the numbers are in '
+        'is chosen to fit them, so the tooling refuses a verdict on a hypothesis that has no frozen '
+        'criterion and refuses a criterion that cannot fail.</p>',
+        '<p class="prose">Refutation is the useful outcome. <em>Inconclusive</em> is reserved for a '
+        'run that did not discriminate &mdash; never for one whose answer was unwelcome. A refuted '
+        'thread is not a dead end: each refutation carries the variants it does not speak to, so a '
+        'later reader can tell what was actually closed.</p>',
+        '<p class="meta">Verdicts across the whole record: %s.</p>'
+        % ', '.join('%s %d' % (k, v) for k, v in sorted(by_v.items())),
+
+        '<h2>Figures and results</h2>',
+        '<div class="panel"><h3 style="margin-top:0">'
+        '<a href="fp16-kernel-selection.html">%s</a></h3>'
         '<p class="prose" style="margin:0 0 6px">%s</p>'
-        '<p class="meta">Research question: %s</p></div>'
-        '<div class="panel"><h3 style="margin-top:0"><a href="hypotheses.html">Hypothesis ledger</a></h3>'
-        '<p class="prose" style="margin:0">Search every hypothesis and prior attempt across its '
-        'explanatory text, not just its id. Built to answer &ldquo;has this already been '
-        'tried?&rdquo; before a cycle opens.</p></div>'
-        '<h2>Campaign view &mdash; issue #1945</h2>'
-        '<p class="prose">All hypotheses currently in the record belong to the throughput campaign '
-        'tracked as issue #1945. This page carries <strong>no campaign progress score</strong>: the '
-        'acceptance authority for that issue is the issue and its rules, and duplicating a composite '
-        'here would create a second scoring authority that could disagree with it.</p>'
-        '<div class="tablewrap"><table><thead><tr><th>Most recent hypotheses</th><th>Original verdict</th>'
-        '<th>Last event (UTC)</th></tr></thead><tbody>%s</tbody></table></div>'
-        '<p class="meta">Verdict tally across the record: %s.</p>'
-        '<h2>What this is not</h2>'
+        '<p class="meta">Research question: %s &nbsp;&middot;&nbsp; carries the interactive figure, '
+        'the joined sweep and kernel audit, and their limitations.</p></div>'
+        % (render.esc(fm.get('title')), render.esc(fm.get('subtitle')),
+           render.esc(fm.get('question'))),
+        '<div class="panel"><h3 style="margin-top:0">'
+        '<a href="hypotheses.html">Full hypothesis ledger</a></h3>'
+        '<p class="prose" style="margin:0">Every hypothesis and prior attempt, searchable across '
+        'its explanatory text rather than its identifier. Built to answer &ldquo;has this already '
+        'been tried?&rdquo; before a new cycle opens.</p></div>',
+
+        '<h2 id="sessions">Sessions</h2>',
+        '<p class="prose">Work is recorded continuously; the session boundary is derived from the '
+        'record itself rather than declared, so the boundary and the events cannot disagree. '
+        'A campaign spans sessions and nothing resets at one.</p>',
+    ]
+
+    for s in sessions:
+        hs = sorted(s['hypotheses'], key=lambda x: x.get('first_ts') or '')
+        body.append(
+            '<h3>Session %d%s &mdash; %s to %s <span class="meta">(%d attempts)</span></h3>'
+            % (s['index'], ' &middot; current' if s['is_current'] else '',
+               render.esc(s['started']), render.esc(s['ended']), len(hs)))
+        body.append(render.attempts_table(hs, rows_by_hyp))
+
+    body.append(
+        '<h2>Limitations of this account</h2>'
         '<p class="prose">It is not the complete research history: a selected subset of receipts is '
-        'published, and the rest are referenced by name. It records no new verdicts, edits no '
+        'published and the rest are referenced by name. It records no new verdicts, edits no '
         'receipt, and holds no acceptance criterion. Where a later finding changes how an earlier '
         'result should be read, it is carried as a dated annotation beside that result &mdash; the '
-        'original verdict is never rewritten.</p>'
+        'original verdict is never rewritten. Technical notes and the generator itself are '
+        'published under <a href="agents.html">Agents</a>.</p>')
+    return render.shell('Research', 'research', ''.join(body), stamp)
+
+
+def agents_page(featured, sessions, coverage, stamp):
+    """A compact machine entry point. It duplicates no scientific record; it points at them."""
+    f = featured.get('featured') or {}
+    m = f.get('measurement') or {}
+    cur = sessions[0] if sessions else None
+    conds = f.get('conditions') or []
+
+    state = {
+        'schema': 'ember-research-state-v1',
+        'generated_at': stamp['generated_at'],
+        'source_events_through': stamp['source_events_through'],
+        'featured_issue': f.get('issue'),
+        'featured_url': f.get('url'),
+        'measurement': dict((k, m.get(k)) for k in
+                            ('label', 'units', 'basis', 'statistic', 'comparator', 'value',
+                             'target', 'updates', 'seconds', 'receipt', 'receipt_sha256')),
+        'conditions': [{'key': c.get('key'), 'state': c.get('state'), 'name': c.get('name')}
+                       for c in conds],
+        'conditions_met': sum(1 for c in conds if str(c.get('state')).upper() == 'MET'),
+        'conditions_total': len(conds),
+        'current_session': ({'started': cur['started'], 'ended': cur['ended'],
+                             'attempts': len(cur['hypotheses'])} if cur else None),
+        'sessions': coverage['sessions'],
+        'acceptance_source': (f.get('acceptance_source') or {}),
+        'no_score': ('Conditions are binary. No composite is computed here, and the measurement '
+                     'is not a completion fraction.'),
+    }
+
+    rows = ''.join(
+        '<tr><td><code>%s</code></td><td>%s</td><td class="num">%s</td></tr>'
+        % (render.esc(x['key']), render.esc(x.get('mode', '-')),
+           render.esc(x.get('bytes', '-')))
+        for x in coverage['receipts'])
+
+    srows = ''.join(
+        '<tr><td class="num">%d</td><td>%s</td><td>%s</td><td class="num">%d</td>'
+        '<td>%s</td></tr>'
+        % (s['index'], render.esc(s['started']), render.esc(s['ended']), s['hypotheses'],
+           'current' if s['is_current'] else 'closed')
+        for s in coverage['sessions'])
+
+    body = [
+        '<h1>Agents</h1>',
+        '<p class="lede">A machine-oriented entry point to the same records the other two tabs '
+        'render. Nothing here is a second copy of a scientific result: every item is either a '
+        'state summary, a stable identifier, or a link into the record that owns it.</p>',
+        render.as_of(stamp),
+
+        '<h2>Current state</h2>',
+        '<pre class="panel mono" style="overflow-x:auto;white-space:pre;font-size:12.5px">%s</pre>'
+        % render.esc(json.dumps(state, indent=1, sort_keys=False)),
+
+        '<h2>Exports</h2>',
+        '<div class="tablewrap"><table><thead><tr><th>Export</th><th>Contains</th></tr></thead>'
+        '<tbody>'
+        '<tr><td><code><a href="export/research-index.json">export/research-index.json</a></code></td>'
+        '<td>Every hypothesis with its stages, frozen criterion, verdict, ruling, limitations and '
+        'receipt references; every attempt-registry row; the full coverage and sanitizer report; '
+        'and the featured-work block rendered above.</td></tr>'
+        '<tr><td><code><a href="export/fp16-sweep-audit.json">export/fp16-sweep-audit.json</a></code></td>'
+        '<td>The two experiments behind the figure, joined only on shapes both measured, with the '
+        'unjoined shapes listed on each side.</td></tr>'
+        '</tbody></table></div>',
+
+        '<h2>Stable identifiers</h2>',
+        '<p class="prose">A hypothesis id is stable and is the anchor on the ledger page: '
+        '<code>hypotheses.html#&lt;id&gt;</code>. A registry row id is stable and appears on the '
+        'row it names. Receipt paths are given relative to the research workspace and are the '
+        'names the instruments wrote, not renderings of them.</p>',
+
+        '<h2>Source revisions</h2>',
+        '<div class="tablewrap"><table><thead><tr><th>Record</th><th>Path</th>'
+        '<th>Records</th><th>Source mtime (UTC)</th></tr></thead><tbody>'
+        '<tr><td>Loop log</td><td><code>%s</code></td><td class="num">%d</td><td>%s</td></tr>'
+        '<tr><td>Attempt registry</td><td><code>%s</code></td><td class="num">%d</td><td>%s</td></tr>'
+        '<tr><td>Acceptance source</td><td><code>%s</code></td><td class="num">%s</td>'
+        '<td>sha256 %s</td></tr>'
+        '</tbody></table></div>'
+        % (render.esc(coverage['loop']['path']), coverage['loop']['records_in_source'],
+           render.esc(coverage['loop']['mtime_utc']),
+           render.esc(coverage['registry']['path']), coverage['registry']['records_in_source'],
+           render.esc(coverage['registry']['mtime_utc']),
+           render.esc((f.get('acceptance_source') or {}).get('path')),
+           render.esc((f.get('acceptance_source') or {}).get('audited')),
+           render.esc(((coverage.get('featured') or {}).get('acceptance_source_verified')
+                       or {}).get('sha256', '')[:16])),
+
+        '<h2>Sessions</h2>',
+        '<div class="tablewrap"><table><thead><tr><th>#</th><th>Started (UTC)</th>'
+        '<th>Ended (UTC)</th><th>Attempts</th><th>State</th></tr></thead><tbody>%s</tbody></table>'
+        '</div>' % srows,
+        '<p class="meta">%s</p>'
+        % render.esc(coverage['sessions'][0]['boundary_basis'] if coverage['sessions'] else ''),
+
+        '<h2>Published receipts</h2>',
+        '<div class="tablewrap"><table><thead><tr><th>Key</th><th>Mode</th><th>Bytes</th></tr>'
+        '</thead><tbody>%s</tbody></table></div>' % rows,
         '<p class="meta"><a href="method.html">How this page is made, what it omits, and how to '
-        'regenerate it &rarr;</a></p>'
-        % (len(hyps), len(registry), coverage['loop']['records_in_source'],
-           len([x for x in coverage['receipts'] if x['status'] == 'READ']),
-           render.esc(fm.get('title')), render.esc(fm.get('subtitle')),
-           render.esc(fm.get('question')), rows,
-           ', '.join('%s %d' % (k, v) for k, v in sorted(by_v.items()))))
-    return render.shell('Ember Research', 'index', body, stamp)
+        'regenerate it &rarr;</a> &nbsp;&middot;&nbsp; generator source is published under '
+        '<code>_generator/</code>.</p>',
+    ]
+    return render.shell('Agents', 'agents', ''.join(body), stamp)
 
 
 def method_page(coverage, stamp, joined):
@@ -516,7 +788,7 @@ def method_page(coverage, stamp, joined):
            coverage['sanitizer']['absolute_local_paths_normalized'],
            coverage['sanitizer']['operator_name_occurrences_replaced'],
            coverage['sanitizer']['credential_shaped_strings_flagged'], len(joined)))
-    return render.shell('How this page is made', 'method', body, stamp)
+    return render.shell('How this page is made', 'agents', body, stamp)
 
 
 if __name__ == '__main__':

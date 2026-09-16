@@ -200,6 +200,18 @@ def fixture(tag):
         shutil.copyfile(os.path.join(sources.SEAT_ROOT, rel), os.path.join(root, rel))
     for rel in sources.RECEIPT_ALLOWLIST.values():
         shutil.copyfile(os.path.join(sources.SEAT_ROOT, rel), os.path.join(root, rel))
+    # The featured selection and the acceptance source it transcribes are build inputs too.
+    # The source is copied byte-for-byte so the loader's digest guard sees the same file the
+    # transcription was taken from; a fixture that changed it would refuse, correctly.
+    shutil.copyfile(os.path.join(sources.SEAT_ROOT, sources.FEATURED),
+                    os.path.join(root, sources.FEATURED))
+    fdoc = json.load(io.open(os.path.join(root, sources.FEATURED), encoding='utf-8'))
+    acc = ((fdoc.get('featured') or {}).get('acceptance_source') or {}).get('path')
+    if acc:
+        dst = os.path.join(root, acc)
+        if not os.path.isdir(os.path.dirname(dst)):
+            os.makedirs(os.path.dirname(dst))
+        shutil.copyfile(os.path.join(sources.SEAT_ROOT, acc), dst)
     return root
 
 
