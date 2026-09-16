@@ -241,6 +241,110 @@ footer .wrap>div{overflow-wrap:anywhere}
   *{animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important;scroll-behavior:auto!important}
 }
+
+/* ---------- Overview ---------------------------------------------------------------
+   What Ember is, then what is being worked on, then what was tried. In that order and
+   above the fold, because the reader arriving here is catching up, not auditing. */
+
+.hero{max-width:66ch;margin:0 0 6px}
+.hero p{margin:0 0 12px}
+.asof{display:inline-flex;align-items:baseline;gap:7px;font-family:"IBM Plex Sans",sans-serif;
+  font-size:12.5px;color:var(--ink-3);border:1px solid var(--rule);background:var(--panel);
+  border-radius:2px;padding:5px 9px}
+.asof{flex-wrap:wrap}
+.asof b{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.feature{border:1px solid var(--rule);border-left:3px solid var(--amber);background:var(--panel);
+  border-radius:3px;padding:18px 20px;margin:16px 0 0}
+.feature .eyebrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline;margin-bottom:9px}
+.feature h2{margin:0;padding:0;border:none;font-size:20px}
+.feature .goal{font-size:16.5px;color:var(--ink);margin:0 0 10px;max-width:68ch}
+.feature .why{font-size:14.5px;color:var(--ink-2);margin:0;max-width:68ch;
+  font-family:"IBM Plex Sans",sans-serif}
+
+.measure{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  margin:18px 0 0}
+.mcard{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:14px 16px}
+.mcard .label{display:block;margin-bottom:7px}
+.mcard .big{font:600 27px/1.05 "IBM Plex Sans",sans-serif;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;display:block}
+.mcard .unit{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;
+  font-weight:400;letter-spacing:0}
+.mcard .sub{font-size:13px;color:var(--ink-2);font-family:"IBM Plex Sans",sans-serif;
+  margin:7px 0 0;line-height:1.5}
+.mcard.flat .big{color:var(--ink-2)}
+
+.bar{height:9px;background:var(--mono-bg);border:1px solid var(--rule);border-radius:2px;
+  margin:11px 0 7px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--amber)}
+.barnote{font-size:12.5px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;
+  font-variant-numeric:tabular-nums}
+
+.conds{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px}
+.conds li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+  background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:11px 14px}
+.pill{font:600 10px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;padding:5px 8px;
+  border-radius:2px;white-space:nowrap;margin-top:2px}
+.p-met{background:var(--amber);color:var(--panel)}
+.p-rem{background:transparent;color:var(--ink-3);border:1.5px solid var(--rule)}
+.conds .cname{font:600 14.5px/1.35 "IBM Plex Sans",sans-serif;margin:0 0 3px;color:var(--ink)}
+.conds .cplain{font-size:14px;color:var(--ink-2);margin:0;max-width:74ch}
+.conds .cwhy{font-size:13px;color:var(--ink-3);margin:5px 0 0;max-width:74ch;
+  font-family:"IBM Plex Sans",sans-serif}
+.condcount{font-family:"IBM Plex Sans",sans-serif;font-size:13.5px;color:var(--ink-2);margin:0}
+
+.sessionbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;
+  background:var(--mono-bg);border:1px solid var(--rule);border-left:3px solid var(--ink-3);
+  border-radius:2px;padding:9px 13px;margin:16px 0 0;
+  font-family:"IBM Plex Sans",sans-serif;font-size:13px;color:var(--ink-2)}
+.sessionbar b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.sessionbar .why{color:var(--ink-3);font-size:12.5px}
+
+/* The attempts table. Real table on a desktop; stacked rows on a phone, where five
+   columns of prose inside a horizontal scroller is unreadable on any screen. */
+table.attempts{font-size:13.5px}
+table.attempts td{vertical-align:top;overflow-wrap:anywhere}
+table.attempts .tname{font-weight:600;color:var(--ink);line-height:1.4}
+table.attempts .tkind{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin-top:4px}
+table.attempts tr.exp>td{padding-top:0;border-bottom:1px solid var(--rule-2)}
+table.attempts tr.exp details{border-top:none;padding:0 0 9px}
+table.attempts tr.exp details .body{padding-left:19px;font-size:14px}
+table.attempts tr.exp dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+table.attempts tr.exp dt{font:600 11px/1.5 "IBM Plex Sans",sans-serif;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+table.attempts tr.exp dd{margin:0;color:var(--ink-2);overflow-wrap:anywhere}
+table.attempts tr:target{background:var(--amber-soft)}
+
+@media (max-width:820px){
+  .tablewrap:has(table.attempts){overflow-x:visible;border:none;background:none}
+  table.attempts,table.attempts tbody,table.attempts tr,table.attempts td{display:block;width:auto}
+  table.attempts thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    white-space:nowrap}
+  table.attempts tr.row{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+    padding:13px 15px 4px;margin:0 0 2px}
+  table.attempts tr.row td{border:none;padding:0 0 9px}
+  table.attempts tr.row td[data-l]::before{content:attr(data-l);display:block;
+    font:600 10px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);margin-bottom:4px}
+  table.attempts tr.exp{background:var(--panel);border:1px solid var(--rule);border-top:none;
+    border-radius:0 0 3px 3px;margin:-3px 0 12px;padding:0 15px}
+  table.attempts tr.exp>td{border-bottom:none;padding:0}
+  table.attempts tr.exp details .body{padding-left:0}
+  /* One column: an unbreakable term in an `auto` track is wider than the screen, which
+     starves the value beside it down to a single character per line. */
+  table.attempts tr.exp dl{grid-template-columns:1fr;gap:0}
+  table.attempts tr.exp dt{white-space:normal;margin:9px 0 3px}
+  table.attempts tr.exp dt:first-child{margin-top:2px}
+}
+
+@media (max-width:760px){
+  .feature{padding:15px 16px}
+  .mcard{padding:12px 14px}
+  .mcard .big{font-size:23px}
+  .conds li{grid-template-columns:1fr;gap:7px}
+  .pill{justify-self:start}
+}
 """
 
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
@@ -254,9 +358,8 @@ def shell(title, current, body, stamp, standalone=True):
     nav = ''.join(
         '<a href="%s"%s>%s</a>' % (h, ' aria-current="page"' if k == current else '', esc(t))
         for k, h, t in (('index', 'index.html', 'Overview'),
-                        ('ledger', 'hypotheses.html', 'Hypothesis ledger'),
-                        ('article', 'fp16-kernel-selection.html', 'FP16 & kernel selection'),
-                        ('method', 'method.html', 'How this page is made')))
+                        ('research', 'research.html', 'Research'),
+                        ('agents', 'agents.html', 'Agents')))
     head = ('<title>%s</title>%s<style>%s</style>' % (esc(title), FONTS, CSS))
     page = (
         '<header class="site"><div class="wrap">'
@@ -321,6 +424,213 @@ SEARCH_JS = """
   run();
 })();
 """
+
+
+def _is_label(part):
+    """A section heading written inline, not a claim.
+
+    Recognised by shape rather than by wording: a short run whose letters are almost all capitals.
+    The records use "MECHANISM.", "WHAT THIS DOES NOT CLOSE," and numbered all-caps clause titles;
+    matching those strings would work today and silently stop working on the next record that
+    invents a heading, so the test is on the form.
+    """
+    p = part.strip().lstrip('(').lstrip('0123456789').lstrip(') ').strip()
+    letters = [c for c in p if c.isalpha()]
+    if not letters:
+        return False
+    upper = sum(1 for c in letters if c.isupper()) / float(len(letters))
+    return upper >= 0.8 and len(p) <= 120
+
+
+def _sentence(text, prefer_digit=False, cap=230):
+    """First sentence of a field, optionally the first one carrying a number.
+
+    Condensation by selection. The cell shows a sentence the record already contains; the
+    expansion shows the field entire. Nothing is rewritten, so a cell can be wrong only in the
+    way its source is wrong.
+    """
+    if not text:
+        return ''
+    s = ' '.join(str(text).split())
+    parts = [p for p in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9(])', s) if p.strip()]
+    body = [p for p in parts if not _is_label(p)] or parts
+    pick = None
+    if prefer_digit:
+        for p in body:
+            if re.search(r'\d', p):
+                pick = p
+                break
+    if pick is None:
+        pick = body[0] if body else s
+    if len(pick) > cap:
+        pick = pick[:cap].rsplit(' ', 1)[0] + '\u2026'
+    return pick
+
+
+def humanise(hid):
+    """A hypothesis id is a sentence with hyphens. Restore the sentence; drop the date stamp."""
+    s = re.sub(r'-?20\d{6}([tT]\d{4}[zZ])?$', '', str(hid or ''))
+    s = s.replace('-', ' ').replace('_', ' ').strip()
+    return (s[:1].upper() + s[1:]) if s else str(hid)
+
+
+def as_of(stamp, label='As of'):
+    return ('<p class="asof ui"><span>%s</span><b>%s</b>'
+            '<span>&middot; source events through</span><b>%s</b></p>'
+            % (esc(label), esc(stamp.get('generated_at')),
+               esc(stamp.get('source_events_through'))))
+
+
+def measure_block(m, prev_value):
+    """Latest comparable measurement against its target, and the change since session start.
+
+    An unknown stays unknown: when the receipt is absent, or when no earlier comparable value
+    exists to difference against, the card says so instead of showing a zero. A zero is a
+    measurement and would assert that the quantity was observed and found unchanged.
+    """
+    if m.get('status') != 'READ':
+        return ('<div class="measure"><div class="mcard"><span class="label">Measured position</span>'
+                '<span class="big">Unknown</span><p class="sub">%s</p></div></div>'
+                % esc(m.get('why') or 'no adjudication receipt is present'))
+    v, target = float(m['value']), float(m['target'])
+    unit = m.get('units') or ''
+    frac = max(0.0, min(1.0, v / target)) if target else 0.0
+    if prev_value is None:
+        change = ('<span class="big">Unknown</span>'
+                  '<p class="sub">No earlier comparable measurement is recorded inside this '
+                  'session, so the change across it cannot be stated. Unknown is not zero.</p>')
+        cls = ' flat'
+    else:
+        d = v - float(prev_value)
+        if abs(d) < 1e-9:
+            change = ('<span class="big">No change</span>'
+                      '<p class="sub">The same adjudicated measurement stands at the start and the '
+                      'end of this session. Work in the table below is diagnostic; none of it '
+                      'produced a new governed number.</p>')
+            cls = ' flat'
+        else:
+            change = ('<span class="big">%+,.0f<span class="unit"> %s</span></span>'
+                      '<p class="sub">Against %s at the start of this session.</p>'
+                      % (d, esc(unit), format(float(prev_value), ',.0f')))
+            cls = ''
+    return (
+        '<div class="measure">'
+        '<div class="mcard"><span class="label">Measured &mdash; %s</span>'
+        '<span class="big">%s<span class="unit"> %s</span></span>'
+        '<div class="bar"><i style="width:%.1f%%"></i></div>'
+        '<p class="barnote">%.1f%% of the %s target</p>'
+        '<p class="sub">%s over %s updates and %s seconds, adjudicated against the target by the '
+        'same statistic.</p></div>'
+        '<div class="mcard"><span class="label">Target</span>'
+        '<span class="big">%s<span class="unit"> %s</span></span>'
+        '<p class="sub">%s %s. The target is the condition, not a forecast; this page carries no '
+        'estimate of when it will be reached.</p></div>'
+        '<div class="mcard%s"><span class="label">Change since session start</span>%s</div>'
+        '</div>'
+        % (esc(m.get('label') or 'position'), format(v, ',.0f'), esc(unit),
+           frac * 100.0, frac * 100.0, format(target, ',.0f'),
+           esc(str(m.get('statistic') or 'the declared statistic')),
+           format(int(m.get('updates') or 0), ','),
+           format(float(m.get('seconds') or 0.0), ',.0f'),
+           format(target, ',.0f'), esc(unit),
+           esc(str(m.get('comparator') or 'compared')), esc(str(m.get('statistic') or '')),
+           cls, change))
+
+
+def conditions_block(conds):
+    met = [c for c in conds if str(c.get('state')).upper() == 'MET']
+    rem = [c for c in conds if str(c.get('state')).upper() != 'MET']
+    items = ''.join(
+        '<li><span class="pill %s">%s</span><div>'
+        '<p class="cname">%s</p><p class="cplain">%s</p>%s</div></li>'
+        % ('p-met' if str(c.get('state')).upper() == 'MET' else 'p-rem',
+           esc('MET' if str(c.get('state')).upper() == 'MET' else 'REMAINING'),
+           esc(c.get('name')), esc(c.get('plain')),
+           ('<p class="cwhy">%s</p>' % esc(c['why'])) if c.get('why') else '')
+        for c in conds)
+    return ('<p class="condcount"><b>%d of %d conditions met</b> &mdash; %s remaining. '
+            'Conditions are met or not met; this page states which, and computes no score over '
+            'them. Being close on the measurement above does not partly satisfy anything.</p>'
+            '<ul class="conds">%s</ul>'
+            % (len(met), len(conds), len(rem), items))
+
+
+def session_bar(session, total_sessions):
+    return ('<div class="sessionbar"><span class="label">Session boundary</span>'
+            '<span>This session began <b>%s</b> and its latest recorded event is <b>%s</b>.</span>'
+            '<span>%s</span>'
+            '<span class="why">%s. A new session does not reset the campaign: '
+            'the measurement and the conditions above carry across all %d.</span></div>'
+            % (esc(session.get('started')), esc(session.get('ended')),
+               ('Earlier sessions remain in the <a href="research.html#sessions">research record</a>.'
+                if total_sessions > 1 else 'This is the first recorded session.'),
+               esc(session.get('boundary_basis')), total_sessions))
+
+
+def _kind_of(h, rows):
+    """Diagnostic or governed, decided by the record rather than by tone.
+
+    A result is GOVERNED only if a registry row says it moves an acceptance gate. Everything
+    else is diagnostic: it measures where time goes, under instrumentation that changes the
+    timing, and earns no progress credit.
+    """
+    for r in rows:
+        mg = str(r.get('moves_gate') or '').strip().lower()
+        if mg and not mg.startswith('no'):
+            return 'governed'
+    ran_on_card = any(e.get('gpu') for e in h.get('events', []))
+    return 'diagnostic on the card' if ran_on_card else 'diagnostic, existing capture'
+
+
+def attempts_table(hyps, rows_by_hyp):
+    """One row per attempt, not per log event, each expanding to its own methods and limits."""
+    body = []
+    for h in sorted(hyps, key=lambda x: x.get('first_ts') or ''):
+        rows = rows_by_hyp.get(h['id'], [])
+        hid = esc(h['id'])
+        verdict = h.get('verdict') or 'open'
+        tested = _sentence(h.get('explanation') or h.get('observation'), cap=200)
+        result = _sentence(h.get('ruling'), prefer_digit=True, cap=260)
+        learned = _sentence(h.get('not_closed') or h.get('closing'), cap=220)
+        body.append(
+            '<tr class="row" id="a-%s">'
+            '<td data-l="Test"><span class="tname">%s</span>'
+            '<span class="tkind">%s</span></td>'
+            '<td data-l="Change tested">%s</td>'
+            '<td data-l="Result versus criterion">%s</td>'
+            '<td data-l="Verdict">%s</td>'
+            '<td data-l="What we learned">%s</td></tr>'
+            % (hid, esc(humanise(h['id'])), esc(_kind_of(h, rows)),
+               esc(tested) or '<span class="none">not recorded</span>',
+               esc(result) or '<span class="none">not recorded</span>',
+               _chip(verdict),
+               esc(learned) or '<span class="none">not recorded</span>'))
+
+        dl = []
+        if h.get('criterion'):
+            dl.append(('Criterion, frozen before the run', esc(h['criterion'])))
+        if h.get('instrument'):
+            dl.append(('Instrument', '<code>%s</code>' % esc(h['instrument'])))
+        if h.get('receipts'):
+            dl.append(('Evidence', '<br>'.join('<code>%s</code>' % esc(r) for r in h['receipts'])))
+        if h.get('ruling'):
+            dl.append(('Result in full', esc(h['ruling'])))
+        if h.get('not_closed'):
+            dl.append(('Limitations, and what this does not close', esc(h['not_closed'])))
+        if h.get('successor'):
+            dl.append(('Next', esc(h['successor'])))
+        dl.append(('Record', '<code>%s</code> &middot; %s &rarr; %s &middot; '
+                             '<a href="hypotheses.html#%s">full entry</a>'
+                             % (hid, esc(h.get('first_ts')), esc(h.get('last_ts')), hid)))
+        body.append(
+            '<tr class="exp"><td colspan="5"><details><summary>Methods, evidence and '
+            'limitations</summary><div class="body"><dl>%s</dl></div></details></td></tr>'
+            % ''.join('<dt>%s</dt><dd>%s</dd>' % (k, v) for k, v in dl))
+
+    return ('<div class="tablewrap"><table class="attempts"><thead><tr>'
+            '<th>Test</th><th>Change tested</th><th>Result versus criterion</th>'
+            '<th>Verdict</th><th>What we learned</th></tr></thead>'
+            '<tbody>%s</tbody></table></div>' % ''.join(body))
 
 
 def ledger_page(hyps, registry, joinmeta, coverage, aliases, stamp):
