@@ -90,3 +90,30 @@ Before any GPU execution: pass native CPU checks, review and freeze the added fi
 ## Sources
 
 The current decoder and document reduction at the baseline commit define the reference arithmetic. External API references: Triton 3.5.0 `python/triton/language/semantic.py` (supported FP8 operand combinations); Triton `language.dot` documentation (FP32 dot output); NVIDIA PTX ISA MMA instructions (SM89 FP8 instruction forms). Hardware and learning behavior still require native execution.
+
+## Explicit accumulation boundary correction (2026-09-17)
+
+The capability diagnostic at `ecb9b8e70398fd51dc4756e9b148129834d61cc6`
+retains a source-to-codegen discrepancy: `partial = dot(left,right)` followed
+by `acc = acc + partial` was lowered to `tt.dot(left,right,acc)` rather than
+independent zero-initialized dot partials and separate FP32 additions.
+The `enable_fp_fusion=False` launch option did not prevent this rewrite.
+The saved cancellation fixture's bundled dgrad failed 1660 of 2048 element
+checks while the separate dgrad cancelled exactly. Quantized operands, scales
+and transposes passed their exact checks. This identifies an implementation
+boundary defect; it does not prove that fixing it resolves every hardware
+rounding discrepancy.
+
+The correction makes only the inter-partial addition explicit using PTX
+`add.rn.f32` through Triton's elementwise inline assembly. BK remains 32,
+the dot operands remain native FP8, and the output scale/rounding rules,
+fixtures, original oracle, learning boundary and performance screens stay
+unchanged. There is no BF16 fallback and no widened numerical tolerance.
+
+A compiler-only check and the runtime instruction report now require each
+optimized-IR FP8 dot to start from a constant-zero accumulator and feed an
+explicit FP32-add boundary, with FP32 addition also present in PTX. This is a
+bounded generated-code check, not proof of hardware accuracy. The unchanged
+native capability suite must pass on the card before any full benchmark.
+The prior failed capability receipts remain immutable. Compilation and native
+execution of the corrected kernels require fresh evidence at the new commit.

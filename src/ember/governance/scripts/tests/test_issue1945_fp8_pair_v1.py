@@ -468,11 +468,15 @@ def test_native_sm89_compilation_without_gpu(kernel_name, modules, tmp_path, mon
         source = ASTSource(fn=kernel, signature=signature, constexprs=constants)
         compiled = triton.compile(source, target=target, options=options)
         ptx = compiled.asm['ptx']
+        # Retain successful compiler output even if a subsequent verifier fails.
+        for extension in ('ttir', 'ptx'):
+            (tmp_path / (kernel_name+'-'+label+'.'+extension)).write_text(
+                compiled.asm[extension], encoding='utf-8')
         assert '.target sm_89' in ptx
         assert compiled.asm['cubin'], 'Compiler did not produce a CUDA binary'
         if kernel_name in ('_fprop', '_dgrad'):
             assert c.has_fp8_mma(ptx, kernel_name == '_dgrad'), (kernel_name, label)
-        (tmp_path / (kernel_name+'-'+label+'.ptx')).write_text(ptx, encoding='utf-8')
+            assert c.fp32_promotion_report(compiled.asm['ttir'],ptx)['verified'], (kernel_name,label)
     assert not torch.cuda.is_initialized()
 
 
@@ -589,3 +593,146 @@ def test_diagnostic_instrumentation_never_changes_frozen_oracle(modules):
             return bool(torch.isfinite(actual).all() and ((actual.double()-ref).abs()<=tolerance).all())
     ''')).body[0]
     assert ast.dump(actual, include_attributes=False) == ast.dump(expected, include_attributes=False)
+
+
+@pytest.mark.parametrize('kernel_name', ['_fprop', '_dgrad'])
+def test_fp8_partial_sums_have_explicit_fp32_add_boundary(kernel_name):
+    """Plain acc + dot is combined into dot(acc) even with FP fusion disabled."""
+    import ast
+    tree = ast.parse((SCRIPTS/'fp8_pair_v1/kernels.py').read_text(encoding='utf-8'))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == kernel_name)
+    additions = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Attribute)
+                 and isinstance(n.func.value, ast.Name)
+                 and n.func.value.id == 'tl' and n.func.attr == 'inline_asm_elementwise']
+    assert len(additions) == 1, 'Each reduction loop needs its own non-fusible FP32 addition'
+    kw = {x.arg: x.value for x in additions[0].keywords}
+    assert ast.literal_eval(kw['asm']) == 'add.rn.f32 $0, $1, $2;'
+    assert ast.literal_eval(kw['constraints']) == '=f,f,f'
+    assert [n.id for n in kw['args'].elts] == ['acc', 'partial']
+    assert ast.unparse(kw['dtype']) == 'tl.float32'
+    assert ast.literal_eval(kw['is_pure']) is True
+    assert ast.literal_eval(kw['pack']) == 1
+    assert not any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add)
+                   and {ast.unparse(n.left), ast.unparse(n.right)} == {'acc','partial'}
+                   for n in ast.walk(fn))
+
+
+def _promotion_fixture():
+    # Reduced compiler-format example: not a performance result or executed kernel.
+    ir = '''
+%zero = arith.constant dense<0.000000e+00> : tensor<32x128xf32>
+%partial = tt.dot %left, %right, %zero, inputPrecision = tf32 : tensor<32x32xf8E4M3FN> * tensor<32x128xf8E4M3FN> -> tensor<32x128xf32>
+%sum = tt.elementwise_inline_asm "add.rn.f32 $0, $1, $2;" {constraints = "=f,f,f", packed_element = 1 : i32, pure = true} %running, %partial : tensor<32x128xf32>, tensor<32x128xf32> -> tensor<32x128xf32>
+'''
+    ptx = 'mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {d}, {a}, {b}, {z};\nadd.rn.f32 %f0, %f1, %f2;\n'
+    return ir, ptx
+
+
+def _promotion_checker(modules):
+    c, _ = modules
+    check = getattr(c, 'fp32_promotion_report', None)
+    assert callable(check), 'Missing emitted-code FP32-promotion check'
+    return check
+
+
+def test_emitted_promotion_checker_accepts_zero_dot_plus_add(modules):
+    report = _promotion_checker(modules)(*_promotion_fixture())
+    assert report['zero_initialized_dots'] == 1
+    assert report['fp32_add_boundaries'] == 1
+    assert report['verified'] is True
+
+
+@pytest.mark.parametrize('defect', ['carried_accumulator', 'nonzero_constant', 'missing_ir_add',
+                                   'unrelated_ir_add', 'missing_ptx_add', 'comment_only',
+                                   'missing_dot', 'non_fp32_add', 'plain_add'])
+def test_emitted_promotion_checker_refuses_lost_boundary(modules, defect):
+    check = _promotion_checker(modules)
+    ir, ptx = _promotion_fixture()
+    if defect == 'carried_accumulator': ir = ir.replace('%right, %zero', '%right, %running')
+    elif defect == 'nonzero_constant': ir = ir.replace('0.000000e+00', '1.000000e+00')
+    elif defect == 'missing_ir_add': ir = '\n'.join(x for x in ir.splitlines() if 'inline_asm' not in x)
+    elif defect == 'unrelated_ir_add': ir = ir.replace('%running, %partial :', '%running, %unrelated :')
+    elif defect == 'missing_ptx_add': ptx = ptx.splitlines()[0]
+    elif defect == 'comment_only': ptx = ptx.splitlines()[0] + '\n// add.rn.f32 %f0, %f1, %f2;'
+    elif defect == 'missing_dot': ir = '\n'.join(x for x in ir.splitlines() if 'tt.dot' not in x)
+    elif defect == 'non_fp32_add': ir = ir.replace('add.rn.f32', 'add.rn.f16')
+    elif defect == 'plain_add': ir = ir.replace('tt.elementwise_inline_asm', 'arith.addf')
+    with pytest.raises(ValueError, match='FP32_PROMOTION_REQUIRED'):
+        check(ir, ptx)
+
+
+def test_emitted_promotion_guard_is_called_by_runtime_and_aot():
+    import ast
+    tree = ast.parse((SCRIPTS/'fp8_pair_v1/kernels.py').read_text(encoding='utf-8'))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'NativeOps')
+    fn = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'instruction_report')
+    calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == 'fp32_promotion_report']
+    assert len(calls) == 1, 'Native instruction report must check promotion as well as FP8 opcodes'
+    test_tree = ast.parse(Path(__file__).read_text(encoding='utf-8'))
+    aot = next(n for n in test_tree.body if isinstance(n, ast.FunctionDef)
+               and n.name == 'test_native_sm89_compilation_without_gpu')
+    assert any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+               and n.func.attr == 'fp32_promotion_report' for n in ast.walk(aot))
+
+
+@pytest.mark.parametrize('attributes', [
+    'constraints = "=f,f,f", packed_element = 1 : i32, pure = true',
+    'packed_element = 1 : i32, pure = true, constraints = "=f,f,f"',
+    'pure = true, constraints = "=f,f,f", packed_element = 1 : i32',
+])
+def test_promotion_parser_accepts_typed_inline_asm_attributes(modules, attributes):
+    """Regression: the first colon belongs to an attribute, not the operands.
+
+    This reduced fixture follows Triton 3.5 TritonOps.td's assembly format;
+    it is not represented as an emitted or executed kernel.
+    """
+    ir, ptx = _promotion_fixture()
+    canonical = 'constraints = "=f,f,f", packed_element = 1 : i32, pure = true'
+    ir = ir.replace(canonical, attributes)
+    report = _promotion_checker(modules)(ir, ptx)
+    assert report['verified'] and report['fp32_add_boundaries'] == 1
+
+
+@pytest.mark.parametrize('operand', ['%partial_extra', '%partial.1', '%other'])
+def test_promotion_parser_requires_exact_operand_identity(modules, operand):
+    ir, ptx = _promotion_fixture()
+    ir = ir.replace('%running, %partial :', '%running, '+operand+' :')
+    with pytest.raises(ValueError, match='FP32_PROMOTION_REQUIRED'):
+        _promotion_checker(modules)(ir, ptx)
+
+
+@pytest.mark.parametrize('location', ['result', 'attribute', 'source_location'])
+def test_promotion_parser_ignores_nonoperand_mentions(modules, location):
+    ir, ptx = _promotion_fixture()
+    ir = ir.replace('%running, %partial :', '%running, %other :')
+    if location == 'result':
+        # An invalid redefinition must not count as use of the dot result.
+        ir = ir.replace('%sum = tt.elementwise_inline_asm', '%partial = tt.elementwise_inline_asm')
+    elif location == 'attribute':
+        ir = ir.replace('packed_element = 1 : i32', 'note = "%partial", packed_element = 1 : i32')
+    else:
+        ir = ir.rstrip() + ' loc("%partial")\n'
+    with pytest.raises(ValueError, match='FP32_PROMOTION_REQUIRED'):
+        _promotion_checker(modules)(ir, ptx)
+
+
+@pytest.mark.parametrize('missing', ['first', 'second'])
+def test_promotion_parser_checks_every_dot(modules, missing):
+    ir, ptx = _promotion_fixture()
+    dot = next(x for x in ir.splitlines() if ' = tt.dot ' in x)
+    add = next(x for x in ir.splitlines() if ' = tt.elementwise_inline_asm ' in x)
+    ir += dot.replace('%partial =', '%second =') + '\n'
+    ir += add.replace('%sum =', '%sum2 =').replace('%partial :', '%second :') + '\n'
+    name = '%partial' if missing == 'first' else '%second'
+    ir = ir.replace('%running, '+name+' :', '%running, %other :')
+    with pytest.raises(ValueError, match='FP32_PROMOTION_REQUIRED'):
+        _promotion_checker(modules)(ir, ptx)
+
+
+def test_promotion_parser_rejects_malformed_attribute_dictionary(modules):
+    ir, ptx = _promotion_fixture()
+    ir = ir.replace('pure = true}', 'pure = true')
+    with pytest.raises(ValueError, match='FP32_PROMOTION_REQUIRED'):
+        _promotion_checker(modules)(ir, ptx)
