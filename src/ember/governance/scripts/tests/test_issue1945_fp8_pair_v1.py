@@ -474,3 +474,118 @@ def test_native_sm89_compilation_without_gpu(kernel_name, modules, tmp_path, mon
             assert c.has_fp8_mma(ptx, kernel_name == '_dgrad'), (kernel_name, label)
         (tmp_path / (kernel_name+'-'+label+'.ptx')).write_text(ptx, encoding='utf-8')
     assert not torch.cuda.is_initialized()
+
+
+def test_oracle_diagnostics_helper_exists(modules):
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    assert callable(getattr(probe, 'oracle_diagnostics', None)), 'Missing element-level oracle diagnostics'
+
+
+@pytest.mark.parametrize('case', ['exact', 'error', 'zero', 'cancellation', 'nan', 'inf'])
+def test_oracle_diagnostics_reproduce_original_gate(modules, case):
+    import json
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    helper = getattr(probe, 'oracle_diagnostics', None)
+    assert callable(helper), 'Missing element-level oracle diagnostics'
+    reference = torch.tensor([[0., 1., -2.], [3., 1e-6, -4.]], dtype=torch.float64)
+    bound = reference.abs() + 1
+    actual = reference.to(torch.bfloat16)
+    if case == 'error': actual[0, 1] = 1.25
+    elif case == 'zero': actual.zero_(); reference.zero_(); bound.zero_()
+    elif case == 'cancellation': actual[1, 1] = .001; bound[1, 1] = 100
+    elif case == 'nan': actual[0, 1] = float('nan')
+    elif case == 'inf': actual[0, 1] = float('inf')
+    original = [t.clone() for t in (actual, reference, bound)]
+    detail = helper(torch, actual, reference, bound)
+    assert detail['passed'] is probe.oracle_close(torch, actual, reference, bound)
+    assert detail['failed_elements'] == sum(detail['row_failed_elements'])
+    assert detail['failed_elements'] == sum(detail['column_failed_elements'])
+    json.dumps(detail, allow_nan=False)
+    for before, after in zip(original, (actual, reference, bound)):
+        torch.testing.assert_close(before, after, rtol=0, atol=0, equal_nan=True)
+
+
+def test_oracle_diagnostics_locates_error_and_reports_original_limit(modules):
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    helper = getattr(probe, 'oracle_diagnostics', None)
+    assert callable(helper), 'Missing element-level oracle diagnostics'
+    reference = torch.ones(2, 3, dtype=torch.float64)
+    bound = reference.clone()
+    actual = reference.to(torch.bfloat16); actual[1, 2] = 2
+    result = helper(torch, actual, reference, bound)
+    assert not result['passed'] and result['failed_elements'] == 1
+    assert result['worst_element']['index'] == [1, 2]
+    assert result['worst_element']['actual'] == 2
+    assert result['worst_element']['rounded_reference'] == 1
+    assert result['worst_element']['tolerance'] == pytest.approx(1/128+1e-6+1e-30)
+    assert result['max_abs_error'] == 1
+
+
+def test_oracle_diagnostics_rejects_shape_broadcasting(modules):
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    helper = getattr(probe, 'oracle_diagnostics', None)
+    assert callable(helper), 'Missing element-level oracle diagnostics'
+    with pytest.raises(ValueError, match='ORACLE_DIAGNOSTIC_SCHEMA'):
+        helper(torch, torch.ones(2, 3), torch.ones(1, 3), torch.ones(2, 3))
+
+
+def test_native_oracle_failure_keeps_diagnostics_and_return_value(modules, tmp_path):
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    observe = getattr(probe, 'record_oracle', None)
+    finish = getattr(probe, 'finish_native_checks', None)
+    assert callable(observe) and callable(finish), 'Missing failure evidence retention'
+    reference = torch.ones(2, 3, dtype=torch.float64)
+    actual = torch.full((2, 3), 2., dtype=torch.bfloat16)
+    checks = {'ordinary': {'D_fprop_oracle': False}, 'native_instructions': {}}
+    details, snapshots = {}, {}
+    assert observe(torch, details, snapshots, 'ordinary', 'D_fprop_oracle',
+                   actual, reference, reference) is False
+    actual.zero_()
+    assert snapshots['ordinary/D_fprop_oracle']['actual'].eq(2).all()
+    class FakeOps:
+        compiled = {}
+    with pytest.raises(ValueError, match='NATIVE_CHECK_FAILED'):
+        finish(torch, tmp_path, checks, details, snapshots, FakeOps())
+    assert (tmp_path/'native-checks.json').is_file()
+    assert (tmp_path/'native-oracle-diagnostics.json').is_file()
+    saved = torch.load(tmp_path/'native-oracle-tensors.pt', weights_only=True)
+    assert saved['ordinary/D_fprop_oracle']['actual'].eq(2).all()
+    import json
+    report = json.loads((tmp_path/'native-oracle-diagnostics.json').read_text())
+    assert report['tensor_archive_sha256'] == probe.file_sha(tmp_path/'native-oracle-tensors.pt')
+    # A second call cannot rewrite the first failure's evidence.
+    with pytest.raises(FileExistsError):
+        finish(torch, tmp_path, checks, details, snapshots, FakeOps())
+
+
+def test_native_oracle_success_keeps_codegen_without_executing_it(modules, tmp_path):
+    import types
+    import json
+    probe = importlib.import_module('fp8_pair_v1.probe')
+    finish = getattr(probe, 'finish_native_checks', None)
+    assert callable(finish), 'Missing failure evidence retention'
+    ops = types.SimpleNamespace(compiled={
+        'fprop_bundle:abc': types.SimpleNamespace(asm={'ptx': 'ptx bytes', 'ttir': 'ttir bytes'}),
+        'dgrad_bundle:def': types.SimpleNamespace(asm={'ptx': 'mixed ptx bytes'}),
+    })
+    checks = {'ordinary': {'D_fprop_oracle': True}, 'native_instructions': {}}
+    assert finish(torch, tmp_path, checks, {}, {}, ops) is checks
+    assert (tmp_path/'fprop_bundle-abc.ptx').read_text() == 'ptx bytes'
+    assert (tmp_path/'fprop_bundle-abc.ttir').read_text() == 'ttir bytes'
+    report = json.loads((tmp_path/'native-oracle-diagnostics.json').read_text())
+    assert report['codegen_sha256']['fprop_bundle-abc.ptx'] == probe.file_sha(tmp_path/'fprop_bundle-abc.ptx')
+
+
+def test_diagnostic_instrumentation_never_changes_frozen_oracle(modules):
+    import ast
+    import textwrap
+    probe_source = (SCRIPTS/'fp8_pair_v1/probe.py').read_text(encoding='utf-8')
+    tree = ast.parse(probe_source)
+    actual = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'oracle_close')
+    expected = ast.parse(textwrap.dedent('''\
+        def oracle_close(torch,actual,reference64,bound64):
+            ref=reference64.to(torch.bfloat16).double()
+            tolerance=ref.abs()/128 + bound64*1e-6 + 1e-30
+            return bool(torch.isfinite(actual).all() and ((actual.double()-ref).abs()<=tolerance).all())
+    ''')).body[0]
+    assert ast.dump(actual, include_attributes=False) == ast.dump(expected, include_attributes=False)

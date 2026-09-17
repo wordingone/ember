@@ -85,6 +85,112 @@ def oracle_close(torch,actual,reference64,bound64):
     return bool(torch.isfinite(actual).all() and ((actual.double()-ref).abs()<=tolerance).all())
 
 
+def oracle_diagnostics(torch, actual, reference64, bound64):
+    """Describe the ORIGINAL oracle result; never select or relax its margin.
+
+    All inputs are snapshotted on CPU. Nonfinite actual values remain failures,
+    with null summary scalars instead of non-standard NaN/Infinity JSON.
+    """
+    if (actual.ndim != 2 or actual.numel() == 0
+            or actual.shape != reference64.shape or actual.shape != bound64.shape):
+        raise ValueError('ORACLE_DIAGNOSTIC_SCHEMA: nonempty matching matrices required')
+    a = actual.detach().cpu().double()
+    expected = reference64.detach().cpu().double()
+    bound = bound64.detach().cpu().double()
+    if not bool(torch.isfinite(expected).all() and torch.isfinite(bound).all()
+                and (bound >= 0).all()):
+        raise ValueError('ORACLE_DIAGNOSTIC_SCHEMA: invalid reference or absolute-product sum')
+    rounded = expected.to(torch.bfloat16).double()
+    # Identical expression to oracle_close; diagnostic only, not a new gate.
+    tolerance = rounded.abs()/128 + bound*1e-6 + 1e-30
+    error = (a-rounded).abs()
+    finite = torch.isfinite(a)
+    failed = (~finite) | (error > tolerance)
+    ratio = torch.where(finite, error/tolerance, torch.full_like(a, float('inf')))
+    worst_flat = int(ratio.flatten().argmax())
+    row, column = divmod(worst_flat, a.shape[1])
+
+    def scalar(value):
+        value = float(value)
+        return value if -float('inf') < value < float('inf') else None
+
+    reference_norm = float(rounded.norm())
+    return dict(
+        passed=oracle_close(torch, a, expected, bound),
+        shape=list(a.shape), elements=a.numel(),
+        failed_elements=int(failed.sum()), nonfinite_elements=int((~finite).sum()),
+        max_abs_error=scalar(error.max()),
+        relative_l2_to_rounded_reference=(scalar((a-rounded).norm()/reference_norm)
+                                          if reference_norm else None),
+        zero_reference=reference_norm == 0,
+        max_error_over_tolerance=scalar(ratio.max()),
+        row_failed_elements=failed.sum(1).tolist(),
+        column_failed_elements=failed.sum(0).tolist(),
+        worst_element=dict(index=[row, column], actual=scalar(a[row,column]),
+            reference64=scalar(expected[row,column]),
+            rounded_reference=scalar(rounded[row,column]),
+            absolute_product_sum=scalar(bound[row,column]),
+            absolute_error=scalar(error[row,column]), tolerance=scalar(tolerance[row,column]),
+            error_over_tolerance=scalar(ratio[row,column])),
+    )
+
+
+def record_oracle(torch, details, snapshots, fixture, name, actual, reference64, bound64):
+    """Observe one comparison and return its unchanged original boolean."""
+    key = fixture+'/'+name
+    if key in snapshots or name in details.get(fixture, {}):
+        raise ValueError('ORACLE_DIAGNOSTIC_DUPLICATE: '+key)
+    snapshot = {label: value.detach().cpu().contiguous().clone()
+                for label, value in (('actual', actual), ('reference64', reference64),
+                                     ('absolute_product_sum64', bound64))}
+    snapshots[key] = snapshot
+    result = oracle_diagnostics(torch, snapshot['actual'], snapshot['reference64'],
+                                snapshot['absolute_product_sum64'])
+    details.setdefault(fixture, {})[name] = result
+    # The existing function remains the sole acceptance decision.
+    return oracle_close(torch, actual, reference64, bound64)
+
+
+def finish_native_checks(torch, output, checks, details, snapshots, ops):
+    """Retain failure evidence BEFORE raising, without rerunning any GPU kernel."""
+    output = Path(output)
+    write_new(output/'native-checks.json', checks)
+    archive = output/'native-oracle-tensors.pt'
+    with archive.open('xb') as handle:
+        torch.save(snapshots, handle)
+        handle.flush(); os.fsync(handle.fileno())
+    codegen = {}
+    for name, kernel in ops.compiled.items():
+        if not name.startswith(('fprop', 'dgrad')):
+            continue
+        for extension in ('ptx', 'ttir', 'ttgir', 'llir'):
+            text = kernel.asm.get(extension)
+            if not isinstance(text, str):
+                continue
+            filename = name.replace(':','-')+'.'+extension
+            path = output/filename
+            with path.open('x', encoding='utf-8', newline='\n') as handle:
+                handle.write(text)
+            codegen[filename] = file_sha(path)
+    report = dict(
+        schema='ember-fp8-native-oracle-diagnostics-v1',
+        claim='Diagnostic observations only; original native gate and all margins unchanged.',
+        fixtures=details, tensor_archive=archive.name,
+        tensor_archive_sha256=file_sha(archive), codegen_sha256=codegen,
+    )
+    write_new(output/'native-oracle-diagnostics.json', report)
+    for fixture, rows in details.items():
+        for name, row in rows.items():
+            print('ORACLE %s %s failed=%d/%d max_abs=%s max_limit_ratio=%s' % (
+                fixture, name, row['failed_elements'], row['elements'],
+                row['max_abs_error'], row['max_error_over_tolerance']), flush=True)
+    flags = [v for group, rows in checks.items() if group != 'native_instructions'
+             for v in rows.values()]
+    if not all(flags):
+        raise ValueError('NATIVE_CHECK_FAILED: see native-checks.json; do not alter margins')
+    return checks
+
+
 def native_checks(torch,ops,c,output):
     """Independent small exact-byte and FP64-product checks before any timing."""
     cpu=c.CpuOps()
@@ -102,6 +208,7 @@ def native_checks(torch,ops,c,output):
        'unequal_branches':(x0,wu0*32,wg0/32,du0/32,dg0*32),
     }
     checks={}
+    details, snapshots = {}, {}
     with torch.no_grad():
         for label,values in fixtures.items():
             x,wu,wg,du,dg=[t.cuda() for t in values]
@@ -124,13 +231,31 @@ def native_checks(torch,ops,c,output):
             fb=(ex.double().abs()@q.T.abs())*a64*b64
             dx64=(ee.double()@expected['qt'].double().T)*ec.double()[:,None]
             db=(ee.double().abs()@expected['qt'].double().T.abs())*ec.double()[:,None]
+            # Keep the exact quantized bytes and scales used by the oracle.
+            # These are host copies only; this instrumentation adds no native launches.
+            snapshots[label+'/operands'] = {
+                'x': values[0].detach().cpu().clone(),
+                'wu': values[1].detach().cpu().clone(),
+                'wg': values[2].detach().cpu().clone(),
+                'du': values[3].detach().cpu().clone(),
+                'dg': values[4].detach().cpu().clone(),
+                'qx_bytes': ex.view(torch.uint8).clone(),
+                'qw_bytes': expected['q'].view(torch.uint8).clone(),
+                'qt_bytes': expected['qt'].view(torch.uint8).clone(),
+                'qe_bytes': ee.view(torch.uint8).clone(),
+                'activation_scales': ea.clone(),
+                'weight_scales': expected['scales'].clone(),
+                'gradient_scales': ec.clone(),
+            }
             for mode in ('C','D','E'):
                 state=ops.prepare(mode,wu,wg)
                 u,g=ops.forward(mode,x,wu,wg,state)
-                exact[mode+'_fprop_oracle']=oracle_close(torch,torch.cat((u,g),1).cpu(),f64,fb)
+                exact[mode+'_fprop_oracle']=record_oracle(
+                    torch,details,snapshots,label,mode+'_fprop_oracle',torch.cat((u,g),1).cpu(),f64,fb)
                 if mode in ('D','E'):
                     dx=ops.dgrad(mode,du,dg,wu,wg,state)
-                    exact[mode+'_dgrad_oracle']=oracle_close(torch,dx.cpu(),dx64,db)
+                    exact[mode+'_dgrad_oracle']=record_oracle(
+                        torch,details,snapshots,label,mode+'_dgrad_oracle',dx.cpu(),dx64,db)
             ops.require_valid()
             checks[label]=exact
         # Modify later/unrelated token rows; earlier projection rows must not change.
@@ -171,13 +296,7 @@ def native_checks(torch,ops,c,output):
         del graph,outs,saved,changed,fresh
         ops.require_valid()
         checks['native_instructions']=ops.instruction_report()
-    write_new(output/'native-checks.json',checks)
-    flags=[v for group,rows in checks.items() if group!='native_instructions' for v in rows.values()]
-    if not all(flags): raise ValueError('NATIVE_CHECK_FAILED: see native-checks.json; do not alter margins')
-    for name,kernel in ops.compiled.items():
-        if name.startswith(('fprop','dgrad')):
-            (output/(name.replace(':','-')+'.ptx')).write_text(kernel.asm['ptx'],encoding='utf-8')
-    return checks
+    return finish_native_checks(torch,output,checks,details,snapshots,ops)
 
 
 def make_functions(torch,F,production,pair_fn,ops,x,wu,wg,wd,dy,du,dg,lengths,region):
