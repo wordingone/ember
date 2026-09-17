@@ -66,7 +66,6 @@ def check_case(torch,ops,c1,v1,model,values,*,sampled=False):
           activation_scale=torch.equal(ag.cpu(),s1),
           absorbed_gradient_bytes=torch.equal(eg.cpu().view(torch.uint8),e.view(torch.uint8)),
           absorbed_gradient_scale=torch.equal(cg.cpu(),gs))
-        del state,qg,ag,eg,cg
         if sampled:
             rows,columns,features=sample_plan(x.shape[0],wu.shape[0],wu.shape[1])
         else:
@@ -74,6 +73,15 @@ def check_case(torch,ops,c1,v1,model,values,*,sampled=False):
         qr=_pick(torch,q,rows); wr=_pick(torch,w,columns)
         er=_pick(torch,e,rows); wc=_pick(torch,w,cols=features)
         ar=s1[list(rows)]; br=ws[list(columns)]; gr=gs[list(rows)]
+        observed_quantized=dict(
+            qx_rows=_pick(torch,qg.detach().cpu(),rows).view(torch.uint8),
+            qw_output_rows=_pick(torch,state['q'].detach().cpu(),columns).view(torch.uint8),
+            qw_input_columns=_pick(torch,state['q'].detach().cpu(),cols=features).view(torch.uint8),
+            qe_rows=_pick(torch,eg.detach().cpu(),rows).view(torch.uint8),
+            activation_scales=ag.detach().cpu()[list(rows)],
+            weight_scales=state['scales'].detach().cpu()[list(columns)],
+            gradient_scales=cg.detach().cpu()[list(rows)])
+        del state,qg,ag,eg,cg
         f=wu.shape[0]
         forward=((model.matmul(qr,wr.T)*ar[:,None])*br).to(torch.bfloat16)
         dx_d=(model.matmul(er,wc)*gr[:,None]).to(torch.bfloat16)
@@ -103,7 +111,7 @@ def check_case(torch,ops,c1,v1,model,values,*,sampled=False):
                 del dx
             del u,g,state
         ops.require_valid()
-    snapshot=dict(qx_rows=qr.view(torch.uint8),qw_output_rows=wr.view(torch.uint8),
+    snapshot=dict(native_quantized=observed_quantized,qx_rows=qr.view(torch.uint8),qw_output_rows=wr.view(torch.uint8),
                   qe_rows=er.view(torch.uint8),qw_input_columns=wc.view(torch.uint8),
                   activation_scales=ar,weight_scales=br,gradient_scales=gr,outputs=record)
     summary=dict(quantization=qflags,hardware=hardware,ideal=ideal,

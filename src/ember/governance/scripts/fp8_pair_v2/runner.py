@@ -17,8 +17,9 @@ from . import contract as c
 PREFIX='src/ember/governance/scripts/'
 PINNED = {'docs/domains/lab/research/fp8-pair-v1.md': '9c78c28ba7d21a41bd955a7fdc56cf212441e665', 'src/ember/governance/scripts/fp8_pair_v1/__init__.py': 'cb99e8771410ddb39bb739d0b3e9d93a73317817', 'src/ember/governance/scripts/fp8_pair_v1/contract.py': '7c950ef3ce59e4afcb25a4d937e51aa48f525c86', 'src/ember/governance/scripts/fp8_pair_v1/kernels.py': 'cf90eec993a8e9329fd3dec306a73cf79419e9d8', 'src/ember/governance/scripts/fp8_pair_v1/pair.py': 'b942400e6b2a8296aa0e38ce09a7748362e9adff', 'src/ember/governance/scripts/fp8_pair_v1/probe.py': 'c085f6b269bab1d73cc3bef664effdb728072542', 'src/ember/governance/scripts/gpu_lock_guard.py': 'fb947cfbfb1cc182040898d5b1d9c27af576e4e7', 'src/ember/governance/scripts/issue1945_fp8_pair_v1.py': 'bfb5075a95c332e3f5666547735e8d31d1ea90aa', 'src/ember/governance/scripts/owned_process.py': '42610c9362b3384cfa8c0a134dadbbe68c0fc8f5', 'src/ember/governance/scripts/tests/test_issue1945_fp8_pair_v1.py': '35f45eed912cd6142ba1c066e678270724fe7654', 'src/ember/model/ember_v0_decoder.py': 'cfab6301484ea44aafd847d61ca234c23b700634', 'src/ember/model/ember_v0_document_reduction.py': '09e7d61dea81157cd2b4fa5ea7506651ad0f3cfd'}
 NEW_FILES=[PREFIX+'issue1945_fp8_pair_v2.py',
-           *[PREFIX+'fp8_pair_v2/'+x for x in ('__init__.py','contract.py','model.py','native.py','runner.py')],
-           PREFIX+'tests/test_issue1945_fp8_pair_v2.py','docs/domains/lab/research/fp8-pair-v2.md']
+           *[PREFIX+'fp8_pair_v2/'+x for x in ('__init__.py','contract.py','model.py','native.py','runner.py','quantizers.py','quantization_checks.py')],
+           PREFIX+'tests/test_issue1945_fp8_pair_v2.py',
+           PREFIX+'tests/test_issue1945_fp8_quantizer_fix.py','docs/domains/lab/research/fp8-pair-v2.md']
 GIT_DISCOVERY=('GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GIT_COMMON_DIR',
                'GIT_OBJECT_DIRECTORY','GIT_ALTERNATE_OBJECT_DIRECTORIES',
                'GIT_CEILING_DIRECTORIES','GIT_DISCOVERY_ACROSS_FILESYSTEM')
@@ -70,7 +71,6 @@ def tensors_new(torch,path,data):
 def save_codegen(output,ops):
     inventory={}
     for name,kernel in ops.compiled.items():
-        if not name.startswith(('fprop','dgrad')): continue
         for ext in ('ptx','ttir','ttgir','llir'):
             text=kernel.asm.get(ext)
             if not isinstance(text,str): continue
@@ -88,6 +88,13 @@ def _module_identity(module,path):
 
 
 def _run_native(torch,ops,c1,v1,model,native,output):
+    from .quantization_checks import run_rounding_checks
+    rounding,rounding_tensors=run_rounding_checks(torch,ops,c1)
+    tensors_new(torch,output/'direct-rounding-tensors.pt',rounding_tensors)
+    write_new(output/'direct-rounding-checks.json',rounding)
+    save_codegen(output,ops)
+    if not all(r['bytes_exact'] and r['scale_exact'] for r in rounding.values()):
+        raise ValueError('V2_DIRECT_CONVERSION_FAILED: see direct-rounding-checks.json')
     cases={}; snapshots={}
     for label,values in native.fixtures(torch).items():
         devices=[t.cuda() for t in values]
@@ -96,6 +103,7 @@ def _run_native(torch,ops,c1,v1,model,native,output):
         del devices
     replay=native.replay_and_locality(torch,ops,v1)
     instruction_details=ops.instruction_report()
+    quantizer_details=ops.quantization_report()
     flags={
         'quantization':{label+'/'+k:v for label,row in cases.items() for k,v in row['quantization'].items()},
         'hardware':{label+'/'+k:v for label,row in cases.items() for k,v in row['hardware'].items()},
@@ -104,8 +112,10 @@ def _run_native(torch,ops,c1,v1,model,native,output):
                         for name,row in instruction_details.items()},
         'ideal':{label+'/'+k:v['passed'] for label,row in cases.items() for k,v in row['ideal'].items()},
     }
+    flags['instructions'].update({'quantizer/'+name:row['verified'] for name,row in quantizer_details.items()})
     # Retain all observations BEFORE any refusal; the old ideal failures are explicit.
     report=dict(cases=cases,flags=flags,instructions=instruction_details,
+        direct_rounding=rounding,quantizer_instructions=quantizer_details,
         original_ideal_gate_passed=all(flags['ideal'].values()),
         meaning='Hardware agreement admits timing only; original ideal failure is not relabelled.')
     tensors_new(torch,output/'native-v2-tensors.pt',snapshots)
@@ -191,7 +201,8 @@ def execute(root,output,args,report):
         import torch.nn.functional as F
         import triton
         from fp8_pair_v1 import contract as c1, pair as pair_module, kernels
-        from . import model,native
+        from . import model,native,quantizers
+        _module_identity(quantizers,root/PREFIX/'fp8_pair_v2/quantizers.py')
         for module,name in ((c1,'contract'),(pair_module,'pair'),(kernels,'kernels')):
             _module_identity(module,root/PREFIX/f'fp8_pair_v1/{name}.py')
         if (torch.__version__,triton.__version__,torch.version.cuda)!=('2.10.0+cu126','3.5.0','12.6'):
@@ -213,7 +224,7 @@ def execute(root,output,args,report):
             bf16_reduced_precision_reduction=torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction)
         if file_sha(args.operands)!=c1.OPERAND_SHA256: raise ValueError('OPERANDS: original byte hash differs')
         report['operand_sha256']=c1.OPERAND_SHA256
-        ops=kernels.NativeOps('cuda:0')
+        ops=quantizers.NativeOps('cuda:0')
         try:
             report['native_checks']=_run_native(torch,ops,c1,v1,model,native,output)
             data=torch.load(args.operands,map_location='cpu',weights_only=True)

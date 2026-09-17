@@ -114,3 +114,34 @@ Official simulator source for comparison of the specified arithmetic:
 https://github.com/microsoft/MMA-Sim/tree/aab7f2ae9f06ffbee1e7e86cb21b708e4c6f9254
 The native kernels and captured-region definitions are the pinned Ember v1
 sources at the baseline commit above. No external simulator package is required.
+
+
+## Direct-conversion implementation correction (2026-09-17)
+
+The failed run at `924970d60007e074ca859962331ef74cf4f6e44a` remains failed.
+Its archived SM89 quantizer code uses the second packed value's tie bit when
+rounding the third and fourth values. Software reconstruction explains all
+three retained layer-0 forward output samples. Backward reproduction was not
+claimed because original arriving-gradient inputs were not retained.
+
+V2 now uses `fp8_pair_v2/quantizers.py` for quantization only. Its three kernels
+retain the v1 scale calculation, clamp, masks, refusal flag and launch geometry,
+but explicitly use PTX `cvt.rn.satfinite.{e4m3x2,e5m2x2}.f32`, then reinterpret
+the output bytes. The native operation is supported on SM89 with PTX 8.1+.
+The v1 files and blob pins remain unchanged. NativeOps inherits the frozen
+forward, backward, transpose, and FP32-accumulation implementation. The CPU
+oracle, arithmetic model, ideal tolerance, timing scope and speed criteria are
+unchanged. Source binding additionally covers the new correction and tests.
+
+Before any timing, run all positive and negative FP8 midpoints plus immediately
+adjacent FP32 values, signed zeros and extrema in every packed position with
+unit row scales. Require exact encoded bytes and scales; preserve tensors and
+quantizer code on failure. Then retain all original small-fixture and full-size
+production admission checks. Samples now include both actual and expected
+quantized operands. No admission check is removed or weakened.
+
+Native compilation and execution must be freshly verified on the unchanged
+Windows stack. No dependency upgrade or edit to installed compiler files is
+part of this correction. Quantization remains fully charged to timing.
+
+Reference: NVIDIA PTX ISA 8.5 (CUDA 12.6.1), section 9.7.10.20, `cvt`.
