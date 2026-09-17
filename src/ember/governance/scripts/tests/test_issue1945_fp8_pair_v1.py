@@ -331,3 +331,146 @@ def test_complete_callable_arms_leave_parameter_owners_unchanged(modules,operand
         assert len(tensors)==(3 if region else 5)
         assert all(torch.isfinite(t).all() for t in tensors)
     assert all(torch.equal(t,s) and t.grad is None for t,s in zip((x,wu,wg,wd),snapshot))
+
+
+@pytest.mark.parametrize('kernel_name,operand', [
+    ('_transpose', 'Q'),
+    ('_fprop', 'QX'), ('_fprop', 'QW'),
+    ('_dgrad', 'QE'), ('_dgrad', 'QT'),
+])
+def test_fp8_masked_load_uses_floating_zero(kernel_name, operand):
+    """Triton 3.5 cannot cast integer padding directly to an FP8 element.
+
+    This source regression check does not assert GPU compilation or execution.
+    It prevents recurrence in every FP8 operand load, not only the transpose.
+    """
+    import ast
+    tree = ast.parse((SCRIPTS / 'fp8_pair_v1/kernels.py').read_text(encoding='utf-8'))
+    function = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == kernel_name)
+    loads = [node for node in ast.walk(function)
+             if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute)
+             and isinstance(node.func.value, ast.Name)
+             and node.func.value.id == 'tl' and node.func.attr == 'load'
+             and node.args
+             and any(isinstance(arg, ast.Name) and arg.id == operand
+                     for arg in ast.walk(node.args[0]))]
+    assert len(loads) == 1, (kernel_name, operand, 'expected exactly one load')
+    padding = next((keyword.value for keyword in loads[0].keywords
+                    if keyword.arg == 'other'), None)
+    assert (isinstance(padding, ast.Constant)
+            and type(padding.value) is float and padding.value == 0.0), (
+                kernel_name, operand, 'FP8 masked-load padding must be floating zero')
+
+
+def _fp8_aot_cases(kernel_name):
+    """Exact capability/full-shape compile signatures; never allocate CUDA tensors."""
+    cases = []
+    for label, m, h, f in (('capability', 32, 64, 128), ('full', 4096, 1024, 2048)):
+        options = dict(num_warps=4, num_stages=3, enable_fp_fusion=False)
+        if kernel_name == '_row_quant':
+            for fmt, dtype, limit in (('e4m3', '*fp8e4nv', 448.), ('e5m2', '*fp8e5', 57344.)):
+                cases.append((label+'-'+fmt,
+                    dict(X='*bf16', Q=dtype, S='*fp32', BAD='*i32'),
+                    dict(R=m, C=h, X0=h, X1=1, LIMIT=limit, BLOCK=h), options))
+        elif kernel_name == '_weight_quant':
+            cases.append((label,
+                dict(WU='*bf16', WG='*bf16', Q='*fp8e4nv', S='*fp32', BAD='*i32'),
+                dict(F=f, H=h, U0=h, U1=1, G0=h, G1=1, BLOCK=h), options))
+        elif kernel_name == '_transpose':
+            cases.append((label, dict(Q='*fp8e4nv', QT='*fp8e4nv'),
+                dict(R=2*f, C=h, BLOCK=32), dict(num_warps=4)))
+        elif kernel_name == '_gradient_quant':
+            cases.append((label,
+                dict(DU='*bf16', DG='*bf16', W_SCALE='*fp32', QE='*fp8e5',
+                     C_SCALE='*fp32', BAD='*i32'),
+                dict(M=m, F=f, U0=f, U1=1, G0=f, G1=1, BLOCK=2*f), options))
+        elif kernel_name == '_fprop':
+            for bundled in (True, False):
+                cases.append((label+('-bundled' if bundled else '-separate'),
+                    dict(QX='*fp8e4nv', QW='*fp8e4nv', A='*fp32', B='*fp32',
+                         U='*bf16', G='*bf16'),
+                    dict(M=m, H=h, N=2*f if bundled else f, F=f, SPLIT=bundled,
+                         W0=h, W1=1, BM=32, BN=128, BK=32), options))
+        elif kernel_name == '_dgrad':
+            for partial in (False, True):
+                cases.append((label+('-separate' if partial else '-bundled'),
+                    dict(QE='*fp8e5', QT='*fp8e4nv', S='*fp32',
+                         OUT='*fp32' if partial else '*bf16'),
+                    dict(M=m, K=f if partial else 2*f, N=h, E0=2*f, E1=1,
+                         T0=2*f, T1=1, PARTIAL=partial, BM=32, BN=128, BK=32), options))
+        elif kernel_name == '_combine':
+            cases.append((label, dict(A='*fp32', B='*fp32', S='*fp32', Y='*bf16'),
+                          dict(M=m, H=h, BLOCK=256), dict(num_warps=4)))
+        else:
+            raise AssertionError('Unknown kernel in the compile-only census: '+kernel_name)
+    if kernel_name == '_transpose':
+        cases.append(('masked-edges', dict(Q='*fp8e4nv', QT='*fp8e4nv'),
+                      dict(R=33, C=65, BLOCK=32), dict(num_warps=4)))
+    return cases
+
+
+_FP8_NATIVE_KERNELS = ('_row_quant', '_weight_quant', '_transpose',
+                       '_gradient_quant', '_fprop', '_dgrad', '_combine')
+
+
+@pytest.mark.parametrize('kernel_name', _FP8_NATIVE_KERNELS)
+def test_aot_case_signatures_cover_the_actual_kernel(kernel_name):
+    """Keep the no-GPU compiler regression inputs synchronized with source."""
+    import ast
+    tree = ast.parse((SCRIPTS / 'fp8_pair_v1/kernels.py').read_text(encoding='utf-8'))
+    function = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == kernel_name)
+    arguments = {arg.arg for arg in function.args.args}
+    constant_names = {arg.arg for arg in function.args.args
+                      if isinstance(arg.annotation, ast.Attribute)
+                      and arg.annotation.attr == 'constexpr'}
+    for label, pointers, constants, _ in _fp8_aot_cases(kernel_name):
+        assert set(constants) == constant_names, (kernel_name, label)
+        assert set(pointers).isdisjoint(constants)
+        assert set(pointers) | set(constants) == arguments, (kernel_name, label)
+
+
+@pytest.mark.parametrize('kernel_name', _FP8_NATIVE_KERNELS)
+def test_native_sm89_compilation_without_gpu(kernel_name, modules, tmp_path, monkeypatch):
+    """Opt-in compiler-only regression. Does not launch or qualify any GPU work.
+
+    Explicit target avoids active-device discovery. Any attempted Triton driver
+    access or PyTorch CUDA initialization fails the test, rather than allocating
+    on the card without the governed GPU launcher.
+    """
+    import os
+    if os.environ.get('EMBER_FP8_AOT_CHECK') != '1':
+        pytest.skip('Set EMBER_FP8_AOT_CHECK=1 for compiler-only SM89 regression')
+    import triton
+    from triton.backends.compiler import GPUTarget
+    from triton.compiler import ASTSource
+    assert triton.__version__ == '3.5.0', 'Compiler check requires frozen Triton 3.5.0'
+    assert not torch.cuda.is_initialized(), 'Run compiler-only tests in a fresh process'
+
+    class NoGpuDriver:
+        def __getattr__(self, name):
+            raise AssertionError('Compiler-only test attempted GPU driver access: '+name)
+
+    def refuse_cuda(*args, **kwargs):
+        raise AssertionError('Compiler-only test attempted PyTorch CUDA initialization')
+
+    monkeypatch.setattr(triton.runtime.driver, '_active', NoGpuDriver())
+    monkeypatch.setattr(torch.cuda, '_lazy_init', refuse_cuda)
+    kernels = importlib.import_module('fp8_pair_v1.kernels')
+    kernel = getattr(kernels, kernel_name)
+    target = GPUTarget('cuda', 89, 32)
+    c, _ = modules
+    for label, pointers, constants, options in _fp8_aot_cases(kernel_name):
+        signature = {name: 'constexpr' if name in constants else pointers[name]
+                     for name in kernel.arg_names}
+        source = ASTSource(fn=kernel, signature=signature, constexprs=constants)
+        compiled = triton.compile(source, target=target, options=options)
+        ptx = compiled.asm['ptx']
+        assert '.target sm_89' in ptx
+        assert compiled.asm['cubin'], 'Compiler did not produce a CUDA binary'
+        if kernel_name in ('_fprop', '_dgrad'):
+            assert c.has_fp8_mma(ptx, kernel_name == '_dgrad'), (kernel_name, label)
+        (tmp_path / (kernel_name+'-'+label+'.ptx')).write_text(ptx, encoding='utf-8')
+    assert not torch.cuda.is_initialized()

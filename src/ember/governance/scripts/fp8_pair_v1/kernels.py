@@ -55,7 +55,7 @@ def _transpose(Q, QT, R: tl.constexpr, C: tl.constexpr, BLOCK: tl.constexpr):
     rr = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     cc = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     # No numeric conversion: load/store the same FP8 type in a tiled transpose.
-    x = tl.load(Q + rr[:, None] * C + cc[None, :], (rr[:, None] < R) & (cc[None, :] < C), other=0)
+    x = tl.load(Q + rr[:, None] * C + cc[None, :], (rr[:, None] < R) & (cc[None, :] < C), other=0.0)
     tl.store(QT + cc[None, :] * R + rr[:, None], x, (rr[:, None] < R) & (cc[None, :] < C))
 
 
@@ -91,8 +91,8 @@ def _fprop(QX, QW, A, B, U, G, M: tl.constexpr, H: tl.constexpr,
     acc = tl.full((BM,BN),0,tl.float32)
     for block in range(tl.cdiv(H,BK)):
         h = block*BK + kk
-        left = tl.load(QX + rr[:,None]*H+h[None,:], (rr[:,None]<M)&(h[None,:]<H), other=0)
-        right = tl.load(QW + jj[None,:]*W0+h[:,None]*W1, (jj[None,:]<N)&(h[:,None]<H), other=0)
+        left = tl.load(QX + rr[:,None]*H+h[None,:], (rr[:,None]<M)&(h[None,:]<H), other=0.0)
+        right = tl.load(QW + jj[None,:]*W0+h[:,None]*W1, (jj[None,:]<N)&(h[:,None]<H), other=0.0)
         partial = tl.dot(left,right,out_dtype=tl.float32,max_num_imprecise_acc=0)
         acc = acc + partial
     a = tl.load(A+rr,rr<M,other=0)
@@ -116,8 +116,8 @@ def _dgrad(QE, QT, S, OUT, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
     acc=tl.full((BM,BN),0,tl.float32)
     for block in range(tl.cdiv(K,BK)):
         k=block*BK+kk
-        left=tl.load(QE+rr[:,None]*E0+k[None,:]*E1,(rr[:,None]<M)&(k[None,:]<K),other=0)
-        right=tl.load(QT+jj[None,:]*T0+k[:,None]*T1,(jj[None,:]<N)&(k[:,None]<K),other=0)
+        left=tl.load(QE+rr[:,None]*E0+k[None,:]*E1,(rr[:,None]<M)&(k[None,:]<K),other=0.0)
+        right=tl.load(QT+jj[None,:]*T0+k[:,None]*T1,(jj[None,:]<N)&(k[:,None]<K),other=0.0)
         partial=tl.dot(left,right,out_dtype=tl.float32,max_num_imprecise_acc=0)
         acc=acc+partial
     if not PARTIAL:
