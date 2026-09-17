@@ -94,7 +94,11 @@ def _fprop(QX, QW, A, B, U, G, M: tl.constexpr, H: tl.constexpr,
         left = tl.load(QX + rr[:,None]*H+h[None,:], (rr[:,None]<M)&(h[None,:]<H), other=0.0)
         right = tl.load(QW + jj[None,:]*W0+h[:,None]*W1, (jj[None,:]<N)&(h[:,None]<H), other=0.0)
         partial = tl.dot(left,right,out_dtype=tl.float32,max_num_imprecise_acc=0)
-        acc = acc + partial
+        # A plain add is fused into the dot accumulator by Triton CombineDotAdd.
+        # Keep each 32-term FP8 dot independent; sum its result using FP32 ALUs.
+        acc = tl.inline_asm_elementwise(
+            asm='add.rn.f32 $0, $1, $2;', constraints='=f,f,f',
+            args=[acc, partial], dtype=tl.float32, is_pure=True, pack=1)
     a = tl.load(A+rr,rr<M,other=0)
     b = tl.load(B+jj,jj<N,other=0)
     result = (acc*a[:,None])*b[None,:]
@@ -119,7 +123,11 @@ def _dgrad(QE, QT, S, OUT, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
         left=tl.load(QE+rr[:,None]*E0+k[None,:]*E1,(rr[:,None]<M)&(k[None,:]<K),other=0.0)
         right=tl.load(QT+jj[None,:]*T0+k[:,None]*T1,(jj[None,:]<N)&(k[:,None]<K),other=0.0)
         partial=tl.dot(left,right,out_dtype=tl.float32,max_num_imprecise_acc=0)
-        acc=acc+partial
+        # A plain add is fused into the dot accumulator by Triton CombineDotAdd.
+        # Keep each 32-term FP8 dot independent; sum its result using FP32 ALUs.
+        acc = tl.inline_asm_elementwise(
+            asm='add.rn.f32 $0, $1, $2;', constraints='=f,f,f',
+            args=[acc, partial], dtype=tl.float32, is_pure=True, pack=1)
     if not PARTIAL:
         scale=tl.load(S+rr,rr<M,other=0)
         acc=acc*scale[:,None]
@@ -240,7 +248,8 @@ class NativeOps:
             if name.startswith(('fprop','dgrad')):
                 ptx=kernel.asm['ptx']
                 native=c.has_fp8_mma(ptx,name.startswith('dgrad'))
-                result[name]=dict(native_fp8_mma=native,ptx_sha256=c.logical_sha(ptx.encode()),
+                promotion=c.fp32_promotion_report(kernel.asm.get('ttir',''),ptx)
+                result[name]=dict(native_fp8_mma=native,fp32_promotion=promotion,ptx_sha256=c.logical_sha(ptx.encode()),
                                   mma_instructions=sorted(set(line.strip().split(' ')[0] for line in ptx.splitlines()
                                       if line.strip().startswith('mma.sync.aligned.'))))
                 if not native:

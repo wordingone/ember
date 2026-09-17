@@ -144,6 +144,71 @@ def has_fp8_mma(ptx: str, mixed: bool) -> bool:
     return bool(instructions) and all(suffix in line for line in instructions)
 
 
+
+def fp32_promotion_report(ttir: str, ptx: str) -> dict:
+    """Require zero-initialized FP8 dot partials and an explicit FP32 add.
+
+    A bounded compiler-format check, not a proof of hardware accuracy. In
+    Triton 3.5, CombineDotAdd rewrites acc + dot(A,B,0) to dot(A,B,acc).
+    A separate inline-assembly FP32 add prevents that transformation. Verify
+    the optimized IR AND the emitted PTX, then retain the numerical gate too.
+    Unknown or missing compiler output refuses rather than certifies.
+    """
+    def refuse(reason):
+        raise ValueError('FP32_PROMOTION_REQUIRED: '+reason)
+
+    if not isinstance(ttir,str) or not isinstance(ptx,str):
+        refuse('compiler output is not text')
+    # Strip comments without counting instruction names mentioned in prose.
+    ir_lines=[line.split('//',1)[0].strip() for line in ttir.splitlines()]
+    asm_lines=[line.split('//',1)[0].strip() for line in ptx.splitlines()]
+    ssa=r'%[A-Za-z0-9_.$]+'
+    zeros=set()
+    for line in ir_lines:
+        match=re.match(r'^('+ssa+r')\s*=\s*arith\.constant\s+dense<([^>]+)>\s*:\s*tensor<',line)
+        if match and 'xf32' in line:
+            try:
+                if float(match.group(2))==0.0:
+                    zeros.add(match.group(1))
+            except ValueError:
+                pass
+    dot_lines=[line for line in ir_lines if re.search(r'=\s*tt\.dot\s',line)]
+    if not dot_lines:
+        refuse('no dot in optimized IR')
+    add_lines=[line for line in ir_lines
+               if re.search(r'=\s*tt\.elementwise_inline_asm\s',line)
+               and '"add.rn.f32 $0, $1, $2;"' in line]
+    # Triton's attr-dict PRECEDES operands and can contain typed values such
+    # as packed_element = 1 : i32. Splitting on the first " : " discards the
+    # operands. Parse the two SSA operands after the attribute dictionary;
+    # names in the result, attributes or location are not operand uses.
+    quoted = r'"(?:[^"\\]|\\.)*"'
+    attributes = r'\{(?:[^{}"]|' + quoted + r')*\}'
+    add_pattern = re.compile(
+        r'^' + ssa + r'\s*=\s*tt\.elementwise_inline_asm\s+'
+        r'"add\.rn\.f32 \$0, \$1, \$2;"\s*' + attributes + r'\s*'
+        r'(' + ssa + r')\s*,\s*(' + ssa + r')\s*:')
+    add_operands = []
+    for line in add_lines:
+        operands = add_pattern.match(line)
+        if operands is None:
+            refuse('unrecognized explicit FP32 add operand syntax')
+        add_operands.append(set(operands.groups()))
+    for line in dot_lines:
+        match=re.match(r'^('+ssa+r')\s*=\s*tt\.dot\s+'+ssa+r'\s*,\s*'+ssa+r'\s*,\s*('+ssa+r')(?=[\s,])',line)
+        if not match or match.group(2) not in zeros or 'xf8' not in line:
+            refuse('dot is not an FP8 product with a constant-zero accumulator')
+        # The addition must consume THIS dot result, not an unrelated value.
+        result=match.group(1)
+        if not any(result in operands for operands in add_operands):
+            refuse('dot result does not reach the explicit FP32 add')
+    ptx_adds=sum(bool(re.match(r'^add\.rn\.f32\s',line)) for line in asm_lines)
+    if not ptx_adds:
+        refuse('no explicit add.rn.f32 in emitted PTX')
+    return dict(verified=True,zero_initialized_dots=len(dot_lines),
+                fp32_add_boundaries=len(add_lines),ptx_fp32_add_instructions=ptx_adds)
+
+
 def adjudicate(rows):
     if set(rows) != {str(x) for x in LAYERS}:
         raise ValueError('SUBJECTS: exactly four frozen shared layers are required')
