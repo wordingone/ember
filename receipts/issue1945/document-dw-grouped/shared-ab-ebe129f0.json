@@ -8,10 +8,10 @@
   ],
   "cuda": "12.6",
   "device": "NVIDIA GeForce RTX 4090",
-  "grouped_kernel": "A:/ember-wt/issue1945-grouped-geometry-leo/src/ember/model/ember_v0_grouped_capture.py",
+  "grouped_kernel": "src/ember/model/ember_v0_grouped_capture.py",
   "grouped_kernel_sha256": "be5fb0f791859ded29e6d98a9e1326d9b0f0f35739aa25f7aaaf7e77bae085de",
   "operand_sha256": "e49ad84192da8f1f82b759e9360cba18b39eca2a716550048b08d2aa1197dc76",
-  "operands": "B:\\M\\ember-live-receipts\\cia-expert-reduction-20260912T2033Z\\operands.pt",
+  "operands": "sha256:e49ad84192da8f1f82b759e9360cba18b39eca2a716550048b08d2aa1197dc76",
   "source_commit": "ebe129f0383c56010f9c8eab2946c10e1013f5c4",
   "torch": "2.10.0+cu126",
   "triton": "3.5.0"
@@ -23,7 +23,10 @@
   "all_12_bitwise_equal": true
  },
  "generated_utc": "2026-09-16T20:04:26Z",
+ "goal_id": "EMBER-02",
+ "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
  "median_speedup": 1.1962659526658124,
+ "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
  "optimizer_updates": 0,
  "protocol": {
   "arm_order": "alternating by round",
@@ -32,7 +35,34 @@
   "timer": "CUDA events",
   "warmup_calls": 3
  },
+ "publication_copy": {
+  "artifact_class": "redacted-publication-copy",
+  "interpretation": "Publication metadata only. All measurements, verdicts, criteria, source commits, and pre-existing content hashes are unchanged. No rerun, revised acceptance, or new qualification claim.",
+  "metadata_added_after_execution": [
+   "goal_id",
+   "workstream_id",
+   "next_executed_outcome",
+   "ticket",
+   "ts",
+   "sha_convention",
+   "invariant_sha256",
+   "publication_copy"
+  ],
+  "not_byte_identical_to_raw_receipt": true,
+  "original_git_blob": "d1beec55730f6712905d213a92286cc918e09080",
+  "original_git_commit": "edc200bef9e459cb41aea0ac6a1016a8b07211e4",
+  "original_repository_path": "receipts/issue1945/document-dw-grouped/shared-ab-ebe129f0.json",
+  "prepared_utc": "2026-09-17T05:18:12.210828+00:00",
+  "raw_file_sha256": "ae557bb67b54ad372ea1df8545a37245a0785c3477a9facdd3d2892a4a9014df",
+  "raw_receipt_remains_authoritative": true,
+  "redacted_fields": {
+   "/binding/grouped_kernel": "Machine-local prefix removed; repository-relative path retained.",
+   "/binding/operands": "Machine-local path replaced by existing content hash; not an executable path."
+  },
+  "ts_basis": "Original generated_utc, not a new experimental execution."
+ },
  "schema": "ember-1945-shared-document-dw-grouped-ab-v1",
+ "sha_convention": "publication_copy.raw_file_sha256: SHA256 of original archived bytes as-is; original_git_blob: Git SHA-1 blob identity at original_git_commit; pre-existing hash fields copied without modification or reinterpretation; invariant_sha256 is the repository invariant identifier, not experimental evidence.",
  "sites": {
   "layers.0.shared.down.weight": {
    "geometry": {
@@ -1126,5 +1156,8 @@
    },
    "speedup": 1.196339079730389
   }
- }
+ },
+ "ticket": "ISSUE-1945-DOCUMENT-DW-PUBLICATION",
+ "ts": "2026-09-16T20:04:26Z",
+ "workstream_id": "EMBER-02A"
 }
