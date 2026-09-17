@@ -102,6 +102,9 @@ def run_git(repo: Path, args: Sequence[str], *, check: bool = True) -> subproces
         text=True,
         capture_output=True,
         encoding="utf-8",
+        # The hook belongs to its caller; this probe belongs to the explicit repo.
+        # Keep the parent environment intact for the remaining commit guards.
+        env=_clean_git_env(),
     )
     if check and result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
