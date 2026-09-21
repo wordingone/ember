@@ -1161,7 +1161,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
                                    return_device_routes=True, device_route_collector=buffers.collector,
-                                   training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
+                                   **({'training_hidden': True} if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else {}))
         else:
             logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
