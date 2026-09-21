@@ -38,6 +38,7 @@ class NextUpdateTests(unittest.TestCase):
         self.capture = SimpleNamespace(invalidate=Mock())
         self.applied = Mock()
         self.runner = SimpleNamespace(GIB=1024**3,
+            experiment_fields=step_runner.experiment_fields,
             attention_selection=lambda identity: step_runner.attention_selection(identity),
             INPUT_FIELDS=('token_ids', 'target_ids', 'positions', 'document_starts'),
             canonical=lambda value: json.dumps(value, sort_keys=True).encode(),

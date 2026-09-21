@@ -24,6 +24,7 @@ class HourCaptureTests(unittest.TestCase):
         runner = SimpleNamespace(MODE_SOURCES={'resident-dynamic-capture': ()},
             execution_mode=lambda identity: identity['execution_mode'],
             local_routing_mode=lambda identity: identity['local_routing_mode'],
+            capture_loss_kwargs=lambda model, identity, lengths: dict(loss_fn=lambda x,y: x.sum()),
             routing_buffers=lambda lengths, device: buffers)
         identity = dict(execution_mode='resident-dynamic-capture', local_routing_mode='per-chunk')
         first, _ = cia_hour.bind_hour_capture(runner, model, identity, lengths, torch.device('cpu'))
