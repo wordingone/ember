@@ -11,7 +11,7 @@ import unittest
 
 import torch
 
-ROOT=Path(os.environ.get('EMBER_TEST_ROOT',str(Path(__file__).resolve().parents[2])))
+ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'src'))
 TOOLS=ROOT/'src/ember/infrastructure/tools/ember-restart-3b'
 spec=importlib.util.spec_from_file_location('k4_runner',TOOLS/'cia_step_runner.py')
