@@ -89,6 +89,10 @@ def validate_probe_inputs(runner, prior, identity):
             raise ValueError('checkpoint probe differs from the hour source or inputs: ' + name)
     if runner.attention_selection(prior) != runner.attention_selection(identity):
         raise ValueError('checkpoint probe attention selection differs from the hour')
+    if prior.get('training_head', 'native') != identity.get('training_head', 'native'):
+        raise ValueError('checkpoint probe training head differs from the hour')
+    if prior.get('experiment_plan') != identity.get('experiment_plan'):
+        raise ValueError('checkpoint probe experiment plan differs from the hour')
     if runner.execution_mode(prior) != runner.execution_mode(identity):
         raise ValueError('checkpoint probe execution mode differs from the hour')
 
@@ -374,7 +378,7 @@ def bind_hour_capture(runner, model, identity, lengths, device):
     buffers = runner.routing_buffers(lengths, device)
     capture = model.bind_segmented_capture(collector=buffers.collector,
         local_routing_mode=runner.local_routing_mode(identity),
-        loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
+        **runner.capture_loss_kwargs(model, identity, lengths),
         static_state=(buffers.raw,), warmup_steps=2,
         **({'capture_experts': True} if mode == 'resident-dynamic-capture' else {}))
     return capture, buffers
@@ -415,6 +419,10 @@ def verify_continuation_accounting(runner, custody, hour, identity, physical_pos
         default = 'unforced' if key == 'attention_backend' else 'none'
         if reference['execution_path'].get(key, default) != value or terminal.get(key, default) != value:
             raise ValueError('continuation attention selection differs: ' + key)
+    selected_head = identity.get('training_head', 'native')
+    if (reference['execution_path'].get('training_head', 'native') != selected_head
+            or terminal.get('training_head', 'native') != selected_head):
+        raise ValueError('continuation training head differs')
     before, after = reference['before'], reference['after']
     if (before['facts'] != terminal['terminal_facts']
             or before['rng_state_sha256'] != terminal['terminal_rng_state_sha256']
@@ -464,6 +472,10 @@ def validate_continuation(runner, identity):
             raise ValueError('continuation source hour identity differs: ' + key)
     if runner.attention_selection(prior) != runner.attention_selection(identity):
         raise ValueError('continuation source hour attention selection differs')
+    if prior.get('training_head', 'native') != identity.get('training_head', 'native'):
+        raise ValueError('continuation source hour training head differs')
+    if prior.get('experiment_plan') != identity.get('experiment_plan'):
+        raise ValueError('continuation source hour experiment plan differs')
     outcome_path = root.parent/'operator/operator-outcome.json'
     outcome = json.loads(outcome_path.read_bytes())
     if (outcome['run_id'] != prior['run_id'] or outcome['success'] is not True
@@ -566,13 +578,14 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
     lengths = runner.document_lengths(tuple(pack['document_starts']), positions)
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
     path = dict(mode=runner.execution_mode(identity), local_routing_mode=runner.local_routing_mode(identity),
+                training_head=identity.get('training_head', 'native'),
                 capture_phase='fresh-record' if capture is not None else 'eager',
                 optimizer='torch-adamw-fused' if identity['hour']['arm'] == 'treatment' else 'torch-adamw',
                 **runner.attention_selection(identity))
     try:
         row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
             run_id=identity['run_id'], capture=capture, record=capture is not None,
-            expert_owners=runner.expert_owner_index(inventory))
+            expert_owners=runner.expert_owner_index(inventory), experiment_binding=runner.experiment_fields(identity))
         # The real resource callback records physical work even though no hour
         # throughput or published checkpoint credit is assigned to this update.
         applied(row['applied_positions'])
@@ -607,6 +620,7 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
         run_id=identity['run_id'], global_step=total_steps, tokens_seen=positions,
         stream_receipt_sha256=identity['data']['receipt_sha256'])
     hour_binding = dict(source_identity=identity['source_sha256'], device=identity['gpu_uuid'],
+        training_head=identity.get('training_head', 'native'),
         geometry=dict(microbatch=identity['geometry']['documents_per_step'],
                       sequence=identity['geometry']['sequence_length'], positions_per_update=positions_per_update),
         terminal_checkpoint=checkpoint_identity, terminal_facts=terminal_state['facts'],
@@ -691,7 +705,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         while True:
             call_started = time.perf_counter()
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
-                run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners)
+                run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners,
+                experiment_binding=runner.experiment_fields(identity))
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
@@ -763,6 +778,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
     p10 = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)]
     runner._write_new(custody / 'hour-result.json', dict(schema='ember-cia-hour-result-v1', hour=hour,
+        geometry=dict(identity['geometry']), training_head=identity.get('training_head', 'native'),
+        **runner.experiment_fields(identity),
         measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
         governed_wall_seconds=governed_wall, pre_checkpoint_wall_seconds=elapsed_before_checkpoint,
         checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,

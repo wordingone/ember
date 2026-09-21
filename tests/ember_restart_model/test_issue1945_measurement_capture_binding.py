@@ -45,7 +45,7 @@ def load_worker_capture_block():
     helpers = []
     for name in ('EXECUTION_MODES', 'MODE_SOURCES'):
         helpers.append(exactly_one([node for node in tree.body if assigned_name(node, name)], name))
-    for name in ('execution_mode', 'local_routing_mode'):
+    for name in ('execution_mode', 'local_routing_mode', 'training_head', 'capture_loss_kwargs'):
         helpers.append(exactly_one([node for node in tree.body
                                    if isinstance(node, ast.FunctionDef) and node.name == name], name))
     wrapper = ast.FunctionDef(
