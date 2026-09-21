@@ -239,6 +239,9 @@ def compare_start_identity(reference, candidate, *, arm):
     left_sources, right_sources = left.pop('source_sha256'), right.pop('source_sha256')
     if not set(left_sources) <= set(right_sources) or any(right_sources[k] != v for k, v in left_sources.items()):
         raise ValueError('starting source identities differ')
+    left_head, right_head = left.pop('training_head', 'native'), right.pop('training_head', 'native')
+    if left_head != 'native' or right_head != 'native':
+        raise ValueError('declared training loss requires its declared-treatment licence consumer')
     default_attention = ('unforced', 'none')
     left_attention = (left.pop('attention_backend', 'unforced'), left.pop('attention_recompute', 'none'))
     right_attention = (right.pop('attention_backend', 'unforced'), right.pop('attention_recompute', 'none'))
@@ -577,6 +580,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
                  geometry=identity['geometry'], input_binding=prepared['binding'],
                  shard_ledger_sha256=identity['data']['shard_ledger_sha256'], source_commit=identity['source_commit'],
                  source_sha256=identity['source_sha256'], optimizer=definition, snapshot_plan=plan)
+    start.update(training_head=runner.training_head(identity), **runner.experiment_fields(identity))
     start['comparison_id'] = identity['trajectory']['comparison_id']
     start['local_routing_mode'] = runner.local_routing_mode(identity)
     start.update(runner.attention_selection(identity))
@@ -601,7 +605,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         dynamic = {'capture_experts': True} if mode == 'resident-dynamic-capture' else {}
         capture = model.bind_segmented_capture(collector=buffers.collector,
             local_routing_mode=runner.local_routing_mode(identity),
-            loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
+            **runner.capture_loss_kwargs(model, identity, lengths),
             static_state=(buffers.raw,), warmup_steps=2, **dynamic)
     arm_rows, snapshots, held = [], {}, {}
     applied_tokens = 0
@@ -612,7 +616,8 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
         held['routing'] = {} if mode is not None else None
         return runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
             run_id=identity['run_id'], expert_owners=expert_owners, capture=capture,
-            record=capture is not None and index == 0, route_observer=held['observer'], route_snapshot=held['routing'])
+            record=capture is not None and index == 0, route_observer=held['observer'], route_snapshot=held['routing'],
+            experiment_binding=runner.experiment_fields(identity))
     def record(row):
         row.update(arm=name, run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                    input_sha256=prepared['binding']['input_sha256'])
@@ -632,6 +637,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
             data = unpermute_routing(data, permutation[index])
         metrics = routing_metrics(data, previous=previous)
         metrics.update(update=update, arm=name, loss=row['loss'], wall_seconds=row['wall_seconds'],
+                       training_head=runner.training_head(identity), **runner.experiment_fields(identity),
                        update_delta_relative_l2=_update_delta(held['before'], inventory, device=device),
                        routing_sha256=hashlib.sha256(_canonical(data)).hexdigest())
         if executed_sha is not None:
@@ -660,6 +666,7 @@ def _run_arm(*, runner, config, prepared, prediction, binding, custody, device, 
     if frozen and inventory_sha256(frozen) != frozen_sha:
         raise ValueError('a frozen owner changed during the trajectory')
     result = dict(arm=name, execution_mode=mode, start=start, rows=arm_rows, snapshots=snapshots,
+                  training_head=runner.training_head(identity), **runner.experiment_fields(identity),
                   frozen_owners_unchanged=True, snapshot_updates=plan['updates'])
     if emission:
         if capture is not None:

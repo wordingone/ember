@@ -787,8 +787,10 @@ class CIADecoder(nn.Module):
         return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
 
     def bind_segmented_capture(self, *, collector=None, loss_fn=None, static_state=(), warmup_steps=2, capture_experts=False,
-                               local_routing_mode='batched'):
+                               local_routing_mode='batched', head_output='logits'):
         """Bind the actual dense segments and owner Parameters before an exemplar training step."""
+        if head_output not in ('logits', 'hidden'):
+            raise ValueError('capture head output must be logits or hidden')
         if type(capture_experts) is not bool:
             raise ValueError('capture_experts must be an explicit boolean')
         if type(local_routing_mode) is not str or local_routing_mode not in ('batched', 'per-chunk'):
@@ -830,7 +832,7 @@ class CIADecoder(nn.Module):
             params, owners = [], set()
             for stored_name, parameter in self.weights.items():
                 name = stored_name.replace('__', '.')
-                selected = ((name in ('final_norm.weight', 'embedding.weight')) if index == 12 else
+                selected = ((name == 'final_norm.weight' or (head_output == 'logits' and name == 'embedding.weight')) if index == 12 else
                     (name.startswith(prefixes) or name in expert_names or name == 'router.local_query.weight' or
                      (index == 0 and (name == 'router.global_query.weight' or name.startswith('router.layers.')))))
                 if selected and parameter.requires_grad and id(parameter) not in owners:
@@ -838,11 +840,12 @@ class CIADecoder(nn.Module):
                     params.append(parameter)
             fn = partial(self._resident_segment, index, lengths=lengths, geometry=geometry,
                          repeats=repeats, collector=collector, capture_experts=capture_experts,
-                         local_index=local_index, local_routing_mode=local_routing_mode)
+                         local_index=local_index, local_routing_mode=local_routing_mode, head_output=head_output)
             specs.append(SegmentSpec(index, fn, tuple(params), tuple(state), f'dense-{index}'))
         step = SegmentedStep(specs, device=execution.device, warmup_steps=warmup_steps).bind(execution, loss_fn=loss_fn)
         step._cia_lengths, step._cia_collector, step._cia_invalidated = lengths, collector, False
         step._cia_capture_experts = capture_experts
+        step._cia_head_output = head_output
         previous = getattr(execution, 'segmented', None)
         if previous is not None:
             previous.invalidate()
@@ -850,9 +853,11 @@ class CIADecoder(nn.Module):
         return step
 
     def _resident_segment(self, index, *carry, lengths, geometry, repeats, collector=None, capture_experts=False,
-                          local_index=None, local_routing_mode='batched'):
+                          local_index=None, local_routing_mode='batched', head_output='logits'):
         """One dense forward segment; every differentiable cross-segment value is carried explicitly."""
         from .ember_v0_residency import resident_global_routes, resident_local_routes
+        if head_output not in ('logits', 'hidden'):
+            raise ValueError('resident head output must be logits or hidden')
         if type(index) is not int or not 0 <= index <= 12:
             raise ValueError('resident segment index must be 0..12')
         execution = self._cuda_execution
@@ -873,10 +878,10 @@ class CIADecoder(nn.Module):
             shared, residual, _, row_gates, positions, keys, priors, ranked, candidates, history = carry
             values = shared + residual * row_gates[:, None].to(residual.dtype)
             if index == 12:
-                logits = document_reduced_head(
-                    self._norm(values, 'final_norm.weight'), self._weight('embedding.weight'),
-                    lengths, self._DOCUMENT_REDUCTION_ORDER)
-                return logits, ranked, history
+                hidden = self._norm(values, 'final_norm.weight')
+                output = hidden if head_output == 'hidden' else document_reduced_head(
+                    hidden, self._weight('embedding.weight'), lengths, self._DOCUMENT_REDUCTION_ORDER)
+                return output, ranked, history
         sizes = tuple(row[3] for row in geometry.chunks)
         equal = len(set(sizes)) == 1
         for layer in (2 * index, 2 * index + 1):
@@ -910,7 +915,7 @@ class CIADecoder(nn.Module):
             normed = execution.grouped_block(normed, row_experts, 2 * index + 1, backend='dynamic')
         return shared, normed, row_experts, row_gates, positions, keys, priors, ranked, candidates, history
 
-    def _resident_documents_forward(self, documents, *, collector=None, plan=None):
+    def _resident_documents_forward(self, documents, *, collector=None, plan=None, head_output='logits'):
         from .ember_v0_residency import ResidentRouteTrace
         execution = self._cuda_execution
         execution.check()
@@ -921,6 +926,10 @@ class CIADecoder(nn.Module):
         geometry = _resident_geometry(lengths)
         repeats = execution.geometry_repeats(lengths, tuple(row[3] for row in geometry.chunks))
         step = getattr(execution, 'segmented', None)
+        if step is not None and getattr(step, '_cia_head_output', 'logits') != head_output:
+            if head_output == 'hidden':
+                raise ValueError('training hidden output requires matching capture grammar')
+            step = None  # Ordinary inference always returns logits through the native path.
         if step is not None:
             if step._cia_invalidated:
                 raise ValueError('resident capture requires rebinding after a geometry, plan or support change')
@@ -935,7 +944,7 @@ class CIADecoder(nn.Module):
         for index in range(13):
             if step is None:
                 carry = self._resident_segment(index, *carry, lengths=lengths, geometry=geometry,
-                                               repeats=repeats, collector=collector)
+                                               repeats=repeats, collector=collector, head_output=head_output)
             else:
                 carry = step.run(index, *carry)
             if index < 12 and not (step is not None and step._cia_capture_experts):
@@ -1089,7 +1098,7 @@ class CIADecoder(nn.Module):
 
     def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False,
                 route_observer=None, route_plan=None, batch_documents=False,
-                return_device_routes=False, device_route_collector=None):
+                return_device_routes=False, device_route_collector=None, training_hidden=False):
         """Numerical execution over explicitly packed, unpadded documents.
 
         Every document is evaluated independently. There is no co-batch pooling,
@@ -1102,6 +1111,10 @@ class CIADecoder(nn.Module):
         a candidate_step context and leases expert bundles during both passes.
         Neither path constitutes an admitted immutable serving generation.
         """
+        if type(training_hidden) is not bool:
+            raise ValueError('training_hidden requires an explicit bool')
+        if training_hidden and not self._resident_experts:
+            raise ValueError('training hidden output requires resident execution')
         if self._parameter_device not in {'cpu', 'cuda'}:
             raise ValueError("numerical forward requires full physical materialization")
         self._input(embedded, 1024)
@@ -1133,7 +1146,8 @@ class CIADecoder(nn.Module):
                 raise ValueError('device route collector must be callable')
             outputs, routes = self._resident_documents_forward(
                 [(embedded[start:end], positions[start:end], index) for index, (start,end) in enumerate(spans)],
-                collector=device_route_collector, plan=route_plan)
+                collector=device_route_collector, plan=route_plan,
+                head_output='hidden' if training_hidden else 'logits')
             logits = torch.cat(outputs)
             return (logits, routes) if return_routes else logits
         if return_device_routes or device_route_collector is not None:

@@ -439,17 +439,131 @@ def local_routing_mode(identity):
     return selected
 
 
+def training_head(identity):
+    selected = identity.get('training_head', 'native')
+    if type(selected) is not str or selected not in ('native', 'cce-document-v1'):
+        raise ValueError('training head is outside its fixed set')
+    if selected != 'native' and execution_mode(identity) is None:
+        raise ValueError('streamed training head requires explicit resident capture')
+    return selected
+
+
+def experiment_fields(identity):
+    binding = identity.get('experiment_plan')
+    if binding is None:
+        return {}
+    return dict(plan_sha256=binding['sha256'], candidate_function_id=binding['candidate_function_id'])
+
+
+def step_experiment_fields(capture, binding):
+    captured = getattr(getattr(capture, 'loss_fn', None), 'experiment_binding', {})
+    supplied = {} if binding is None else binding
+    if type(supplied) is not dict or (supplied and set(supplied) != {'plan_sha256', 'candidate_function_id'}):
+        raise ValueError('Explicit step function and plan binding required')
+    if captured and supplied and captured != supplied:
+        raise ValueError('Step plan differs from the captured loss declaration')
+    return dict(supplied or captured)
+
+
+def validate_experiment_plan(identity):
+    binding = identity.get('experiment_plan')
+    if binding is None:
+        if training_head(identity) != 'native':
+            raise ValueError('Selected training function requires its frozen experiment plan')
+        return None
+    if type(binding) is not dict or set(binding) != {'path', 'sha256', 'candidate_function_id'}:
+        raise ValueError('Explicit experiment plan path, hash and function identity required')
+    raw = Path(binding['path']).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != checked_sha(binding['sha256']):
+        raise ValueError('Frozen experiment plan bytes differ')
+    plan = json.loads(raw)
+    if type(plan) is not dict or not isinstance(binding['candidate_function_id'], str) or not binding['candidate_function_id']:
+        raise ValueError('Experiment plan must name a training function')
+    if plan.get('candidate_function_id') != binding['candidate_function_id']:
+        raise ValueError('Experiment plan function differs')
+    validate_experiment_sources(identity, plan)
+    for key in ('source_commit', 'optimizer', 'support', 'seed', 'data'):
+        if key not in plan or plan[key] != identity[key]:
+            raise ValueError('Experiment plan differs from execution: ' + key)
+    for key in ('documents_per_step', 'sequence_length'):
+        if plan.get('geometry', {}).get(key) != identity['geometry'][key]:
+            raise ValueError('Experiment plan geometry differs: ' + key)
+    selected = dict(training_head=training_head(identity), execution_mode=execution_mode(identity),
+                    local_routing_mode=local_routing_mode(identity), **attention_selection(identity))
+    for key, value in selected.items():
+        if plan.get('selectors', {}).get(key) != value:
+            raise ValueError('Experiment plan selector differs: ' + key)
+    return plan
+
+
+def capture_loss_kwargs(model, identity, lengths):
+    import torch
+    if training_head(identity) == 'native':
+        return dict(loss_fn=lambda logits, targets:
+                    torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
+    from ember.model.ember_v0_streamed_loss import document_streamed_loss
+    os.environ['CCE_AUTOTUNE'] = '0'
+    lengths = tuple(lengths)
+    def loss(hidden, targets):
+        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths, sum(lengths))
+    loss.experiment_binding = experiment_fields(identity)
+    return dict(head_output='hidden', loss_fn=loss)
+
+
+def streamed_sources(identity):
+    if training_head(identity) == 'native':
+        return ()
+    manifest = 'src/ember/model/streamed_loss_vendor.json'
+    binding = json.loads((ROOT / manifest).read_bytes())
+    for relative, digest in binding['files'].items():
+        if not relative.startswith('src/cut_cross_entropy/') or '..' in Path(relative).parts:
+            raise ValueError('Streamed implementation source outside its package')
+        if file_sha256(ROOT / relative) != checked_sha(digest):
+            raise ValueError('Streamed implementation bytes differ: ' + relative)
+    return ('src/ember/model/ember_v0_streamed_loss.py', manifest, *sorted(binding['files']))
+
+
+TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
+CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
+    'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
+    ('cia_hour_energy.py', 'boundary_energy_collector.py'))
+
+
+def allowed_experiment_sources(identity):
+    """One selected training function's allowed source closure across every run stage."""
+    return frozenset(SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) +
+                     TRAJECTORY_SOURCES + CHECKPOINT_SOURCES + HOUR_SOURCES + streamed_sources(identity))
+
+
+def validate_experiment_sources(identity, plan):
+    declared, executed = plan.get('source_sha256'), identity.get('source_sha256')
+    if type(declared) is not dict or type(executed) is not dict:
+        raise ValueError('Experiment source bindings must be explicit maps')
+    if set(executed) != set(required_sources(identity)):
+        raise ValueError('Execution source set differs from its selected stage')
+    if not set(executed) <= set(declared) <= allowed_experiment_sources(identity):
+        raise ValueError('Experiment source closure is missing required or contains unbound files')
+    root = ROOT.resolve(strict=True)
+    for relative, expected in declared.items():
+        path = (root / relative).resolve(strict=True)
+        if not path.is_relative_to(root):
+            raise ValueError('Experiment source resolved outside the source checkout')
+        if file_sha256(path) != checked_sha(expected):
+            raise ValueError('Frozen experiment source bytes differ: ' + relative)
+    if any(declared[name] != value for name, value in executed.items()):
+        raise ValueError('Execution source digest differs from its frozen experiment')
+
+
 def required_sources(identity):
-    """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
-    additional = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',) if trajectory_mode(identity) else ()
+    """Exact source set of one stage; the frozen experiment may bind its full stage union."""
+    additional = TRAJECTORY_SOURCES if trajectory_mode(identity) else ()
     if hour_mode(identity) or trajectory_checkpoint_emission(identity):
-        additional += tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-            ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+        additional += CHECKPOINT_SOURCES
     if hour_mode(identity):
-        additional += ('src/ember/governance/scripts/catalog_train_stream.py',)
-        additional += tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-                            ('cia_hour_energy.py', 'boundary_energy_collector.py'))
-    return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional
+        additional += HOUR_SOURCES
+    return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional + streamed_sources(identity)
 
 
 def trajectory_mode(identity):
@@ -644,12 +758,14 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
     local_routing_mode(identity)
     attention_selection(identity)
+    training_head(identity)
+    validate_experiment_plan(identity)
     if ('production_mixture' in identity) != hour:
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
@@ -984,7 +1100,8 @@ def document_lengths(starts, total):
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
-                 capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None):
+                 capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
+                 experiment_binding=None):
     """Return one row only after context exit, successful update and synchronization.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
@@ -1009,6 +1126,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         raise ValueError('reference routing observer must be callable')
     if route_snapshot is not None and type(route_snapshot) is not dict:
         raise ValueError('trajectory routing snapshot requires a plain output dictionary')
+    experiment = step_experiment_fields(capture, experiment_binding)
     synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
     synchronize()
     if device.type == 'cuda':
@@ -1042,12 +1160,14 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         if buffers is not None:
             logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
-                                   return_device_routes=True, device_route_collector=buffers.collector)
+                                   return_device_routes=True, device_route_collector=buffers.collector,
+                                   training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
         else:
             logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
                                    **({'route_observer': route_observer} if route_observer is not None else {}))
-        loss = torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
+        loss = (capture.loss(logits, targets) if capture is not None else
+                torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
         if events is not None:
             events[1].record()
         forwarded = time.perf_counter()
@@ -1100,6 +1220,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if route_snapshot is not None:
         route_snapshot.update(buffers=buffers, snapshot=snapshot)
     return {'index': pack.get('index', 0), 'phase': pack['phase'], 'batch_documents': batch_documents,
+            'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
+            **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
             'positions_per_second': len(pack['token_ids']) / wall,
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
@@ -1388,7 +1510,7 @@ def worker(binding_path):
             capture = model.bind_segmented_capture(
                 local_routing_mode=local_routing_mode(prediction['identity']),
                 collector=buffers.collector,
-                loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
+                **capture_loss_kwargs(model, prediction['identity'], first_lengths),
                 static_state=(buffers.raw,), warmup_steps=2, **dynamic)
         counts = geometry_counts(prediction['identity']['geometry'], measurement=True) if measurement else None
         measured_rates = []
@@ -1411,7 +1533,7 @@ def worker(binding_path):
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
-                                   expert_owners=expert_owners)
+                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']))
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
