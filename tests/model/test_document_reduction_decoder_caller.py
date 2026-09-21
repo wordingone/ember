@@ -45,6 +45,8 @@ class _Stub:
     """Only what the decoder methods under test actually read."""
 
     _DOCUMENT_REDUCTION_ORDER = CIADecoder._DOCUMENT_REDUCTION_ORDER
+    attention_recompute = False
+    _document_attention = CIADecoder._document_attention
 
     def __init__(self, weights, resident):
         self._weights = weights
