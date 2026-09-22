@@ -94,7 +94,9 @@ def _rows(A, B, O, C, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
         if FP8:
             # One multiply on the fp32 accumulator in registers. Descaling the OPERANDS instead
             # would cost a pass over both, which is the traffic the quantization just removed.
-            acc = acc * SCALE
+            # tl.load, not a scalar argument: the launcher may not call .item() to produce
+            # one, because a device-to-host read invalidates an in-progress stream capture.
+            acc = acc * tl.load(SCALE)
         tl.store(C + rows[:, None] * N + cols[None, :], acc,
                  (rows[:, None] < end) & (cols[None, :] < N))
 
@@ -186,12 +188,14 @@ def rows(a, b, offsets):
     bm, bn, bk, warps, stages = _rows_config()
     # The bf16 geometry guard above ran against the REAL inputs; quantization happens after it, so
     # turning the arm on cannot loosen what the guard checks.
-    left, right, scale, fp8 = a, b, 1.0, False
+    # SCALE defaults to `a` rather than to a float: it is a POINTER argument now, and the
+    # FP8 constexpr compiles the load out, so the dummy is never dereferenced.
+    left, right, scale, fp8 = a, b, a, False
     if _grouped_fp8_enabled():
         from ember.model.ember_v0_fp8_linear import _quantize
         left, sa = _quantize(a)
         right, sb = _quantize(b)
-        scale, fp8 = (sa * sb).item(), True
+        scale, fp8 = (sa * sb).reshape(1), True
         _expert_counts['fp8_rows'] = _expert_counts.get('fp8_rows', 0) + 1
     else:
         _expert_counts['bf16_rows'] = _expert_counts.get('bf16_rows', 0) + 1
