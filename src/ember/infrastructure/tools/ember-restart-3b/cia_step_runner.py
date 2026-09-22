@@ -691,7 +691,8 @@ MEASUREMENT_UPDATES = 1024
 # micro-steps into the same gradients and applying ONE update. The pack is still one contiguous cursor span of 4N
 # documents, so the data plan, cursor chain and applied-position accounting are unchanged in kind; only the number of
 # positions each update applies changes, and that IS the learning contract, declared by the geometry itself.
-MICRO_DOCUMENTS = 4
+# #1945 wide micro-step: EMBER_MICRO_DOCUMENTS documents per captured micro-step (default 4).
+MICRO_DOCUMENTS = int(os.environ.get('EMBER_MICRO_DOCUMENTS', '4'))
 MAX_MICRO_STEPS = 16
 ACCUMULATION_DEPTHS = (1, 2, 4, 8, 16)
 MEASUREMENT_SCHEMA = 'governed-1024-v1'
@@ -954,7 +955,7 @@ class RoutingStatisticsBuffers:
     def __init__(self, lengths, *, device):
         import torch
         if (type(lengths) is not tuple or not lengths or any(type(n) is not int or n <= 0 for n in lengths)
-                or sum(lengths) > 4096):
+                or sum(lengths) > 1024 * MICRO_DOCUMENTS):
             raise ValueError('complete positive document geometry within context required')
         self.lengths = lengths
         chunks, offset, epochs = [], 0, 0
