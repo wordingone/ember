@@ -23,6 +23,43 @@ from .ember_v0_inventory import equation_inventory, update_support
 from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
 
+import atexit
+import json as _json
+
+_merged_kv_counts = {"merged": 0, "per_document": 0}
+
+
+def merged_kv_counts():
+    return dict(_merged_kv_counts)
+
+
+def _write_merged_kv_receipt():
+    # Per-key MAX merge, for the same reason the runner does it: the controller process
+    # carries the frozen environment, imports this module, does no work, and outlives
+    # the worker. A counter receipt is evidence only if a process that did nothing
+    # cannot overwrite the counts of the one that did.
+    path = os.environ.get("EMBER_MERGED_KV_RECEIPT")
+    if not path:
+        return
+    merged = dict(_merged_kv_counts)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            prior = _json.load(handle)
+        if type(prior) is dict:
+            for key, value in prior.items():
+                if type(value) is int and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            _json.dump(merged, handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_merged_kv_receipt)
+
 
 def _resident_geometry(lengths):
     from .ember_v0_residency import DeviceRouteGeometry
@@ -747,10 +784,42 @@ class CIADecoder(nn.Module):
             # reduction exactly rather than reimplementing either. q and o do not need it: their
             # forward is already bit-equal merged, so only their reduction shape moves.
             q = self._document_linear(values, prefix + ".q.weight", lengths).view(total, 16, 64)
-            k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"),
-                                   values, lengths).view(total, 4, 64)
-            v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"),
-                                   values, lengths).view(total, 4, 64)
+            # EMBER_MERGED_KV: K and V issue one GEMM PER DOCUMENT where Q and O issue one
+            # merged GEMM over the same rows. Measured in isolation at this exact shape --
+            # 4 documents of 1024 rows, 1024 -> 256, bf16 -- the per-document form costs
+            # 490.81 us forward+backward against 144.87 us merged: 345.95 us per site,
+            # 16,605.5 us per step over 48 sites, 10.56% of the 157,260.6 us device step
+            # (state/issue1945-receipts/kv-merge-fwd-bwd-probe-20260922.json). Ceiling
+            # 1.1181x ALONE, below the 1.5x dispatch bar, so this is a stack member and
+            # never a standalone arm.
+            #
+            # It is a DECLARED NUMERICAL TREATMENT, not a refactor. The comment on
+            # _per_document says cuBLAS chooses its algorithm from M, so the merged form
+            # is not bit-equal; the probe reproduces that prediction almost exactly --
+            # relative L2 0.00286 against the stated 0.00283-0.00289, and 37.5% of
+            # elements differing against the stated ~37%. Admissible only under a gate-C
+            # licence pair. With the flag unset the expression is the original one, so
+            # flag-off execution is unchanged.
+            #
+            # TWO mechanisms move here, not one, and the comment directly above this block
+            # names both: the 1024 -> 256 forward is not bit-equal merged, AND _document_linear
+            # moves the weight-gradient reduction shape as well -- that is precisely why k and
+            # v were restored to _per_document, whose reduction reproduces the saved actual R1
+            # update-1 gradients bitwise on 24 of 24 weights. The flag re-opens that decision
+            # on the strength of a duration nobody had measured when it was made (345.95 us
+            # per site), and it re-opens it as a question for the licence pair to answer, not
+            # as a correction of it. If the pair refuses, the prior ruling stands and the flag
+            # is what made the refusal a measurement instead of an assumption.
+            _mkv = os.environ.get("EMBER_MERGED_KV") == "1"
+            _merged_kv_counts["merged" if _mkv else "per_document"] += 1
+            if _mkv:
+                k = self._document_linear(values, prefix + ".k.weight", lengths).view(total, 4, 64)
+                v = self._document_linear(values, prefix + ".v.weight", lengths).view(total, 4, 64)
+            else:
+                k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"),
+                                       values, lengths).view(total, 4, 64)
+                v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"),
+                                       values, lengths).view(total, 4, 64)
             q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
             k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
             out = self._document_attention(q, k.repeat_interleave(4, dim=1),

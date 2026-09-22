@@ -479,15 +479,38 @@ def _native_loss(logits, targets):
     return torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
 
 
-def _write_loss_widen_receipt():
-    path = os.environ.get('EMBER_LOSS_WIDEN_RECEIPT')
+def _merge_counter_receipt(variable, counts):
+    # Two processes run THIS FILE per dispatch and both carry the frozen environment:
+    # the controller (--daemon-run --live --hidden-helper) re-execs itself as the worker
+    # (--worker <binding>) and verifies the ancestry, then outlives it. The controller
+    # never calls measure_step, so its counts are zero, and on 2026-09-22 it exited 1.2 s
+    # behind its child and overwrote a real count with those zeros -- twice, on two
+    # governed 1,024-update runs, each time reporting an executing member INERT.
+    # Taking the per-key MAXIMUM makes exit order irrelevant: whichever process did the
+    # work contributes its counts, and one that did none cannot erase them. The custody
+    # is fresh per run, so no stale count can be carried in from an earlier measurement.
+    path = os.environ.get(variable)
     if not path:
         return
+    merged = dict(counts)
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            prior = json.load(handle)
+        if type(prior) is dict:
+            for key, value in prior.items():
+                if type(value) is int and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
     try:
         with open(path, 'w', encoding='utf-8') as handle:
-            json.dump(dict(_loss_widen_counts), handle)
+            json.dump(merged, handle)
     except OSError:
         pass
+
+
+def _write_loss_widen_receipt():
+    _merge_counter_receipt('EMBER_LOSS_WIDEN_RECEIPT', _loss_widen_counts)
 
 
 atexit.register(_write_loss_widen_receipt)
