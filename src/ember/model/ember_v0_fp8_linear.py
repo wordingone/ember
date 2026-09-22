@@ -40,7 +40,9 @@ made by a probe rather than by the governed run that is entitled to make it.
 """
 from __future__ import annotations
 
+import atexit
 import collections
+import json
 import os
 
 import torch
@@ -78,6 +80,47 @@ def reset_dispatch_counts() -> None:
     """
     for key in _DISPATCH_COUNTS:
         _DISPATCH_COUNTS[key] = 0
+
+def _write_dispatch_receipt() -> None:
+    # The counters above are correct and, until this function existed, unreachable: nothing in the
+    # repository read dispatch_counts(), so every fp8 arm was scored on a configuration field that
+    # records what was REQUESTED. A governed run therefore could not distinguish a treatment that
+    # ran from one that was merely selected -- which is the defect the block above is written
+    # against, reproduced one layer out by having no consumer.
+    #
+    # MERGE, never overwrite. EMBER_FP8_RECEIPT is exported by the dispatching shell and is
+    # inherited by every descendant, so a process that imports this module and does no work can
+    # reach the same path and clobber a real tally with its own zeros. Taking the per-key maximum
+    # makes write ORDER irrelevant; the custody is fresh per run, so there are no stale counts.
+    path = os.environ.get("EMBER_FP8_RECEIPT")
+    if not path:
+        return
+    counts = dict(_DISPATCH_COUNTS)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            prior = json.load(handle).get("counts", {})
+        for key, value in prior.items():
+            if isinstance(value, int) and value > counts.get(key, 0):
+                counts[key] = value
+    except (OSError, ValueError):
+        pass
+    payload = {
+        "schema": "ember-1945-fp8-dispatch-counts-v1",
+        "claim_boundary": "asserts which exits of linear() EXECUTED in this process; licenses no duration and no learning result",
+        "counts": counts,
+        "pid": os.getpid(),
+        "enabled_requested": os.environ.get("EMBER_FP8_LINEAR"),
+        "delayed_scale_requested": os.environ.get("EMBER_FP8_DELAYED_SCALE"),
+    }
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=1, sort_keys=True)
+    except OSError:
+        pass
+
+
+atexit.register(_write_dispatch_receipt)
+
 
 
 def fp8_enabled() -> bool:
