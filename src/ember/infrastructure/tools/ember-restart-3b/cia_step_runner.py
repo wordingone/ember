@@ -90,7 +90,7 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
     if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
         raise ValueError('geometry fields differ')
     sequence = positive_int(geometry['sequence_length'], 'sequence length', 1024)
-    documents = positive_int(geometry['documents_per_step'], 'documents per step', 4)
+    documents = positive_int(geometry['documents_per_step'], 'documents per step', MICRO_DOCUMENTS * MAX_MICRO_STEPS)
     warm = geometry['warm_steps']
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
@@ -98,8 +98,12 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
                             131072 if hour else MEASUREMENT_UPDATES if measurement else 63 if trajectory else 8)
     if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
         raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
-    if measurement and (sequence, documents, warm, measured) != (1024, 4, 1, MEASUREMENT_UPDATES):
-        raise ValueError('long measurement requires exactly 1024 complete 4x1024 updates with one warm exemplar')
+    if measurement and ((sequence, warm, measured) != (1024, 1, MEASUREMENT_UPDATES)
+                        or documents % MICRO_DOCUMENTS or documents // MICRO_DOCUMENTS not in ACCUMULATION_DEPTHS):
+        raise ValueError('long measurement requires exactly 1024 complete updates of 4xN documents of 1024 positions '
+                         '(N in %s micro-steps) with one warm exemplar' % (ACCUMULATION_DEPTHS,))
+    if not measurement and documents > MICRO_DOCUMENTS:
+        raise ValueError('only the long measurement accumulates micro-steps; every other geometry is one 4x1024 step')
     if hour and ((sequence, documents, warm) != (1024, 4, 1) or measured < 2):
         raise ValueError('extended worker requires 4x1024 geometry, one warm exemplar and at least two measured updates')
     return sequence, documents, warm, measured
@@ -295,7 +299,7 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
         raise ValueError('prediction timing and rate must be finite positive numbers')
-    positive_int(positions_per_step, 'counted step positions', 4096)
+    positive_int(positions_per_step, 'counted step positions', 4096 * MAX_MICRO_STEPS)
     if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError('prediction arithmetic differs from counted positions')
     trajectory, hour = trajectory_mode(expected_identity), hour_mode(expected_identity)
@@ -682,6 +686,14 @@ def validate_document_permutation(value):
 
 
 MEASUREMENT_UPDATES = 1024
+# Gradient accumulation (#1945). The forward context is 4 documents of 1,024 positions -- routing buffers, captured
+# segments and the attention geometry are all bound to it -- so positions per OPTIMIZER step grow by running N such
+# micro-steps into the same gradients and applying ONE update. The pack is still one contiguous cursor span of 4N
+# documents, so the data plan, cursor chain and applied-position accounting are unchanged in kind; only the number of
+# positions each update applies changes, and that IS the learning contract, declared by the geometry itself.
+MICRO_DOCUMENTS = 4
+MAX_MICRO_STEPS = 16
+ACCUMULATION_DEPTHS = (1, 2, 4, 8, 16)
 MEASUREMENT_SCHEMA = 'governed-1024-v1'
 MEASUREMENT_WALL_SECONDS = 3000
 # Long-measurement arms: the declared execution regime of each; only the fused arm declares the fused optimizer.
@@ -1175,6 +1187,28 @@ def document_lengths(starts, total):
     return tuple(b - a for a, b in zip(starts, starts[1:] + (total,)))
 
 
+def micro_packs(pack):
+    """Split one update's pack into its 4-document micro-steps (a 4-document pack is its own single micro-step).
+    Documents are whole and positions are per document, so each micro-step is exactly the forward geometry the
+    capture was recorded under."""
+    starts = tuple(pack['document_starts'])
+    total = len(pack['token_ids'])
+    if len(starts) <= MICRO_DOCUMENTS:
+        return [pack]
+    if len(starts) % MICRO_DOCUMENTS or starts[0] != 0:
+        raise ValueError('pack documents are not a whole number of micro-steps')
+    bounds = list(starts) + [total]
+    out = []
+    for first in range(0, len(starts), MICRO_DOCUMENTS):
+        lo, hi = bounds[first], bounds[first + MICRO_DOCUMENTS]
+        out.append({'token_ids': pack['token_ids'][lo:hi], 'target_ids': pack['target_ids'][lo:hi],
+                    'positions': pack['positions'][lo:hi],
+                    'document_starts': [s - lo for s in starts[first:first + MICRO_DOCUMENTS]]})
+    if sum(len(m['token_ids']) for m in out) != total:
+        raise ValueError('micro-steps do not cover the pack')
+    return out
+
+
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
                  experiment_binding=None):
@@ -1208,82 +1242,122 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(device)
     before = _cache_values(model._cuda_execution.cache)
+    micros = micro_packs(pack)
+    depth = len(micros)
+    if depth > 1 and (route_observer is not None or route_snapshot is not None or verify_routes):
+        raise ValueError('reference routing observation is defined for one micro-step only')
     started = time.perf_counter()
-    tokens = torch.tensor(pack['token_ids'], dtype=torch.long, device=device)
-    targets = torch.tensor(pack['target_ids'], dtype=torch.long, device=device)
-    positions = torch.tensor(pack['positions'], dtype=torch.long, device=device)
-    starts = tuple(pack['document_starts'])
     resident = bool(getattr(model, '_resident_experts', None))
     if (route_snapshot is not None and not resident) or (route_observer is not None and resident):
         raise ValueError('routing observation interface differs from the selected execution mode')
-    buffers = routing_buffers(document_lengths(starts, len(pack['token_ids'])), device) if resident else None
-    if buffers is not None:
-        buffers.begin_step()
     if capture is not None:
-        if buffers is None:
+        if not resident:
             raise ValueError('segmented capture requires the resident routing buffers')
         if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
             raise ValueError('segmented capture is not bound to this model execution')
         capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
     else:
         optimizer.zero_grad(set_to_none=True)
+    if depth > 1 and expert_owners is not None:
+        # An owner released to None last update would receive its first micro-step gradient by AccumulateGrad
+        # STEALING the incoming tensor -- on the captured path that tensor aliases the graph's static gradient
+        # output, which the next micro-step's replay overwrites before adding it again. Materialised zeros force
+        # every micro-step onto the in-place += path, so the sum is the sum.
+        for parameters in expert_owners.values():
+            for parameter in parameters:
+                if parameter.requires_grad and parameter.grad is None:
+                    parameter.grad = torch.zeros_like(parameter)
     staged = time.perf_counter()
-    events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if device.type == 'cuda' else None
-    recording = capture.record() if (capture is not None and record) else contextlib.nullcontext()
-    with model.candidate_step(), recording:
-        if events is not None:
-            events[0].record()
-        if buffers is not None:
-            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
-                                   return_routes=True, batch_documents=batch_documents,
-                                   return_device_routes=True, device_route_collector=buffers.collector,
-                                   training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
-        else:
-            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
-                                   return_routes=True, batch_documents=batch_documents,
-                                   **({'route_observer': route_observer} if route_observer is not None else {}))
-        loss = (capture.loss(logits, targets) if capture is not None else
-                _native_loss(logits, targets))
-        if events is not None:
-            events[1].record()
-        forwarded = time.perf_counter()
-        loss.backward()
-        if events is not None:
-            events[2].record()
-        backwarded = time.perf_counter()
+    events = [torch.cuda.Event(enable_timing=True) for _ in range(3 * depth + 1)] if device.type == 'cuda' else None
+    forward_seconds = backward_seconds = 0.0
+    losses = []
+    micro_snapshots = []
+    unrouted = None
+    routes = None
+    with model.candidate_step():
+        for micro_index, micro in enumerate(micros):
+            tokens = torch.tensor(micro['token_ids'], dtype=torch.long, device=device)
+            targets = torch.tensor(micro['target_ids'], dtype=torch.long, device=device)
+            positions = torch.tensor(micro['positions'], dtype=torch.long, device=device)
+            starts = tuple(micro['document_starts'])
+            buffers = routing_buffers(document_lengths(starts, len(micro['token_ids'])), device) if resident else None
+            if buffers is not None:
+                buffers.begin_step()
+            recording = (capture.record() if (capture is not None and record and micro_index == 0)
+                         else contextlib.nullcontext())
+            with recording:
+                micro_started = time.perf_counter()
+                if events is not None:
+                    events[3 * micro_index].record()
+                if buffers is not None:
+                    logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                                           return_routes=True, batch_documents=batch_documents,
+                                           return_device_routes=True, device_route_collector=buffers.collector,
+                                           training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
+                else:
+                    logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                                           return_routes=True, batch_documents=batch_documents,
+                                           **({'route_observer': route_observer} if route_observer is not None else {}))
+                loss = (capture.loss(logits, targets) if capture is not None else
+                        _native_loss(logits, targets))
+                if events is not None:
+                    events[3 * micro_index + 1].record()
+                micro_forwarded = time.perf_counter()
+                loss.backward()
+                if events is not None:
+                    events[3 * micro_index + 2].record()
+                micro_backwarded = time.perf_counter()
+            forward_seconds += micro_forwarded - micro_started
+            backward_seconds += micro_backwarded - micro_forwarded
+            losses.append(loss.detach())
+            if buffers is not None:
+                # Per-micro-step boundary copy: each micro-step's report set is validated on its own, and an expert
+                # owner is unrouted for the UPDATE only if it routed no rows in ANY micro-step.
+                snapshot = buffers.snapshot()
+                if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
+                    raise ValueError('device routing buffers differ from the model trace')
+                micro_snapshots.append(snapshot)
+                these = {layer: set(experts) for layer, experts in buffers.unrouted(snapshot).items()}
+                unrouted = these if unrouted is None else {
+                    layer: unrouted[layer] & these[layer] for layer in unrouted if layer in these}
+            if capture is not None and record:
+                del logits, loss, routes
+                routes = None
+    forwarded = staged + forward_seconds
+    backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
-    if not math.isfinite(float(loss.detach())):
+    loss_value = float(sum(float(value) for value in losses) / depth)
+    if not math.isfinite(loss_value):
         raise ValueError('nonfinite step loss')
-    # Pre-update boundary: the ONE device-to-host copy of the routing buffers happens here, so an incomplete or
-    # duplicated report set (a captured segment that skipped the collector) and a trace mismatch refuse BEFORE
-    # optimizer.step() can mutate the model. The copy is step work and stays inside the wall; the digest and the
-    # statistics are decoded from the retained snapshot after timing, without a second copy.
-    snapshot = None
+    snapshot = micro_snapshots[-1] if micro_snapshots else None
     released = None
     routing_boundary_started = time.perf_counter()
-    if buffers is not None:
-        snapshot = buffers.snapshot()
-        if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
-            raise ValueError('device routing buffers differ from the model trace')
-        if expert_owners is not None:
-            # Reference skip semantics: unrouted expert owners carry no gradient into the update (per layer, per expert,
-            # from the same snapshot that validated the report set). Captured dense owners are not in this index.
-            released = release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))
+    if unrouted is not None and expert_owners is not None:
+        # Reference skip semantics over the whole update: unrouted expert owners carry no gradient into it.
+        released = release_unrouted_expert_grads(expert_owners, {layer: tuple(sorted(experts))
+                                                                 for layer, experts in unrouted.items() if experts})
     routing_digest_seconds = time.perf_counter() - routing_boundary_started
-    if capture is not None and record:
-        # The exemplar step's autograd graph must not outlive the record: the harness captures on a side stream and a
-        # live AccumulateGrad node bound to the default stream invalidates the capture (proven in the harness fixture).
-        del routes
+    if depth > 1:
+        # Each micro-step loss is a mean over its own positions; the update applies the mean over all of them.
+        grads = [parameter.grad for group in optimizer.param_groups for parameter in group['params']
+                 if parameter.grad is not None]
+        if grads:
+            torch._foreach_mul_(grads, 1.0 / depth)
     optimizer.step()
     if events is not None:
-        events[3].record()
+        events[-1].record()
     synchronize()
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
-    if buffers is not None:
+    if buffers is not None and depth == 1:
         routes_sha256, grammar = buffers.digest(snapshot), buffers.GRAMMAR
         routing_statistics, route_host_reads = buffers.statistics(snapshot), buffers.route_host_reads
+    elif buffers is not None:
+        routes_sha256 = hashlib.sha256(''.join(buffers.digest(s) for s in micro_snapshots).encode()).hexdigest()
+        grammar = buffers.GRAMMAR + '+accumulated-v1'
+        routing_statistics = [buffers.statistics(s) for s in micro_snapshots]
+        route_host_reads = buffers.route_host_reads
     else:
         routes_sha256, grammar, routing_statistics, route_host_reads = (
             hashlib.sha256(canonical(routes)).hexdigest(), ROUTES_DIGEST_GRAMMARS[0], None, None)
@@ -1302,10 +1376,13 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'positions_per_second': len(pack['token_ids']) / wall,
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
-            'optimizer_and_sync_seconds': finished - exited, 'loss': float(loss.detach()),
-            'cuda_phase_seconds': ({'forward': events[0].elapsed_time(events[1]) / 1000,
-                                   'backward': events[1].elapsed_time(events[2]) / 1000,
-                                   'context_exit_and_optimizer': events[2].elapsed_time(events[3]) / 1000}
+            'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
+            'accumulation_micro_steps': depth,
+            'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
+                                                   for m in range(depth)) / 1000,
+                                   'backward': sum(events[3 * m + 1].elapsed_time(events[3 * m + 2])
+                                                   for m in range(depth)) / 1000,
+                                   'context_exit_and_optimizer': events[3 * depth - 1].elapsed_time(events[-1]) / 1000}
                                   if events is not None else None),
             'routes_sha256': routes_sha256, 'routes_digest_grammar': grammar,
             'routing_digest_seconds': routing_digest_seconds, 'routing_statistics': routing_statistics,
@@ -1556,7 +1633,8 @@ def worker(binding_path):
         definition = prediction['identity']['optimizer']
         measurement = measurement_mode(prediction['identity'])
         first = prepared['first'] if measurement else prepared['packs'][0]
-        first_lengths = document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+        first_micro = micro_packs(first)[0]
+        first_lengths = document_lengths(tuple(first_micro['document_starts']), len(first_micro['token_ids']))
 
         def optimizer_factory(inventory):
             if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:

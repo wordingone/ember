@@ -311,8 +311,12 @@ class SkipSemanticsTests(unittest.TestCase):
         start = source.index('def measure_step(')
         body = source[start:source.index('\ndef ', start + 1)]
         snapshot = body.index('snapshot = buffers.snapshot()')
-        release = body.index('release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))')
-        self.assertLess(snapshot, release)
+        # The unrouted set is read from each micro-step's snapshot and intersected across micro-steps before the
+        # one release (#1945 gradient accumulation); with one micro-step it is that step's set unchanged.
+        unrouted = body.index('buffers.unrouted(snapshot)')
+        release = body.index('release_unrouted_expert_grads(expert_owners,')
+        self.assertLess(snapshot, unrouted)
+        self.assertLess(unrouted, release)
         self.assertLess(body.index("raise ValueError('device routing buffers differ from the model trace')"), release)
         self.assertLess(release, body.index('\n    optimizer.step()\n'))  # the call, not the docstring mention
         self.assertIn("'unrouted_expert_grads_released'", body)
@@ -534,7 +538,7 @@ class ResidentModel:
         return torch.zeros((len(tokens), 4))
 
     def __call__(self, embedded, positions, *, document_starts, return_routes, batch_documents,
-                 return_device_routes=False, device_route_collector=None):
+                 return_device_routes=False, device_route_collector=None, training_hidden=False):
         self.calls.append(dict(document_starts=document_starts, return_routes=return_routes,
                                return_device_routes=return_device_routes, collector=device_route_collector))
         if not return_device_routes or device_route_collector is None:
@@ -633,6 +637,36 @@ class MeasureStepTests(unittest.TestCase):
         row = subject.measure_step(model, optimizer, pack_for(lengths), device=torch.device('cpu'))
         self.assertEqual(optimizer.steps, 1)
         self.assertLessEqual(row['routing_digest_seconds'], row['wall_seconds'])
+
+    def test_accumulated_update_applies_the_mean_gradient_of_its_micro_steps_once(self):
+        # #1945 gradient accumulation: an 8-document pack is two 4-document micro-steps into ONE update, and the update
+        # equals SGD on the mean of the two micro-step losses (a plain sum, or two updates, would fail this).
+        lengths = (3, 4, 5, 6)
+        single = pack_for(lengths)
+        generator = torch.Generator().manual_seed(11)
+        targets = [torch.randint(0, 8, (len(single['token_ids']),), generator=generator).tolist() for _ in range(2)]
+        wide = dict(single, token_ids=single['token_ids'] * 2, target_ids=targets[0] + targets[1],
+                    positions=single['positions'] * 2,
+                    document_starts=single['document_starts'] + [s + sum(lengths) for s in single['document_starts']])
+        model = ResidentModel(lengths, 21)
+        optimizer = CountingSGD([model.weight], lr=1.0)
+        row = subject.measure_step(model, optimizer, wide, device=torch.device('cpu'))
+        self.assertEqual(optimizer.steps, 1)
+        self.assertEqual(row['accumulation_micro_steps'], 2)
+        self.assertEqual(row['applied_positions'], 2 * sum(lengths))
+        self.assertEqual([call['document_starts'] for call in model.calls], [tuple(single['document_starts'])] * 2)
+        self.assertEqual(len(row['routing_statistics']), 2)
+        grads = []
+        for micro_targets in targets:
+            weight = torch.zeros(8, requires_grad=True)
+            torch.nn.functional.cross_entropy(weight.expand(sum(lengths), 8), torch.tensor(micro_targets)).backward()
+            grads.append(weight.grad)
+        torch.testing.assert_close(model.weight.detach(), -(grads[0] + grads[1]) / 2)
+        losses = [float(torch.nn.functional.cross_entropy(torch.zeros(sum(lengths), 8), torch.tensor(t))) for t in targets]
+        self.assertAlmostEqual(row['loss'], sum(losses) / 2, places=5)
+        with self.assertRaises(ValueError):  # the reference trace comparison is defined for one micro-step only
+            subject.measure_step(model, optimizer, wide, device=torch.device('cpu'), verify_routes=True)
+        self.assertEqual(optimizer.steps, 1)
 
     def test_legacy_model_keeps_legacy_grammar(self):
         model = LegacyModel()
