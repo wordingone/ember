@@ -710,7 +710,8 @@ class ResidentExecution:
         if self.active or self.retired or self.poisoned:
             raise RuntimeError('geometry binding requires a quiescent current execution')
         if (type(lengths) is not tuple or not lengths
-                or any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > 4096):
+                or any(type(n) is not int or n <= 0 for n in lengths)
+                or sum(lengths) > int(os.environ.get('EMBER_MAX_POSITIONS', '4096'))):
             raise ValueError('complete positive document geometry within context required')
         sizes = tuple(min(256, n-start) for n in lengths for start in range(0,n,256))
         self._geometry_lengths = lengths

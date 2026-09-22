@@ -26,6 +26,56 @@ from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, se
 import atexit
 import json as _json
 
+# #1945 wide micro-step: the packed-positions ceiling of ONE captured micro-step. Default 4,096
+# (4 x 1,024). Raising it moves only the packed-batch ceiling; every document still attends within
+# itself, so the per-document context contract is untouched.
+_MAX_PACKED_POSITIONS = int(os.environ.get('EMBER_MAX_POSITIONS', '4096'))
+
+
+def _layer_set(name, default):
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    if raw.strip() == 'none':
+        return frozenset()
+    layers = frozenset(int(x) for x in raw.split(',') if x.strip())
+    if any(not 0 <= layer < 24 for layer in layers):
+        raise ValueError(name + ' names a layer outside 0..23')
+    return layers
+
+
+# #1945 layer template (numerical treatment, licensed only by gate C). A layer outside
+# _ATTENTION_KEEP passes values through its attention unchanged; outside _FFN_KEEP its shared
+# FFN; an odd layer outside _EXPERT_KEEP still routes but its grouped expert block is a zero
+# residual. Unset variables keep every layer, which is the unchanged model.
+_ATTENTION_KEEP = _layer_set('EMBER_SKIP_KEEP', frozenset(range(24)))
+_FFN_KEEP = _layer_set('EMBER_SKIP_KEEP_FFN', _ATTENTION_KEEP)
+_EXPERT_KEEP = _layer_set('EMBER_SKIP_KEEP_EXPERT', _FFN_KEEP)
+_layer_template_counts = {"attention_skipped": 0, "ffn_skipped": 0, "expert_skipped": 0,
+                          "attention_run": 0, "ffn_run": 0, "expert_run": 0}
+
+
+def _write_layer_template_receipt():
+    # The feature's own assertion that it executed (counted where each branch is TRACED, so on the
+    # captured path it counts exemplar/record calls, not replays). Per-key MAX merge: a process that
+    # imports this module and does no work cannot overwrite the counts of the one that did.
+    path = os.environ.get('EMBER_LAYER_TEMPLATE_RECEIPT')
+    if not path:
+        return
+    counts = dict(_layer_template_counts)
+    try:
+        with open(path, encoding='utf-8') as f:
+            prior = _json.load(f).get('counts', {})
+        counts = {k: max(v, int(prior.get(k, 0))) for k, v in counts.items()}
+    except (OSError, ValueError):
+        pass
+    with open(path, 'w', encoding='utf-8') as f:
+        _json.dump({'counts': counts, 'attention_keep': sorted(_ATTENTION_KEEP), 'ffn_keep': sorted(_FFN_KEEP),
+                    'expert_keep': sorted(_EXPERT_KEEP), 'max_packed_positions': _MAX_PACKED_POSITIONS}, f)
+
+
+atexit.register(_write_layer_template_receipt)
+
 _merged_kv_counts = {"merged": 0, "per_document": 0}
 
 
@@ -64,7 +114,7 @@ atexit.register(_write_merged_kv_receipt)
 def _resident_geometry(lengths):
     from .ember_v0_residency import DeviceRouteGeometry
     if (type(lengths) is not tuple or not lengths or
-            any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > 4096):
+            any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > _MAX_PACKED_POSITIONS):
         raise ValueError('resident segment geometry requires complete positive document lengths')
     chunks, offset, epoch = [], 0, 0
     for document, length in enumerate(lengths):
@@ -955,10 +1005,19 @@ class CIADecoder(nn.Module):
         equal = len(set(sizes)) == 1
         for layer in (2 * index, 2 * index + 1):
             prefix = f'layers.{layer}'
-            values = values + self._batched_attention(
-                self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
-            shared = values + self._document_swiglu(
-                self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared', lengths)
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._batched_attention(
+                    self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._document_swiglu(
+                    self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared', lengths)
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if layer % 2 == 0:
                 values = shared
                 continue
@@ -980,8 +1039,12 @@ class CIADecoder(nn.Module):
             if collector is not None:
                 collector('local', dict(layer=layer, winners=winners.detach().clone(), logits=logits.detach().clone(),
                                        gates=gates.detach().clone(), valid=valid.detach().clone(), native_winners=native_winners.detach().clone()))
-        if capture_experts:
+        if capture_experts and (2 * index + 1) in _EXPERT_KEEP:
+            _layer_template_counts['expert_run'] += 1
             normed = execution.grouped_block(normed, row_experts, 2 * index + 1, backend='dynamic')
+        elif capture_experts:
+            _layer_template_counts['expert_skipped'] += 1
+            normed = torch.zeros_like(normed)
         return shared, normed, row_experts, row_gates, positions, keys, priors, ranked, candidates, history
 
     def _resident_documents_forward(self, documents, *, collector=None, plan=None, head_output='logits'):
@@ -1188,7 +1251,7 @@ class CIADecoder(nn.Module):
             raise ValueError("numerical forward requires full physical materialization")
         self._input(embedded, 1024)
         self._input(positions)
-        if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= 4096:
+        if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= _MAX_PACKED_POSITIONS:
             raise ValueError("1..4096 unpadded BF16 positions required")
         if positions.dtype != torch.long or tuple(positions.shape) != (len(embedded), 3):
             raise ValueError("three integer axes required at every position")
