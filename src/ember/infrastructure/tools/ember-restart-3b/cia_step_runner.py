@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import ctypes
 from dataclasses import asdict, replace
 import contextlib
@@ -439,6 +440,59 @@ def local_routing_mode(identity):
     return selected
 
 
+_loss_widen_counts = {'fused_widen': 0, 'materialised_widen': 0}
+
+
+def loss_widen_counts():
+    return dict(_loss_widen_counts)
+
+
+def _fused_logit_widen():
+    """Fold the fp32 widening of the logits INTO the log-softmax instead of materialising it.
+
+    `cross_entropy(logits.float(), targets)` upcasts the whole [positions, vocabulary] logit
+    tensor to fp32 first -- at this geometry a 4096x32768 fp32 copy, measured at 1,813.1 us
+    per step over two launches in the fusibility audit -- and only then reduces it. Passing
+    `dtype=torch.float32` to `log_softmax` performs the identical widening per element as the
+    reduction reads it, so the copy never exists.
+
+    BIT-EXACT BY CONSTRUCTION, not merely close: bf16 -> fp32 is an exact widening (every
+    bf16 value is representable in fp32), so the softmax arithmetic sees the same values in
+    the same order either way. `cross_entropy` is defined as `nll_loss(log_softmax(x))` and
+    both carry reduction='mean' over the same denominator.
+
+    Counted at the call site rather than read back from the environment: a frozen manifest
+    variable records that the flag reached the worker, and only a count records that the
+    branch which ran is the branch that was asked for.
+    """
+    on = os.environ.get('EMBER_FUSED_LOGIT_WIDEN') == '1'
+    _loss_widen_counts['fused_widen' if on else 'materialised_widen'] += 1
+    return on
+
+
+def _native_loss(logits, targets):
+    import torch
+    if _fused_logit_widen():
+        return torch.nn.functional.nll_loss(
+            torch.nn.functional.log_softmax(logits, dim=-1, dtype=torch.float32),
+            targets, reduction='mean')
+    return torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
+
+
+def _write_loss_widen_receipt():
+    path = os.environ.get('EMBER_LOSS_WIDEN_RECEIPT')
+    if not path:
+        return
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(dict(_loss_widen_counts), handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_loss_widen_receipt)
+
+
 def training_head(identity):
     selected = identity.get('training_head', 'native')
     if type(selected) is not str or selected not in ('native', 'cce-document-v1'):
@@ -499,8 +553,7 @@ def validate_experiment_plan(identity):
 def capture_loss_kwargs(model, identity, lengths):
     import torch
     if training_head(identity) == 'native':
-        return dict(loss_fn=lambda logits, targets:
-                    torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
+        return dict(loss_fn=_native_loss)
     from ember.model.ember_v0_streamed_loss import document_streamed_loss
     os.environ['CCE_AUTOTUNE'] = '0'
     lengths = tuple(lengths)
@@ -1167,7 +1220,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                    return_routes=True, batch_documents=batch_documents,
                                    **({'route_observer': route_observer} if route_observer is not None else {}))
         loss = (capture.loss(logits, targets) if capture is not None else
-                torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
+                _native_loss(logits, targets))
         if events is not None:
             events[1].record()
         forwarded = time.perf_counter()
