@@ -62,6 +62,35 @@ class MeasurementGeometryTests(unittest.TestCase):
         ordinary = dict(sequence_length=1024, documents_per_step=4, warm_steps=1, measured_steps=8)
         self.assertEqual(runner.geometry_counts(ordinary), (1024, 4, 1, 8))
 
+    def test_measurement_accumulates_whole_four_document_micro_steps_only(self):
+        for documents in (8, 16, 32, 64):
+            self.assertEqual(runner.geometry_counts(dict(GEOMETRY, documents_per_step=documents), measurement=True),
+                             (1024, documents, 1, 1024))
+        for documents in (6, 12, 128):  # not whole micro-steps, or deeper than the declared depths
+            with self.assertRaises(ValueError):
+                runner.geometry_counts(dict(GEOMETRY, documents_per_step=documents), measurement=True)
+        with self.assertRaises(ValueError):  # only the long measurement accumulates
+            runner.geometry_counts(dict(sequence_length=1024, documents_per_step=8, warm_steps=1, measured_steps=8))
+
+    def test_micro_packs_split_one_update_into_contiguous_four_document_steps(self):
+        documents, sequence = 8, 4
+        pack = {'token_ids': list(range(documents * sequence)),
+                'target_ids': list(range(1, documents * sequence + 1)),
+                'positions': [[p, 0, 0] for _ in range(documents) for p in range(sequence)],
+                'document_starts': [d * sequence for d in range(documents)], 'phase': 'measured', 'index': 3}
+        micros = runner.micro_packs(pack)
+        self.assertEqual(len(micros), 2)
+        self.assertEqual(sum((m['token_ids'] for m in micros), []), pack['token_ids'])
+        self.assertEqual(sum((m['target_ids'] for m in micros), []), pack['target_ids'])
+        for micro in micros:
+            self.assertEqual(micro['document_starts'], [0, 4, 8, 12])
+            self.assertEqual(micro['positions'], pack['positions'][:16])
+        single = dict(pack, token_ids=pack['token_ids'][:16], target_ids=pack['target_ids'][:16],
+                      positions=pack['positions'][:16], document_starts=pack['document_starts'][:4])
+        self.assertIs(runner.micro_packs(single)[0], single)
+        with self.assertRaises(ValueError):  # a partial micro-step is refused, never padded or dropped
+            runner.micro_packs(dict(pack, document_starts=pack['document_starts'][:6]))
+
 
 class MeasurementIdentityTests(unittest.TestCase):
     def test_measurement_identity_is_explicit_arm_bound_and_exclusive(self):
