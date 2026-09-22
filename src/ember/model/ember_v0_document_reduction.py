@@ -108,17 +108,90 @@ class _DocumentReducedLinear(torch.autograd.Function):
             raise ValueError(f"order must be one of {ORDERS}; it is measured, not defaulted")
         ctx.save_for_backward(values, weight)
         ctx.lengths, ctx.order = tuple(int(length) for length in lengths), order
+        ctx.fp8 = _cia_fp8_selected(values)
+        if ctx.fp8:
+            return _cia_fp8_forward(values, weight)
         return F.linear(values, weight)
 
     @staticmethod
     def backward(ctx, grad_output):
         values, weight = ctx.saved_tensors
-        grad_input = grad_output @ weight if ctx.needs_input_grad[0] else None
+        grad_input = None
+        if ctx.needs_input_grad[0]:
+            grad_input = (_cia_fp8_grad_input(grad_output, weight) if getattr(ctx, "fp8", False)
+                          else grad_output @ weight)
         grad_weight = None
         if ctx.needs_input_grad[1]:
             grad_weight = reduce_weight_gradient(
                 values, grad_output, ctx.lengths, ctx.order, dtype=weight.dtype)
         return grad_input, grad_weight, None, None
+
+
+# --- e4m3 execution of the two MERGED GEMMs, behind EMBER_FP8_LINEAR -------------------------
+#
+# The CIA measured path reaches every dense projection -- q, k, v, o and the three shared SwiGLU
+# weights -- through `document_reduced_linear`, so this is the single site at which the format of
+# the CIA dense class is decided. `ember_v0_fp8_linear` was reachable only from `ember_v0_model`,
+# which the CIA decoder does not import, so EMBER_FP8_LINEAR has been accepted and inert on every
+# CIA arm measured to date. This wires the flag to the path that actually runs.
+#
+# TWO of the three GEMMs move. The weight gradient does NOT, and that boundary is the contract
+# stated at the top of this file: its per-document partials are summed in an order resolved by
+# reproducing a saved actual reference gradient bitwise, and no wider accumulator is permitted
+# because matching the reference means matching its rounding. Quantizing that reduction's operands
+# would install a third arithmetic the reference never had. So the treatment's ceiling is 2/3 of
+# the dense class's GEMM time, not all of it, and that is stated before any measurement rather
+# than discovered from one.
+#
+# The forward quantizes the activation per call and takes the weight from the version-keyed cache
+# in `ember_v0_fp8_linear`, which requantizes only when the optimizer writes the parameter. The
+# backward quantizes grad_output per call and takes the cached column-major weight. `values` is
+# still saved in its original dtype because the weight gradient consumes it unchanged.
+#
+# Every refusal -- flag unset, device below sm89, a dtype the format does not apply to -- falls
+# back to the ordinary path and is COUNTED, so "the arm was selected" and "the arm executed" stay
+# separately observable in the receipt. A count of zero with the flag set is an inert arm, which
+# is exactly the failure this wiring exists to make visible.
+
+
+def _cia_fp8_selected(values):
+    """Whether this call executes in e4m3, counting the exit either way."""
+    from . import ember_v0_fp8_linear as fp8
+    if not fp8.fp8_enabled():
+        fp8._DISPATCH_COUNTS["not_selected"] += 1
+        return False
+    if not fp8.fp8_supported(values):
+        fp8._DISPATCH_COUNTS["unsupported_device"] += 1
+        return False
+    if values.dtype not in (torch.bfloat16, torch.float16):
+        fp8._DISPATCH_COUNTS["full_precision"] += 1
+        return False
+    fp8._DISPATCH_COUNTS["fp8"] += 1
+    return True
+
+
+def _cia_fp8_forward(values, weight):
+    """values @ weight^T in e4m3. `weight` is (out, in) contiguous, so `.t()` is column-major free."""
+    from . import ember_v0_fp8_linear as fp8
+    # The site key is the weight's identity plus the role, so a delayed scale calibrated for
+    # this projection's activations is never reused for another projection or for a gradient.
+    # The scale is keyed by the ACTIVATION, not by the projection that reads it. The shared SwiGLU
+    # up and gate consume one tensor, and so do q, k and v; keying per weight gave each of them its
+    # own scale and its own cast of the same bytes. A shape-scoped key lets those sites share both,
+    # and it stays stable across steps so the resident factor survives calibration. Two different
+    # tensors of one shape share a scale, which is a running max over both and therefore conservative
+    # against overflow -- it costs precision, never range, and gate C adjudicates the precision.
+    values8, values_scale = fp8.quantize_activation(values, ("act", tuple(values.shape[1:])))
+    weight8, _, weight_scale = fp8._quantize_weight(weight)
+    return fp8._scaled_matmul(values8, values_scale, weight8.t(), weight_scale, values.dtype)
+
+
+def _cia_fp8_grad_input(grad_output, weight):
+    """grad_output @ weight in e4m3, with the column-major weight from the per-step cache."""
+    from . import ember_v0_fp8_linear as fp8
+    grad8, grad_scale = fp8.quantize_activation(grad_output, ("grad", tuple(grad_output.shape[1:])))
+    _, weight_column_major, weight_scale = fp8._quantize_weight(weight)
+    return fp8._scaled_matmul(grad8, grad_scale, weight_column_major, weight_scale, grad_output.dtype)
 
 
 def document_reduced_linear(values, weight, lengths, order):
