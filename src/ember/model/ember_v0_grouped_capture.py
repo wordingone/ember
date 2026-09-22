@@ -7,9 +7,51 @@ Offsets are cumulative routed row counts produced and validated by ResidentExecu
 these internal kernels perform no host read of routing values. This numerical treatment
 requires separate conformance evidence and does not change the native default.
 """
+import atexit
+import io
+import json
+import os
+
 import torch
 import triton
 import triton.language as tl
+
+
+_expert_counts = {'param_layout_db': 0, 'kernel_layout_db': 0}
+
+
+def expert_dispatch_counts():
+    return dict(_expert_counts)
+
+
+def _param_layout_db():
+    """Store the expert weight gradient in the PARAMETER layout instead of the kernel's.
+
+    A pure layout treatment: the same accumulator is written to the same values in a
+    different physical order, so it is bit-exact by construction and needs no licence pair.
+    What it buys is downstream -- AccumulateGrad stops taking a strided operand.
+
+    Counted at the launch site rather than read back from the environment, because a frozen
+    manifest variable records that the flag reached the worker and only a count records that
+    the branch Triton compiled is the branch that ran.
+    """
+    on = os.environ.get('EMBER_PARAM_LAYOUT_DB') == '1'
+    _expert_counts['param_layout_db' if on else 'kernel_layout_db'] += 1
+    return on
+
+
+def _write_expert_receipt():
+    path = os.environ.get('EMBER_FP16_EXPERTS_RECEIPT')
+    if not path:
+        return
+    try:
+        with io.open(path, 'w', encoding='utf-8') as handle:
+            json.dump(dict(_expert_counts), handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_expert_receipt)
 
 
 @triton.jit
@@ -40,7 +82,8 @@ def _rows(A, B, O, C, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
 @triton.jit
 def _weights(A, D, O, W, ENDS, K: tl.constexpr, N: tl.constexpr,
              AS0: tl.constexpr, AS1: tl.constexpr, DS0: tl.constexpr, DS1: tl.constexpr,
-             BM: tl.constexpr = 32, BN: tl.constexpr = 64, BK: tl.constexpr = 32, NC: tl.constexpr = 0):
+             BM: tl.constexpr = 32, BN: tl.constexpr = 64, BK: tl.constexpr = 32, NC: tl.constexpr = 0,
+             TRANS_STORE: tl.constexpr = False):
     group = tl.program_id(2)
     start = tl.load(O + group - 1, group > 0, other=0)
     end = tl.load(O + group)
@@ -74,8 +117,16 @@ def _weights(A, D, O, W, ENDS, K: tl.constexpr, N: tl.constexpr,
             right = tl.load(D + mm[:, None] * DS0 + cols[None, :] * DS1,
                             (mm[:, None] < end) & (cols[None, :] < N), other=0)
             acc += tl.dot(left, right)
-    tl.store(W + group * K * N + rows[:, None] * N + cols[None, :], acc,
-             (rows[:, None] < K) & (cols[None, :] < N))
+    if TRANS_STORE:
+        # The destination is physically (groups, N, K), so K is its fast axis. Transposing
+        # the accumulator in REGISTERS keeps this store coalesced, which a bare stride swap
+        # does not. Storing in the PARAMETER layout is what lets AccumulateGrad take a
+        # contiguous operand instead of the strided add the trace prices at 9,314 us/step.
+        tl.store(W + group * K * N + cols[:, None] * K + rows[None, :] * 1, tl.trans(acc),
+                 (rows[None, :] < K) & (cols[:, None] < N))
+    else:
+        tl.store(W + group * K * N + rows[:, None] * N + cols[None, :], acc,
+                 (rows[:, None] < K) & (cols[None, :] < N))
 
 
 def rows(a, b, offsets):
@@ -111,11 +162,21 @@ class DynamicGrouped(torch.autograd.Function):
         a, b, offsets, chunk_ends = ctx.saved_tensors
         k, n = b.shape[1:]
         da = rows(gradient, b.transpose(1, 2), offsets)
-        db = torch.empty(b.shape, device=b.device, dtype=b.dtype)
+        trans = _param_layout_db()
+        if trans:
+            # Physically (groups, n, k) -- the layout the resident Parameter actually owns,
+            # since _grouped_swiglu reaches this kernel through gate/up/down.transpose(1, 2).
+            # Returned as a transposed VIEW so autograd still sees b's logical (groups, k, n)
+            # shape, which makes this a LAYOUT change and nothing else: not one arithmetic
+            # operation differs.
+            db = torch.empty((b.shape[0], n, k), device=b.device, dtype=b.dtype).transpose(1, 2)
+        else:
+            db = torch.empty(b.shape, device=b.device, dtype=b.dtype)
         _weights[(triton.cdiv(k, 64), triton.cdiv(n, 128), b.shape[0])](
             a, gradient, offsets, db, offsets if chunk_ends is None else chunk_ends,
             k, n, *a.stride(), *gradient.stride(),
-            BM=64, BN=128, BK=32, NC=0 if chunk_ends is None else chunk_ends.shape[1], num_warps=4)
+            BM=64, BN=128, BK=32, NC=0 if chunk_ends is None else chunk_ends.shape[1], num_warps=4,
+            TRANS_STORE=trans)
         return da, db, None, None
 
 
