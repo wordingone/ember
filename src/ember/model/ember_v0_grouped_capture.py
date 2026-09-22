@@ -129,6 +129,30 @@ def _weights(A, D, O, W, ENDS, K: tl.constexpr, N: tl.constexpr,
                  (rows[:, None] < K) & (cols[None, :] < N))
 
 
+#: The `_rows` tile, overridable by EMBER_ROWS_TILE as "BM,BN,BK,warps,stages".
+#:
+#: The shipped 64x128x32 with four warps and Triton's default pipelining was never tuned against
+#: this card: the kernel is 18,582 us/step over 72 calls, the largest single kernel in the step.
+#: BK=32 in particular gives a short inner loop with little to overlap.
+#:
+#: This override applies to `_rows` ONLY, which is reached by the forward and by the dX leg of the
+#: backward. It deliberately does not reach `_weights`, whose NC branch rounds a BF16 partial at
+#: every chunk boundary in order to reproduce the reference gradient bit for bit -- a tile change
+#: there would move those boundaries and break the contract rather than the implementation.
+#:
+#: `_rows` accumulates in fp32 and states no bit-exactness contract, so a different BK changes the
+#: summation order and therefore the low bits. That is a numerical change and gate C adjudicates
+#: it; it is not a contract change.
+def _rows_config():
+    raw = os.environ.get("EMBER_ROWS_TILE", "").strip()
+    if not raw:
+        return 64, 128, 32, 4, 3
+    parts = raw.split(",")
+    if len(parts) != 5:
+        raise ValueError("EMBER_ROWS_TILE requires BM,BN,BK,warps,stages")
+    return tuple(int(p) for p in parts)
+
+
 def rows(a, b, offsets):
     if a.ndim != 2 or b.ndim != 3 or offsets.ndim != 1:
         raise ValueError('grouped capture requires matrices and one offset vector')
@@ -139,9 +163,10 @@ def rows(a, b, offsets):
             or a.dtype != torch.bfloat16 or b.dtype != a.dtype or offsets.dtype != torch.int32):
         raise ValueError('grouped capture requires aligned positive same-device BF16 geometry')
     out = torch.empty((m, n), device=a.device, dtype=a.dtype)
-    _rows[(triton.cdiv(m, 64), triton.cdiv(n, 128), groups)](
+    bm, bn, bk, warps, stages = _rows_config()
+    _rows[(triton.cdiv(m, bm), triton.cdiv(n, bn), groups)](
         a, b, offsets, out, m, k, n, *a.stride(), *b.stride(),
-        BM=64, BN=128, BK=32, num_warps=4)
+        BM=bm, BN=bn, BK=bk, num_warps=warps, num_stages=stages)
     return out
 
 

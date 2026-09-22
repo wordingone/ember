@@ -4,9 +4,14 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from collections import OrderedDict
 from contextlib import contextmanager
+import atexit
+import json
+import os
 import time
 import torch
 import torch.nn.functional as F
+import triton
+import triton.language as tl
 from torch.autograd.function import once_differentiable
 from .ember_v0_inventory import equation_inventory
 
@@ -169,8 +174,147 @@ class ExpertCache:
             self.leased.remove(expert)
 
 
+# These are CAPTURE-TIME TRACE counts, not per-step counts: the dict increment is a Python
+# side effect inside _silu_mul, so it fires when the region is traced/captured, not on each
+# CUDA graph replay. A small nonzero count (e.g. 13, not 1024) is expected and is exactly what
+# the proof needs -- the question this receipt answers is binary (was the branch ever reached),
+# never how many training steps ran under it. 'fallback' counts the reference path taken
+# because the operands did not meet the kernel's layout/dtype requirements.
+_swiglu_activation_counts = {'fused': 0, 'unfused': 0, 'fallback': 0}
+
+
+def swiglu_activation_counts():
+    return dict(_swiglu_activation_counts)
+
+
+def _silu_mul_reference(gate_projection, up_projection):
+    return F.silu(gate_projection) * up_projection
+
+
+@triton.jit
+def _silu_mul_kernel(G, U, O, N, BLOCK: tl.constexpr = 1024):
+    pid = tl.program_id(0)
+    offsets = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offsets < N
+    g = tl.load(G + offsets, mask, other=0)
+    u = tl.load(U + offsets, mask, other=0)
+    g32 = g.to(tl.float32)
+    silu32 = g32 * tl.sigmoid(g32)
+    # Explicit intermediate cast to the input dtype -- this IS the reference's own rounding
+    # boundary: `F.silu(g)` materialises a bf16-rounded tensor before the multiply ever runs.
+    # A bare torch.compile trace was found to elide exactly this cast under its own dtype
+    # propagation (measured: 27.5% of elements differed, 1 ulp each), which is why this is a
+    # real Triton-level cast rather than a Python-level annotation that Inductor can fold away.
+    silu_rounded = silu32.to(G.dtype.element_ty)
+    product = silu_rounded.to(tl.float32) * u.to(tl.float32)
+    tl.store(O + offsets, product.to(G.dtype.element_ty), mask)
+
+
+def _silu_mul_triton_launch(gate_projection, up_projection):
+    n = gate_projection.numel()
+    out = torch.empty_like(gate_projection)
+    grid = (triton.cdiv(n, 1024),)
+    _silu_mul_kernel[grid](gate_projection, up_projection, out, n, BLOCK=1024, num_warps=4)
+    return out
+
+
+class _SiluMulTriton(torch.autograd.Function):
+    """Wraps the raw kernel so gradient flows through it under torch.autograd.grad.
+
+    _grouped_swiglu's 'dynamic' backend is reached from inside `torch.enable_grad()` in
+    _ResidentGroupedSwiGLU.forward/backward, which differentiates the whole retained graph
+    with `torch.autograd.grad`. A bare kernel launch has no grad_fn and would break that
+    graph silently; this Function supplies one.
+
+    The backward reuses aten's own `silu_backward` exactly as `_swiglu_group_gradients`
+    already does for the native fast path, so the GRADIENT FORMULA is the one already
+    carrying this file's no-worse-learning licence. This is a distinct numerical claim from
+    the forward's and was checked, not assumed: both gate_gradient and up_gradient came back
+    bit-identical to autograd through the unfused reference at [4096,3072] and [4096,2048]
+    (verify_fused_swiglu_backward.py). Re-verify if this kernel or backward changes -- a
+    citation to a verifier is not itself a verification.
+    """
+    @staticmethod
+    def forward(ctx, gate_projection, up_projection):
+        ctx.save_for_backward(gate_projection, up_projection)
+        return _silu_mul_triton_launch(gate_projection, up_projection)
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, output_gradient):
+        gate_projection, up_projection = ctx.saved_tensors
+        activated = F.silu(gate_projection)
+        gate_gradient = torch.ops.aten.silu_backward.default(
+            output_gradient * up_projection, gate_projection)
+        up_gradient = output_gradient * activated
+        return gate_gradient, up_gradient
+
+
+def _silu_mul(gate_projection, up_projection):
+    """silu(gate_projection) * up_projection in one elementwise pass when EMBER_FUSED_SWIGLU_ACT=1.
+
+    `F.silu(x)` writes a full intermediate to device memory and the following multiply reads
+    it straight back. At the governed geometry the profiler prices `aten::mul [4096,3072]` at
+    2458.7 us/step over 36 calls and `aten::silu [4096,2048]` at 641.3 us/step over 24 calls --
+    one fused pass reads both operands once and writes the product once, removing that round
+    trip. Gated at the call site (never cached at import) so a manifest variable recording that
+    the flag reached the worker is distinct from a call-site count recording that the branch
+    which ran is the branch that was asked for.
+
+    CAPTURE RISK: the 'dynamic' backend of _grouped_swiglu can be reached from inside a CUDA
+    graph capture. The Triton kernel's FIRST launch at a given (shape, dtype) performs its own
+    JIT compilation, which allocates and synchronizes -- a synchronize inside a capture aborts
+    it, exactly the same hazard a torch.compile'd function would carry. The runner takes one
+    warm step before capture, so compilation is expected to land there and the capture should
+    then replay an already-compiled kernel, but that is a hypothesis resting on the warm step
+    reaching this call with the same shapes, not a proven property; the governed run settles it.
+    """
+    on = os.environ.get('EMBER_FUSED_SWIGLU_ACT') == '1'
+    if not on:
+        _swiglu_activation_counts['unfused'] += 1
+        return _silu_mul_reference(gate_projection, up_projection)
+    # Refuse rather than guess on any layout/dtype the kernel was not written for. A silent
+    # wrong-layout kernel is worse than an unfused one.
+    if (not gate_projection.is_contiguous() or not up_projection.is_contiguous()
+            or gate_projection.shape != up_projection.shape
+            or gate_projection.dtype != torch.bfloat16 or up_projection.dtype != torch.bfloat16):
+        _swiglu_activation_counts['fallback'] += 1
+        return _silu_mul_reference(gate_projection, up_projection)
+    _swiglu_activation_counts['fused'] += 1
+    return _SiluMulTriton.apply(gate_projection, up_projection)
+
+
+def _write_swiglu_activation_receipt():
+    path = os.environ.get('EMBER_SWIGLU_ACT_RECEIPT')
+    if not path:
+        return
+    # Merge rather than overwrite: this module could in principle be loaded a second time
+    # under an alternate module name by a non-worker process sharing the same receipt path
+    # (the exact mechanism that clobbered the loss-widen receipt with zeros on 2026-09-22).
+    # Taking the per-key maximum against whatever is already on disk means write order never
+    # matters and a bystander's zeros can never erase real counts.
+    merged = dict(_swiglu_activation_counts)
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            existing = json.load(handle)
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                if isinstance(value, int) and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(merged, handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_swiglu_activation_receipt)
+
+
 def _swiglu(value, up, gate, down):
-    return F.linear(F.silu(F.linear(value, gate)) * F.linear(value, up), down)
+    return F.linear(_silu_mul(F.linear(value, gate), F.linear(value, up)), down)
 
 
 class _PagedSwiGLU(torch.autograd.Function):
@@ -425,13 +569,15 @@ def _validate_resident_group(parameters, storage):
 def _grouped_swiglu(value, up, gate, down, offsets, backend='native', chunk_ends=None):
     if backend == 'dynamic':
         from .ember_v0_grouped_capture import grouped_mm
-        hidden = F.silu(grouped_mm(value, gate.transpose(1, 2), offsets, chunk_ends=chunk_ends))
-        hidden = hidden * grouped_mm(value, up.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        gate_projection = grouped_mm(value, gate.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        up_projection = grouped_mm(value, up.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        hidden = _silu_mul(gate_projection, up_projection)
         return grouped_mm(hidden, down.transpose(1, 2), offsets, chunk_ends=chunk_ends)
     if backend != 'native':
         raise ValueError('unknown resident grouped backend')
-    hidden = F.silu(F.grouped_mm(value, gate.transpose(1, 2), offs=offsets))
-    hidden = hidden * F.grouped_mm(value, up.transpose(1, 2), offs=offsets)
+    gate_projection = F.grouped_mm(value, gate.transpose(1, 2), offs=offsets)
+    up_projection = F.grouped_mm(value, up.transpose(1, 2), offs=offsets)
+    hidden = _silu_mul(gate_projection, up_projection)
     return F.grouped_mm(hidden, down.transpose(1, 2), offs=offsets)
 
 

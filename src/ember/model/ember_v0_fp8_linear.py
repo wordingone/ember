@@ -40,6 +40,7 @@ made by a probe rather than by the governed run that is entitled to make it.
 """
 from __future__ import annotations
 
+import collections
 import os
 
 import torch
@@ -195,6 +196,145 @@ def _quantize_pair(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, to
         except Exception:
             _COMPILE_PAIR_TRUSTED = False
     return _quantize_pair_eager(tensor)
+
+
+# --- delayed scaling ---------------------------------------------------------------------
+#
+# Ported from the same module at head 59ae9bb5, where it was implemented and then lost when the
+# document-reduction refactor rewrote this file. Single-tensor form: the CIA chokepoint keeps its
+# weight gradient in bf16, so there is no transposed cast to build here.
+#
+# The scale stops being a function of THIS tensor and becomes a resident scalar that a few early
+# calls establish and every later call reuses. That is a DECLARED NUMERICAL TREATMENT on top of the
+# format change: a tensor whose values later exceed the calibrated range is CLAMPED at e4m3's 448
+# rather than rescaled, losing magnitude rather than producing infinities, and one far below it
+# loses mantissa. This measures DURATION and licenses nothing.
+#
+# Why it is worth porting, from today's captured pair rather than from an isolated probe: the amax
+# is TWO of the three kernels Inductor emits per quantize, and inside the governed captured step
+# they cost 4,334.0 us per trace half-step against 3,414.6 for the cast that survives. Removing the
+# reduction removes a full pass over every quantized tensor, not merely two launches.
+#
+# CAPTURE. The factor and dequant tensors are allocated once and written IN PLACE, so the tensor a
+# captured graph recorded is the tensor a later calibration would update -- there is no second
+# allocation for a replay to miss. Calibration must FINISH before capture or the graph records the
+# calibrating branch, amax and all, for the life of the replay; the probe runs three warm steps
+# before capture, so EMBER_FP8_CALIBRATION_CALLS=1 is sufficient and is the default here.
+
+
+def delayed_scaling_enabled() -> bool:
+    # Read per call, for the reason `fp8_enabled` is: the governed runner sets its environment
+    # after this module is imported, and a module-level constant makes the treatment inert inside
+    # the very path it is meant to measure.
+    return os.environ.get("EMBER_FP8_DELAYED_SCALE") == "1"
+
+
+def _calibration_calls() -> int:
+    try:
+        return max(1, int(os.environ.get("EMBER_FP8_CALIBRATION_CALLS", "1")))
+    except ValueError:
+        return 1
+
+
+#: Per site and role: [calls seen, running amax, multiply factor in the tensor dtype, dequant fp32].
+_SCALE_STATE: dict = {}
+
+
+def _resident_factors(tensor, key):
+    """The multiply factor and dequant scale for this site, calibrating only on the first calls."""
+    state = _SCALE_STATE.get(key)
+    if state is None:
+        state = [0, None, torch.ones((), device=tensor.device, dtype=tensor.dtype),
+                 torch.ones((), device=tensor.device, dtype=torch.float32)]
+        _SCALE_STATE[key] = state
+    if state[0] < _calibration_calls():
+        # The running max ACROSS calibration calls, not the last one, so a single quiet batch
+        # cannot set a scale that later batches overflow.
+        amax = tensor.detach().abs().amax().float().clamp_min(_MIN_AMAX)
+        state[1] = amax if state[1] is None else torch.maximum(state[1], amax)
+        scale = E4M3_MAX / state[1]
+        state[2].copy_(scale.to(tensor.dtype))
+        state[3].copy_((1.0 / scale).to(torch.float32))
+        state[0] += 1
+        _DISPATCH_COUNTS["quantize_calibrating"] = _DISPATCH_COUNTS.get("quantize_calibrating", 0) + 1
+    else:
+        _DISPATCH_COUNTS["quantize_resident"] = _DISPATCH_COUNTS.get("quantize_resident", 0) + 1
+    return state[2], state[3]
+
+
+def _quantize_resident_eager(tensor, factor):
+    """The quantize with no reduction in it at all: multiply, clamp, cast."""
+    return (tensor * factor).clamp(-E4M3_MAX, E4M3_MAX).to(torch.float8_e4m3fn)
+
+
+_COMPILED_QUANTIZE_RESIDENT = torch.compile(_quantize_resident_eager, dynamic=True)
+_COMPILE_RESIDENT_TRUSTED = True
+
+
+def _quantize_delayed(tensor, key):
+    """`_quantize`'s return, with the amax reduction removed after calibration."""
+    global _COMPILE_RESIDENT_TRUSTED
+    factor, dequant = _resident_factors(tensor, key)
+    if _COMPILE_RESIDENT_TRUSTED:
+        try:
+            return _COMPILED_QUANTIZE_RESIDENT(tensor, factor), dequant
+        except Exception:
+            _COMPILE_RESIDENT_TRUSTED = False
+    return _quantize_resident_eager(tensor, factor), dequant
+
+
+#: Activations quantized this step, keyed by the input tensor's identity.
+#:
+#: Several projections consume ONE activation: the shared SwiGLU up and gate both read the block
+#: input, and q, k and v all read the attention input. Under a per-site key each of them quantized
+#: the same bytes again, which is why the delayed-scale arm still pays 241 casts per step for far
+#: fewer distinct tensors.
+#:
+#: The entry holds a STRONG reference to the source tensor. That is not an accident: CPython
+#: recycles ``id`` the moment an object is freed, so a cache keyed on ``id`` alone can hand a new
+#: tensor the previous occupant's bytes. Holding the source keeps the id reserved for as long as
+#: the entry lives, and the ``is`` check below then cannot be satisfied by an impostor. The
+#: ``_version`` check catches an in-place write to a tensor we are still holding.
+#:
+#: The cache is small and FIFO. The sites that share a tensor are adjacent calls, so a few entries
+#: catch all of them, and a short cache is what keeps the strong references from pinning a
+#: meaningful amount of activation memory.
+_ACT_CACHE: "collections.OrderedDict[int, tuple]" = collections.OrderedDict()
+_ACT_CACHE_MAX = 4
+
+
+def quantize_activation(tensor, key):
+    """`quantize_for`, deduplicated across the sites that consume one activation."""
+    ident = id(tensor)
+    entry = _ACT_CACHE.get(ident)
+    if entry is not None and entry[0] is tensor and entry[1] == tensor._version:
+        _DISPATCH_COUNTS["quantize_act_reused"] = _DISPATCH_COUNTS.get("quantize_act_reused", 0) + 1
+        return entry[2], entry[3]
+    quantized, dequant = quantize_for(tensor, key)
+    _ACT_CACHE[ident] = (tensor, tensor._version, quantized, dequant)
+    _ACT_CACHE.move_to_end(ident)
+    while len(_ACT_CACHE) > _ACT_CACHE_MAX:
+        _ACT_CACHE.popitem(last=False)
+    return quantized, dequant
+
+
+def clear_activation_cache() -> None:
+    """Drop every cached activation, releasing the strong references it holds."""
+    _ACT_CACHE.clear()
+
+
+def quantize_for(tensor, key):
+    """One entry point, so the forward and backward legs cannot disagree about the policy."""
+    if delayed_scaling_enabled():
+        return _quantize_delayed(tensor, key)
+    _DISPATCH_COUNTS["quantize_dynamic"] = _DISPATCH_COUNTS.get("quantize_dynamic", 0) + 1
+    return _quantize(tensor)
+
+
+def clear_scale_state() -> None:
+    """Drop every resident scale. For teardown and for tests that rebuild a model in place."""
+    _SCALE_STATE.clear()
+    clear_activation_cache()
 
 
 #: Quantized weights, keyed by the parameter's identity and its version counter.
