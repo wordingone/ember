@@ -45,8 +45,16 @@ def _write_expert_receipt():
     if not path:
         return
     try:
+        counts = dict(_expert_counts)
+        try:
+            with io.open(path, 'r', encoding='utf-8') as prior:
+                for key, value in json.load(prior).items():
+                    if isinstance(value, int) and value > counts.get(key, 0):
+                        counts[key] = value
+        except (OSError, ValueError):
+            pass
         with io.open(path, 'w', encoding='utf-8') as handle:
-            json.dump(dict(_expert_counts), handle)
+            json.dump(counts, handle)
     except OSError:
         pass
 
@@ -54,13 +62,21 @@ def _write_expert_receipt():
 atexit.register(_write_expert_receipt)
 
 
+def _grouped_fp8_enabled() -> bool:
+    # Read per call, not at import: the governed runner sets its environment after this module is
+    # imported, and a module-level constant makes the treatment inert inside the very measurement
+    # meant to score it.
+    return os.environ.get('EMBER_FP8_GROUPED') == '1'
+
+
 @triton.jit
 def _rows(A, B, O, C, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
           AS0: tl.constexpr, AS1: tl.constexpr, BS0: tl.constexpr,
           BS1: tl.constexpr, BS2: tl.constexpr,
+          SCALE, FP8: tl.constexpr = False,
           BM: tl.constexpr = 32, BN: tl.constexpr = 64, BK: tl.constexpr = 32):
     group = tl.program_id(2)
-    start = tl.load(O + group - 1, group > 0, other=0)
+    start = tl.load(O + group - 1, group > 0, other=0.0)
     end = tl.load(O + group)
     first = start + tl.program_id(0) * BM
     if first < end:
@@ -71,10 +87,14 @@ def _rows(A, B, O, C, M: tl.constexpr, K: tl.constexpr, N: tl.constexpr,
         for block in range(tl.cdiv(K, BK)):
             kk = block * BK + reduction
             left = tl.load(A + rows[:, None] * AS0 + kk[None, :] * AS1,
-                           (rows[:, None] < end) & (kk[None, :] < K), other=0)
+                           (rows[:, None] < end) & (kk[None, :] < K), other=0.0)
             right = tl.load(B + group * BS0 + kk[:, None] * BS1 + cols[None, :] * BS2,
-                            (kk[:, None] < K) & (cols[None, :] < N), other=0)
-            acc += tl.dot(left, right)
+                            (kk[:, None] < K) & (cols[None, :] < N), other=0.0)
+            acc += tl.dot(left, right, out_dtype=tl.float32)
+        if FP8:
+            # One multiply on the fp32 accumulator in registers. Descaling the OPERANDS instead
+            # would cost a pass over both, which is the traffic the quantization just removed.
+            acc = acc * SCALE
         tl.store(C + rows[:, None] * N + cols[None, :], acc,
                  (rows[:, None] < end) & (cols[None, :] < N))
 
@@ -164,8 +184,20 @@ def rows(a, b, offsets):
         raise ValueError('grouped capture requires aligned positive same-device BF16 geometry')
     out = torch.empty((m, n), device=a.device, dtype=a.dtype)
     bm, bn, bk, warps, stages = _rows_config()
+    # The bf16 geometry guard above ran against the REAL inputs; quantization happens after it, so
+    # turning the arm on cannot loosen what the guard checks.
+    left, right, scale, fp8 = a, b, 1.0, False
+    if _grouped_fp8_enabled():
+        from ember.model.ember_v0_fp8_linear import _quantize
+        left, sa = _quantize(a)
+        right, sb = _quantize(b)
+        scale, fp8 = (sa * sb).item(), True
+        _expert_counts['fp8_rows'] = _expert_counts.get('fp8_rows', 0) + 1
+    else:
+        _expert_counts['bf16_rows'] = _expert_counts.get('bf16_rows', 0) + 1
     _rows[(triton.cdiv(m, bm), triton.cdiv(n, bn), groups)](
-        a, b, offsets, out, m, k, n, *a.stride(), *b.stride(),
+        left, right, offsets, out, m, k, n, *a.stride(), *b.stride(),
+        scale, FP8=fp8,
         BM=bm, BN=bn, BK=bk, num_warps=warps, num_stages=stages)
     return out
 
