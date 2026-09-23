@@ -93,7 +93,8 @@ class HourContractTests(unittest.TestCase):
             def next_episode(self, *, shard_index, token_offset, sequence_length):
                 calls.append(token_offset)
                 return dict(token_ids=list(range(sequence_length)), target_ids=list(range(1, sequence_length + 1))), dict(shard_index=shard_index, token_offset=token_offset + sequence_length)
-        packs = subject.HourPacks(Stream(), dict(shard_index=0, token_offset=0), maximum_steps=2, sequence=2, documents=2)
+        packs = subject.HourPacks(Stream(), dict(shard_index=0, token_offset=0), maximum_steps=2, sequence=2, documents=2,
+                                   fill=runner.fill_pack)
         self.assertEqual(calls, [])
         first = packs.next_pack()
         self.assertEqual(calls, [0, 2])
@@ -136,7 +137,8 @@ class HourContractTests(unittest.TestCase):
             def next_episode(self, *, shard_index, token_offset, sequence_length):
                 return dict(token_ids=[0]*sequence_length, target_ids=[0]*sequence_length), dict(shard_index=shard_index, token_offset=token_offset+sequence_length)
         # Boundary simulation skips allocation of the preceding complete packs.
-        packs = subject.HourPacks(Stream(), dict(shard_index=0, token_offset=(1+target)*4096), maximum_steps=1+131072+1)
+        packs = subject.HourPacks(Stream(), dict(shard_index=0, token_offset=(1+target)*4096), maximum_steps=1+131072+1,
+                                   fill=runner.fill_pack)
         packs.index = 1+target
         continuation = packs.next_pack()
         self.assertEqual(len(continuation['target_ids']),4096)

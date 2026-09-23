@@ -10,6 +10,35 @@ from pathlib import Path
 import subprocess
 import time
 
+# #1945 mixture amendment A1 section 9 (frozen before any A1 result): 16,384 optimizer updates per arm, the warm update
+# counted as update 1, full parameter snapshots at these update indices for held-out scoring and time-to-quality.
+LEARNING_SNAPSHOTS = (2048, 4096, 8192, 16384)
+LEARNING_MEASURED = LEARNING_SNAPSHOTS[-1] - 1
+
+
+def save_learning_snapshot(runner, inventory, root, *, update, budget_bytes):
+    """Every parameter, its own dtype, one safetensors file per owner; a manifest binds each file by digest."""
+    from safetensors.torch import save_file
+    root.mkdir(parents=False, exist_ok=False)
+    entries, written = {}, 0
+    for index, name in enumerate(sorted(inventory)):
+        value = inventory[name]
+        tensor = value.detach().cpu().contiguous()
+        size = tensor.numel() * tensor.element_size()
+        if written + size + 4096 > budget_bytes:
+            raise ValueError('learning snapshot byte budget would be exceeded')
+        path = root / ('owner-%04d.safetensors' % index)
+        save_file({'parameter': tensor}, str(path))
+        actual = path.stat().st_size
+        written += actual
+        entries[name] = dict(file=path.name, sha256=runner.file_sha256(path), bytes=actual,
+                             shape=list(value.shape), dtype=str(value.dtype))
+        del tensor
+    manifest = dict(schema='ember-1945-learning-snapshot-v1', update=update, tensors=entries, bytes=written,
+                    population=sum(value.numel() for value in inventory.values()))
+    runner._write_new(root / 'snapshot-manifest.json', manifest)
+    return manifest
+
 
 def bound_json(runner, path, digest):
     path = Path(path).resolve(strict=True)
@@ -100,9 +129,9 @@ def validate_probe_inputs(runner, prior, identity):
 def validate_checkpoint_probe(runner, identity):
     """Require a completed same-source probe and reopen its real admitted child."""
     selection = identity['hour']
-    if selection['schema'] == 'checkpoint-probe-v1':
+    if selection['schema'] in ('checkpoint-probe-v1', 'learning-comparison-v1'):
         if 'checkpoint_probe' in identity:
-            raise ValueError('checkpoint probe cannot consume another probe identity')
+            raise ValueError('checkpoint probe or learning comparison cannot consume another probe identity')
         return
     reference = identity.get('checkpoint_probe')
     required = {'custody_root', 'result_sha256', 'prediction_sha256', 'owned_sha256',
@@ -156,6 +185,8 @@ def validate_identity(*, runner, identity):
         raise ValueError('declared step capacity cannot satisfy hour minimum')
     if hour['schema'] == 'checkpoint-probe-v1' and geometry['measured_steps'] != 2:
         raise ValueError('checkpoint probe requires exactly two measured updates')
+    if hour['schema'] == 'learning-comparison-v1' and geometry['measured_steps'] != LEARNING_MEASURED:
+        raise ValueError('learning comparison requires exactly %d measured updates' % LEARNING_MEASURED)
     walls = identity['dispatch_resources'].get('disk_write_walls')
     if (not isinstance(walls, list) or len(walls) != 1 or walls[0].get('volume_root') != 'B:/'
             or walls[0].get('maximum_write_bytes') != runner.resource_limits(identity)['max_b_write_gib'] * runner.GIB):
@@ -671,6 +702,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     hour = identity['hour']
     mode = runner.execution_mode(identity)
     probe = hour['schema'] == 'checkpoint-probe-v1'
+    learning = hour['schema'] == 'learning-comparison-v1'
+    snapshots, paused = [], 0.0
     model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
@@ -751,8 +784,20 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 measured += 1
                 step_rates.append(row['positions_per_second'])
                 elapsed = time.perf_counter() - started
-                if ((probe and measured == 2) or
-                        (not probe and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
+                if learning and total_steps in LEARNING_SNAPSHOTS:
+                    # Training wall excludes snapshot writing; the snapshot reads parameters after the step completes.
+                    torch.cuda.synchronize(device)
+                    training_wall = time.perf_counter() - started - paused
+                    paused_from = time.perf_counter()
+                    snapshot = save_learning_snapshot(runner, inventory, custody / ('learning-snapshot-%05d' % total_steps),
+                                                      update=total_steps, budget_bytes=16 * runner.GIB)
+                    paused += time.perf_counter() - paused_from
+                    snapshots.append(dict(update=total_steps, training_wall_seconds=training_wall,
+                                          applied_positions=positions, manifest_sha256=runner.file_sha256(
+                                              custody / ('learning-snapshot-%05d' % total_steps) / 'snapshot-manifest.json'),
+                                          bytes=snapshot['bytes'], write_seconds=time.perf_counter() - paused_from))
+                if ((probe and measured == 2) or (learning and total_steps == LEARNING_SNAPSHOTS[-1]) or
+                        (not probe and not learning and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
                     break
             # Keep the one independently checked continuation pack reserved.
             # The finite measured allowance is not the hour completion condition.
@@ -779,7 +824,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     energy_binding = energy.end()
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
-    continuation = None if probe else publish_continuation_reference(
+    continuation = None if probe or learning else publish_continuation_reference(
         runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
         device, applied, governed_wall, energy_binding)
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
@@ -803,5 +848,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         energy=energy_binding,
         continuation=continuation,
         production_mixture_validation=prepared['mixture_validation'],
-        claim='Checkpoint probe only' if probe else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+        learning_snapshots=snapshots if learning else None,
+        learning_snapshot_pause_seconds=paused if learning else None,
+        claim='Checkpoint probe only' if probe else 'A1 learning comparison: training and snapshots only; learning, '
+              'evaluation and throughput are scored separately' if learning else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
 

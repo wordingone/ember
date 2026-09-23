@@ -823,6 +823,9 @@ def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
         limits.update(wall_seconds=4500, max_b_write_gib=24)
+        if identity['hour']['schema'] == 'learning-comparison-v1':
+            # Two checkpoints plus four full parameter snapshots; the full-compute control arm runs 16,384 updates.
+            limits.update(wall_seconds=10800, max_b_write_gib=80)
         if 'continuation' in identity:
             limits.update(wall_seconds=900, max_b_write_gib=1)
     elif trajectory_mode(identity):
@@ -843,11 +846,13 @@ def hour_mode(identity):
     value = identity['hour']
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
-            or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['arm'] not in ('control', 'treatment')
+            or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
+            or value['arm'] not in ('control', 'treatment')
             or type(value['minimum_wall_seconds']) is not int
             or type(value['minimum_measured_steps']) is not int
             or (value['minimum_wall_seconds'], value['minimum_measured_steps']) !=
-               ((3600, 1024) if value['schema'] == 'governed-hour-v1' else (0, 2))):
+               {'governed-hour-v1': (3600, 1024), 'checkpoint-probe-v1': (0, 2),
+                'learning-comparison-v1': (0, 16383)}[value['schema']]):
         raise ValueError('explicit fixed governed-hour identity required')
     if 'continuation' in identity and value['schema'] != 'governed-hour-v1':
         raise ValueError('continuation requires the completed governed hour')
