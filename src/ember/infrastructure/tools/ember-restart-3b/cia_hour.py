@@ -227,8 +227,8 @@ def validate_identity(*, runner, identity):
 
 class HourPacks:
     """Generate only the next complete pack from an already verified immutable shard list."""
-    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4):
-        self.stream = stream
+    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4, image_text=None, fill=None):
+        self.stream, self.image_text, self.fill = stream, image_text, fill
         self.cursor = dict(cursor)
         self.maximum_steps = maximum_steps
         self.sequence, self.documents = sequence, documents
@@ -240,13 +240,8 @@ class HourPacks:
         before = dict(self.cursor)
         pack = dict(token_ids=[], target_ids=[], positions=[], document_starts=[],
                     index=self.index, phase='warm' if self.index == 0 else 'measured')
-        for _ in range(self.documents):
-            episode, after = self.stream.next_episode(**self.cursor, sequence_length=self.sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(self.sequence)])
-            self.cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+        self.cursor = self.fill(pack, self.stream, self.cursor, self.image_text,
+                                sequence=self.sequence, documents=self.documents)
         if len(pack['token_ids']) != self.sequence * self.documents or len(pack['target_ids']) != len(pack['token_ids']):
             raise ValueError('hour pack lost complete decoder targets')
         pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
@@ -259,20 +254,25 @@ def prepare_inputs(runner, data, geometry):
         raise ValueError('governed hour requires its frozen admitted shard ledger')
     sequence, documents, warm, maximum = runner.geometry_counts(geometry, hour=True)
     stream, receipt, tokenizer, ledger = runner.open_input_stream(data)
+    image_text = runner.open_image_text(data, tokenizer, sequence)
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('hour cursor fields differ')
     # Reserve the independently checked next update without adding throughput credit.
     reference_positions = sequence * documents
     positions = (warm + maximum) * sequence * documents + reference_positions
-    span = stream.check_cursor_span(**cursor, tokens=positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + maximum + 1) * sequence
+                                    * runner.text_documents(image_text, documents))
     identity = dict(receipt_sha256=data['receipt_sha256'], tokenizer_sha256=data['tokenizer_sha256'],
                     shard_ledger_sha256=data['shard_ledger_sha256'], cursor_start=cursor,
                     geometry=geometry, span=span, maximum_planned_positions=positions,
                     reference_positions_reserved=reference_positions)
+    if image_text is not None:
+        identity['image_text'] = dict(data['image_text'], grammar=runner.load_image_text_module().GRAMMAR)
     binding = dict(identity, input_sha256=hashlib.sha256(runner.canonical(identity)).hexdigest(),
                    input_digest_grammar='receipt-ledger-cursor-span-v1', shard_ledger_path=str(ledger))
-    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents)
+    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents,
+                      image_text=image_text, fill=runner.fill_pack)
     first = packs.next_pack()
     for path, expected in ((receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256']),
                            (ledger, data['shard_ledger_sha256'])):
