@@ -600,7 +600,10 @@ class CIADecoder(nn.Module):
 
     def _input(self, value, trailing=None):
         if self._cuda_execution is not None:
-            self._cuda_execution.cache.check()
+            cache = self._cuda_execution.cache
+            # A resident execution is its own cache: state predicates here, the full owner compare at begin_step,
+            # at the resident forward's entry and at end_step (which precedes the optimizer update).
+            (cache.check_state if cache is self._cuda_execution and cache.active else cache.check)()
         if not isinstance(value, torch.Tensor) or value.device != self._execution_device:
             raise ValueError("input must share the declared model device")
         if trailing is not None and (value.ndim != 2 or value.shape[-1] != trailing):
@@ -1265,7 +1268,11 @@ class CIADecoder(nn.Module):
             raise ValueError("strictly increasing document starts beginning at zero required")
         if type(batch_documents) is not bool:
             raise ValueError("batch_documents must be a bool")
-        self.parameter_inventory()
+        execution = self._cuda_execution
+        if not (self._resident_experts and execution is not None and execution.cache is execution and execution.active):
+            # Under an active resident step the inventory was validated at begin_step and is re-run by end_step
+            # before the optimizer update; the full owner compare at the resident forward's entry covers the gap.
+            self.parameter_inventory()
         spans = list(zip(document_starts, document_starts[1:] + (len(embedded),)))
         if type(return_device_routes) is not bool:
             raise ValueError('return_device_routes must be a bool')
