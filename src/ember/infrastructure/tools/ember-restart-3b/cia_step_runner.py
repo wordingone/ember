@@ -110,13 +110,14 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
 
 
 def _pack_digest(packs):
-    body = [{name: pack[name] for name in INPUT_FIELDS} for pack in packs]
+    body = [{name: pack[name] for name in INPUT_FIELDS + (('images',) if 'images' in pack else ())}
+            for pack in packs]
     return hashlib.sha256(canonical(body)).hexdigest()
 
 
 def open_input_stream(data):
     """Verify the existing receipt and ledger and detach the admitted shard list."""
-    if not isinstance(data, dict) or set(data) != DATA_KEYS:
+    if not isinstance(data, dict) or set(data) not in (DATA_KEYS, DATA_KEYS | {'image_text'}):
         raise ValueError('data plan fields differ')
     semantic_path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py'
     spec = importlib.util.spec_from_file_location('cia_measurement_semantic_stream', semantic_path)
@@ -150,6 +151,53 @@ def open_input_stream(data):
     return stream, receipt, tokenizer, ledger
 
 
+IMAGE_TEXT_KEYS = {'manifest_path', 'manifest_sha256', 'seed'}
+
+
+def load_image_text_module():
+    name = 'cia_measurement_image_text_stream'
+    module = sys.modules.get(name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(name, ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/image_text_stream.py')
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return module
+
+
+def open_image_text(data, tokenizer, sequence):
+    """Mixture amendment A1: None for a text-only plan, else the frozen image-text document source."""
+    binding = data.get('image_text')
+    if binding is None:
+        return None
+    if type(binding) is not dict or set(binding) != IMAGE_TEXT_KEYS or type(binding['seed']) is not int:
+        raise ValueError('image-text binding fields differ')
+    from tokenizers import Tokenizer
+    frozen = Tokenizer.from_file(str(tokenizer))
+    def encode(text):
+        return list(frozen.encode(text, add_special_tokens=False).ids)
+    return load_image_text_module().ImageTextStream(binding['manifest_path'], checked_sha(binding['manifest_sha256']),
+                                                    encode, seed=binding['seed'], sequence=sequence)
+
+
+def text_documents(image_text, documents):
+    return documents - (1 if image_text is not None else 0)
+
+
+def fill_pack(pack, stream, cursor, image_text, *, sequence, documents):
+    """Text documents from the stream, then (A1) one image-text document chosen by the pack index."""
+    for _ in range(text_documents(image_text, documents)):
+        episode, after = stream.next_episode(**cursor, sequence_length=sequence)
+        pack['document_starts'].append(len(pack['token_ids']))
+        pack['token_ids'].extend(episode['token_ids'])
+        pack['target_ids'].extend(episode['target_ids'])
+        pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
+        cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+    if image_text is not None:
+        load_image_text_module().append_document(pack, image_text.document(pack['index']))
+    return cursor
+
+
 def prepare_inputs(data, geometry, *, trajectory=False):
     """Open the real stream and freeze the whole short plan before model allocation."""
     stream, receipt, tokenizer, ledger = open_input_stream(data)
@@ -157,19 +205,14 @@ def prepare_inputs(data, geometry, *, trajectory=False):
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('cursor fields differ')
+    image_text = open_image_text(data, tokenizer, sequence)
     planned_positions = (warm + measured) * documents * sequence
-    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + measured) * text_documents(image_text, documents) * sequence)
     packs = []
     for index in range(warm + measured):
         pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
                 'index': index, 'phase': 'warm' if index < warm else 'measured'}
-        for _ in range(documents):
-            episode, next_cursor = stream.next_episode(**cursor, sequence_length=sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
-            cursor = {key: next_cursor[key] for key in ('shard_index', 'token_offset')}
+        cursor = fill_pack(pack, stream, cursor, image_text, sequence=sequence, documents=documents)
         packs.append(pack)
     if file_sha256(receipt) != data['receipt_sha256'] or file_sha256(tokenizer) != data['tokenizer_sha256']:
         raise ValueError('receipt or tokenizer changed during input preparation')
@@ -204,8 +247,8 @@ MEASUREMENT_INPUT_GRAMMAR = 'measurement-receipt-cursor-span-v1'
 class MeasurementPacks:
     """Generate only the next complete pack from the verified detached shard list. The 1,025-pack plan is never
     resident, and each emitted pack carries the cursor it consumed so every row accounts for its own input."""
-    def __init__(self, stream, cursor, *, maximum_steps, sequence, documents, warm):
-        self.stream = stream
+    def __init__(self, stream, cursor, *, maximum_steps, sequence, documents, warm, image_text=None):
+        self.stream, self.image_text = stream, image_text
         self.cursor = dict(cursor)
         self.maximum_steps, self.sequence, self.documents, self.warm = maximum_steps, sequence, documents, warm
         self.index = 0
@@ -216,13 +259,8 @@ class MeasurementPacks:
         before = dict(self.cursor)
         pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
                 'index': self.index, 'phase': 'warm' if self.index < self.warm else 'measured'}
-        for _ in range(self.documents):
-            episode, after = self.stream.next_episode(**self.cursor, sequence_length=self.sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(self.sequence)])
-            self.cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+        self.cursor = fill_pack(pack, self.stream, self.cursor, self.image_text,
+                                sequence=self.sequence, documents=self.documents)
         pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
         self.index += 1
         return pack
@@ -237,16 +275,19 @@ def prepare_measurement_inputs(data, geometry):
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('cursor fields differ')
+    image_text = open_image_text(data, tokenizer, sequence)
     planned_positions = (warm + measured) * documents * sequence
-    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + measured) * text_documents(image_text, documents) * sequence)
     declaration = {'receipt_sha256': data['receipt_sha256'], 'tokenizer_sha256': data['tokenizer_sha256'],
                    'shard_ledger_sha256': data['shard_ledger_sha256'], 'cursor_start': cursor,
                    'geometry': dict(geometry), 'span': span, 'planned_positions': planned_positions}
+    if image_text is not None:
+        declaration['image_text'] = dict(data['image_text'], grammar=load_image_text_module().GRAMMAR)
     binding = dict(declaration, input_sha256=hashlib.sha256(canonical(declaration)).hexdigest(),
                    input_digest_grammar=MEASUREMENT_INPUT_GRAMMAR,
                    shard_ledger_path=str(ledger) if ledger is not None else None)
     packs = MeasurementPacks(stream, cursor, maximum_steps=warm + measured, sequence=sequence, documents=documents,
-                             warm=warm)
+                             warm=warm, image_text=image_text)
     first = packs.next_pack()
     bound = [(receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256'])]
     if ledger is not None:
@@ -584,8 +625,9 @@ def capture_loss_kwargs(model, identity, lengths):
     from ember.model.ember_v0_streamed_loss import document_streamed_loss
     os.environ['CCE_AUTOTUNE'] = '0'
     lengths = tuple(lengths)
-    def loss(hidden, targets):
-        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths, sum(lengths))
+    def loss(hidden, targets, selections=None, denominator=None):
+        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                      sum(lengths) if denominator is None else denominator, selections=selections)
     loss.experiment_binding = experiment_fields(identity)
     return dict(head_output='hidden', loss_fn=loss)
 
@@ -1232,6 +1274,8 @@ def micro_packs(pack):
     total = len(pack['token_ids'])
     if len(starts) <= MICRO_DOCUMENTS:
         return [pack]
+    if pack.get('images'):
+        raise ValueError('image-text packs are defined for one 4-document micro-step only')
     if len(starts) % MICRO_DOCUMENTS or starts[0] != 0:
         raise ValueError('pack documents are not a whole number of micro-steps')
     bounds = list(starts) + [total]
@@ -1256,6 +1300,40 @@ def _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrout
     these = {layer: set(experts) for layer, experts in buffers.unrouted(snapshot).items()}
     return these if unrouted is None else {
         layer: unrouted[layer] & these[layer] for layer in unrouted if layer in these}
+
+
+IGNORE_TARGET = -100
+
+
+def loss_selection(micro, device):
+    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections."""
+    import torch
+    targets = micro['target_ids']
+    if IGNORE_TARGET not in targets:
+        return None
+    starts = list(micro['document_starts']) + [len(targets)]
+    selections, count = [], 0
+    for lo, hi in zip(starts, starts[1:]):
+        rows = [row for row in range(lo, hi) if targets[row] != IGNORE_TARGET]
+        if not rows:
+            raise ValueError('a document carries no loss-bearing target')
+        count += len(rows)
+        selections.append(None if len(rows) == hi - lo else
+                          (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True), len(rows)))
+    return {'selections': tuple(selections), 'denominator': count}
+
+
+def exposure_fields(pack, wall):
+    """A1 counting: loss-bearing decoder targets, image patches, images and non-loss positions, never converted.
+    positions_per_second is loss-bearing decoder targets per second (identical to decoder positions/s on text packs)."""
+    targets = pack['target_ids']
+    loss_bearing = sum(1 for value in targets if value != IGNORE_TARGET)
+    images = pack.get('images', ())
+    return {'loss_bearing_positions': loss_bearing, 'non_loss_positions': len(targets) - loss_bearing,
+            'image_patches': sum(span['count'] for span in images), 'images': len(images),
+            'positions_per_second': loss_bearing / wall, 'decoder_positions_per_second': len(targets) / wall,
+            'images_per_second': len(images) / wall,
+            'rate_basis': 'loss-bearing-decoder-targets'}
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
@@ -1330,6 +1408,14 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             targets = torch.tensor(micro['target_ids'], dtype=torch.long, device=device)
             positions = torch.tensor(micro['positions'], dtype=torch.long, device=device)
             starts = tuple(micro['document_starts'])
+            selection = loss_selection(micro, device)
+            image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
+                                         if micro.get('images') else (None, None))
+            embedded = model.embed_text(tokens)
+            if image_rows is not None:
+                # Placeholder rows are REPLACED (out of place), so image.weight is trained through these rows and
+                # the placeholder token's embedding receives no gradient from them.
+                embedded = embedded.index_put((image_rows,), model.embed_image(image_patches))
             buffers = routing_buffers(document_lengths(starts, len(micro['token_ids'])), device) if resident else None
             if buffers is not None:
                 buffers.begin_step()
@@ -1340,16 +1426,20 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 if events is not None:
                     events[3 * micro_index].record()
                 if buffers is not None:
-                    logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                    logits, routes = model(embedded, positions, document_starts=starts,
                                            return_routes=True, batch_documents=batch_documents,
                                            return_device_routes=True, device_route_collector=buffers.collector,
                                            training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
                 else:
-                    logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                    logits, routes = model(embedded, positions, document_starts=starts,
                                            return_routes=True, batch_documents=batch_documents,
                                            **({'route_observer': route_observer} if route_observer is not None else {}))
-                loss = (capture.loss(logits, targets) if capture is not None else
-                        _native_loss(logits, targets))
+                streamed = capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'
+                if streamed and selection is not None:
+                    loss = capture.loss(logits, targets.clamp(min=0), **selection)
+                else:
+                    loss = (capture.loss(logits, targets) if capture is not None else
+                            _native_loss(logits, targets))
                 if events is not None:
                     events[3 * micro_index + 1].record()
                 micro_forwarded = time.perf_counter()
@@ -1426,7 +1516,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
             **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
-            'positions_per_second': len(pack['token_ids']) / wall,
+            **exposure_fields(pack, wall),
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
             'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
