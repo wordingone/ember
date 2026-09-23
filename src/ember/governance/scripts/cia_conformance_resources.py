@@ -17,6 +17,7 @@ TOTAL_GPU_BYTES = 20 * GIB
 ALLOCATOR_BYTES = 16 * GIB
 WALL_SECONDS = 600
 MIN_FREE_COMMIT = 42 * GIB
+MAX_CONSECUTIVE_TIMEOUTS = 5
 
 
 def parse_device_sample(text, expected_uuid, *, total_gpu_bytes=TOTAL_GPU_BYTES):
@@ -144,9 +145,31 @@ class ResourceJob(owned_process._WindowsJob if os.name == 'nt' else object):
             self._watcher.start()
 
     def _watch(self):
+        # A query that TIMES OUT observed nothing, so only a sustained run of them is fatal; any sample that
+        # parses and breaches the envelope, or any other failure, stays fatal at once. With the card
+        # saturated, nvidia-smi routinely takes 1-3 s, and one 3 s tail event killed two governed hours
+        # at ~41 min (#1945). MAX_CONSECUTIVE_TIMEOUTS bounds the unobserved interval to about 20 s.
+        timeouts = 0
         while not self._stop.wait(1):
             try:
                 self._observe()
+                timeouts = 0
+            except subprocess.TimeoutExpired as error:
+                timeouts += 1
+                self.timeouts_tolerated = getattr(self, 'timeouts_tolerated', 0) + 1
+                if timeouts < MAX_CONSECUTIVE_TIMEOUTS:
+                    continue
+                with self._handle_lock:
+                    if self._stop.is_set():
+                        return
+                    self.failure = f'{timeouts} consecutive GPU queries timed out: {error}'
+                    if self._handle and not owned_process._kernel32.TerminateJobObject(self._handle, 125):
+                        self._containment_error = 'TerminateJobObject failed during GPU supervision'
+                        try:
+                            super().close()
+                        except Exception as cleanup_error:
+                            self._containment_error += ': ' + str(cleanup_error)
+                return
             except Exception as error:
                 with self._handle_lock:
                     if self._stop.is_set():
