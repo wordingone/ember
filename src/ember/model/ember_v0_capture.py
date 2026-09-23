@@ -327,10 +327,10 @@ class SegmentedStep:
             if id(parameter) not in cleared and parameter.grad is not None:
                 parameter.grad.zero_()
 
-    def loss(self, logits, targets):
+    def loss(self, logits, targets, **selection):
         if self.loss_fn is None:
             raise CaptureStateError("no loss_fn bound; the runner owns the loss")
-        return self.loss_fn(logits, targets)
+        return self.loss_fn(logits, targets, **selection)
 
     def receipt(self):
         return {"segments": len(self.segments), "device": self.device.type, "captured": self.captured,
