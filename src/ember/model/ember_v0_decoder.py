@@ -1036,7 +1036,10 @@ class CIADecoder(nn.Module):
             else:
                 row_experts = torch.repeat_interleave(winners, repeats, output_size=sum(lengths))
                 row_gates = torch.repeat_interleave(gates, repeats, output_size=sum(lengths))
-            normed = self._norm(shared, prefix + '.expert_norm.weight')
+            # A skipped expert site consumes no norm: its output is replaced by zeros below, so computing the
+            # norm there is dead work that the function-correctness clause counts as an optional-site kernel.
+            normed = (self._norm(shared, prefix + '.expert_norm.weight')
+                      if not capture_experts or layer in _EXPERT_KEEP else shared)
             history = (winners.detach()[None, :] if history is None else
                        torch.cat((history, winners.detach()[None, :]), dim=0))
             if collector is not None:
