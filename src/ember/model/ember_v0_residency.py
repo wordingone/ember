@@ -804,6 +804,23 @@ class ResidentExecution:
         return (self.model.owner_declaration(), tuple((name, ExpertCache._signature(value))
                  for name, value in self.model.live_parameters().items()))
 
+    @staticmethod
+    def _structure(owner):
+        # The owner identity with every in-place version counter removed. Each field the full parameter
+        # inventory validates -- names, object identity, shape, stride (hence contiguity), dtype, device,
+        # storage address/offset/size, the typed config and placement declarations, and the resident group
+        # storage -- is a field of this tuple, so equality with a tuple taken right after a passing inventory
+        # proves the inventory would pass again. Versions move with every optimizer update and are excluded.
+        declaration, rows = owner
+        layout = declaration[5]
+        if isinstance(layout, tuple):
+            layout = tuple(row[:4] + row[5:] if isinstance(row, tuple) and len(row) == 12 else row for row in layout)
+        return (declaration[:5] + (layout,) + declaration[6:],
+                tuple((name, signature[:1] + signature[2:]) for name, signature in rows))
+
+    def _registration(self):
+        return tuple(name for name, _ in self.model.named_parameters(remove_duplicate=False))
+
     def check(self):
         if not self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution requires its current active candidate step')
@@ -839,8 +856,11 @@ class ResidentExecution:
     def begin_step(self):
         if self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution is not available for a new step')
-        self.model.parameter_inventory()
-        self.bound = self.identity()
+        owner = self.identity()
+        validated, self._validated = getattr(self, '_validated', None), None
+        if validated is None or validated != (self._structure(owner), self._registration()):
+            self.model.parameter_inventory()
+        self.bound = owner
         self.step_id += 1
         self.pending = 0
         self.routed = []
@@ -854,6 +874,7 @@ class ResidentExecution:
             if self.pending:
                 raise RuntimeError('incomplete resident expert backward')
             self.model.parameter_inventory()
+            self._validated = (self._structure(self.identity()), self._registration())
             torch.cuda.synchronize(self.device)
             predicates = self.input_valid.detach().cpu().tolist()
             if not all(predicates):
@@ -865,6 +886,7 @@ class ResidentExecution:
                 raise ResidentRoutingRefusal(self.step_id, unknown)
         except BaseException:
             self.poisoned = True
+            self._validated = None
             raise
         finally:
             self.active = False
