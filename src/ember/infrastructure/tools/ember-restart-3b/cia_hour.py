@@ -538,7 +538,9 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
     def optimizer_factory(inventory):
         if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
             raise ValueError('continuation optimizer population is incomplete')
-        return torch.optim.AdamW(list(inventory.values()), **runner.optimizer_kwargs(identity['optimizer']))
+        built = torch.optim.AdamW(list(inventory.values()), **runner.optimizer_kwargs(identity['optimizer']))
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=runner.execution_mode(identity), optimizer_factory=optimizer_factory)
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, source['root'], source['child'])
@@ -676,9 +678,14 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     def optimizer_factory(inventory):
         if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
             raise ValueError('hour optimizer population is incomplete')
-        return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+        built = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
             eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
             **({'fused': True} if hour['arm'] == 'treatment' else {}))
+        # Same attach as cia_step_runner's own factory: under a layer template, measure_step releases the grads of
+        # parameters the template never runs, so fused AdamW neither walks nor weight-decays them. Without it the
+        # hour steps every weight (#1945: optimizer_and_sync 15.6 ms vs 2.8 ms) and is a different function.
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=mode, optimizer_factory=optimizer_factory)
     if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
