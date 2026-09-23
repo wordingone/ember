@@ -308,16 +308,24 @@ class SkipSemanticsTests(unittest.TestCase):
 
     def test_measure_step_releases_after_the_snapshot_and_before_the_update(self):
         source = SOURCE.read_text(encoding='utf-8')
-        start = source.index('def measure_step(')
-        body = source[start:source.index('\ndef ', start + 1)]
-        snapshot = body.index('snapshot = buffers.snapshot()')
+        helper_start = source.index('def _take_route_snapshot(')
+        helper = source[helper_start:source.index('\ndef ', helper_start + 1)]
         # The unrouted set is read from each micro-step's snapshot and intersected across micro-steps before the
         # one release (#1945 gradient accumulation); with one micro-step it is that step's set unchanged.
-        unrouted = body.index('buffers.unrouted(snapshot)')
+        self.assertLess(helper.index('snapshot = buffers.snapshot()'), helper.index('buffers.unrouted(snapshot)'))
+        self.assertLess(helper.index("raise ValueError('device routing buffers differ from the model trace')"),
+                        helper.index('micro_snapshots.append(snapshot)'))
+        start = source.index('def measure_step(')
+        body = source[start:source.index('\ndef ', start + 1)]
         release = body.index('release_unrouted_expert_grads(expert_owners,')
-        self.assertLess(snapshot, unrouted)
-        self.assertLess(unrouted, release)
-        self.assertLess(body.index("raise ValueError('device routing buffers differ from the model trace')"), release)
+        # The last micro-step's snapshot is taken after candidate_step exits (end_step's host checks overlap
+        # backward) and still before the release and the optimizer update.
+        exited = body.index('exited = time.perf_counter()')
+        deferred = body.index('_take_route_snapshot(deferred_buffers,')
+        self.assertLess(body.index('with model.candidate_step():'), exited)
+        self.assertLess(exited, deferred)
+        self.assertLess(deferred, release)
+        self.assertLess(body.index('_take_route_snapshot(buffers, routes, verify_routes,'), exited)
         self.assertLess(release, body.index('\n    optimizer.step()\n'))  # the call, not the docstring mention
         self.assertIn("'unrouted_expert_grads_released'", body)
         worker = source[source.index('def worker('):]

@@ -1246,6 +1246,18 @@ def micro_packs(pack):
     return out
 
 
+def _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrouted):
+    """Per-micro-step boundary copy: each micro-step's report set is validated on its own, and an expert owner is
+    unrouted for the UPDATE only if it routed no rows in ANY micro-step. Returns the updated unrouted map."""
+    snapshot = buffers.snapshot()
+    if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
+        raise ValueError('device routing buffers differ from the model trace')
+    micro_snapshots.append(snapshot)
+    these = {layer: set(experts) for layer, experts in buffers.unrouted(snapshot).items()}
+    return these if unrouted is None else {
+        layer: unrouted[layer] & these[layer] for layer in unrouted if layer in these}
+
+
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
                  experiment_binding=None):
@@ -1311,6 +1323,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     micro_snapshots = []
     unrouted = None
     routes = None
+    deferred_buffers = None
     with model.candidate_step():
         for micro_index, micro in enumerate(micros):
             tokens = torch.tensor(micro['token_ids'], dtype=torch.long, device=device)
@@ -1347,22 +1360,22 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
+            deferred_buffers = None
             if buffers is not None:
-                # Per-micro-step boundary copy: each micro-step's report set is validated on its own, and an expert
-                # owner is unrouted for the UPDATE only if it routed no rows in ANY micro-step.
-                snapshot = buffers.snapshot()
-                if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
-                    raise ValueError('device routing buffers differ from the model trace')
-                micro_snapshots.append(snapshot)
-                these = {layer: set(experts) for layer, experts in buffers.unrouted(snapshot).items()}
-                unrouted = these if unrouted is None else {
-                    layer: unrouted[layer] & these[layer] for layer in unrouted if layer in these}
+                if micro_index == len(micros) - 1 and not verify_routes:
+                    # The last micro-step's copy blocks until backward drains; taken after candidate_step exits, the
+                    # end_step host checks overlap backward instead of following it. Still before optimizer.step.
+                    deferred_buffers = buffers
+                else:
+                    unrouted = _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrouted)
             if capture is not None and record:
                 del logits, loss, routes
                 routes = None
     forwarded = staged + forward_seconds
     backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
+    if deferred_buffers is not None:
+        unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
     loss_value = float(sum(float(value) for value in losses) / depth)
     if not math.isfinite(loss_value):
         raise ValueError('nonfinite step loss')
