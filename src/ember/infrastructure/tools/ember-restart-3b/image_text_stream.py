@@ -126,19 +126,37 @@ def exposure(pack):
             'decoder_positions': len(targets)}
 
 
+_POOL = None
+
+
+def _decode_pool():
+    global _POOL
+    if _POOL is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _POOL = ThreadPoolExecutor(max_workers=PAIRS_PER_DOCUMENT, thread_name_prefix='image-decode')
+    return _POOL
+
+
 def load_patches(pack, device):
     """Decode every image in the pack (inside the measured step) -> (rows LongTensor, patches bf16 [N,768])."""
     import torch
     evaluator = _evaluator()
-    rows, pieces = [], []
-    for span in pack.get('images', ()):
+    spans = list(pack.get('images', ()))
+
+    def decode(span):
         raw = Path(span['path']).read_bytes()
         if _sha256(raw) != span['object_sha256']:
             raise ValueError('image object bytes changed after planning: ' + span['path'])
         patches, coordinates, _ = evaluator.image_patches(raw)
         if len(coordinates) != span['count']:
             raise ValueError('image patch count differs from the plan')
-        pieces.append(patches)
+        return patches
+
+    # The per-image decode is the evaluator's own function on each image independently, and file reads, hashing and
+    # PIL decode/resize release the interpreter lock, so the images decode concurrently inside the step; map() preserves order,
+    # so rows and patches are byte-identical to the serial loop.
+    rows, pieces = [], list(_decode_pool().map(decode, spans)) if len(spans) > 1 else [decode(s) for s in spans]
+    for span in spans:
         rows.extend(range(span['row'], span['row'] + span['count']))
     if not pieces:
         return None, None
