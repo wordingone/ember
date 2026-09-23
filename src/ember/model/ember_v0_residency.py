@@ -585,7 +585,7 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
     """Grouped kernels share storage; gradients belong to the actual Parameters."""
     @staticmethod
     def forward(ctx, value, offsets, execution, layer, backend, chunk_ends, *parameters):
-        execution.check()
+        execution.check_state()
         ctx.execution, ctx.layer, ctx.step_id = execution, layer, execution.step_id
         ctx.completed = False
         ctx.backend = backend
@@ -612,7 +612,7 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
     @once_differentiable
     def backward(ctx, output_gradient):
         execution = ctx.execution
-        execution.check()
+        execution.check_state()
         if execution.step_id != ctx.step_id or ctx.completed:
             raise RuntimeError('stale or repeated resident grouped backward')
         value, offsets, *parameters = ctx.saved_tensors
@@ -758,7 +758,7 @@ class ResidentExecution:
         return tuple(rows)
 
     def check_route_plan(self, plan):
-        self.check()
+        self.check_state()
         if self._plan_declaration is None:
             if plan is not None:
                 raise ValueError('route plan must be bound before the resident step')
@@ -766,7 +766,7 @@ class ResidentExecution:
             raise ValueError('route plan differs from its prebound declaration')
 
     def planned_routes(self, depth, geometry, candidates, native_winners, logits, gates):
-        self.check()
+        self.check_state()
         if self._plan_declaration is None:
             return native_winners,gates
         actual=torch.stack([candidates[row[4]] for row in geometry.chunks])
@@ -780,13 +780,13 @@ class ResidentExecution:
         return winners,(probability-probability.detach())+1.0
 
     def geometry_repeats(self, lengths, sizes):
-        self.check()
+        self.check_state()
         if lengths != self._geometry_lengths or sizes != self._geometry_sizes:
             raise ValueError('resident forward requires its prebound document geometry')
         return self._geometry_repeats
 
     def require_valid(self, predicate, reason):
-        self.check()
+        self.check_state()
         if (reason not in ('input', 'routing', 'plan') or not isinstance(predicate, torch.Tensor)
                 or predicate.shape != () or predicate.dtype != torch.bool or predicate.device != self.device):
             raise ValueError('declared scalar device validity predicate required')
@@ -821,9 +821,15 @@ class ResidentExecution:
     def _registration(self):
         return tuple(name for name, _ in self.model.named_parameters(remove_duplicate=False))
 
-    def check(self):
+    def check_state(self):
+        # Per-layer sites inside the step: state predicates only. The owner identity is compared at begin_step,
+        # at the resident forward's entry and at end_step, and end_step precedes the optimizer update, so a
+        # mid-step owner change still refuses the step before it can mutate the model.
         if not self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution requires its current active candidate step')
+
+    def check(self):
+        self.check_state()
         if self.identity() != self.bound:
             raise RuntimeError('resident candidate owner changed during the step')
 
@@ -906,7 +912,7 @@ class ResidentExecution:
 
     def validate_routed(self, experts):
         """Accumulate a device validity predicate and return safe local group slots."""
-        self.check()
+        self.check_state()
         if (not isinstance(experts, torch.Tensor) or experts.ndim != 1 or experts.dtype != torch.long
                 or experts.device != self.device or not len(experts)):
             raise ValueError('one nonempty same-device integer expert vector required')
@@ -919,7 +925,7 @@ class ResidentExecution:
         return tuple(self.model._resident_groups[(layer, projection)] for projection in ('up', 'gate', 'down'))
 
     def grouped_block(self, values, experts, layer, *, backend='native'):
-        self.check()
+        self.check_state()
         if (type(layer) is not int or layer not in range(1, 24, 2)
                 or values.ndim != 2 or values.shape[1] != 1024 or values.dtype != torch.bfloat16
                 or values.device != self.device or len(experts) != len(values)):
@@ -946,7 +952,7 @@ class ResidentExecution:
         return result.index_select(0, torch.argsort(order))
 
     def expert_block(self, values, expert, layer):
-        self.check()
+        self.check_state()
         if type(expert) is not int or expert not in self.ids:
             raise ResidentRoutingRefusal(self.step_id, (expert,))
         return self.model._swiglu(values, f'experts.{expert}.layers.{layer}')
