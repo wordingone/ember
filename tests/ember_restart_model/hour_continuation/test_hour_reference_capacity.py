@@ -13,6 +13,18 @@ import unittest
 import cia_hour
 
 
+def text_fill(pack, stream, cursor, image_text, *, sequence, documents):
+    # The runner's fill_pack for a text-only hour, without importing the runner.
+    for _ in range(documents):
+        episode, after = stream.next_episode(**cursor, sequence_length=sequence)
+        pack['document_starts'].append(len(pack['token_ids']))
+        pack['token_ids'].extend(episode['token_ids'])
+        pack['target_ids'].extend(episode['target_ids'])
+        pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
+        cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+    return cursor
+
+
 class Stream:
     def check_cursor_span(self, **kwargs):
         self.span = kwargs
@@ -39,7 +51,10 @@ class ReferenceCapacityTests(unittest.TestCase):
             geometry = dict(measured_steps=2)
             runner = SimpleNamespace(geometry_counts=lambda geometry, hour: (1024, 4, 1, 2),
                 open_input_stream=lambda data: (stream, *paths), file_sha256=sha,
-                canonical=lambda value: json.dumps(value, sort_keys=True).encode())
+                canonical=lambda value: json.dumps(value, sort_keys=True).encode(),
+                # Text-only hour (no A1 image-text source): the runner's own contract for these two seams.
+                open_image_text=lambda data, tokenizer, sequence: None,
+                text_documents=lambda image_text, documents: documents, fill_pack=text_fill)
             prepared = cia_hour.prepare_inputs(runner, data, geometry)
             self.assertEqual(stream.span['tokens'], 4*4096)
             self.assertEqual(prepared['geometry'], geometry)
