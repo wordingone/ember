@@ -1117,6 +1117,42 @@ def expert_owner_index(inventory):
     return index
 
 
+def template_untrained_parameters(inventory):
+    """Parameters the decoder's fixed layer template never runs this step: attention (and its norm) outside
+    _ATTENTION_KEEP, shared FFN (and its norm) outside _FFN_KEEP, and the expert norm and every expert's weights at a
+    sparse layer outside _EXPERT_KEEP. The captured path materialises and zeroes grads IN PLACE for every registered
+    owner, so without release fused AdamW steps them with zero gradient: no moment change, but decoupled weight decay
+    shrinks weights the template never trains, and the kernel walks their elements. Releasing their grads to None
+    before optimizer.step gives them reference skip semantics (the release_unrouted_expert_grads rule applied to
+    template sites). With no template in force every set is the full range and this returns an empty list."""
+    from ember.model import ember_v0_decoder as decoder
+    layers = range(24)
+    attention = {layer for layer in layers if layer not in decoder._ATTENTION_KEEP}
+    ffn = {layer for layer in layers if layer not in decoder._FFN_KEEP}
+    expert = {layer for layer in layers if layer % 2 == 1 and layer not in decoder._EXPERT_KEEP}
+    released = []
+    for name, parameter in inventory.items():
+        match = re.match(r'(?:experts\.\d+\.)?layers\.(\d+)\.(attention|shared|expert_norm|down|up|gate)', name)
+        if match is None:
+            continue
+        layer, site = int(match.group(1)), match.group(2)
+        if name.startswith('experts.'):
+            hit = layer in expert
+        elif site == 'attention':
+            hit = layer in attention
+        elif site == 'shared':
+            hit = layer in ffn
+        elif site == 'expert_norm':
+            hit = layer in expert
+        else:
+            hit = False
+        if hit:
+            released.append(parameter)
+    if (attention or ffn or expert) and not released:
+        raise ValueError('layer template is in force but no untrained parameter name matched')
+    return released
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1344,6 +1380,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                  if parameter.grad is not None]
         if grads:
             torch._foreach_mul_(grads, 1.0 / depth)
+    template_untrained = getattr(optimizer, '_ember_template_untrained', ())
+    for parameter in template_untrained:
+        parameter.grad = None
     optimizer.step()
     if events is not None:
         events[-1].record()
@@ -1379,6 +1418,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
             'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
             'accumulation_micro_steps': depth,
+            'template_untrained_released': len(template_untrained),
             'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
                                                    for m in range(depth)) / 1000,
                                    'backward': sum(events[3 * m + 1].elapsed_time(events[3 * m + 2])
@@ -1640,7 +1680,9 @@ def worker(binding_path):
         def optimizer_factory(inventory):
             if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
                 raise ValueError('full CIA-3B population is missing')
-            return torch.optim.AdamW(list(inventory.values()), **optimizer_kwargs(definition))
+            built = torch.optim.AdamW(list(inventory.values()), **optimizer_kwargs(definition))
+            built._ember_template_untrained = template_untrained_parameters(inventory)
+            return built
 
         inventory, optimizer = prepare_model(model, prediction['identity'], first_lengths, device, mode=mode,
                                              optimizer_factory=optimizer_factory)
