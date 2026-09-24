@@ -1563,28 +1563,6 @@ def _cia_counter_tensor(archive, tensor, shape, storage_type):
     return _tensor_raw_bytes(archive,tensor)
 
 
-_COUNTERS = {}
-
-
-def _counter_for(digest):
-    """The counter module whose source bytes hash to digest: this file, or a verbatim prior counter kept in
-    counter-history/. A persisted receipt is re-derived only by the code that produced it."""
-    if type(digest) is not str or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
-        raise ValueError('CIA counter receipt names no counter digest')
-    if digest == _read_bytes_snapshot(Path(__file__), label="counter source")[1]:
-        return sys.modules[__name__]
-    if digest not in _COUNTERS:
-        path = Path(__file__).parent / 'counter-history' / ('parameter_counter-%s.py' % digest)
-        if not path.is_file(): raise ValueError('CIA parent counter receipt differs: it names a counter this tree does not keep')
-        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-            raise ValueError('CIA historic counter bytes differ from their digest')
-        import importlib.util
-        spec = importlib.util.spec_from_file_location('parameter_counter_%s' % digest[:16], path)
-        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-        _COUNTERS[digest] = module
-    return _COUNTERS[digest]
-
-
 def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
     """Reopen an admitted zero-step CIA parent using the existing byte counter."""
     parent_root = Path(parent_checkpoint)
@@ -1597,17 +1575,11 @@ def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expect
     digest = hashlib.sha256(raw).hexdigest()
     if expected_digest is not None and digest != expected_digest:
         raise ValueError('CIA parent manifest digest differs from its bound identity')
-    zero_step = ('lineage' not in parent
-            and parent.get('genesis_provenance') == {'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}
-            and parent.get('data_cursor',{}).get('global_step') == 0
-            and parent.get('data_cursor',{}).get('tokens_seen') == 0)
-    # A chained parent is itself an admitted descendant; its own lineage is re-validated below, recursively to genesis.
-    chained = (isinstance(parent.get('lineage'), dict)
-            and parent.get('genesis_provenance') in ({'kind':'VERIFIED_ZERO_STEP_PARENT','independently_qualified':False},
-                                                     {'kind':'VERIFIED_DESCENDANT_PARENT','independently_qualified':False})
-            and type(parent.get('data_cursor',{}).get('global_step')) is int and parent['data_cursor']['global_step'] > 0)
-    if parent.get('schema_version') != 'ember-cia-checkpoint-v1' or not (zero_step or chained):
-        raise ValueError('CIA descendant requires an admitted zero-step parent or an admitted descendant parent')
+    if (parent.get('schema_version') != 'ember-cia-checkpoint-v1' or 'lineage' in parent
+            or parent.get('genesis_provenance') != {'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}
+            or parent.get('data_cursor',{}).get('global_step') != 0
+            or parent.get('data_cursor',{}).get('tokens_seen') != 0):
+        raise ValueError('CIA first descendant requires an admitted zero-step parent')
     cap = parent.get('max_restore_payload_bytes')
     if type(cap) is not int or cap < 1 or type(max_restore_payload_bytes) is not int or cap > max_restore_payload_bytes:
         raise ValueError('CIA parent exceeds the explicit caller restore byte bound')
@@ -1619,9 +1591,8 @@ def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expect
     persisted = validate_realization_receipt(json.loads(persisted_raw))
     parent = dict(parent, checkpoint_manifest_sha256=digest)
     facts = {}
-    producer = _counter_for(persisted['counter_sha256'])
-    measured = producer._cia_realization_receipt(parent_root, parent,
-        model_config_sha256=parent['model_config_sha256'], _facts=facts, _allow_descendant=chained)
+    measured = _cia_realization_receipt(parent_root, parent,
+        model_config_sha256=parent['model_config_sha256'], _facts=facts, _allow_descendant=False)
     if measured != persisted:
         raise ValueError('CIA admitted parent counter receipt differs from reopened bytes')
     parent['_parent_counter_receipt_sha256'] = hashlib.sha256(persisted_raw).hexdigest()
@@ -1764,9 +1735,7 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
     specs=equation_inventory()
     inventory={spec.name:spec.shape for spec in specs}
     facts={'parameters':{},'elements':{name:prod(shape) for name,shape in inventory.items()},'optimizer':{}}
-    def object_digests(item):
-        expert_id,record = item
-        digests={}
+    for expert_id,record in [(None,core),*enumerate(records)]:
         with _cia_counter_component(root,'objects/'+record['sha256']+'.pt',record) as (archive,payload):
             if expert_id is None:
                 if set(payload)!={'schema_version','architecture_sha256','model'} or payload['schema_version']!='ember-cia-core-object-v1' or payload['architecture_sha256']!=architecture_digest:
@@ -1780,15 +1749,9 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
             storage=set()
             for name,tensor in state.items():
                 raw = _cia_counter_tensor(archive,tensor,shapes[name],'BFloat16Storage')
-                digests[name] = hashlib.sha256(raw).hexdigest()
+                facts['parameters'][name] = hashlib.sha256(raw).hexdigest()
                 if tensor.storage.key in storage: raise ValueError('CIA counter parameter storage alias')
                 storage.add(tensor.storage.key)
-        return digests
-    # Independent objects on a bounded pool (hashing and reads release the interpreter lock); merged in object order.
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for digests in pool.map(object_digests, [(None,core),*enumerate(records)]):
-            facts['parameters'].update(digests)
     placement=manifest['placement']
     if set(placement)!=set(inventory): raise ValueError('CIA counter placement inventory mismatch')
     for entry in placement.values():
