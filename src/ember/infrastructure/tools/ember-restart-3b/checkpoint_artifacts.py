@@ -4507,6 +4507,13 @@ def _cia_read_component(root, record):
     return torch.load(io.BytesIO(snapshot), map_location='cpu', weights_only=True)
 
 
+def _cia_ordered_parallel(function, items, *, workers=8):
+    """Apply function to independent items on a bounded pool; results and the first error keep item order."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        yield from pool.map(function, items)
+
+
 def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_payload_bytes=None):
     """Inspect one complete raw generation, optionally retaining verified tensors.
 
@@ -4598,11 +4605,14 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
     inventory = {name: (tuple(value.shape), value.numel()) for name,value in tensors.items()}
     lineage_facts = _cia_lineage_facts(tensors,{}) if descendant else None
     if not retain_model: tensors = {}
-    for expert_id in range(25):
+    # The 25 objects are independent reads; hashing, reads and isfinite release the interpreter lock, so the
+    # same checks run on a bounded pool and merge in expert order (one pass was 29 s serial).
+    def load_expert(expert_id):
         expert = read_cia_expert_object(index_path, expected_index_sha256=index['sha256'], expert_id=expert_id)
+        return expert, (_cia_lineage_facts(expert,{}) if descendant else None)
+    for expert, expert_facts in _cia_ordered_parallel(load_expert, range(25)):
         inventory.update({name: (tuple(value.shape), value.numel()) for name,value in expert.items()})
         if descendant:
-            expert_facts = _cia_lineage_facts(expert,{})
             lineage_facts['parameters'].update(expert_facts['parameters'])
             lineage_facts['elements'].update(expert_facts['elements'])
         if retain_model: tensors.update(expert)

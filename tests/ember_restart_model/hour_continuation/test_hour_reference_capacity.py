@@ -54,7 +54,9 @@ class ReferenceCapacityTests(unittest.TestCase):
                 canonical=lambda value: json.dumps(value, sort_keys=True).encode(),
                 # Text-only hour (no A1 image-text source): the runner's own contract for these two seams.
                 open_image_text=lambda data, tokenizer, sequence: None,
-                text_documents=lambda image_text, documents: documents, fill_pack=text_fill)
+                text_documents=lambda image_text, documents: documents, fill_pack=text_fill,
+                # Look-ahead off (the runner's pack_lookahead returns the source unchanged when not enabled).
+                pack_lookahead=lambda packs: packs)
             prepared = cia_hour.prepare_inputs(runner, data, geometry)
             self.assertEqual(stream.span['tokens'], 4*4096)
             self.assertEqual(prepared['geometry'], geometry)
