@@ -305,6 +305,7 @@ def prepare_inputs(runner, data, geometry):
     packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents,
                       image_text=image_text, fill=runner.fill_pack)
     first = packs.next_pack()
+    packs = runner.pack_lookahead(packs)
     for path, expected in ((receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256']),
                            (ledger, data['shard_ledger_sha256'])):
         if runner.file_sha256(path) != expected:
@@ -746,7 +747,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             call_started = time.perf_counter()
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
                 run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners,
-                experiment_binding=runner.experiment_fields(identity))
+                experiment_binding=runner.experiment_fields(identity), image_text=prepared['packs'].image_text)
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],

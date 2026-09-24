@@ -16,6 +16,7 @@ import importlib.util
 import json
 import random
 import sys
+import threading
 from pathlib import Path
 
 PAIRS_PER_DOCUMENT = 8
@@ -27,14 +28,18 @@ GRAMMAR = 'image-text-document-a1-v1'
 MANIFEST_FIELDS = {'object_sha256', 'path', 'caption', 'dataset_id', 'licence'}
 
 
+_EVALUATOR_LOCK = threading.Lock()
+
+
 def _evaluator():
     name = 'ember_mmmu_cia_evaluation_for_training'
-    module = sys.modules.get(name)
-    if module is None:
-        spec = importlib.util.spec_from_file_location(name, str(Path(__file__).with_name('mmmu_cia_evaluation.py')))
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
+    with _EVALUATOR_LOCK:
+        module = sys.modules.get(name)
+        if module is None:
+            spec = importlib.util.spec_from_file_location(name, str(Path(__file__).with_name('mmmu_cia_evaluation.py')))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            sys.modules[name] = module
     return module
 
 
@@ -137,31 +142,67 @@ def _decode_pool():
     return _POOL
 
 
-def load_patches(pack, device):
-    """Decode every image in the pack (inside the measured step) -> (rows LongTensor, patches bf16 [N,768])."""
-    import torch
+def _decode_uint8(path, object_sha256):
+    """The evaluator's image_patches up to its uint8 grid: same RGB convert, grid and BILINEAR resize, same row-major
+    patch order -- in PIL and numpy only, so a pool thread never starts a torch intra-op team. The float32/255 -> bf16
+    step is applied on the device by load_patches; the result equals image_patches bit for bit."""
+    import io
+    import numpy
+    from PIL import Image
+    raw = Path(path).read_bytes()
+    if _sha256(raw) != object_sha256:
+        raise ValueError('image object bytes changed after planning: ' + str(path))
     evaluator = _evaluator()
+    patch = evaluator.PATCH
+    with Image.open(io.BytesIO(raw)) as image:
+        image = image.convert('RGB')
+        gx, gy = evaluator.image_grid(*image.size)
+        data = image.resize((gx * patch, gy * patch), Image.BILINEAR).tobytes()
+    grid = numpy.frombuffer(data, dtype=numpy.uint8).reshape(gy, patch, gx, patch, 3)
+    return numpy.ascontiguousarray(grid.transpose(0, 2, 1, 3, 4)).reshape(gy * gx, patch * patch * 3)
+
+
+_AHEAD = {}
+LAST_SOURCE = None
+
+
+def prefetch_index(stream, index):
+    """Start decoding update `index`'s image pairs on the pool (called inside the previous update's wall)."""
+    _AHEAD.clear()
+    rows = stream.pair_rows(index)
+    key = tuple(row['object_sha256'] for row in rows)
+    _AHEAD[key] = [_decode_pool().submit(_decode_uint8, row['path'], row['object_sha256']) for row in rows]
+
+
+def join_prefetch():
+    """Block until every started decode has finished (so its cost stays inside the wall that started it)."""
+    for futures in _AHEAD.values():
+        for future in futures:
+            future.exception()
+
+
+def load_patches(pack, device):
+    """Decode every image in the pack (inside a measured step) -> (rows LongTensor, patches bf16 [N,768])."""
+    import numpy
+    import torch
+    global LAST_SOURCE
     spans = list(pack.get('images', ()))
-
-    def decode(span):
-        raw = Path(span['path']).read_bytes()
-        if _sha256(raw) != span['object_sha256']:
-            raise ValueError('image object bytes changed after planning: ' + span['path'])
-        patches, coordinates, _ = evaluator.image_patches(raw)
-        if len(coordinates) != span['count']:
-            raise ValueError('image patch count differs from the plan')
-        return patches
-
-    # The per-image decode is the evaluator's own function on each image independently, and file reads, hashing and
-    # PIL decode/resize release the interpreter lock, so the images decode concurrently inside the step; map() preserves order,
-    # so rows and patches are byte-identical to the serial loop.
-    rows, pieces = [], list(_decode_pool().map(decode, spans)) if len(spans) > 1 else [decode(s) for s in spans]
-    for span in spans:
-        rows.extend(range(span['row'], span['row'] + span['count']))
-    if not pieces:
+    if not spans:
         return None, None
+    futures = _AHEAD.pop(tuple(span['object_sha256'] for span in spans), None)
+    if futures is not None:
+        grids, LAST_SOURCE = [future.result() for future in futures], 'decoded-in-previous-step-wall'
+    else:
+        grids = list(_decode_pool().map(lambda span: _decode_uint8(span['path'], span['object_sha256']), spans))
+        LAST_SOURCE = 'decoded-in-this-step'
+    rows = []
+    for span, grid in zip(spans, grids):
+        if grid.shape[0] != span['count']:
+            raise ValueError('image patch count differs from the plan')
+        rows.extend(range(span['row'], span['row'] + span['count']))
+    patches = torch.from_numpy(numpy.concatenate(grids)).to(device)
     return (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True),
-            torch.cat(pieces).to(device, non_blocking=True))
+            patches.to(torch.float32).div_(255.0).to(torch.bfloat16))
 
 
 def self_test():
