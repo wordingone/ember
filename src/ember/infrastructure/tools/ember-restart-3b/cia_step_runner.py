@@ -305,6 +305,17 @@ def measurement_packs(prepared):
         yield packs.next_pack()
 
 
+def with_next(iterable):
+    """(pack, next pack or None): the next pack is generated one step earlier (still outside every step wall, as
+    before) so its images can be decoded inside the current step's wall."""
+    iterator = iter(iterable)
+    current = next(iterator, None)
+    while current is not None:
+        following = next(iterator, None)
+        yield current, following
+        current = following
+
+
 def verify_measurement_pack(pack, index, *, sequence, documents, warm, measured):
     if (index >= warm + measured or pack['index'] != index or pack['phase'] != ('warm' if index < warm else 'measured')
             or len(pack['token_ids']) != sequence * documents or len(pack['target_ids']) != sequence * documents
@@ -1343,7 +1354,7 @@ def exposure_fields(pack, wall):
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
-                 experiment_binding=None):
+                 experiment_binding=None, prefetch=None):
     """Return one row only after context exit, successful update and synchronization.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
@@ -1451,6 +1462,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 loss.backward()
                 if events is not None:
                     events[3 * micro_index + 2].record()
+                if prefetch is not None and micro_index == len(micros) - 1:
+                    # The next update's images decode on the pool while this update drains on the device; joined
+                    # below before this step's wall closes, so the decode is paid inside a measured wall.
+                    load_image_text_module().prefetch(prefetch)
                 micro_backwarded = time.perf_counter()
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
@@ -1495,6 +1510,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if events is not None:
         events[-1].record()
     synchronize()
+    if prefetch is not None:
+        load_image_text_module().join_prefetch()
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
@@ -1521,6 +1538,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
             **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
+            'image_patches_source': load_image_text_module().LAST_SOURCE if pack.get('images') else None,
             **exposure_fields(pack, wall),
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
@@ -1823,7 +1841,8 @@ def worker(binding_path):
         gc_identity = dict(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'])
         with GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
                 (custody / 'gc-events.jsonl').open('xb') as gc_rows:
-            for index, pack in enumerate(measurement_packs(prepared) if measurement else prepared['packs']):
+            for index, (pack, following) in enumerate(with_next(measurement_packs(prepared) if measurement
+                                                                else prepared['packs'])):
                 if measurement:
                     verify_measurement_pack(pack, index, sequence=counts[0], documents=counts[1], warm=counts[2],
                                             measured=counts[3])
@@ -1838,7 +1857,8 @@ def worker(binding_path):
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
-                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']))
+                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']),
+                                   prefetch=(following if following is not None and following.get('images') else None))
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.

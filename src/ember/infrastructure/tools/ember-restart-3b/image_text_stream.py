@@ -137,11 +137,56 @@ def _decode_pool():
     return _POOL
 
 
+_PREFETCHED = {}
+LAST_SOURCE = None
+
+
+def _span_key(spans):
+    return tuple(span['object_sha256'] for span in spans)
+
+
+def _decode_span(span):
+    raw = Path(span['path']).read_bytes()
+    if _sha256(raw) != span['object_sha256']:
+        raise ValueError('image object bytes changed after planning: ' + span['path'])
+    patches, coordinates, _ = _evaluator().image_patches(raw)
+    if len(coordinates) != span['count']:
+        raise ValueError('image patch count differs from the plan')
+    return patches
+
+
+def prefetch(pack):
+    """Start decoding the NEXT update's images on the pool. The runner calls this after the current update's
+    backward is launched and joins it (join_prefetch) before that update's wall closes, so every decode is still
+    paid inside a measured step wall -- the host is otherwise idle waiting on the device there."""
+    spans = list(pack.get('images', ()))
+    if spans:
+        _evaluator()
+        _PREFETCHED[_span_key(spans)] = [_decode_pool().submit(_decode_span, span) for span in spans]
+
+
+def join_prefetch():
+    from concurrent.futures import wait
+    for futures in _PREFETCHED.values():
+        wait(futures)
+
+
 def load_patches(pack, device):
     """Decode every image in the pack (inside the measured step) -> (rows LongTensor, patches bf16 [N,768])."""
+    global LAST_SOURCE
     import torch
     evaluator = _evaluator()
     spans = list(pack.get('images', ()))
+    prefetched = _PREFETCHED.pop(_span_key(spans), None) if spans else None
+    if prefetched is not None:
+        rows = []
+        pieces = [future.result() for future in prefetched]
+        for span in spans:
+            rows.extend(range(span['row'], span['row'] + span['count']))
+        LAST_SOURCE = 'decoded-in-previous-step-wall'
+        return (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True),
+                torch.cat(pieces).to(device, non_blocking=True))
+    LAST_SOURCE = 'decoded-in-this-step' if spans else None
 
     def decode(span):
         raw = Path(span['path']).read_bytes()
