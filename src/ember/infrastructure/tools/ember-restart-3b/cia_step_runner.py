@@ -1049,6 +1049,18 @@ def _cache_values(cache):
 
 ROUTES_DIGEST_GRAMMARS = ('legacy-rows-v1', 'device-buffers-v1')
 _ROUTING_BUFFERS = {}
+_NEXT_STEP = None  # measure_step's staging of update index+1 (EMBER_STAGE_NEXT_STEP); consumed only for the same pack
+
+
+def _with_successor(packs):
+    """(pack, the pack after it or None): one pack of lookahead, drawn between steps, outside every wall."""
+    iterator = iter(packs)
+    end = object()
+    current = next(iterator, end)
+    while current is not end:
+        following = next(iterator, end)
+        yield current, (None if following is end else following)
+        current = following
 
 
 class RoutingStatisticsBuffers:
@@ -1450,8 +1462,14 @@ def exposure_fields(pack, wall):
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
-                 experiment_binding=None, image_text=None):
+                 experiment_binding=None, image_text=None, next_pack=None):
     """Return one row only after context exit, successful update and synchronization.
+
+    next_pack with EMBER_STAGE_NEXT_STEP=1 (on the resident captured path, after the recording step): once this step's
+    optimizer is launched, and before its wall closes, the host stages update index+1 while the device runs the
+    update -- the in-place gradient clear, the pinned input copy, the image patches, and the begin_step
+    structure/registration tuple of the staged owner. The next step consumes exactly that staging only when handed
+    the SAME pack object; otherwise it recomputes. Every staged cost is paid inside this measured wall.
 
     image_text (the A1 stream) makes the step start decoding update index+1's images once its last backward is
     launched, and join them before its own wall closes: the decode is paid inside a measured wall, beside device work.
@@ -1497,7 +1515,13 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             raise ValueError('segmented capture requires the resident routing buffers')
         if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
             raise ValueError('segmented capture is not bound to this model execution')
-        capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
+    global _NEXT_STEP
+    ahead, _NEXT_STEP = _NEXT_STEP, None
+    if ahead is not None and (ahead['pack'] is not pack or depth != 1 or capture is None or record):
+        ahead = None  # staged for a different pack or path: discarded, everything below recomputes
+    if capture is not None:
+        if ahead is None:
+            capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
     else:
         optimizer.zero_grad(set_to_none=True)
     if depth > 1 and expert_owners is not None:
@@ -1519,10 +1543,15 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     deferred_buffers = None
     with model.candidate_step():
         for micro_index, micro in enumerate(micros):
-            tokens, targets, positions, selection = staged_inputs(micro, device)
+            if ahead is not None:
+                (tokens, targets, positions, selection), (image_rows, image_patches) = ahead['inputs'], ahead['patches']
+                patches_source = ahead['patches_source']
+            else:
+                tokens, targets, positions, selection = staged_inputs(micro, device)
+                image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
+                                             if micro.get('images') else (None, None))
+                patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
             starts = tuple(micro['document_starts'])
-            image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
-                                         if micro.get('images') else (None, None))
             embedded = model.embed_text(tokens)
             if image_rows is not None:
                 # Placeholder rows are REPLACED (out of place), so image.weight is trained through these rows and
@@ -1603,10 +1632,22 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     optimizer.step()
     if events is not None:
         events[-1].record()
+    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
+                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
+            model._cuda_execution.stage_validation = stage_next
             stage()
+    if stage_next:
+        # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
+        # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
+        capture.zero_grad(optimizer=optimizer)
+        next_inputs = staged_inputs(next_pack, device)
+        next_patches = (load_image_text_module().load_patches(next_pack, device, pinned=True)
+                        if next_pack.get('images') else (None, None))
+        _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
+                      'patches_source': load_image_text_module().LAST_SOURCE if next_pack.get('images') else None}
     synchronize()
     if image_text is not None:
         load_image_text_module().join_prefetch()
@@ -1640,7 +1681,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
             'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
-            **({'image_patches_source': load_image_text_module().LAST_SOURCE} if pack.get('images') else {}),
+            **({'image_patches_source': patches_source} if pack.get('images') else {}),
+            'staged_by_previous_step': ahead is not None, 'staged_next_step': stage_next,
             'accumulation_micro_steps': depth,
             'template_untrained_released': len(template_untrained),
             'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
@@ -1939,7 +1981,10 @@ def worker(binding_path):
         gc_identity = dict(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'])
         with GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
                 (custody / 'gc-events.jsonl').open('xb') as gc_rows:
-            for index, pack in enumerate(measurement_packs(prepared) if measurement else prepared['packs']):
+            source_packs = measurement_packs(prepared) if measurement else prepared['packs']
+            stage_next_step = measurement and capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
+            for index, (pack, next_pack) in enumerate(_with_successor(source_packs) if stage_next_step
+                                                      else ((pack, None) for pack in source_packs)):
                 if measurement:
                     verify_measurement_pack(pack, index, sequence=counts[0], documents=counts[1], warm=counts[2],
                                             measured=counts[3])
@@ -1955,7 +2000,8 @@ def worker(binding_path):
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
                                    expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']),
-                                   image_text=getattr(prepared.get('packs'), 'image_text', None) if measurement else None)
+                                   image_text=getattr(prepared.get('packs'), 'image_text', None) if measurement else None,
+                                   next_pack=next_pack)
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.

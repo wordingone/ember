@@ -181,8 +181,10 @@ def join_prefetch():
             future.exception()
 
 
-def load_patches(pack, device):
-    """Decode every image in the pack (inside a measured step) -> (rows LongTensor, patches bf16 [N,768])."""
+def load_patches(pack, device, pinned=False):
+    """Decode every image in the pack (inside a measured step) -> (rows LongTensor, patches bf16 [N,768]).
+    pinned stages the uint8 grid through pinned host memory with a non-blocking copy (same bytes, same values), so a
+    caller staging the NEXT update does not block on the device work already queued."""
     import numpy
     import torch
     global LAST_SOURCE
@@ -200,8 +202,15 @@ def load_patches(pack, device):
         if grid.shape[0] != span['count']:
             raise ValueError('image patch count differs from the plan')
         rows.extend(range(span['row'], span['row'] + span['count']))
-    patches = torch.from_numpy(numpy.concatenate(grids)).to(device)
-    return (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True),
+    host = torch.from_numpy(numpy.concatenate(grids))
+    if pinned and getattr(device, 'type', str(device)) == 'cuda':
+        patches = host.pin_memory().to(device, non_blocking=True)
+    else:
+        patches = host.to(device)
+    rows_host = torch.tensor(rows, dtype=torch.long)
+    if pinned and getattr(device, 'type', str(device)) == 'cuda':
+        rows_host = rows_host.pin_memory()
+    return (rows_host.to(device, non_blocking=True),
             patches.to(torch.float32).div_(255.0).to(torch.bfloat16))
 
 
