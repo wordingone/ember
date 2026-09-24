@@ -774,10 +774,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
-                cursor_after=pack['cursor_after'], hour=hour)
+                cursor_after=pack['cursor_after'], hour=hour, update_completed_monotonic=call_finished)
             rows.write(runner.canonical(row) + b'\n')
-            rows.flush()
-            os.fsync(rows.fileno())
+            # Gate A reads completion-to-completion time from update_completed_monotonic. Durability is batched:
+            # one fsync per 64 rows (was per row, inside the between-call gap); the loop exit syncs the rest.
+            if total_steps % 64 == 0:
+                rows.flush()
+                os.fsync(rows.fileno())
             # Collections since the previous row, classified in-step / outside-step against this step call's window;
             # filed beside (never inside) the row.
             gc_rows.write(runner.canonical(gc_meter.file(total_steps, row['phase'], call_started=call_started,
@@ -827,6 +830,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             # The finite measured allowance is not the hour completion condition.
             require_remaining_hour_capacity(measured, identity['geometry']['measured_steps'])
             pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
+        rows.flush()
+        os.fsync(rows.fileno())
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
         runner._NEXT_STEP = None  # staged work for a step that will not run under this capture

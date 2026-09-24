@@ -1735,7 +1735,9 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
     specs=equation_inventory()
     inventory={spec.name:spec.shape for spec in specs}
     facts={'parameters':{},'elements':{name:prod(shape) for name,shape in inventory.items()},'optimizer':{}}
-    for expert_id,record in [(None,core),*enumerate(records)]:
+    def object_digests(item):
+        expert_id,record = item
+        digests={}
         with _cia_counter_component(root,'objects/'+record['sha256']+'.pt',record) as (archive,payload):
             if expert_id is None:
                 if set(payload)!={'schema_version','architecture_sha256','model'} or payload['schema_version']!='ember-cia-core-object-v1' or payload['architecture_sha256']!=architecture_digest:
@@ -1749,9 +1751,15 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
             storage=set()
             for name,tensor in state.items():
                 raw = _cia_counter_tensor(archive,tensor,shapes[name],'BFloat16Storage')
-                facts['parameters'][name] = hashlib.sha256(raw).hexdigest()
+                digests[name] = hashlib.sha256(raw).hexdigest()
                 if tensor.storage.key in storage: raise ValueError('CIA counter parameter storage alias')
                 storage.add(tensor.storage.key)
+        return digests
+    # Independent objects on a bounded pool (hashing and reads release the interpreter lock); merged in object order.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for digests in pool.map(object_digests, [(None,core),*enumerate(records)]):
+            facts['parameters'].update(digests)
     placement=manifest['placement']
     if set(placement)!=set(inventory): raise ValueError('CIA counter placement inventory mismatch')
     for entry in placement.values():

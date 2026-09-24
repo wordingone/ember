@@ -2020,7 +2020,7 @@ def worker(binding_path):
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
                 row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
-                           input_sha256=prepared['binding']['input_sha256'])
+                           input_sha256=prepared['binding']['input_sha256'], update_completed_monotonic=call_finished)
                 if measurement:
                     row.update(cursor_before=pack['cursor_before'], cursor_after=pack['cursor_after'],
                                pack_sha256=_pack_digest([pack]), measurement=prediction['identity']['measurement'])
