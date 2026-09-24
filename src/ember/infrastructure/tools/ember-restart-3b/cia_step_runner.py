@@ -1607,6 +1607,16 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     forwarded = staged + forward_seconds
     backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
+    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
+                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
+    staged_early = None
+    if stage_next:
+        # Update index+1's inputs: pure host-to-device work independent of this update, issued while the device
+        # still runs this backward (the host would otherwise block below on the route snapshot / loss check).
+        staged_early = (staged_inputs(next_pack, device),
+                        load_image_text_module().load_patches(next_pack, device, pinned=True)
+                        if next_pack.get('images') else (None, None),
+                        load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
     if deferred_buffers is not None:
         unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
     loss_value = float(sum(float(value) for value in losses) / depth)
@@ -1632,8 +1642,6 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     optimizer.step()
     if events is not None:
         events[-1].record()
-    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
-                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
@@ -1643,11 +1651,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
         # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
         capture.zero_grad(optimizer=optimizer)
-        next_inputs = staged_inputs(next_pack, device)
-        next_patches = (load_image_text_module().load_patches(next_pack, device, pinned=True)
-                        if next_pack.get('images') else (None, None))
+        next_inputs, next_patches, next_source = staged_early
         _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
-                      'patches_source': load_image_text_module().LAST_SOURCE if next_pack.get('images') else None}
+                      'patches_source': next_source}
     synchronize()
     if image_text is not None:
         load_image_text_module().join_prefetch()
