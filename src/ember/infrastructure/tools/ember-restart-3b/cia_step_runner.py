@@ -1541,6 +1541,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     unrouted = None
     routes = None
     deferred_buffers = None
+    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
+                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
+    staged_early = None
     with model.candidate_step():
         for micro_index, micro in enumerate(micros):
             if ahead is not None:
@@ -1590,6 +1593,14 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 micro_backwarded = time.perf_counter()
                 if image_text is not None and micro_index == len(micros) - 1:
                     load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
+                if stage_next and micro_index == len(micros) - 1:
+                    # Update index+1's inputs, staged at the last backward launch: the device still has this
+                    # backward queued, and end_step below synchronizes, so staging after candidate_step exits
+                    # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
+                    staged_early = (staged_inputs(next_pack, device),
+                                    load_image_text_module().load_patches(next_pack, device, pinned=True)
+                                    if next_pack.get('images') else (None, None),
+                                    load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
@@ -1607,16 +1618,6 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     forwarded = staged + forward_seconds
     backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
-    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
-                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
-    staged_early = None
-    if stage_next:
-        # Update index+1's inputs: pure host-to-device work independent of this update, issued while the device
-        # still runs this backward (the host would otherwise block below on the route snapshot / loss check).
-        staged_early = (staged_inputs(next_pack, device),
-                        load_image_text_module().load_patches(next_pack, device, pinned=True)
-                        if next_pack.get('images') else (None, None),
-                        load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
     if deferred_buffers is not None:
         unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
     loss_value = float(sum(float(value) for value in losses) / depth)
