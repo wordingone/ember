@@ -320,6 +320,22 @@ def hour_complete(*, measured_updates, elapsed_seconds):
     return measured_updates >= 1024 and elapsed_seconds >= 3600
 
 
+class _HourPushback:
+    """One pack drawn early for next-step staging and returned to the stream when the hour stops, so the
+    continuation reference reads the identical pack at the identical cursor."""
+    def __init__(self, inner, pack):
+        self._inner, self._pack = inner, pack
+
+    def next_pack(self):
+        if self._pack is not None:
+            pack, self._pack = self._pack, None
+            return pack
+        return self._inner.next_pack()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 def require_remaining_hour_capacity(measured_updates, maximum):
     if measured_updates >= maximum:
         raise ValueError('declared measured hour capacity exhausted before completion')
@@ -743,11 +759,18 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
             (custody / 'gc-events.jsonl').open('xb') as gc_rows:
         pack = first
+        # EMBER_STAGE_NEXT_STEP: draw step N+1's pack before step N only when the end-of-step draw would happen
+        # anyway; a pack drawn early and not trained on is pushed back after the loop (continuation reservation).
+        stage_next = capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
+        upcoming = None
         while True:
             call_started = time.perf_counter()
+            if stage_next and total_steps >= 1 and measured + 1 < identity['geometry']['measured_steps']:
+                upcoming = prepared['packs'].next_pack()
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
                 run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners,
-                experiment_binding=runner.experiment_fields(identity), image_text=prepared['packs'].image_text)
+                experiment_binding=runner.experiment_fields(identity), image_text=prepared['packs'].image_text,
+                next_pack=upcoming)
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
@@ -803,7 +826,10 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             # Keep the one independently checked continuation pack reserved.
             # The finite measured allowance is not the hour completion condition.
             require_remaining_hour_capacity(measured, identity['geometry']['measured_steps'])
-            pack = prepared['packs'].next_pack()
+            pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
+        if upcoming is not None:
+            prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
+        runner._NEXT_STEP = None  # staged work for a step that will not run under this capture
         closing_instant = time.perf_counter()
         gc_rows.write(runner.canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
                                                      call_finished=closing_instant)) + b'\n')
