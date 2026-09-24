@@ -1603,6 +1603,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     optimizer.step()
     if events is not None:
         events[-1].record()
+    if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
+        stage = getattr(model._cuda_execution, 'stage_next_identity', None)
+        if stage is not None:
+            stage()
     synchronize()
     if image_text is not None:
         load_image_text_module().join_prefetch()

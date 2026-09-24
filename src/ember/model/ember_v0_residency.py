@@ -839,6 +839,7 @@ class ResidentExecution:
         if (self.active or self.retired or self.poisoned or self.pending
                 or self.model._cuda_execution is not self):
             raise RuntimeError('capture requires a quiescent current resident execution')
+        self._staged_identity = None
         self.model.parameter_inventory()
         owner = self.identity()
         saved = (self.bound, self.step_id, self.routed,
@@ -859,10 +860,16 @@ class ResidentExecution:
             self.routing_valid.copy_(saved[3])
             self.input_valid.copy_(saved[4])
 
+    def stage_next_identity(self):
+        # Taken after the previous step's optimizer call returns, beside the device update. end_step compares the
+        # live identity against this bound, so any owner change after staging refuses before the next update.
+        self._staged_identity = self.identity()
+
     def begin_step(self):
         if self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution is not available for a new step')
-        owner = self.identity()
+        staged, self._staged_identity = getattr(self, '_staged_identity', None), None
+        owner = staged if staged is not None else self.identity()
         validated, self._validated = getattr(self, '_validated', None), None
         if validated is None or validated != (self._structure(owner), self._registration()):
             self.model.parameter_inventory()
