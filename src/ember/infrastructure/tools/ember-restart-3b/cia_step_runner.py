@@ -304,6 +304,13 @@ class LookaheadPacks:
         self._submit()
         return pack
 
+    def __getattr__(self, name):
+        # Every read the look-ahead does not redefine is the inner source's (image_text, stream, geometry):
+        # the hour reads .image_text for its experiment binding and the wrapper had no such attribute.
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
     @property
     def maximum_steps(self):
         return self._inner.maximum_steps
