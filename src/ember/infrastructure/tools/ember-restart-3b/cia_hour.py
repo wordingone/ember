@@ -747,7 +747,28 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         claim='Complete-model execution inventory; no model qualification'))
     publish, owner_update_counts = checkpoint_publisher(
         runner, model, optimizer, inventory, identity, binding, custody, device)
-    parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
+    chain = identity.get('parent_checkpoint')
+    base_steps = base_tokens = 0
+    if chain is None:
+        parent_root = custody / 'zero-parent'
+        parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
+    else:
+        # Chained start: the hour trains FROM an admitted checkpoint, bound by its manifest digest; the loader
+        # re-verifies every object before it mutates the model or the optimizer.
+        import hashlib
+        import checkpoint_artifacts as artifacts
+        parent_root = Path(chain['root'])
+        raw = (parent_root / 'checkpoint-manifest.json').read_bytes()
+        if hashlib.sha256(raw).hexdigest() != chain['manifest_sha256']:
+            raise ValueError('chained hour parent manifest differs from its bound digest')
+        parent = dict(json.loads(raw), checkpoint_manifest_sha256=chain['manifest_sha256'])
+        restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
+            max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
+        cursor = parent['data_cursor']
+        if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
+                shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
+            raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
+        base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
@@ -850,8 +871,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         capture.invalidate()
     optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize(device)
-    child = publish('trained-child', steps=total_steps, tokens=positions,
-                    cursor=pack['cursor_after'], parent=custody / 'zero-parent')
+    child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
+                    cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)

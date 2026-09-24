@@ -4756,7 +4756,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
             active_expert_ids=[str(i) for i in range(25) if any(spec.expert == i and parameters[spec.name].requires_grad for spec in specs)],
             core=core,expert_index=index,optimizer=components['optimizer-state.pt'],replay=components['replay-state.pt'],
             optimizer_identity=identity,placement=optimizer_payload['placement'],max_restore_payload_bytes=max_transient_scratch_bytes,
-            genesis_provenance={'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False},
+            genesis_provenance={'kind':('VERIFIED_DESCENDANT_PARENT' if 'lineage' in parent else 'VERIFIED_ZERO_STEP_PARENT')
+                if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False},
             qualification={'clean_genesis':False,'trained':False,'served':False})
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
