@@ -830,6 +830,12 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
         runner._NEXT_STEP = None  # staged work for a step that will not run under this capture
+        execution = getattr(model, '_cuda_execution', None)
+        if execution is not None:
+            # The staged owner identity for a step that will not run: checkpoint restore bumps parameter
+            # versions, so the continuation step must bind the live identity, never this stale one.
+            execution._staged_identity = None
+            execution._staged_validation = None
         closing_instant = time.perf_counter()
         gc_rows.write(runner.canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
                                                      call_finished=closing_instant)) + b'\n')
