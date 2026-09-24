@@ -840,6 +840,7 @@ class ResidentExecution:
                 or self.model._cuda_execution is not self):
             raise RuntimeError('capture requires a quiescent current resident execution')
         self._staged_identity = None
+        self._staged_validation = None
         self.model.parameter_inventory()
         owner = self.identity()
         saved = (self.bound, self.step_id, self.routed,
@@ -864,14 +865,22 @@ class ResidentExecution:
         # Taken after the previous step's optimizer call returns, beside the device update. end_step compares the
         # live identity against this bound, so any owner change after staging refuses before the next update.
         self._staged_identity = self.identity()
+        # The begin_step structure/registration tuple of that same staged owner, taken at the same instant. The
+        # guarantee is unchanged: a later owner or registration change is refused by end_step's identity compare and
+        # full parameter inventory, both before the next optimizer update.
+        self._staged_validation = ((self._structure(self._staged_identity), self._registration())
+                                   if getattr(self, 'stage_validation', False) else None)
 
     def begin_step(self):
         if self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution is not available for a new step')
         staged, self._staged_identity = getattr(self, '_staged_identity', None), None
+        staged_validation, self._staged_validation = getattr(self, '_staged_validation', None), None
         owner = staged if staged is not None else self.identity()
         validated, self._validated = getattr(self, '_validated', None), None
-        if validated is None or validated != (self._structure(owner), self._registration()):
+        current = (staged_validation if staged is not None and staged_validation is not None
+                   else (self._structure(owner), self._registration()))
+        if validated is None or validated != current:
             self.model.parameter_inventory()
         self.bound = owner
         self.step_id += 1
