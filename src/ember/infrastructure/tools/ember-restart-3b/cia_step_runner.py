@@ -266,6 +266,71 @@ class MeasurementPacks:
         return pack
 
 
+class LookaheadPacks:
+    """One-pack look-ahead over a pack source (MeasurementPacks or cia_hour.HourPacks); see the A1 route record.
+
+    Reports the CONSUMED position through .cursor/.index, so the continuation reference and every published cursor
+    are unchanged. Assigning .cursor or .index drops the buffered pack and writes through to the inner source."""
+    def __init__(self, inner):
+        from concurrent.futures import ThreadPoolExecutor
+        self._inner = inner
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='ember-pack-ahead')
+        self._future = None
+        self._at_submit = None
+        self._submit()
+
+    def _submit(self):
+        if self._inner.index >= self._inner.maximum_steps:
+            self._future, self._at_submit = None, None
+            return
+        self._at_submit = (dict(self._inner.cursor), self._inner.index)
+        self._future = self._pool.submit(self._inner.next_pack)
+
+    def _drop(self):
+        if self._future is not None:
+            try:
+                self._future.result()
+            except Exception:
+                pass
+            self._inner.cursor, self._inner.index = self._at_submit
+            self._future, self._at_submit = None, None
+
+    def next_pack(self):
+        if self._future is None:
+            pack = self._inner.next_pack()
+        else:
+            future, self._future, self._at_submit = self._future, None, None
+            pack = future.result()
+        self._submit()
+        return pack
+
+    @property
+    def maximum_steps(self):
+        return self._inner.maximum_steps
+
+    @property
+    def cursor(self):
+        return dict(self._at_submit[0]) if self._future is not None else self._inner.cursor
+
+    @cursor.setter
+    def cursor(self, value):
+        self._drop()
+        self._inner.cursor = value
+
+    @property
+    def index(self):
+        return self._at_submit[1] if self._future is not None else self._inner.index
+
+    @index.setter
+    def index(self, value):
+        self._drop()
+        self._inner.index = value
+
+
+def pack_lookahead(packs):
+    return LookaheadPacks(packs) if os.environ.get('EMBER_PACK_LOOKAHEAD') == '1' else packs
+
+
 def prepare_measurement_inputs(data, geometry):
     """Bind the 1,024-update plan by receipt, tokenizer, ledger, cursor and span without materializing it. The input
     digest is the digest of that declaration under a named grammar, never a digest of pack bytes the plan does not
@@ -289,6 +354,7 @@ def prepare_measurement_inputs(data, geometry):
     packs = MeasurementPacks(stream, cursor, maximum_steps=warm + measured, sequence=sequence, documents=documents,
                              warm=warm, image_text=image_text)
     first = packs.next_pack()
+    packs = pack_lookahead(packs)
     bound = [(receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256'])]
     if ledger is not None:
         bound.append((ledger, data['shard_ledger_sha256']))
@@ -1328,6 +1394,47 @@ def loss_selection(micro, device):
     return {'selections': tuple(selections), 'denominator': count}
 
 
+def staged_inputs(micro, device):
+    """tokens, targets, positions and loss_selection(micro, device), through ONE pinned host array and ONE copy.
+
+    Same values and dtypes as the three torch.tensor(list, device=...) calls plus loss_selection: the selection rows
+    are the indices whose target is not IGNORE_TARGET within each document, in order, and a fully loss-bearing
+    document keeps None exactly as loss_selection does."""
+    import numpy
+    import torch
+    targets_host = numpy.asarray(micro['target_ids'], dtype=numpy.int64)
+    n = targets_host.shape[0]
+    # positions are [n] on text-only packs and [n, 3] (position, x, y) on image-text packs: flattened here,
+    # restored to their own shape on the device slice.
+    positions_host = numpy.asarray(micro['positions'], dtype=numpy.int64)
+    end = 2 * n + positions_host.size
+    parts = [numpy.asarray(micro['token_ids'], dtype=numpy.int64), targets_host, positions_host.reshape(-1)]
+    spans = None
+    if (targets_host == IGNORE_TARGET).any():
+        starts = list(micro['document_starts']) + [n]
+        spans, offset = [], end
+        for lo, hi in zip(starts, starts[1:]):
+            rows = lo + numpy.flatnonzero(targets_host[lo:hi] != IGNORE_TARGET)
+            if rows.shape[0] == 0:
+                raise ValueError('a document carries no loss-bearing target')
+            if rows.shape[0] == hi - lo:
+                spans.append(None)
+            else:
+                spans.append((offset, rows.shape[0]))
+                parts.append(rows.astype(numpy.int64))
+                offset += rows.shape[0]
+    host = torch.from_numpy(numpy.concatenate(parts))
+    if device.type == 'cuda':
+        host = host.pin_memory()
+    staged = host.to(device, non_blocking=True)
+    selection = None
+    if spans is not None:
+        selection = {'selections': tuple(None if span is None else (staged[span[0]:span[0] + span[1]], span[1])
+                                         for span in spans),
+                     'denominator': int((targets_host != IGNORE_TARGET).sum())}
+    return staged[:n], staged[n:2 * n], staged[2 * n:end].view(positions_host.shape), selection
+
+
 def exposure_fields(pack, wall):
     """A1 counting: loss-bearing decoder targets, image patches, images and non-loss positions, never converted.
     positions_per_second is loss-bearing decoder targets per second (identical to decoder positions/s on text packs)."""
@@ -1343,8 +1450,11 @@ def exposure_fields(pack, wall):
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
-                 experiment_binding=None):
+                 experiment_binding=None, image_text=None):
     """Return one row only after context exit, successful update and synchronization.
+
+    image_text (the A1 stream) makes the step start decoding update index+1's images once its last backward is
+    launched, and join them before its own wall closes: the decode is paid inside a measured wall, beside device work.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
     inside the forward/backward; ONE device-to-host copy at the pre-update boundary validates the report set and
@@ -1409,11 +1519,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     deferred_buffers = None
     with model.candidate_step():
         for micro_index, micro in enumerate(micros):
-            tokens = torch.tensor(micro['token_ids'], dtype=torch.long, device=device)
-            targets = torch.tensor(micro['target_ids'], dtype=torch.long, device=device)
-            positions = torch.tensor(micro['positions'], dtype=torch.long, device=device)
+            tokens, targets, positions, selection = staged_inputs(micro, device)
             starts = tuple(micro['document_starts'])
-            selection = loss_selection(micro, device)
             image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
                                          if micro.get('images') else (None, None))
             embedded = model.embed_text(tokens)
@@ -1452,6 +1559,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 if events is not None:
                     events[3 * micro_index + 2].record()
                 micro_backwarded = time.perf_counter()
+                if image_text is not None and micro_index == len(micros) - 1:
+                    load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
@@ -1495,6 +1604,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if events is not None:
         events[-1].record()
     synchronize()
+    if image_text is not None:
+        load_image_text_module().join_prefetch()
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
@@ -1525,6 +1636,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
             'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
+            **({'image_patches_source': load_image_text_module().LAST_SOURCE} if pack.get('images') else {}),
             'accumulation_micro_steps': depth,
             'template_untrained_released': len(template_untrained),
             'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
@@ -1838,7 +1950,8 @@ def worker(binding_path):
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
-                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']))
+                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']),
+                                   image_text=getattr(prepared.get('packs'), 'image_text', None) if measurement else None)
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
