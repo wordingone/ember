@@ -1368,6 +1368,127 @@ def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
     return keys, skip
 
 
+def segment_optimizer_enabled():
+    return os.environ.get('EMBER_SEGMENT_OPTIMIZER') == '1'
+
+
+class SegmentOptimizer:
+    """Gated fused AdamW per captured segment on a side stream, launched from post-accumulate-grad hooks as the
+    backward completes each segment. Per tensor the kernel and its arguments equal gated_optimizer_step's; only the
+    launch partition, the stream and the launch time change. Armed per update by arm() (before backward), closed by
+    finish() (after backward), which steps whatever did not complete early and joins the side stream."""
+
+    def __init__(self, optimizer, expert_owners, capture, device):
+        import torch
+        for group in optimizer.param_groups:
+            if group.get('fused') is not True or group.get('amsgrad') or group.get('maximize'):
+                raise ValueError('the segment optimizer gates fused AdamW only')
+        self.optimizer, self.device = optimizer, device
+        self.side = torch.cuda.Stream(device=device)
+        self.owner_of = {id(p): key for key, ps in expert_owners.items() for p in ps}
+        self.keys = tuple(sorted(expert_owners))
+        self.position = {key: k for k, key in enumerate(self.keys)}
+        self.group_index = {id(p): gi for gi, group in enumerate(optimizer.param_groups) for p in group['params']}
+        untrained = {id(p) for p in getattr(optimizer, '_ember_template_untrained', ())}
+        seen = {}
+        for segment in capture.segments:
+            for p in segment.params:
+                seen.setdefault(id(p), []).append(segment.index)
+        self.segment_of, self.members = {}, {}
+        for segment in capture.segments:
+            for p in segment.params:
+                i = id(p)
+                if (i in self.group_index and i not in untrained and p.requires_grad and len(seen[i]) == 1
+                        and i not in self.segment_of):
+                    self.segment_of[i] = segment.index
+                    self.members.setdefault(segment.index, []).append(p)
+        self.hooks = [p.register_post_accumulate_grad_hook(self._hook)
+                      for ps in self.members.values() for p in ps]
+        self.armed, self._index, self._gather, self.last_early = None, None, {}, None
+
+    def arm(self, execution, buffers, loss):
+        import torch
+        if self.keys and self._index is None:
+            self._index = (torch.tensor([layer // 2 for layer, _ in self.keys], dtype=torch.long).to(buffers.device),
+                           torch.tensor([expert for _, expert in self.keys], dtype=torch.long).to(buffers.device))
+        refused = ~(execution.input_valid.all() & execution.routing_valid
+                    & (buffers.views['reports'] == 1).all() & torch.isfinite(loss.detach().float()))
+        skip = None
+        if self.keys:
+            rows, experts = self._index
+            hits = (buffers.views['winners'].index_select(0, rows) == experts[:, None]).any(1)
+            skip = (refused | ~hits).to(torch.float32)
+        self.armed = dict(refused=refused, dense=refused.to(torch.float32), skip=skip, stepped=set(), early=0,
+                          twice=False, pending={index: {id(p) for p in ps} for index, ps in self.members.items()})
+        return refused
+
+    def _hook(self, parameter):
+        armed = self.armed
+        if armed is None:
+            return
+        i = id(parameter)
+        if i in armed['stepped']:
+            armed['twice'] = True
+            return
+        pending = armed['pending'][self.segment_of[i]]
+        pending.discard(i)
+        if not pending:
+            members = [p for p in self.members[self.segment_of[i]] if p.grad is not None]
+            if members:
+                self._launch(members, armed)
+                armed['early'] += 1
+
+    def _launch(self, params, armed):
+        import torch
+        from torch.optim.adam import adam
+        ready = torch.cuda.Event()
+        ready.record(torch.cuda.current_stream(self.device))
+        self.side.wait_event(ready)
+        split = {}
+        for p in params:
+            split.setdefault((self.group_index[id(p)], self.owner_of.get(id(p))), []).append(p)
+        with torch.cuda.stream(self.side), torch.no_grad():
+            for (gi, key), members in split.items():
+                group = self.optimizer.param_groups[gi]
+                beta1, beta2 = group['betas']
+                sub = dict(group)
+                sub['params'] = members
+                ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
+                has_complex = self.optimizer._init_group(sub, ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps)
+                adam(ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps, amsgrad=False,
+                     has_complex=has_complex, beta1=beta1, beta2=beta2, lr=group['lr'],
+                     weight_decay=group['weight_decay'], eps=group['eps'], maximize=False, foreach=group['foreach'],
+                     capturable=group['capturable'], differentiable=group['differentiable'], fused=True,
+                     grad_scale=None, found_inf=(armed['dense'] if key is None else armed['skip'][self.position[key]]),
+                     decoupled_weight_decay=group['decoupled_weight_decay'])
+        armed['stepped'].update(id(p) for p in params)
+
+    def finish(self, refused):
+        """Step every parameter with a gradient that did not complete early, join the side stream, and return
+        (stepped owner keys, their device skip values, device mismatch of the boundary verdict vs the armed one)."""
+        import torch
+        armed, self.armed = self.armed, None
+        if armed is None:
+            raise RuntimeError('segment optimizer finished an update it never armed')
+        remaining = [p for group in self.optimizer.param_groups for p in group['params']
+                     if p.grad is not None and id(p) not in armed['stepped']]
+        if remaining:
+            self._launch(remaining, armed)
+        torch.cuda.current_stream(self.device).wait_stream(self.side)
+        if armed['twice']:
+            raise RuntimeError('a segment owner accumulated twice in one backward')
+        keys = tuple(sorted({self.owner_of[i] for i in armed['stepped'] if i in self.owner_of}))
+        skip = None
+        if keys:
+            gather = self._gather.get(keys)
+            if gather is None:
+                gather = self._gather[keys] = torch.tensor([self.position[k] for k in keys],
+                                                           dtype=torch.long).to(self.device)
+            skip = armed['skip'].index_select(0, gather)
+        self.last_early = armed['early']
+        return keys, skip, refused != armed['refused']
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1698,6 +1819,15 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         raise ValueError('the deferred verdict is defined for one captured resident micro-step on CUDA only')
     if deferred:
         model._cuda_execution.defer_verdict = True
+    segment_optimizer = None
+    if segment_optimizer_enabled():
+        if not deferred:
+            raise ValueError('the segment optimizer requires the deferred verdict')
+        if capture.captured and not record:
+            segment_optimizer = getattr(optimizer, '_ember_segment_optimizer', None)
+            if segment_optimizer is None:
+                segment_optimizer = optimizer._ember_segment_optimizer = SegmentOptimizer(
+                    optimizer, expert_owners, capture, device)
     step_stack = pre['stack'] if pre is not None else contextlib.ExitStack()
     if pre is None:
         step_stack.enter_context(model.candidate_step())
@@ -1710,11 +1840,16 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             with recording:
                 logits, routes, loss, micro_started, micro_forwarded = (
                     pre['launched'] if pre is not None else _launch(prep, micro_index, events))
+                if segment_optimizer is not None:
+                    # The verdict and the unrouted gate are final once the forward is enqueued, so each segment's
+                    # owners are stepped (gated) on the side stream as the backward finishes that segment.
+                    segment_optimizer.arm(model._cuda_execution, buffers, loss)
                 loss.backward()
                 if events is not None:
                     events[3 * micro_index + 2].record()
                 micro_backwarded = time.perf_counter()
-                if image_text is not None and micro_index == len(micros) - 1:
+                two_ahead = stage_next and os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1'
+                if image_text is not None and micro_index == len(micros) - 1 and not two_ahead:
                     load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
                 if stage_next and micro_index == len(micros) - 1:
                     # Update index+1's inputs, staged at the last backward launch: the device still has this
@@ -1724,6 +1859,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                     load_image_text_module().load_patches(next_pack, device, pinned=True)
                                     if next_pack.get('images') else (None, None),
                                     load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
+                    if image_text is not None and two_ahead:
+                        # index+1's decode began one update earlier, so the staging above did not wait on it;
+                        # index+2's begins now and is joined inside this update's wall.
+                        load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 2)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
@@ -1778,7 +1917,13 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     for parameter in template_untrained:
         parameter.grad = None
     if deferred:
-        gated_keys, gated_skip = gated_optimizer_step(optimizer, expert_owners, deferred_buffers, refused)
+        segment_mismatch_host = None
+        if segment_optimizer is not None:
+            gated_keys, gated_skip, segment_mismatch = segment_optimizer.finish(refused)
+            segment_mismatch_host = torch.empty((), dtype=torch.bool, pin_memory=True)
+            segment_mismatch_host.copy_(segment_mismatch, non_blocking=True)
+        else:
+            gated_keys, gated_skip = gated_optimizer_step(optimizer, expert_owners, deferred_buffers, refused)
         skip_host = None
         if gated_skip is not None:
             skip_host = torch.empty(gated_skip.shape, dtype=torch.float32, pin_memory=True)
@@ -1833,6 +1978,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 raise ValueError('nonfinite step loss')
             if bool(refused_host):
                 raise RuntimeError('device refusal set with every host predicate passing')
+            if segment_mismatch_host is not None and bool(segment_mismatch_host):
+                raise RuntimeError('the pre-backward verdict differs from the boundary verdict')
             micro_snapshots.append(snapshot)
             unrouted_host = deferred_buffers.unrouted(snapshot)
             gated_unrouted = [key for key in gated_keys if key[1] in unrouted_host.get(key[0], ())]
