@@ -365,6 +365,15 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     def publish(name, *, steps, tokens, cursor, parent=None):
         torch.cuda.synchronize(device)
         optimizer.zero_grad(set_to_none=True)
+        # A gated fused step runs _init_group on every parameter carrying a gradient, then found_inf skips it and
+        # rolls its clock back to 0: state that no update ever applied (step 0, zero moments). Adam initialises
+        # exactly that lazily, so dropping it is semantically nil, and it keeps the child's inactive state equal
+        # to the parent's absent state for the lineage check.
+        for parameter in [p for p, s in optimizer.state.items()
+                          if s and float(s.get('step', 1)) == 0
+                          and all(not torch.is_tensor(v) or v.dim() == 0 or not bool(v.any())
+                                  for k, v in s.items() if k != 'step')]:
+            del optimizer.state[parameter]
         return artifacts.write_checkpoint_artifacts(model, optimizer, custody / name,
             launch_seed=identity['seed'], rng_state={'cpu': torch.get_rng_state(), 'cuda': torch.cuda.get_rng_state(device)},
             data_cursor=dict(shard=str(cursor['shard_index']), record_index=cursor['token_offset'],
