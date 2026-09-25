@@ -2,6 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import gc
 import math
 import hashlib
 import json
@@ -811,6 +812,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                                                          call_finished=call_finished)) + b'\n')
             gc_rows.flush()
             applied(row['applied_positions'])
+            if started is not None and not gc.isenabled() and total_steps % 64 == 63:
+                gc.collect(0)
             total_steps += 1
             positions += row['applied_positions']
             for name, parameter in inventory.items():
@@ -829,6 +832,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 # Warm-to-measured transition (the hour's single warm update is step 1), outside every timed interval,
                 # eager control and captured treatment alike; the governed clock starts after it.
                 runner._write_new(custody / 'gc-freeze.json', runner.freeze_resident_object_graph(**gc_identity))
+                if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
+                    gc.disable()  # bounded below: one generation-0 collection every 64 steps
                 energy.begin()
                 started = time.perf_counter()
             else:
@@ -858,6 +863,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
         rows.flush()
         os.fsync(rows.fileno())
+        gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
         if runner._NEXT_STEP is not None and 'forward' in runner._NEXT_STEP:
