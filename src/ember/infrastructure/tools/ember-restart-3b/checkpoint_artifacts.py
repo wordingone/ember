@@ -2383,6 +2383,10 @@ def _validate_counter_receipt(manifest_receipt: Mapping[str, Any], returned: Map
     }
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         expected[field] = architecture.get(field)
+    if validated.get("counter_sha256") != expected["counter_sha256"]:
+        # A chained parent was counted by an earlier counter; admit it only when that counter is kept verbatim.
+        getattr(_ember_1601eccb5605602b_module, "_counter_for")(validated.get("counter_sha256"))
+        expected["counter_sha256"] = validated.get("counter_sha256")
     if any(validated.get(field) != value for field, value in expected.items()):
         raise ValueError("post-run counter receipt does not bind subject, source, genesis, or measured counts")
     return validated
@@ -4543,7 +4547,8 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
         raise ValueError('CIA checkpoint receipt differs from raw manifest')
     if manifest['architecture_revision'] != 'CIA3-R1-N61':
         raise ValueError('CIA checkpoint architecture revision mismatch')
-    if manifest['genesis_provenance'] != {'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}:
+    # A descendant of a descendant (a chained hour) is stamped VERIFIED_DESCENDANT_PARENT by the writer.
+    if manifest['genesis_provenance'] not in ([{'kind':'VERIFIED_ZERO_STEP_PARENT','independently_qualified':False},{'kind':'VERIFIED_DESCENDANT_PARENT','independently_qualified':False}] if descendant else [{'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}]):
         raise ValueError('CIA checkpoint genesis provenance is not an unqualified object binding')
     if manifest['qualification'] != {'clean_genesis':False,'trained':False,'served':False}:
         raise ValueError('CIA checkpoint bytes cannot grant model qualification')

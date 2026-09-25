@@ -1713,7 +1713,8 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
     architecture_digest = cia_architecture_sha256(manifest['architecture_config'])
     if manifest['model_config_sha256'] != model_config_sha256:
         raise ValueError('CIA counter config digest differs from checkpoint')
-    if manifest['genesis_provenance'] != {'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}:
+    # A descendant of a descendant (a chained hour) is stamped VERIFIED_DESCENDANT_PARENT by the writer.
+    if manifest['genesis_provenance'] not in ([{'kind':'VERIFIED_ZERO_STEP_PARENT','independently_qualified':False},{'kind':'VERIFIED_DESCENDANT_PARENT','independently_qualified':False}] if descendant else [{'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}]):
         raise ValueError('CIA counter requires unqualified object provenance')
     if manifest['qualification'] != {'clean_genesis':False,'trained':False,'served':False}:
         raise ValueError('CIA checkpoint bytes cannot grant model qualification')
