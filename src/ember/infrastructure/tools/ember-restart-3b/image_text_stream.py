@@ -43,6 +43,16 @@ def _evaluator():
     return module
 
 
+def _tolerate_truncated_objects():
+    """Decode an admitted object as far as its bytes go. One admitted JPEG (a-okvqa, b4bfc6ab...) ends 9 bytes short:
+    its bytes match the manifest digest, yet PIL refuses it by default, which ended a governed hour mid-run. Set in the
+    training process only (only cia_hour/cia_step_runner import this module; the protected evaluation processes never
+    do), set rather than toggled so every decode thread sees one value. A decode census of all 198,466 manifest rows
+    found that object as the only failure; every other object decodes identically either way."""
+    from PIL import ImageFile
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+
 def _sha256(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -79,6 +89,7 @@ class ImageTextStream:
     def document(self, pack_index):
         """token_ids/target_ids/positions of one document plus image spans (rows relative to the document)."""
         evaluator = _evaluator()
+        _tolerate_truncated_objects()
         tokens, targets, positions, images = [], [], [], []
         base = PAIRS_PER_DOCUMENT * pack_index
         for k, row in enumerate(self.pair_rows(pack_index)):
@@ -153,6 +164,7 @@ def _decode_uint8(path, object_sha256):
     if _sha256(raw) != object_sha256:
         raise ValueError('image object bytes changed after planning: ' + str(path))
     evaluator = _evaluator()
+    _tolerate_truncated_objects()
     patch = evaluator.PATCH
     with Image.open(io.BytesIO(raw)) as image:
         image = image.convert('RGB')
