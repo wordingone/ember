@@ -109,10 +109,24 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
     return sequence, documents, warm, measured
 
 
+ROW_FSYNC_EVERY = 64  # rows are flushed every update; fsync'd in batches (see patch note)
+
+
 def _pack_digest(packs):
     body = [{name: pack[name] for name in INPUT_FIELDS + (('images',) if 'images' in pack else ())}
             for pack in packs]
     return hashlib.sha256(canonical(body)).hexdigest()
+
+
+_DRAWN_DIGESTS = {}
+
+
+def _row_digest(pack):
+    """The row's pack digest: the producer's, when it digested this very object, else computed here."""
+    entry = _DRAWN_DIGESTS.pop(id(pack), None)
+    if entry is not None and entry[0] is pack:
+        return entry[1]
+    return _pack_digest([pack])
 
 
 def open_input_stream(data):
@@ -284,7 +298,13 @@ class LookaheadPacks:
             self._future, self._at_submit = None, None
             return
         self._at_submit = (dict(self._inner.cursor), self._inner.index)
-        self._future = self._pool.submit(self._inner.next_pack)
+        self._future = self._pool.submit(self._draw)
+
+    def _draw(self):
+        # The row digest is taken here, off the training thread; _row_digest uses it only for this same object.
+        pack = self._inner.next_pack()
+        _DRAWN_DIGESTS[id(pack)] = (pack, _pack_digest([pack]))
+        return pack
 
     def _drop(self):
         if self._future is not None:
@@ -1294,6 +1314,60 @@ def template_untrained_parameters(inventory):
     return released
 
 
+def deferred_verdict_enabled():
+    return os.environ.get('EMBER_DEFERRED_VERDICT') == '1'
+
+
+def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
+    """Fused AdamW over the parameters that carry a gradient, with found_inf on the device: the dense set gated by
+    `refused`, every expert owner by refused | unrouted (its expert won no chunk of its layer in this step's winners).
+    Per tensor this is the same kernel with the same arguments optimizer.step() launches; the partition changes only
+    which tensors share a launch. Returns (keys, skip): the gated expert owners and their device found_inf values."""
+    import torch
+    from torch.optim.adam import adam
+    cache = getattr(optimizer, '_ember_gate_cache', None)
+    if cache is None:
+        owner_of = {id(parameter): key for key, parameters in expert_owners.items() for parameter in parameters}
+        cache = optimizer._ember_gate_cache = {'owner_of': owner_of, 'index': {}}
+    owner_of = cache['owner_of']
+    members = []
+    for group in optimizer.param_groups:
+        if group.get('fused') is not True or group.get('amsgrad') or group.get('maximize'):
+            raise ValueError('the deferred verdict gates fused AdamW only')
+        split = {}
+        for parameter in group['params']:
+            if parameter.grad is not None:
+                split.setdefault(owner_of.get(id(parameter)), []).append(parameter)
+        members.append((group, split))
+    keys = tuple(sorted({key for _, split in members for key in split if key is not None}))
+    index = cache['index'].get(keys)
+    if index is None:
+        rows = torch.tensor([layer // 2 for layer, _ in keys], dtype=torch.long).to(buffers.device)
+        experts = torch.tensor([expert for _, expert in keys], dtype=torch.long).to(buffers.device)
+        index = cache['index'][keys] = (rows, experts, {key: k for k, key in enumerate(keys)})
+    rows, experts, position = index
+    dense = refused.to(torch.float32)
+    skip = None
+    if keys:
+        hits = (buffers.views['winners'].index_select(0, rows) == experts[:, None]).any(1)
+        skip = (refused | ~hits).to(torch.float32)
+    with torch.no_grad():
+        for group, split in members:
+            beta1, beta2 = group['betas']
+            for key, parameters in split.items():
+                sub = dict(group)
+                sub['params'] = parameters
+                params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
+                has_complex = optimizer._init_group(sub, params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps)
+                adam(params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps, amsgrad=False,
+                     has_complex=has_complex, beta1=beta1, beta2=beta2, lr=group['lr'],
+                     weight_decay=group['weight_decay'], eps=group['eps'], maximize=False, foreach=group['foreach'],
+                     capturable=group['capturable'], differentiable=group['differentiable'], fused=True,
+                     grad_scale=None, found_inf=(dense if key is None else skip[position[key]]),
+                     decoupled_weight_decay=group['decoupled_weight_decay'])
+    return keys, skip
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1618,6 +1692,12 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             events[3 * micro_index + 1].record()
         return logits, routes, loss, micro_started, time.perf_counter()
 
+    deferred = deferred_verdict_enabled()
+    if deferred and (depth != 1 or verify_routes or route_observer is not None or route_snapshot is not None
+                     or expert_owners is None or capture is None or device.type != 'cuda'):
+        raise ValueError('the deferred verdict is defined for one captured resident micro-step on CUDA only')
+    if deferred:
+        model._cuda_execution.defer_verdict = True
     step_stack = pre['stack'] if pre is not None else contextlib.ExitStack()
     if pre is None:
         step_stack.enter_context(model.candidate_step())
@@ -1661,15 +1741,29 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     forwarded = staged + forward_seconds
     backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
-    if deferred_buffers is not None:
-        unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
-    loss_value = float(sum(float(value) for value in losses) / depth)
-    if not math.isfinite(loss_value):
-        raise ValueError('nonfinite step loss')
-    snapshot = micro_snapshots[-1] if micro_snapshots else None
+    if deferred:
+        # No host read before the optimizer: one device refusal, pinned copies of the routing buffer and the loss.
+        if deferred_buffers is None:
+            raise ValueError('the deferred verdict requires the routing statistics buffers')
+        execution = model._cuda_execution
+        loss_device = losses[0].float()
+        refused = ~(execution.input_valid.all() & execution.routing_valid
+                    & (deferred_buffers.views['reports'] == 1).all() & torch.isfinite(loss_device))
+        raw_host = torch.empty(deferred_buffers.nbytes, dtype=torch.uint8, pin_memory=True)
+        raw_host.copy_(deferred_buffers.raw, non_blocking=True)
+        loss_host = torch.empty((), dtype=torch.float32, pin_memory=True)
+        loss_host.copy_(loss_device, non_blocking=True)
+        loss_value = snapshot = None
+    else:
+        if deferred_buffers is not None:
+            unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
+        loss_value = float(sum(float(value) for value in losses) / depth)
+        if not math.isfinite(loss_value):
+            raise ValueError('nonfinite step loss')
+        snapshot = micro_snapshots[-1] if micro_snapshots else None
     released = None
     routing_boundary_started = time.perf_counter()
-    if unrouted is not None and expert_owners is not None:
+    if not deferred and unrouted is not None and expert_owners is not None:
         # Reference skip semantics over the whole update: unrouted expert owners carry no gradient into it.
         released = release_unrouted_expert_grads(expert_owners, {layer: tuple(sorted(experts))
                                                                  for layer, experts in unrouted.items() if experts})
@@ -1683,7 +1777,16 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     template_untrained = getattr(optimizer, '_ember_template_untrained', ())
     for parameter in template_untrained:
         parameter.grad = None
-    optimizer.step()
+    if deferred:
+        gated_keys, gated_skip = gated_optimizer_step(optimizer, expert_owners, deferred_buffers, refused)
+        skip_host = None
+        if gated_skip is not None:
+            skip_host = torch.empty(gated_skip.shape, dtype=torch.float32, pin_memory=True)
+            skip_host.copy_(gated_skip, non_blocking=True)
+        refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
+        refused_host.copy_(refused, non_blocking=True)
+    else:
+        optimizer.step()
     if events is not None:
         events[-1].record()
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
@@ -1718,6 +1821,33 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         events[-1].synchronize()  # this update's optimizer has completed; the next forward stays queued
     else:
         synchronize()
+    if deferred:
+        try:
+            # The verdict end_step and the boundary snapshot used to give before the optimizer, given now from the
+            # pinned copies. Any refusal here found the kernels gated (found_inf 1.0): nothing was mutated.
+            model._cuda_execution.settle_deferred()
+            snapshot = bytes(raw_host.numpy().tobytes())
+            deferred_buffers.complete(snapshot)
+            loss_value = float(loss_host)
+            if not math.isfinite(loss_value):
+                raise ValueError('nonfinite step loss')
+            if bool(refused_host):
+                raise RuntimeError('device refusal set with every host predicate passing')
+            micro_snapshots.append(snapshot)
+            unrouted_host = deferred_buffers.unrouted(snapshot)
+            gated_unrouted = [key for key in gated_keys if key[1] in unrouted_host.get(key[0], ())]
+            if skip_host is not None and [key for key, value in zip(gated_keys, skip_host.tolist())
+                                          if value == 1.0] != gated_unrouted:
+                raise RuntimeError('device unrouted masks differ from the boundary snapshot')
+            released = {}
+            for layer, expert in gated_unrouted:
+                released.setdefault(layer, []).append(expert)
+        except BaseException:
+            forward = (_NEXT_STEP or {}).get('forward')
+            if forward is not None:
+                _NEXT_STEP = None
+                forward['stack'].__exit__(*sys.exc_info())
+            raise
     if image_text is not None:
         load_image_text_module().join_prefetch()
     finished = time.perf_counter()
@@ -2068,6 +2198,8 @@ def worker(binding_path):
                     # before the first measured step's clock starts; eager and captured paths alike.
                     _write_new(custody / 'gc-freeze.json', freeze_resident_object_graph(**gc_identity))
                     frozen = True
+                    if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
+                        gc.disable()  # bounded below: one generation-0 collection every 64 rows
                 # EMBER_PRELAUNCH_FORWARD: the next update's forward is enqueued behind this update's optimizer
                 # (never on the recorded exemplar, index 0, whose capture follows the call); its pack is verified first.
                 prelaunch = (measurement and stage_next_step and next_pack is not None and index >= 1
@@ -2089,17 +2221,20 @@ def worker(binding_path):
                            input_sha256=prepared['binding']['input_sha256'], update_completed_monotonic=call_finished)
                 if measurement:
                     row.update(cursor_before=pack['cursor_before'], cursor_after=pack['cursor_after'],
-                               pack_sha256=_pack_digest([pack]), measurement=prediction['identity']['measurement'])
+                               pack_sha256=_row_digest(pack), measurement=prediction['identity']['measurement'])
                     if pack['phase'] == 'measured':
                         measured_rates.append(row['positions_per_second'])
                 rows.write(canonical(row) + b'\n')
                 rows.flush()
-                os.fsync(rows.fileno())
+                if index == 0 or index % ROW_FSYNC_EVERY == ROW_FSYNC_EVERY - 1:
+                    os.fsync(rows.fileno())
                 # Collections since the previous row, classified in-step / outside-step by their start instant against
                 # this step call's window; filed beside (never inside) the row.
                 gc_rows.write(canonical(gc_meter.file(index, pack['phase'], call_started=call_started,
                                                       call_finished=call_finished)) + b'\n')
                 gc_rows.flush()
+                if frozen and not gc.isenabled() and index % 64 == 63:
+                    gc.collect(0)
                 applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
                     capture.zero_grad(optimizer=optimizer)  # full retained membership, eager expert owners included

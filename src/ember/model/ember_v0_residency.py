@@ -901,6 +901,19 @@ class ResidentExecution:
                 raise RuntimeError('incomplete resident expert backward')
             self.model.parameter_inventory()
             self._validated = (self._structure(owner), self._registration())
+            if getattr(self, 'deferred_verdict', None) is not None:
+                raise RuntimeError('the previous step\'s deferred verdict was never settled')
+            if getattr(self, 'defer_verdict', False):
+                # No drain: the predicates are copied to pinned host memory on the stream (ordered before the next
+                # step's begin_step refills them); the caller gates the optimizer on the device and settles after its
+                # completion wait, before the step's row exists.
+                self.defer_verdict = False
+                inputs = torch.empty(3, dtype=torch.bool, pin_memory=True)
+                inputs.copy_(self.input_valid.detach(), non_blocking=True)
+                routing = torch.empty((), dtype=torch.bool, pin_memory=True)
+                routing.copy_(self.routing_valid.detach(), non_blocking=True)
+                self.deferred_verdict = (self.step_id, inputs, routing, list(self.routed))
+                return
             torch.cuda.synchronize(self.device)
             predicates = self.input_valid.detach().cpu().tolist()
             if not all(predicates):
@@ -916,6 +929,23 @@ class ResidentExecution:
             raise
         finally:
             self.active = False
+
+    def settle_deferred(self):
+        """Raise the refusals end_step would have raised, from the pinned copies; call after the completion wait."""
+        verdict, self.deferred_verdict = getattr(self, 'deferred_verdict', None), None
+        if verdict is None:
+            raise RuntimeError('no deferred verdict to settle')
+        step_id, inputs, routing, routed = verdict
+        predicates = inputs.tolist()
+        if not all(predicates):
+            self.poisoned = True
+            raise ResidentInputRefusal(step_id, [reason for reason, ok in
+                zip(('input', 'routing', 'plan'), predicates) if not ok])
+        if not bool(routing):
+            self.poisoned = True
+            unknown = [int(expert) for values in routed for expert in values.detach().cpu().tolist()
+                       if int(expert) not in self.ids]
+            raise ResidentRoutingRefusal(step_id, unknown)
 
     @contextmanager
     def step(self):
