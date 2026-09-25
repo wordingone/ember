@@ -825,8 +825,15 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 gc.collect(0)
             total_steps += 1
             positions += row['applied_positions']
+            # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
+            # found_inf, so its clock does not advance; the row names those owners, and they are not counted.
+            skipped = {(int(layer), expert) for layer, experts in (row.get('unrouted_expert_grads_released') or {}).items()
+                       for expert in experts}
             for name, parameter in inventory.items():
                 if parameter.grad is not None:
+                    match = runner.EXPERT_OWNER.match(name)
+                    if match and (int(match.group(2)), int(match.group(1))) in skipped:
+                        continue
                     owner_update_counts[name] = owner_update_counts.get(name, 0) + 1
             if total_steps == 1:
                 if capture is not None:
