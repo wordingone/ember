@@ -791,7 +791,10 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
                 run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners,
                 experiment_binding=runner.experiment_fields(identity), image_text=prepared['packs'].image_text,
-                next_pack=upcoming)
+                next_pack=upcoming, prelaunch_next=(
+                    upcoming is not None and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1' and not probe
+                    and not learning and started is not None and not hour_complete(
+                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)))
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
@@ -844,9 +847,11 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                                           applied_positions=positions, manifest_sha256=runner.file_sha256(
                                               custody / ('learning-snapshot-%05d' % total_steps) / 'snapshot-manifest.json'),
                                           bytes=snapshot['bytes'], write_seconds=time.perf_counter() - paused_from))
+                prelaunched = runner._NEXT_STEP is not None and 'forward' in runner._NEXT_STEP
                 if ((probe and measured == 2) or (learning and total_steps == LEARNING_SNAPSHOTS[-1]) or
                         (not probe and not learning and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
-                    break
+                    if not prelaunched:  # a pre-launched update is always completed (the hour is a minimum)
+                        break
             # Keep the one independently checked continuation pack reserved.
             # The finite measured allowance is not the hour completion condition.
             require_remaining_hour_capacity(measured, identity['geometry']['measured_steps'])
@@ -855,6 +860,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         os.fsync(rows.fileno())
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
+        if runner._NEXT_STEP is not None and 'forward' in runner._NEXT_STEP:
+            raise RuntimeError('hour loop exited with a pre-launched update still open')
         runner._NEXT_STEP = None  # staged work for a step that will not run under this capture
         execution = getattr(model, '_cuda_execution', None)
         if execution is not None:

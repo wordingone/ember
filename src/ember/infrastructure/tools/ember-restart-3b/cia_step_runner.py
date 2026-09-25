@@ -1478,7 +1478,8 @@ def exposure_fields(pack, wall):
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
-                 experiment_binding=None, image_text=None, next_pack=None):
+                 experiment_binding=None, image_text=None, next_pack=None,
+                 prelaunch_next=False):
     """Return one row only after context exit, successful update and synchronization.
 
     next_pack with EMBER_STAGE_NEXT_STEP=1 (on the resident captured path, after the recording step): once this step's
@@ -1514,7 +1515,11 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         raise ValueError('trajectory routing snapshot requires a plain output dictionary')
     experiment = step_experiment_fields(capture, experiment_binding)
     synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
-    synchronize()
+    global _NEXT_STEP
+    # A forward pre-launched by the previous call (prelaunch_next) is queued behind that call's optimizer on the
+    # same stream; draining here would idle the device while the host launches this step's backward.
+    if not (_NEXT_STEP is not None and 'forward' in _NEXT_STEP):
+        synchronize()
     if device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(device)
     before = _cache_values(model._cuda_execution.cache)
@@ -1531,8 +1536,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             raise ValueError('segmented capture requires the resident routing buffers')
         if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
             raise ValueError('segmented capture is not bound to this model execution')
-    global _NEXT_STEP
     ahead, _NEXT_STEP = _NEXT_STEP, None
+    pre = ahead.get('forward') if ahead is not None else None
+    if pre is not None and (ahead['pack'] is not pack or depth != 1 or capture is None or record):
+        raise RuntimeError('a pre-launched forward was handed a different pack or path')
     if ahead is not None and (ahead['pack'] is not pack or depth != 1 or capture is None or record):
         ahead = None  # staged for a different pack or path: discarded, everything below recomputes
     if capture is not None:
@@ -1550,7 +1557,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 if parameter.requires_grad and parameter.grad is None:
                     parameter.grad = torch.zeros_like(parameter)
     staged = time.perf_counter()
-    events = [torch.cuda.Event(enable_timing=True) for _ in range(3 * depth + 1)] if device.type == 'cuda' else None
+    events = (pre['events'] if pre is not None else
+              [torch.cuda.Event(enable_timing=True) for _ in range(3 * depth + 1)] if device.type == 'cuda' else None)
     forward_seconds = backward_seconds = 0.0
     losses = []
     micro_snapshots = []
@@ -1560,49 +1568,68 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
-    with model.candidate_step():
+
+    def _prepare(micro, staged_ahead):
+        # Inputs, embedding and routing-buffer reset for one micro-step (same calls, same order as before).
+        if staged_ahead is not None:
+            (tokens, targets, positions, selection), (image_rows, image_patches) = (staged_ahead['inputs'],
+                                                                                    staged_ahead['patches'])
+            patches_source = staged_ahead['patches_source']
+        else:
+            tokens, targets, positions, selection = staged_inputs(micro, device)
+            image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
+                                         if micro.get('images') else (None, None))
+            patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
+        starts = tuple(micro['document_starts'])
+        embedded = model.embed_text(tokens)
+        if image_rows is not None:
+            # Placeholder rows are REPLACED (out of place), so image.weight is trained through these rows and
+            # the placeholder token's embedding receives no gradient from them.
+            embedded = embedded.index_put((image_rows,), model.embed_image(image_patches))
+        buffers = routing_buffers(document_lengths(starts, len(micro['token_ids'])), device) if resident else None
+        if buffers is not None:
+            buffers.begin_step()
+        return dict(targets=targets, positions=positions, selection=selection, starts=starts, embedded=embedded,
+                    buffers=buffers, patches_source=patches_source)
+
+    def _launch(prep, micro_index, events):
+        # Forward and loss for one micro-step; returns what the backward and the row need.
+        targets, positions, selection = prep['targets'], prep['positions'], prep['selection']
+        starts, embedded, buffers = prep['starts'], prep['embedded'], prep['buffers']
+        micro_started = time.perf_counter()
+        if events is not None:
+            events[3 * micro_index].record()
+        if buffers is not None:
+            logits, routes = model(embedded, positions, document_starts=starts,
+                                   return_routes=True, batch_documents=batch_documents,
+                                   return_device_routes=True, device_route_collector=buffers.collector,
+                                   training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
+        else:
+            logits, routes = model(embedded, positions, document_starts=starts,
+                                   return_routes=True, batch_documents=batch_documents,
+                                   **({'route_observer': route_observer} if route_observer is not None else {}))
+        streamed = capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'
+        if streamed and selection is not None:
+            loss = capture.loss(logits, targets.clamp(min=0), **selection)
+        else:
+            loss = (capture.loss(logits, targets) if capture is not None else
+                    _native_loss(logits, targets))
+        if events is not None:
+            events[3 * micro_index + 1].record()
+        return logits, routes, loss, micro_started, time.perf_counter()
+
+    step_stack = pre['stack'] if pre is not None else contextlib.ExitStack()
+    if pre is None:
+        step_stack.enter_context(model.candidate_step())
+    with step_stack:
         for micro_index, micro in enumerate(micros):
-            if ahead is not None:
-                (tokens, targets, positions, selection), (image_rows, image_patches) = ahead['inputs'], ahead['patches']
-                patches_source = ahead['patches_source']
-            else:
-                tokens, targets, positions, selection = staged_inputs(micro, device)
-                image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
-                                             if micro.get('images') else (None, None))
-                patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
-            starts = tuple(micro['document_starts'])
-            embedded = model.embed_text(tokens)
-            if image_rows is not None:
-                # Placeholder rows are REPLACED (out of place), so image.weight is trained through these rows and
-                # the placeholder token's embedding receives no gradient from them.
-                embedded = embedded.index_put((image_rows,), model.embed_image(image_patches))
-            buffers = routing_buffers(document_lengths(starts, len(micro['token_ids'])), device) if resident else None
-            if buffers is not None:
-                buffers.begin_step()
+            prep = pre['prepared'] if pre is not None else _prepare(micro, ahead)
+            buffers, patches_source = prep['buffers'], prep['patches_source']
             recording = (capture.record() if (capture is not None and record and micro_index == 0)
                          else contextlib.nullcontext())
             with recording:
-                micro_started = time.perf_counter()
-                if events is not None:
-                    events[3 * micro_index].record()
-                if buffers is not None:
-                    logits, routes = model(embedded, positions, document_starts=starts,
-                                           return_routes=True, batch_documents=batch_documents,
-                                           return_device_routes=True, device_route_collector=buffers.collector,
-                                           training_hidden=(capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'))
-                else:
-                    logits, routes = model(embedded, positions, document_starts=starts,
-                                           return_routes=True, batch_documents=batch_documents,
-                                           **({'route_observer': route_observer} if route_observer is not None else {}))
-                streamed = capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'
-                if streamed and selection is not None:
-                    loss = capture.loss(logits, targets.clamp(min=0), **selection)
-                else:
-                    loss = (capture.loss(logits, targets) if capture is not None else
-                            _native_loss(logits, targets))
-                if events is not None:
-                    events[3 * micro_index + 1].record()
-                micro_forwarded = time.perf_counter()
+                logits, routes, loss, micro_started, micro_forwarded = (
+                    pre['launched'] if pre is not None else _launch(prep, micro_index, events))
                 loss.backward()
                 if events is not None:
                     events[3 * micro_index + 2].record()
@@ -1671,7 +1698,26 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         next_inputs, next_patches, next_source = staged_early
         _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
                       'patches_source': next_source}
-    synchronize()
+        if prelaunch_next:
+            # Update index+1's candidate step opens here (this update's step exited above and its routing
+            # snapshot is already on the host) and its forward is enqueued behind this update's optimizer, so
+            # the device is not drained between updates. The forward writes no parameter or gradient; its
+            # backward, end_step checks and optimizer run in the next call, which must be handed this pack.
+            next_events = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+            next_stack = contextlib.ExitStack()
+            next_stack.enter_context(model.candidate_step())
+            try:
+                next_prep = _prepare(micro_packs(next_pack)[0], _NEXT_STEP)
+                next_launched = _launch(next_prep, 0, next_events)
+            except BaseException:
+                next_stack.__exit__(*sys.exc_info())
+                raise
+            _NEXT_STEP['forward'] = dict(stack=next_stack, prepared=next_prep, launched=next_launched,
+                                         events=next_events)
+    if _NEXT_STEP is not None and 'forward' in _NEXT_STEP:
+        events[-1].synchronize()  # this update's optimizer has completed; the next forward stays queued
+    else:
+        synchronize()
     if image_text is not None:
         load_image_text_module().join_prefetch()
     finished = time.perf_counter()
@@ -1899,6 +1945,7 @@ def verify_worker(binding, binding_path):
 
 def worker(binding_path):
     """Direct worker calls fail at actual job membership, before artifact reads."""
+    global _NEXT_STEP
     from ember.governance.scripts import cia_conformance_resources as resources
     binding_path = Path(binding_path)
     if not binding_path.parent.name.startswith('measurement-'):
@@ -2021,13 +2068,20 @@ def worker(binding_path):
                     # before the first measured step's clock starts; eager and captured paths alike.
                     _write_new(custody / 'gc-freeze.json', freeze_resident_object_graph(**gc_identity))
                     frozen = True
+                # EMBER_PRELAUNCH_FORWARD: the next update's forward is enqueued behind this update's optimizer
+                # (never on the recorded exemplar, index 0, whose capture follows the call); its pack is verified first.
+                prelaunch = (measurement and stage_next_step and next_pack is not None and index >= 1
+                             and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1')
+                if prelaunch:
+                    verify_measurement_pack(next_pack, index + 1, sequence=counts[0], documents=counts[1],
+                                            warm=counts[2], measured=counts[3])
                 call_started = time.perf_counter()
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
                                    expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']),
                                    image_text=getattr(prepared.get('packs'), 'image_text', None) if measurement else None,
-                                   next_pack=next_pack)
+                                   next_pack=next_pack, prelaunch_next=prelaunch)
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
@@ -2055,6 +2109,9 @@ def worker(binding_path):
                     finally:
                         buffers.capturing = False
                     _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
+            if _NEXT_STEP is not None and 'forward' in _NEXT_STEP:
+                raise RuntimeError('measurement ended with a pre-launched update still open')
+            _NEXT_STEP = None
             # Collections after the last step (teardown side) are outside every step by construction.
             closing_instant = time.perf_counter()
             gc_rows.write(canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,

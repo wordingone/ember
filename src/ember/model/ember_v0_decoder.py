@@ -779,8 +779,19 @@ class CIADecoder(nn.Module):
         routes = []
         for layer in range(24):
             prefix = f"layers.{layer}"
-            values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"), positions, prefix + ".attention")
-            shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            # The layer template governs the reference forward exactly as it governs the resident segment, so an
+            # evaluator scores the function that was trained (unset keeps every layer: unchanged model).
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"), positions, prefix + ".attention")
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if layer % 2:
                 pieces = []
                 for start in range(0, len(embedded), 256):
@@ -797,9 +808,14 @@ class CIADecoder(nn.Module):
                     chosen = local.expert if plan is None else self._planned_expert(
                         plan, (document_index, layer, start), candidates)
                     slot = candidates.index(chosen)
-                    residual = self.expert_block(
-                        self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
-                        expert=chosen, layer=layer)
+                    if layer in _EXPERT_KEEP:
+                        _layer_template_counts['expert_run'] += 1
+                        residual = self.expert_block(
+                            self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
+                            expert=chosen, layer=layer)
+                    else:  # routed, zero residual: the resident segment's skipped expert site
+                        _layer_template_counts['expert_skipped'] += 1
+                        residual = torch.zeros_like(shared[start:start + 256])
                     # The gate still consumes the NATIVE logits, so the selector gradient graph a
                     # planned execution builds is the one free execution would have built. Only the
                     # discrete winner comes from the plan.
@@ -1152,11 +1168,20 @@ class CIADecoder(nn.Module):
         routes = []
         for layer in range(24):
             prefix = f"layers.{layer}"
-            values = values + self._batched_attention(
-                self._norm(values, prefix + ".attention_norm.weight"), positions_all, lengths, prefix + ".attention")
-            shared = values + self._per_document(
-                lambda piece: self._swiglu(piece, prefix + ".shared"),
-                self._norm(values, prefix + ".shared_norm.weight"), lengths)
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._batched_attention(
+                    self._norm(values, prefix + ".attention_norm.weight"), positions_all, lengths, prefix + ".attention")
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._per_document(
+                    lambda piece: self._swiglu(piece, prefix + ".shared"),
+                    self._norm(values, prefix + ".shared_norm.weight"), lengths)
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if not layer % 2:
                 values = shared
                 continue
@@ -1210,6 +1235,11 @@ class CIADecoder(nn.Module):
                 gate = factor.repeat_interleave(sizes[0])
             else:
                 gate = torch.repeat_interleave(factor, size_tensor, output_size=total)
+            if layer not in _EXPERT_KEEP:  # routed, zero residual: the resident segment's skipped expert site
+                _layer_template_counts['expert_skipped'] += 1
+                residual = torch.zeros_like(residual)
+            else:
+                _layer_template_counts['expert_run'] += 1
             values = shared + residual * gate[:, None].to(residual.dtype)
         outputs = [self._linear(piece, "embedding.weight")
                    for piece in torch.split(self._norm(values, "final_norm.weight"), lengths)]
