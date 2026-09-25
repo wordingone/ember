@@ -1489,6 +1489,19 @@ class SegmentOptimizer:
         return keys, skip, refused != armed['refused']
 
 
+def _stage_next_early(next_pack, device, image_text, pack, two_ahead):
+    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream)."""
+    staged = (staged_inputs(next_pack, device),
+              load_image_text_module().load_patches(next_pack, device, pinned=True)
+              if next_pack.get('images') else (None, None),
+              load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
+    if image_text is not None and two_ahead:
+        # index+1's decode began one update earlier, so the staging above did not wait on it;
+        # index+2's begins now and is joined inside this update's wall.
+        load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 2)
+    return staged
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1849,20 +1862,15 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                     events[3 * micro_index + 2].record()
                 micro_backwarded = time.perf_counter()
                 two_ahead = stage_next and os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1'
+                stage_after_optimizer = stage_next and os.environ.get('EMBER_STAGE_AFTER_OPTIMIZER') == '1'
                 if image_text is not None and micro_index == len(micros) - 1 and not two_ahead:
                     load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
                 if stage_next and micro_index == len(micros) - 1:
                     # Update index+1's inputs, staged at the last backward launch: the device still has this
                     # backward queued, and end_step below synchronizes, so staging after candidate_step exits
                     # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
-                    staged_early = (staged_inputs(next_pack, device),
-                                    load_image_text_module().load_patches(next_pack, device, pinned=True)
-                                    if next_pack.get('images') else (None, None),
-                                    load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
-                    if image_text is not None and two_ahead:
-                        # index+1's decode began one update earlier, so the staging above did not wait on it;
-                        # index+2's begins now and is joined inside this update's wall.
-                        load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 2)
+                    if not stage_after_optimizer:
+                        staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
@@ -1934,6 +1942,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         optimizer.step()
     if events is not None:
         events[-1].record()
+    if stage_next and staged_early is None:
+        # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
+        staged_early = _stage_next_early(next_pack, device, image_text, pack,
+                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1')
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
