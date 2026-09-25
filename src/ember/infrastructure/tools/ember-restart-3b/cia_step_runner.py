@@ -335,7 +335,13 @@ class LookaheadPacks:
 
 
 def pack_lookahead(packs):
-    return LookaheadPacks(packs) if os.environ.get('EMBER_PACK_LOOKAHEAD') == '1' else packs
+    if os.environ.get('EMBER_PACK_LOOKAHEAD') != '1':
+        return packs
+    # The lookahead thread and the step thread share the interpreter lock; a shorter switch interval bounds how long the step
+    # thread can wait for it behind the pack worker. Host scheduling only: no tensor, route or RNG state changes.
+    if os.environ.get('EMBER_SWITCH_INTERVAL_S'):
+        sys.setswitchinterval(float(os.environ['EMBER_SWITCH_INTERVAL_S']))
+    return LookaheadPacks(packs)
 
 
 def prepare_measurement_inputs(data, geometry):
@@ -1813,8 +1819,11 @@ def freeze_resident_object_graph(**identity):
     warm update, whatever warm_steps in 0..2 declares), outside every timed interval."""
     collected = gc.collect()
     gc.freeze()
+    if os.environ.get('EMBER_GC_GEN0'):
+        gc.set_threshold(int(os.environ['EMBER_GC_GEN0']), *gc.get_threshold()[1:])
     return dict(identity, schema='gc-freeze-v1', collected=collected, frozen=gc.get_freeze_count(),
-                threshold=list(gc.get_threshold()), enabled=gc.isenabled())
+                threshold=list(gc.get_threshold()), enabled=gc.isenabled(),
+                switch_interval_seconds=sys.getswitchinterval())
 
 
 def verify_worker(binding, binding_path):

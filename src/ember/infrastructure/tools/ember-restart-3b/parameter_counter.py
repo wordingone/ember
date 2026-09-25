@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import io
+import os
 import json
 import pickle
 import sys
@@ -1585,7 +1587,40 @@ def _counter_for(digest):
     return _COUNTERS[digest]
 
 
+_CIA_PARENT_MEMO = {}
+
+
+def _cia_tree_fingerprint(root):
+    """(relpath, size, mtime_ns) of every file under root, or None when root is not a canonical directory."""
+    root = Path(root)
+    if not root.is_absolute() or not root.is_dir():
+        return None
+    rows = []
+    for path in sorted(root.rglob('*')):
+        if path.is_file():
+            st = path.stat()
+            rows.append((path.relative_to(root).as_posix(), st.st_size, st.st_mtime_ns))
+    return tuple(rows)
+
+
 def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
+    """EMBER_CIA_PARENT_MEMO=1: an admitted parent is immutable for the life of one publication, so its reopen is
+    computed once per process and reused only while every file keeps its size and mtime. Unset: always reopen."""
+    if os.environ.get('EMBER_CIA_PARENT_MEMO') != '1':
+        return _cia_parent_snapshot_reopened(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
+                                             expected_digest=expected_digest)
+    before = _cia_tree_fingerprint(parent_checkpoint)
+    key = (str(parent_checkpoint), expected_digest, max_restore_payload_bytes, before)
+    if before is not None and key in _CIA_PARENT_MEMO:
+        return copy.deepcopy(_CIA_PARENT_MEMO[key])
+    value = _cia_parent_snapshot_reopened(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
+                                          expected_digest=expected_digest)
+    if before is not None and _cia_tree_fingerprint(parent_checkpoint) == before:
+        _CIA_PARENT_MEMO[key] = copy.deepcopy(value)
+    return value
+
+
+def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
     """Reopen an admitted zero-step CIA parent using the existing byte counter."""
     parent_root = Path(parent_checkpoint)
     if not parent_root.is_absolute() or parent_root.resolve(strict=True) != parent_root:

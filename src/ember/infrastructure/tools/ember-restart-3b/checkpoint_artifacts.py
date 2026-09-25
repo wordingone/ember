@@ -4518,6 +4518,25 @@ def _cia_ordered_parallel(function, items, *, workers=8):
         yield from pool.map(function, items)
 
 
+_CIA_VALIDATED_PARENTS = set()
+
+
+def _cia_validate_parent_once(root, receipt):
+    """Validate an admitted parent. EMBER_CIA_PARENT_MEMO=1 skips a repeat within one process only for the identical
+    root and receipt while every parent file keeps its size and mtime; unset, every call validates in full."""
+    if os.environ.get('EMBER_CIA_PARENT_MEMO') != '1':
+        return _cia_validated_checkpoint(root, receipt)
+    import parameter_counter as cia_counter
+    before = cia_counter._cia_tree_fingerprint(root)
+    key = (str(root), hashlib.sha256(json.dumps(receipt, sort_keys=True, default=str).encode()).hexdigest(), before)
+    if before is not None and key in _CIA_VALIDATED_PARENTS:
+        return None
+    value = _cia_validated_checkpoint(root, receipt)
+    if before is not None and cia_counter._cia_tree_fingerprint(root) == before:
+        _CIA_VALIDATED_PARENTS.add(key)
+    return value
+
+
 def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_payload_bytes=None):
     """Inspect one complete raw generation, optionally retaining verified tensors.
 
@@ -4569,7 +4588,7 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
         import parameter_counter as cia_counter
         parent, parent_facts = cia_counter._cia_parent_snapshot(lineage.get('parent_checkpoint',''),
             max_restore_payload_bytes=cap, expected_digest=lineage.get('parent_manifest_sha256'))
-        _cia_validated_checkpoint(Path(lineage['parent_checkpoint']),parent)
+        _cia_validate_parent_once(Path(lineage['parent_checkpoint']),parent)
     index = manifest['expert_index']
     if type(index) is not dict or set(index) != {'path', 'sha256', 'bytes', 'expert_object_bytes'}:
         raise ValueError('CIA checkpoint expert index record schema mismatch')
@@ -4716,7 +4735,7 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         import parameter_counter as cia_counter
         parent, parent_facts = cia_counter._cia_parent_snapshot(cia_parent_checkpoint,
             max_restore_payload_bytes=max_transient_scratch_bytes)
-        _cia_validated_checkpoint(Path(cia_parent_checkpoint),parent)
+        _cia_validate_parent_once(Path(cia_parent_checkpoint),parent)
         if Path(root).resolve() == Path(cia_parent_checkpoint).resolve():
             raise ValueError('CIA child checkpoint cannot replace its parent')
     _validate_replay_bindings(launch_seed=launch_seed, rng_state=rng_state, data_cursor=data_cursor,
