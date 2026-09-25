@@ -69,7 +69,7 @@ class ImageTextStream:
             if not line.strip():
                 continue
             row = json.loads(line)
-            if type(row) is not dict or set(row) != MANIFEST_FIELDS:
+            if type(row) is not dict or set(row) - {'loss_scope'} != MANIFEST_FIELDS:
                 raise ValueError('image-text manifest row fields differ')
             rows.append(row)
         if len(rows) < PAIRS_PER_DOCUMENT:
@@ -99,7 +99,10 @@ class ImageTextStream:
             _, coordinates, grid = evaluator.image_patches(raw)
             if not 0 < len(coordinates) <= MAX_PATCHES:
                 raise ValueError('image patch count outside the frozen budget')
-            caption = list(self.encode(row['caption']))[:MAX_CAPTION_TOKENS]
+            encoded = list(self.encode(row['caption']))
+            # An answer-scoped row keeps its TAIL under the cap, so the options and the answer letter survive.
+            caption = (encoded[-MAX_CAPTION_TOKENS:] if row.get('loss_scope') == 'answer'
+                       else encoded[:MAX_CAPTION_TOKENS])
             if not caption:
                 raise ValueError('empty caption: ' + row['object_sha256'])
             tokens.append(BOI); targets.append(IGNORE); positions.append([len(positions), 0, 0])
@@ -108,10 +111,16 @@ class ImageTextStream:
                            'manifest_row': self.order[(base + k) % len(self.rows)]})
             for x, y in coordinates:
                 tokens.append(FILL); targets.append(IGNORE); positions.append([len(positions), x, y])
-            tokens.append(EOI); targets.append(caption[0]); positions.append([len(positions), 0, 0])
+            scope = row.get('loss_scope', 'caption')
+            if scope not in ('caption', 'answer') or (scope == 'answer' and len(caption) < 2):
+                raise ValueError('unsupported loss scope or too-short answer caption: ' + row['object_sha256'])
+            answer_only = scope == 'answer'  # train the answer letter (last caption token) and its end token only
+            tokens.append(EOI); targets.append(IGNORE if answer_only else caption[0])
+            positions.append([len(positions), 0, 0])
             for index, token in enumerate(caption):
                 tokens.append(token)
-                targets.append(caption[index + 1] if index + 1 < len(caption) else EOS)
+                target = caption[index + 1] if index + 1 < len(caption) else EOS
+                targets.append(IGNORE if answer_only and index < len(caption) - 2 else target)
                 positions.append([len(positions), 0, 0])
             tokens.append(EOS); targets.append(IGNORE); positions.append([len(positions), 0, 0])
         if len(tokens) > self.sequence:
