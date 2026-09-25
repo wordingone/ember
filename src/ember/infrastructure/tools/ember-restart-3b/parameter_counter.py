@@ -1583,6 +1583,9 @@ def _counter_for(digest):
         import importlib.util
         spec = importlib.util.spec_from_file_location('parameter_counter_%s' % digest[:16], path)
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        # A historic counter's own resolver would look under counter-history/counter-history/; its chained
+        # ancestors resolve through this tree instead, still verified digest-to-bytes.
+        module._counter_for = _counter_for
         _COUNTERS[digest] = module
     return _COUNTERS[digest]
 
