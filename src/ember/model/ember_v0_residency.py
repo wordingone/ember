@@ -892,11 +892,15 @@ class ResidentExecution:
 
     def end_step(self):
         try:
-            self.check()
+            # check(), with the identity read once and reused below: parameter_inventory() between them only validates.
+            self.check_state()
+            owner = self.identity()
+            if owner != self.bound:
+                raise RuntimeError('resident candidate owner changed during the step')
             if self.pending:
                 raise RuntimeError('incomplete resident expert backward')
             self.model.parameter_inventory()
-            self._validated = (self._structure(self.identity()), self._registration())
+            self._validated = (self._structure(owner), self._registration())
             torch.cuda.synchronize(self.device)
             predicates = self.input_valid.detach().cpu().tolist()
             if not all(predicates):

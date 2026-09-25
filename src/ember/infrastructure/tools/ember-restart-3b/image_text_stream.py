@@ -57,6 +57,49 @@ def _sha256(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+_IO = None
+_VERIFIED = {}          # (path, object_sha256) -> verified bytes, consumed once by _decode_uint8
+_VERIFIED_CAP = 512
+_VERIFIED_LOCK = threading.Lock()
+
+
+def _io_pool():
+    global _IO
+    if _IO is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _IO = ThreadPoolExecutor(max_workers=2 * PAIRS_PER_DOCUMENT, thread_name_prefix='image-read')
+    return _IO
+
+
+def _read_verified(row):
+    raw = Path(row['path']).read_bytes()
+    if _sha256(raw) != row['object_sha256']:
+        raise ValueError('image object bytes differ from the manifest: ' + row['path'])
+    return raw
+
+
+def _keep_verified(path, object_sha256, raw):
+    with _VERIFIED_LOCK:
+        _VERIFIED[(str(path), object_sha256)] = raw
+        while len(_VERIFIED) > _VERIFIED_CAP:
+            _VERIFIED.pop(next(iter(_VERIFIED)))
+
+
+def _take_verified(path, object_sha256):
+    with _VERIFIED_LOCK:
+        return _VERIFIED.pop((str(path), object_sha256), None)
+
+
+def _header_grid(evaluator, raw):
+    """(coordinates, grid) exactly as evaluator.image_patches returns them: image_grid reads the size alone and
+    convert('RGB') does not change it, so the header's size is the decoded size."""
+    import io
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as image:
+        gx, gy = evaluator.image_grid(*image.size)
+    return [(x, y) for y in range(gy) for x in range(gx)], (gx, gy)
+
+
 class ImageTextStream:
     """Frozen manifest + tokenizer -> deterministic image-text documents by pack index."""
 
@@ -92,11 +135,11 @@ class ImageTextStream:
         _tolerate_truncated_objects()
         tokens, targets, positions, images = [], [], [], []
         base = PAIRS_PER_DOCUMENT * pack_index
-        for k, row in enumerate(self.pair_rows(pack_index)):
-            raw = Path(row['path']).read_bytes()
-            if _sha256(raw) != row['object_sha256']:
-                raise ValueError('image object bytes differ from the manifest: ' + row['path'])
-            _, coordinates, grid = evaluator.image_patches(raw)
+        pair_rows = self.pair_rows(pack_index)
+        raws = list(_io_pool().map(_read_verified, pair_rows))
+        for k, (row, raw) in enumerate(zip(pair_rows, raws)):
+            coordinates, grid = _header_grid(evaluator, raw)
+            _keep_verified(row['path'], row['object_sha256'], raw)
             if not 0 < len(coordinates) <= MAX_PATCHES:
                 raise ValueError('image patch count outside the frozen budget')
             encoded = list(self.encode(row['caption']))
@@ -169,9 +212,11 @@ def _decode_uint8(path, object_sha256):
     import io
     import numpy
     from PIL import Image
-    raw = Path(path).read_bytes()
-    if _sha256(raw) != object_sha256:
-        raise ValueError('image object bytes changed after planning: ' + str(path))
+    raw = _take_verified(path, object_sha256)
+    if raw is None:
+        raw = Path(path).read_bytes()
+        if _sha256(raw) != object_sha256:
+            raise ValueError('image object bytes changed after planning: ' + str(path))
     evaluator = _evaluator()
     _tolerate_truncated_objects()
     patch = evaluator.PATCH
