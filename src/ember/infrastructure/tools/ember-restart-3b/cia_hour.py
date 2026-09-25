@@ -758,10 +758,10 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         import hashlib
         import checkpoint_artifacts as artifacts
         parent_root = Path(chain['root'])
-        raw = (parent_root / 'checkpoint-manifest.json').read_bytes()
-        if hashlib.sha256(raw).hexdigest() != chain['manifest_sha256']:
+        # The load receipt's outer checkpoint.byte_sha256 binding is derived from the exact manifest bytes parsed.
+        parent = artifacts.published_checkpoint_receipt(parent_root)
+        if parent['checkpoint_manifest_sha256'] != chain['manifest_sha256']:
             raise ValueError('chained hour parent manifest differs from its bound digest')
-        parent = dict(json.loads(raw), checkpoint_manifest_sha256=chain['manifest_sha256'])
         restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
             max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
         cursor = parent['data_cursor']
