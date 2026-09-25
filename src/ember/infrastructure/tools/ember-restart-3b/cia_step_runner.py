@@ -361,6 +361,20 @@ def pack_lookahead(packs):
     # thread can wait for it behind the pack worker. Host scheduling only: no tensor, route or RNG state changes.
     if os.environ.get('EMBER_SWITCH_INTERVAL_S'):
         sys.setswitchinterval(float(os.environ['EMBER_SWITCH_INTERVAL_S']))
+    if os.environ.get('EMBER_HOST_PRIORITY') == '1' and sys.platform == 'win32':
+        # The step thread launches every captured segment; when it waits for the CPU behind the image read/decode pool the
+        # device idles inside the step. HIGH process class and HIGHEST priority for the calling (step) thread, both
+        # grantable without elevation. Host scheduling only: no tensor, route or RNG state changes.
+        import ctypes
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.GetCurrentThread.restype = ctypes.c_void_p
+        kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel32.SetThreadPriority.argtypes = (ctypes.c_void_p, ctypes.c_int)
+        if not kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00000080):
+            raise OSError(ctypes.get_last_error(), 'SetPriorityClass(HIGH) refused')
+        if not kernel32.SetThreadPriority(kernel32.GetCurrentThread(), 2):
+            raise OSError(ctypes.get_last_error(), 'SetThreadPriority(HIGHEST) refused')
     return LookaheadPacks(packs)
 
 
