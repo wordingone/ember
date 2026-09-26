@@ -83,7 +83,7 @@ class _DocumentStreamedLoss(torch.autograd.Function):
                 if rows is None:
                     grad_hidden[start:end].copy_(partial)
                 else:
-                    grad_hidden.index_copy_(0, rows, partial)
+                    grad_hidden.index_add_(0, rows, partial)  # repeated rows accumulate; unique rows equal copy
             if c.requires_grad:
                 partial = next(gradients)
                 grad_classifier = partial if grad_classifier is None else grad_classifier + partial
@@ -117,7 +117,8 @@ def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *,
                 rows.append(None)
                 continue
             index, count = entry
-            if (type(count) is not int or not 0 < count <= length or index.ndim != 1 or len(index) != count
+            # count may exceed length only by repeated rows (an answer-target weight, EMBER_ANSWER_WEIGHT).
+            if (type(count) is not int or count <= 0 or index.ndim != 1 or len(index) != count
                     or index.dtype != torch.int64 or index.device != hidden.device):
                 raise ValueError('Document row selection is invalid')
             counted += count
