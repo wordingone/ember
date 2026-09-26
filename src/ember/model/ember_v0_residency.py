@@ -899,8 +899,15 @@ class ResidentExecution:
                 raise RuntimeError('resident candidate owner changed during the step')
             if self.pending:
                 raise RuntimeError('incomplete resident expert backward')
-            self.model.parameter_inventory()
-            self._validated = (self._structure(owner), self._registration())
+            # _structure carries every field the full inventory validates (see its comment), so a structure and
+            # registration equal to those of the last PASSING inventory prove it would pass again; the full
+            # inventory runs whenever they differ. It was the largest host cost between backward and the optimizer
+            # enqueue, and its jitter set #1945's slow-update tail.
+            current = (self._structure(owner), self._registration())
+            if getattr(self, '_inventory_passed', None) != current:
+                self.model.parameter_inventory()
+                self._inventory_passed = current
+            self._validated = current
             if getattr(self, 'deferred_verdict', None) is not None:
                 raise RuntimeError('the previous step\'s deferred verdict was never settled')
             if getattr(self, 'defer_verdict', False):
