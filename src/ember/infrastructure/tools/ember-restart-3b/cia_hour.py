@@ -822,7 +822,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             gc_rows.flush()
             applied(row['applied_positions'])
             if started is not None and not gc.isenabled() and total_steps % 64 == 63:
-                gc.collect(0)
+                runner.bounded_collect(total_steps)
             total_steps += 1
             positions += row['applied_positions']
             # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
@@ -849,7 +849,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 # eager control and captured treatment alike; the governed clock starts after it.
                 runner._write_new(custody / 'gc-freeze.json', runner.freeze_resident_object_graph(**gc_identity))
                 if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
-                    gc.disable()  # bounded below: one generation-0 collection every 64 steps
+                    gc.disable()  # bounded below: runner.bounded_collect every 64 steps
                 energy.begin()
                 started = time.perf_counter()
             else:

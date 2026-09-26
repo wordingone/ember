@@ -2160,6 +2160,15 @@ class GcPauseMeter:
                     call_finished=call_finished, in_step=inside, outside_step=outside)
 
 
+def bounded_collect(step):
+    """The bound on a disabled collector, run every 64 steps. Generation 0 alone leaks: cycles still referenced
+    by the in-flight (staged or pre-launched) update at a pass are promoted, become garbage a step later, and a
+    disabled collector never examines them again. Two #1945 hours grew from ~33 to ~108 ms per update and died
+    at ~28,700 updates on host commit (WinError 1455). Generation 1 each pass reclaims them one pass later; a
+    full pass every 4,096 steps bounds anything that outlives two passes."""
+    return gc.collect(2 if step % 4096 == 4095 else 1)
+
+
 def freeze_resident_object_graph(**identity):
     """Move every object alive now -- the resident model, optimizer state, capture graphs, routing buffers -- into
     CPython's permanent generation after one full collection, so every later generation-2 collection traverses only
@@ -2372,7 +2381,7 @@ def worker(binding_path):
                     _write_new(custody / 'gc-freeze.json', freeze_resident_object_graph(**gc_identity))
                     frozen = True
                     if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
-                        gc.disable()  # bounded below: one generation-0 collection every 64 rows
+                        gc.disable()  # bounded below: bounded_collect every 64 rows
                 # EMBER_PRELAUNCH_FORWARD: the next update's forward is enqueued behind this update's optimizer
                 # (never on the recorded exemplar, index 0, whose capture follows the call); its pack is verified first.
                 prelaunch = (measurement and stage_next_step and next_pack is not None and index >= 1
@@ -2407,7 +2416,7 @@ def worker(binding_path):
                                                       call_finished=call_finished)) + b'\n')
                 gc_rows.flush()
                 if frozen and not gc.isenabled() and index % 64 == 63:
-                    gc.collect(0)
+                    bounded_collect(index)
                 applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
                     capture.zero_grad(optimizer=optimizer)  # full retained membership, eager expert owners included
