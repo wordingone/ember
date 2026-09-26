@@ -106,7 +106,32 @@ class ResourceTests(unittest.TestCase):
             result = OwnedProcessRunner(windows_job_factory=factory).run(long_command, timeout_s=20)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(result.cleanup_verified)
-        self.assertIn('consecutive GPU queries timed out', jobs[0].failure)
+        self.assertIn('consecutive GPU queries observed nothing', jobs[0].failure)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows named job enforcement')
+    def test_isolated_nonzero_query_exits_are_tolerated_but_a_sustained_run_is_fatal(self):
+        import subprocess
+        failed = subprocess.CalledProcessError(255, ['nvidia-smi'])
+        ok = {'used_bytes': 1}
+        command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File',
+                   str(Path.home() / '.codex/headless-python.ps1'), '--', '-B', '-c', 'import time; time.sleep(6)']
+        jobs = []
+        def factory():
+            job = resources.ConformanceJob(uuid.uuid4().hex, 'GPU-ab12')
+            jobs.append(job)
+            return job
+        pattern = [ok, failed, ok, failed, ok] + [ok] * 60
+        with patch.object(resources, 'sample_device', side_effect=pattern):
+            result = OwnedProcessRunner(windows_job_factory=factory).run(command, timeout_s=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIsNone(jobs[0].failure)
+        jobs.clear()
+        pattern = [ok] + [failed] * resources.MAX_CONSECUTIVE_TIMEOUTS + [ok] * 60
+        long_command = command[:-1] + ['import time; time.sleep(30)']
+        with patch.object(resources, 'sample_device', side_effect=pattern):
+            result = OwnedProcessRunner(windows_job_factory=factory).run(long_command, timeout_s=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('consecutive GPU queries observed nothing', jobs[0].failure)
 
     @unittest.skipUnless(os.name == 'nt', 'Windows named job enforcement')
     def test_failed_termination_uses_close_and_reports_containment_failure(self):

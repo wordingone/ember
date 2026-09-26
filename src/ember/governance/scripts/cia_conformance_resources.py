@@ -149,12 +149,14 @@ class ResourceJob(owned_process._WindowsJob if os.name == 'nt' else object):
         # parses and breaches the envelope, or any other failure, stays fatal at once. With the card
         # saturated, nvidia-smi routinely takes 1-3 s, and one 3 s tail event killed two governed hours
         # at ~41 min (#1945). MAX_CONSECUTIVE_TIMEOUTS bounds the unobserved interval to about 20 s.
+        # A query that EXITS NONZERO (nvidia-smi 255 under load) likewise observed nothing and is bounded the same
+        # way; it killed a third governed hour at ~41 min when it was fatal at once.
         timeouts = 0
         while not self._stop.wait(1):
             try:
                 self._observe()
                 timeouts = 0
-            except subprocess.TimeoutExpired as error:
+            except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
                 timeouts += 1
                 self.timeouts_tolerated = getattr(self, 'timeouts_tolerated', 0) + 1
                 if timeouts < MAX_CONSECUTIVE_TIMEOUTS:
@@ -162,7 +164,7 @@ class ResourceJob(owned_process._WindowsJob if os.name == 'nt' else object):
                 with self._handle_lock:
                     if self._stop.is_set():
                         return
-                    self.failure = f'{timeouts} consecutive GPU queries timed out: {error}'
+                    self.failure = f'{timeouts} consecutive GPU queries observed nothing: {error}'
                     if self._handle and not owned_process._kernel32.TerminateJobObject(self._handle, 125):
                         self._containment_error = 'TerminateJobObject failed during GPU supervision'
                         try:
