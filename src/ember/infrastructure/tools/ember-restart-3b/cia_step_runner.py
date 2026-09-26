@@ -1639,6 +1639,25 @@ def _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrout
 IGNORE_TARGET = -100
 
 
+def answer_weight():
+    """EMBER_ANSWER_WEIGHT: each answer-letter target counts this many times in the loss (unset: 1)."""
+    raw = os.environ.get('EMBER_ANSWER_WEIGHT', '')
+    if not raw:
+        return 1
+    weight = int(raw)
+    if weight < 2:
+        raise ValueError('EMBER_ANSWER_WEIGHT must be an integer >= 2 when set')
+    return weight
+
+
+def _weighted_rows(rows, answer_rows, weight):
+    """rows plus (weight - 1) repeats of every answer row inside them, repeats appended in row order."""
+    if weight == 1 or not answer_rows:
+        return rows
+    inside = [row for row in answer_rows if row in set(rows)]
+    return list(rows) + [row for row in inside for _ in range(weight - 1)]
+
+
 def loss_selection(micro, device):
     """None when every target is loss-bearing (text-only: the prior function); else per-document row selections."""
     import torch
@@ -1651,8 +1670,9 @@ def loss_selection(micro, device):
         rows = [row for row in range(lo, hi) if targets[row] != IGNORE_TARGET]
         if not rows:
             raise ValueError('a document carries no loss-bearing target')
+        rows = _weighted_rows(rows, micro.get('answer_rows', ()), answer_weight())
         count += len(rows)
-        selections.append(None if len(rows) == hi - lo else
+        selections.append(None if len(rows) == hi - lo and rows == list(range(lo, hi)) else
                           (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True), len(rows)))
     return {'selections': tuple(selections), 'denominator': count}
 
@@ -1672,7 +1692,7 @@ def staged_inputs(micro, device):
     positions_host = numpy.asarray(micro['positions'], dtype=numpy.int64)
     end = 2 * n + positions_host.size
     parts = [numpy.asarray(micro['token_ids'], dtype=numpy.int64), targets_host, positions_host.reshape(-1)]
-    spans = None
+    spans, weight, answers = None, answer_weight(), micro.get('answer_rows', ())
     if (targets_host == IGNORE_TARGET).any():
         starts = list(micro['document_starts']) + [n]
         spans, offset = [], end
@@ -1680,6 +1700,8 @@ def staged_inputs(micro, device):
             rows = lo + numpy.flatnonzero(targets_host[lo:hi] != IGNORE_TARGET)
             if rows.shape[0] == 0:
                 raise ValueError('a document carries no loss-bearing target')
+            if weight > 1 and answers:
+                rows = numpy.asarray(_weighted_rows(rows.tolist(), answers, weight), dtype=numpy.int64)
             if rows.shape[0] == hi - lo:
                 spans.append(None)
             else:
@@ -1694,7 +1716,9 @@ def staged_inputs(micro, device):
     if spans is not None:
         selection = {'selections': tuple(None if span is None else (staged[span[0]:span[0] + span[1]], span[1])
                                          for span in spans),
-                     'denominator': int((targets_host != IGNORE_TARGET).sum())}
+                     'denominator': sum(length for *_, length in (s for s in spans if s is not None)) +
+                                    sum(hi - lo for (lo, hi), s in zip(zip(starts, starts[1:]), spans)
+                                        if s is None)}
     return staged[:n], staged[n:2 * n], staged[2 * n:end].view(positions_host.shape), selection
 
 

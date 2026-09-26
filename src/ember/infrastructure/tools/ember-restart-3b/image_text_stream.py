@@ -133,7 +133,7 @@ class ImageTextStream:
         """token_ids/target_ids/positions of one document plus image spans (rows relative to the document)."""
         evaluator = _evaluator()
         _tolerate_truncated_objects()
-        tokens, targets, positions, images = [], [], [], []
+        tokens, targets, positions, images, answers = [], [], [], [], []
         base = PAIRS_PER_DOCUMENT * pack_index
         pair_rows = self.pair_rows(pack_index)
         raws = list(_io_pool().map(_read_verified, pair_rows))
@@ -163,6 +163,8 @@ class ImageTextStream:
             for index, token in enumerate(caption):
                 tokens.append(token)
                 target = caption[index + 1] if index + 1 < len(caption) else EOS
+                if answer_only and index == len(caption) - 2:
+                    answers.append(len(targets))  # the row whose target is the answer letter
                 targets.append(IGNORE if answer_only and index < len(caption) - 2 else target)
                 positions.append([len(positions), 0, 0])
             tokens.append(EOS); targets.append(IGNORE); positions.append([len(positions), 0, 0])
@@ -170,8 +172,11 @@ class ImageTextStream:
             raise ValueError('image-text document overflows the sequence')
         while len(tokens) < self.sequence:
             tokens.append(FILL); targets.append(IGNORE); positions.append([len(positions), 0, 0])
-        return {'token_ids': tokens, 'target_ids': targets, 'positions': positions, 'images': images,
-                'wrapped': base + PAIRS_PER_DOCUMENT > len(self.rows)}
+        document = {'token_ids': tokens, 'target_ids': targets, 'positions': positions, 'images': images,
+                    'wrapped': base + PAIRS_PER_DOCUMENT > len(self.rows)}
+        if answers:
+            document['answer_rows'] = answers
+        return document
 
 
 def append_document(pack, document):
@@ -182,6 +187,8 @@ def append_document(pack, document):
     pack['target_ids'].extend(document['target_ids'])
     pack['positions'].extend(document['positions'])
     pack.setdefault('images', []).extend(dict(span, row=span['row'] + start) for span in document['images'])
+    if document.get('answer_rows'):
+        pack.setdefault('answer_rows', []).extend(row + start for row in document['answer_rows'])
 
 
 def exposure(pack):
