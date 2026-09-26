@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -119,6 +120,18 @@ def _pack_digest(packs):
 
 
 _DRAWN_DIGESTS = {}
+# The look-ahead holds at most one pack in flight, so a handful of entries covers every consumer that pops. The bound
+# is what keeps a consumer that never pops (the governed hour) from retaining every pack it ever drew: 4,096 position
+# lists per update, a host MemoryError near update 28.8k, and a full collection scanning all of them.
+_DRAWN_DIGESTS_CAP = 8
+_DRAWN_DIGESTS_LOCK = threading.Lock()
+
+
+def _remember_drawn(pack, digest):
+    with _DRAWN_DIGESTS_LOCK:
+        _DRAWN_DIGESTS[id(pack)] = (pack, digest)
+        while len(_DRAWN_DIGESTS) > _DRAWN_DIGESTS_CAP:
+            _DRAWN_DIGESTS.pop(next(iter(_DRAWN_DIGESTS)))
 
 
 def _row_digest(pack):
@@ -303,7 +316,7 @@ class LookaheadPacks:
     def _draw(self):
         # The row digest is taken here, off the training thread; _row_digest uses it only for this same object.
         pack = self._inner.next_pack()
-        _DRAWN_DIGESTS[id(pack)] = (pack, _pack_digest([pack]))
+        _remember_drawn(pack, _pack_digest([pack]))
         return pack
 
     def _drop(self):
