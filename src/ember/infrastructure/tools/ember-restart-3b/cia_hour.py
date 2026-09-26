@@ -17,6 +17,43 @@ LEARNING_SNAPSHOTS = (2048, 4096, 8192, 16384)
 LEARNING_MEASURED = LEARNING_SNAPSHOTS[-1] - 1
 
 
+_LEAK_PREVIOUS = {}
+
+
+def _leak_probe(custody, step):
+    """Diagnostic only (EMBER_LEAK_PROBE): process commit, host-allocator stats and the object types that grew since
+    the previous sample, filed beside the rows. Image hours exhaust host commit near 28.8k updates (#1945)."""
+    import collections
+    import ctypes
+    import sys
+    import threading
+    import torch
+
+    class Counters(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_size_t) for name in (
+            'cb', 'PageFaultCount', 'PeakWorkingSetSize', 'WorkingSetSize', 'QuotaPeakPagedPoolUsage',
+            'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage', 'QuotaNonPagedPoolUsage', 'PagefileUsage',
+            'PeakPagefileUsage', 'PrivateUsage')]
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(counters),
+                                             counters.cb)
+    types = collections.Counter(type(item).__qualname__ for item in gc.get_objects())
+    grew = {name: count - _LEAK_PREVIOUS.get(name, 0) for name, count in types.items()
+            if count - _LEAK_PREVIOUS.get(name, 0) > 64}
+    _LEAK_PREVIOUS.clear()
+    _LEAK_PREVIOUS.update(types)
+    host = {key: value for key, value in torch.cuda.host_memory_stats().items()
+            if key.endswith('.current') or 'num_host' in key}
+    stream = sys.modules.get('cia_measurement_image_text_stream')
+    record = dict(step=step, private_bytes=counters.PrivateUsage, working_set=counters.WorkingSetSize,
+                  blocks=sys.getallocatedblocks(), objects=sum(types.values()), threads=threading.active_count(),
+                  grew=dict(sorted(grew.items(), key=lambda item: -item[1])[:25]), host_allocator=host,
+                  verified=len(getattr(stream, '_VERIFIED', ())), ahead=len(getattr(stream, '_AHEAD', ())))
+    with open(custody / 'leak-probe.jsonl', 'a', encoding='utf-8') as handle:
+        handle.write(json.dumps(record, sort_keys=True) + '\n')
+
+
 def save_learning_snapshot(runner, inventory, root, *, update, budget_bytes):
     """Every parameter, its own dtype, one safetensors file per owner; a manifest binds each file by digest."""
     from safetensors.torch import save_file
@@ -823,6 +860,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             applied(row['applied_positions'])
             if started is not None and not gc.isenabled() and total_steps % 64 == 63:
                 runner.bounded_collect(total_steps)
+            if os.environ.get('EMBER_LEAK_PROBE') and total_steps % 1024 == 1023:
+                _leak_probe(custody, total_steps)
             total_steps += 1
             positions += row['applied_positions']
             # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
