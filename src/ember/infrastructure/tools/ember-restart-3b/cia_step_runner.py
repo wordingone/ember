@@ -2510,7 +2510,9 @@ def launch(args, dispatch):
     census = resource_census()
     _, prepared = prepare_execution(prediction)
     gpu_uuid = prediction['identity']['gpu_uuid']
-    resources.sample_device(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
+    # #1945: this one-shot preflight call had zero tolerance for a slow/failing nvidia-smi.
+    # sample_device_at_launch() retries only here; the watcher's own tolerance is unchanged.
+    resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
     with (custody / 'prediction.json').open('xb') as stream:
         stream.write(prediction_bytes)
     _write_new(custody / 'preflight.json', {'headroom': preflight, 'processes': census,

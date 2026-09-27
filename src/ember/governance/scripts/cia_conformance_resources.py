@@ -54,6 +54,22 @@ def sample_device(uuid, *, total_gpu_bytes=TOTAL_GPU_BYTES):
     return parse_device_sample(result.stdout, uuid, total_gpu_bytes=total_gpu_bytes)
 
 
+def sample_device_at_launch(uuid, *, total_gpu_bytes=TOTAL_GPU_BYTES, attempts=MAX_CONSECUTIVE_TIMEOUTS):
+    """#1945: the one-shot launch-time preflight call (cia_step_runner.py:2513) had zero
+    tolerance for a slow or failing nvidia-smi, unlike the watcher's own MAX_CONSECUTIVE_TIMEOUTS
+    retry inside ResourceJob._watch(). This wraps sample_device() with the same attempt count for
+    that single call site ONLY -- sample_device() itself, and the watcher's use of it, are
+    unchanged, so the watcher's in-run unobserved-interval bound does not widen."""
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return sample_device(uuid, total_gpu_bytes=total_gpu_bytes)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+            last_error = error
+            continue
+    raise last_error
+
+
 def job_name(run_id, *, namespace='EmberCIAConformance'):
     if not re.fullmatch('[0-9a-f]{32}', run_id):
         raise ValueError('run identity must be 32 lowercase hex characters')
