@@ -1529,6 +1529,28 @@ def _stage_next_early(next_pack, device, image_text, pack, two_ahead):
     return staged
 
 
+_OPTIMIZER_OVERLAP_STREAMS = {}
+
+
+def _optimizer_overlap_stream(device):
+    """#1945 T1 (registry row the-optimizer-overlap-is-blocked-by-a-mutation-boundary-not-by-plumbing-20260921):
+    a side stream for optimizer.step(), used only under EMBER_STAGE_OPTIMIZER_OVERLAP=1. The mutation-boundary
+    validation (release_unrouted_expert_grads and everything before it) still happens on the main stream, in
+    order, exactly as today; this stream only takes the optimizer kernels themselves off the main stream so the
+    prelaunched next forward's staging (host copies, image decode) is not queued behind them. Correctness is
+    unchanged: the prelaunched forward's actual kernel launch still waits on this stream's completion event
+    before it runs -- only the interval between optimizer's dispatch and that wait is where anything can
+    genuinely overlap. Cached per device so repeated steps reuse one stream instead of allocating a new one
+    every call.
+    """
+    import torch
+    stream = _OPTIMIZER_OVERLAP_STREAMS.get(device)
+    if stream is None:
+        stream = torch.cuda.Stream(device=device)
+        _OPTIMIZER_OVERLAP_STREAMS[device] = stream
+    return stream
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1827,6 +1849,12 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
+    # #1945 T1: only meaningful when there IS a prelaunched next forward to overlap with, so this rides the same
+    # preconditions as stage_next. Flag defaults off -- optimizer_overlap_stream is None and every branch below
+    # collapses to today's single-stream behavior, byte-for-byte.
+    optimizer_overlap = (stage_next and device.type == 'cuda'
+                          and os.environ.get('EMBER_STAGE_OPTIMIZER_OVERLAP') == '1')
+    optimizer_overlap_stream = _optimizer_overlap_stream(device) if optimizer_overlap else None
 
     def _prepare(micro, staged_ahead):
         # Inputs, embedding and routing-buffer reset for one micro-step (same calls, same order as before).
@@ -1990,9 +2018,22 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
         refused_host.copy_(refused, non_blocking=True)
     else:
-        optimizer.step()
+        if optimizer_overlap_stream is not None:
+            # Everything above this point (backward, routing validation, release_unrouted_expert_grads) is
+            # already ordered on the main stream; wait_stream carries that ordering onto the side stream so
+            # the optimizer still only mutates AFTER the mutation boundary clears, exactly as today -- it is
+            # just no longer occupying the main stream while it does.
+            optimizer_overlap_stream.wait_stream(torch.cuda.current_stream(device))
+            with torch.cuda.stream(optimizer_overlap_stream):
+                optimizer.step()
+        else:
+            optimizer.step()
     if events is not None:
-        events[-1].record()
+        if optimizer_overlap_stream is not None:
+            with torch.cuda.stream(optimizer_overlap_stream):
+                events[-1].record()
+        else:
+            events[-1].record()
     if stage_next and staged_early is None:
         # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
         staged_early = _stage_next_early(next_pack, device, image_text, pack,
@@ -2003,6 +2044,11 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             model._cuda_execution.stage_validation = stage_next
             stage()
     if stage_next:
+        if optimizer_overlap_stream is not None:
+            # zero_grad mutates the same .grad tensors optimizer.step() is reading on the side stream; wait here
+            # (not earlier) so _stage_next_early's host copies and image decode, issued above, keep overlapping
+            # the optimizer for real -- this is the one point past which nothing below can run ahead of it.
+            torch.cuda.current_stream(device).wait_stream(optimizer_overlap_stream)
         # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
         # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
         capture.zero_grad(optimizer=optimizer)
