@@ -2028,8 +2028,16 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 optimizer.step()
         else:
             optimizer.step()
+    # #1945 T1 fix: the `if deferred:` branch above always runs the optimizer mutation via
+    # gated_optimizer_step/segment_optimizer.finish on the CURRENT (default) stream, never on
+    # optimizer_overlap_stream -- only the non-deferred else-branch above actually dispatches
+    # optimizer.step() there. Every check below must therefore track where the optimizer really
+    # ran, not just whether an overlap stream object exists, or the "optimizer done" event gets
+    # recorded on a stream nothing was enqueued on this iteration and downstream waits on it
+    # (gating the next step's prelaunched forward/routing) are satisfied without a real guarantee.
+    optimizer_ran_on_overlap_stream = optimizer_overlap_stream is not None and not deferred
     if events is not None:
-        if optimizer_overlap_stream is not None:
+        if optimizer_ran_on_overlap_stream:
             with torch.cuda.stream(optimizer_overlap_stream):
                 events[-1].record()
         else:
@@ -2044,7 +2052,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             model._cuda_execution.stage_validation = stage_next
             stage()
     if stage_next:
-        if optimizer_overlap_stream is not None:
+        if optimizer_ran_on_overlap_stream:
             # zero_grad mutates the same .grad tensors optimizer.step() is reading on the side stream; wait here
             # (not earlier) so _stage_next_early's host copies and image decode, issued above, keep overlapping
             # the optimizer for real -- this is the one point past which nothing below can run ahead of it.
