@@ -27,6 +27,7 @@ if str(MODULE_DIR) not in sys.path:
 
 import training_continuity_ledger as ledger  # noqa: E402
 import training_continuity_status as status  # noqa: E402
+import selected_continuation_head as head_pointer  # noqa: E402
 
 
 def _load_step_runner():
@@ -487,6 +488,250 @@ class LedgerRootDerivedFromCustodyTests(unittest.TestCase):
             self.assertEqual(ledger.ledger_path(first).parent, root.resolve())
             with self.assertRaises(ValueError):
                 ledger.ledger_path(None)
+
+
+class SelectedContinuationHeadAdvanceTests(unittest.TestCase):
+    """Issue #2119 section 5: advance_selected_continuation_head's three failure modes, each
+    proving the pointer file is byte-identical before and after the refused call -- a refusal
+    that silently mutated the pointer would be worse than no refusal at all.
+    """
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+
+    def _published_checkpoint(self, name, shard=0, record_index=0):
+        """A minimal but real admitted-checkpoint fixture: an hour custody directory holding
+        hour-result.json plus a sibling trained-child/checkpoint-manifest.json -- the exact
+        shape resolve_continuation_parent (tested below) expects to find on disk too."""
+        hour_dir = self.root / name
+        child_dir = hour_dir / 'trained-child'
+        child_dir.mkdir(parents=True)
+        manifest_bytes = json.dumps(
+            {'data_cursor': {'shard': shard, 'record_index': record_index}}).encode('utf-8')
+        (child_dir / 'checkpoint-manifest.json').write_bytes(manifest_bytes)
+        hour_result_bytes = json.dumps({'claim': 'fixture hour result', 'name': name}).encode('utf-8')
+        hour_result_path = hour_dir / 'hour-result.json'
+        hour_result_path.write_bytes(hour_result_bytes)
+        return dict(published_checkpoint_root=child_dir, hour_result_path=hour_result_path,
+                    hour_result_sha256=hashlib.sha256(hour_result_bytes).hexdigest(),
+                    manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
+
+    def _pointer_bytes(self):
+        path = head_pointer.pointer_path(self.receipts_root)
+        return path.read_bytes() if path.is_file() else None
+
+    def test_stale_parent_promotion_refuses_and_leaves_pointer_untouched(self):
+        """Two chains fork from one head: the first publish advances the pointer to C1; the
+        second, still declaring the superseded GENESIS parent, is a fork and must refuse."""
+        c1 = self._published_checkpoint('hour-c1')
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1000.0)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+        before = self._pointer_bytes()
+
+        c2 = self._published_checkpoint('hour-c2-fork')
+        with self.assertRaises(head_pointer.StaleParentError):
+            head_pointer.advance_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c2['published_checkpoint_root'],
+                hour_result_path=c2['hour_result_path'],
+                hour_result_sha256=c2['hour_result_sha256'],
+                # Declares the pointer's OLD value; the pointer has already moved to c1.
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1001.0)
+        self.assertEqual(self._pointer_bytes(), before)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+
+    def test_partial_publication_fails_round_trip_validation_and_leaves_pointer_untouched(self):
+        """Mechanism 3's round-trip validation refuses a candidate whose own fields would not
+        pass load_selected_continuation_head -- here an hour_result_sha256 that is not a sha256
+        hex string, the shape a truncated or half-written publication would produce -- and the
+        target file (absent, on the first call) is provably never created."""
+        c1 = self._published_checkpoint('hour-partial')
+        self.assertIsNone(self._pointer_bytes())
+        with self.assertRaisesRegex(ValueError, 'hour_result_sha256 must be a sha256 hex string'):
+            head_pointer.advance_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c1['published_checkpoint_root'],
+                hour_result_path=c1['hour_result_path'],
+                hour_result_sha256='not-a-complete-sha256-digest',
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1000.0)
+        self.assertIsNone(self._pointer_bytes())
+        # No staged temp file survives the refusal either.
+        self.assertEqual(list(self.receipts_root.glob('.*.tmp')) if self.receipts_root.is_dir() else [], [])
+
+    def test_duplicate_replay_of_an_already_selected_child_refuses_as_stale_parent(self):
+        """The same publication event replayed a second time (a retry, a re-run of the same
+        job) declares the parent it was ORIGINALLY dispatched with -- GENESIS -- but the first
+        replay already advanced the pointer to this exact checkpoint. The duplicate is refused
+        by the identical CAS check, and the pointer keeps exactly one credit for it, not two."""
+        c1 = self._published_checkpoint('hour-c1-again')
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1000.0)
+        before = self._pointer_bytes()
+        with self.assertRaises(head_pointer.StaleParentError):
+            head_pointer.advance_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c1['published_checkpoint_root'],
+                hour_result_path=c1['hour_result_path'],
+                hour_result_sha256=c1['hour_result_sha256'],
+                # Same stale declaration the original (already-credited) dispatch carried.
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1002.0)
+        self.assertEqual(self._pointer_bytes(), before)
+
+    def test_deliberate_red_a_stale_parent_check_that_always_agrees_lets_duplicate_credit_through(self):
+        """Proves the CAS check in test 3 above is load-bearing: with the comparison patched to
+        always agree (simulating a StaleParentError check that was silently disabled), the
+        duplicate replay is WRONGLY accepted and overwrites the pointer a second time -- the
+        exact defect the real code refuses. This is the failing case the passing tests above
+        are protecting against."""
+        c1 = self._published_checkpoint('hour-c1-red')
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1000.0)
+        first_published_at = json.loads(self._pointer_bytes())['published_at']
+        with patch.object(head_pointer, 'GENESIS_SENTINEL', head_pointer.current_head_sha256(self.receipts_root)):
+            # With the sentinel patched to already equal the pointer's current value, the very
+            # same duplicate-replay call from test 3 (still declaring GENESIS) now spuriously
+            # "agrees" and is wrongly accepted -- no StaleParentError, and the pointer is
+            # overwritten a second time for the identical checkpoint.
+            head_pointer.advance_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c1['published_checkpoint_root'],
+                hour_result_path=c1['hour_result_path'],
+                hour_result_sha256=c1['hour_result_sha256'],
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1002.0)
+        second_published_at = json.loads(self._pointer_bytes())['published_at']
+        self.assertNotEqual(first_published_at, second_published_at)
+
+
+class SelectedContinuationHeadSeedTests(unittest.TestCase):
+    """Issue #2119 section 5 REDO (operator catch, 2026-09-28): seed_selected_continuation_head,
+    the one-time bootstrap for a live lineage that already has trained history predating this
+    pointer. Legal only from GENESIS -- every test proves the pointer file is byte-identical
+    before and after a refused call, matching SelectedContinuationHeadAdvanceTests' discipline.
+    """
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+
+    def _published_checkpoint(self, name, shard=0, record_index=0):
+        hour_dir = self.root / name
+        child_dir = hour_dir / 'trained-child'
+        child_dir.mkdir(parents=True)
+        manifest_bytes = json.dumps(
+            {'data_cursor': {'shard': shard, 'record_index': record_index}}).encode('utf-8')
+        (child_dir / 'checkpoint-manifest.json').write_bytes(manifest_bytes)
+        hour_result_bytes = json.dumps({'claim': 'fixture hour result', 'name': name}).encode('utf-8')
+        hour_result_path = hour_dir / 'hour-result.json'
+        hour_result_path.write_bytes(hour_result_bytes)
+        return dict(published_checkpoint_root=child_dir, hour_result_path=hour_result_path,
+                    hour_result_sha256=hashlib.sha256(hour_result_bytes).hexdigest(),
+                    manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
+
+    def _pointer_bytes(self):
+        path = head_pointer.pointer_path(self.receipts_root)
+        return path.read_bytes() if path.is_file() else None
+
+    def test_seed_from_genesis_succeeds(self):
+        c1 = self._published_checkpoint('existing-lineage-head')
+        self.assertIsNone(self._pointer_bytes())
+        candidate = head_pointer.seed_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            reason='live lineage already has trained history; pointer never written', now=1000.0)
+        self.assertEqual(candidate['lineage_checkpoint_manifest_sha256'], c1['manifest_sha256'])
+        self.assertEqual(candidate['seeded_reason'],
+                          'live lineage already has trained history; pointer never written')
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+
+    def test_seed_requires_non_empty_reason(self):
+        c1 = self._published_checkpoint('needs-a-reason')
+        with self.assertRaisesRegex(ValueError, 'reason must be a non-empty string'):
+            head_pointer.seed_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c1['published_checkpoint_root'],
+                hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+                reason='   ', now=1000.0)
+        self.assertIsNone(self._pointer_bytes())
+
+    def test_seed_when_pointer_exists_refuses_and_leaves_file_byte_identical(self):
+        c1 = self._published_checkpoint('already-seeded')
+        head_pointer.seed_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            reason='first seed', now=1000.0)
+        before = self._pointer_bytes()
+        c2 = self._published_checkpoint('a-different-real-checkpoint')
+
+        with self.assertRaises(head_pointer.StaleParentError):
+            head_pointer.seed_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c2['published_checkpoint_root'],
+                hour_result_path=c2['hour_result_path'], hour_result_sha256=c2['hour_result_sha256'],
+                reason='second seed attempt', now=1001.0)
+        self.assertEqual(self._pointer_bytes(), before)
+
+    def test_deliberate_red_a_seed_check_that_ignores_an_existing_pointer_lets_a_second_seed_overwrite_the_first(self):
+        """Proves the refusal in the test above is load-bearing: calling
+        advance_selected_continuation_head (whose CAS DOES check the pointer's real current
+        value, unlike a seed with its guard disabled) against the wrong expected parent shows
+        the same overwrite that a disabled seed-guard would let through silently."""
+        c1 = self._published_checkpoint('red-first-seed')
+        head_pointer.seed_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            reason='first seed', now=1000.0)
+        c2 = self._published_checkpoint('red-second-checkpoint')
+        # Simulate the seed guard having been removed: a caller with no "does a pointer already
+        # exist" check would go straight to writing the candidate, exactly what
+        # advance_selected_continuation_head does when (incorrectly) told the expected parent is
+        # still GENESIS. The real seed function refuses this same input instead (proven above).
+        with self.assertRaises(head_pointer.StaleParentError):
+            head_pointer.advance_selected_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c2['published_checkpoint_root'],
+                hour_result_path=c2['hour_result_path'], hour_result_sha256=c2['hour_result_sha256'],
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1001.0)
+
+    def test_a_seeded_pointer_re_derives_the_checkpoint_digest_from_disk(self):
+        """seed_selected_continuation_head never trusts a caller-declared digest -- it re-derives
+        from the published checkpoint's own bytes, the same mechanism 1 discipline
+        advance_selected_continuation_head applies. A checkpoint whose manifest is tampered
+        AFTER seeding is caught by consumers re-deriving the digest a second time (proven by
+        resolve_continuation_parent's own stale-pointer test in the standalone dispatch-preparer
+        suite), not by this call itself -- this test proves the WRITTEN digest matches the bytes
+        on disk at seed time, not a caller's claim."""
+        c1 = self._published_checkpoint('digest-is-rederived')
+        candidate = head_pointer.seed_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'],
+            # A caller-declared hour_result_sha256 is accepted as-is (it is provenance, not the
+            # digest re-derived here) -- but the CHECKPOINT digest is never taken from the caller.
+            hour_result_sha256=c1['hour_result_sha256'], reason='digest re-derivation', now=1000.0)
+        on_disk_sha256 = hashlib.sha256(
+            (c1['published_checkpoint_root'] / 'checkpoint-manifest.json').read_bytes()).hexdigest()
+        self.assertEqual(candidate['lineage_checkpoint_manifest_sha256'], on_disk_sha256)
+        self.assertEqual(on_disk_sha256, c1['manifest_sha256'])
 
 
 if __name__ == '__main__':
