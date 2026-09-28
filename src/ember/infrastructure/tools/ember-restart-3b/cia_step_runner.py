@@ -1015,12 +1015,51 @@ def load_hour_module():
     return module
 
 
+def load_ledger_module():
+    path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/training_continuity_ledger.py'
+    spec = importlib.util.spec_from_file_location('cia_training_continuity_ledger', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
+def load_purpose_module():
+    path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py'
+    spec = importlib.util.spec_from_file_location('cia_training_job_purpose', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
+def validate_training_job_purpose(identity, *, hour):
+    """Issue #2119: the real CIA dispatch path (this file) never passed through
+    certified_train_launch.py's validate_certified_request, so a run here declared no
+    training_job_purpose and required none of its bindings -- the exact gap the issue names.
+    This calls the SAME shared predicate certified_train_launch.py enforces on the governed-
+    vertical path (imported, never duplicated), so retained-training credit and required
+    bindings never diverge between the two dispatch routes.
+
+    has_resume/has_data_segment are read from fields this identity already carries and already
+    verifies elsewhere in this function: checkpoint_probe/continuation reopen a real prior
+    admitted checkpoint (validate_checkpoint_probe, below); production_mixture is the admitted
+    next data segment for an hour (validate_identity, below). No second admission check is
+    introduced here.
+    """
+    purpose_module = load_purpose_module()
+    has_resume = bool(identity.get('checkpoint_probe')) or 'continuation' in identity
+    has_data_segment = bool(hour) and bool(identity.get('production_mixture'))
+    return purpose_module._validate_training_job_purpose(
+        identity, has_resume=has_resume, has_data_segment=has_data_segment)
+
+
 def prepare_execution(prediction):
     identity = prediction.get('identity')
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
-            'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint'}:
+            'dispatch_resources', 'training_job_purpose'}
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
         raise ValueError('measurement identity fields differ')
     if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
             or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
@@ -1035,6 +1074,7 @@ def prepare_execution(prediction):
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
         raise ValueError('checkpoint probe reference requires the explicit hour identity')
+    validate_training_job_purpose(identity, hour=hour)
     validate_trajectory_resources(identity)
     if hour:
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
@@ -2509,6 +2549,20 @@ def launch(args, dispatch):
     preflight = headroom()
     census = resource_census()
     _, prepared = prepare_execution(prediction)
+    identity = prediction['identity']
+    if identity.get('training_job_purpose') == 'DIAGNOSTIC':
+        # Issue #2119 section 3: reserve the declared budget BEFORE any GPU spawn. The budget is
+        # the same wall_seconds limit OwnedProcessRunner already enforces below -- no second,
+        # independently-declared budget field is introduced for this.
+        ledger_module = load_ledger_module()
+        ledger_module.reserve_diagnostic_dispatch(
+            path=ledger_module.ledger_path(parent),
+            lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+            run_id=run_id, budget_seconds=resource_limits(identity)['wall_seconds'],
+            diagnostic_question=identity['training_diagnostic_question'],
+            non_advancement_reason=identity['training_diagnostic_non_advancement_reason'],
+            return_condition=identity['training_diagnostic_return_condition'],
+            readiness_blocker=identity.get('training_diagnostic_readiness_blocker'))
     gpu_uuid = prediction['identity']['gpu_uuid']
     # #1945: this one-shot preflight call had zero tolerance for a slow/failing nvidia-smi.
     # sample_device_at_launch() retries only here; the watcher's own tolerance is unchanged.
@@ -2535,6 +2589,7 @@ def launch(args, dispatch):
                                     host_memory_bytes=LIMITS['host_memory_bytes'], total_gpu_bytes=LIMITS['total_gpu_bytes'])
         jobs.append(job)
         return job
+    dispatch_started = time.time()
     try:
         with gpu_lock_guard.acquire(script=ENTRY):
             headroom()
@@ -2546,6 +2601,15 @@ def launch(args, dispatch):
             'error': str(error), 'cleanup_verified': False, 'claim': CLAIM,
             'device_samples': jobs[0].samples if jobs else [],
             'supervisor_failure': jobs[0].failure if jobs else None})
+        if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
+            # Issue #2119 section 3: an experiment that never reached a terminal receipt
+            # published no eligible descendant by construction.
+            ledger_module = load_ledger_module()
+            ledger_module.record_retention_experiment_outcome(
+                path=ledger_module.ledger_path(parent),
+                lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+                run_id=run_id, eligible_descendant_published=False,
+                elapsed_seconds=int(time.time() - dispatch_started))
         raise
     (custody / 'stdout.log').write_text(result.stdout, encoding='utf-8')
     (custody / 'stderr.log').write_text(result.stderr, encoding='utf-8')
@@ -2555,7 +2619,17 @@ def launch(args, dispatch):
     receipt.update(prediction_sha256=args.prediction_sha256, claim=CLAIM,
                    device_samples=jobs[0].samples, supervisor_failure=jobs[0].failure)
     _write_new(custody / 'owned.json', receipt)
-    return 0 if result.returncode == 0 and result.cleanup_verified and not jobs[0].failure else 1
+    succeeded = result.returncode == 0 and result.cleanup_verified and not jobs[0].failure
+    if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
+        # Reuses the exact success predicate this function already returns on -- no second,
+        # independent notion of "eligible" is introduced here.
+        ledger_module = load_ledger_module()
+        ledger_module.record_retention_experiment_outcome(
+            path=ledger_module.ledger_path(parent),
+            lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+            run_id=run_id, eligible_descendant_published=succeeded,
+            elapsed_seconds=int(time.time() - dispatch_started))
+    return 0 if succeeded else 1
 
 
 def main(argv=None):
