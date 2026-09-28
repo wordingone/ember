@@ -797,4 +797,31 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         continuation=continuation,
         production_mixture_validation=prepared['mixture_validation'],
         claim='Checkpoint probe only' if probe else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+    # Issue #2119 section 5: "the retained descendant becomes the actual next continuation
+    # source" -- advance the durable selected-continuation-head pointer, atomically, after this
+    # verified publication (the trained-child checkpoint above has already reopened and had its
+    # digest re-derived from disk by checkpoint_publisher; this call re-derives it a second time,
+    # independently, inside advance_selected_continuation_head itself, matching update_current_
+    # subject.py's own "never trust the caller" discipline for mechanism 1).
+    #
+    # Scope, deliberately narrow: only a governed CONTINUE_TRAINING hour advances the pointer.
+    # probe (a ~2-measured-update sanity check, claim='Checkpoint probe only') is excluded;
+    # RETENTION_ELIGIBLE_EXPERIMENT is deliberately excluded here too: whether it published an
+    # eligible descendant is decided at the process level in cia_step_runner.py's _launch (the
+    # `succeeded` predicate), not inside this function, and #2119 s5 names only the continuation
+    # case explicitly.
+    #
+    # Master's run_hour is unconditionally genesis-only today (parent is always the zero-parent
+    # published in this same run; there is no chained-start branch on this tree), so the expected
+    # parent for the CAS is always the GENESIS sentinel here.
+    if not probe and identity.get('training_job_purpose') == 'CONTINUE_TRAINING':
+        import selected_continuation_head
+        import training_continuity_ledger
+        selected_continuation_head.advance_selected_continuation_head(
+            repo_root=runner.ROOT,
+            receipts_root=training_continuity_ledger.ledger_root(custody.parent),
+            published_checkpoint_root=custody / 'trained-child',
+            hour_result_path=custody / 'hour-result.json',
+            hour_result_sha256=runner.file_sha256(custody / 'hour-result.json'),
+            expected_parent_checkpoint_manifest_sha256=selected_continuation_head.GENESIS_SENTINEL)
 
