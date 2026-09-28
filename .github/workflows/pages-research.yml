@@ -1,0 +1,63 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+#
+# Publishes the Ember Research site, and ONLY that site. The deployed artifact is
+# built from docs/domains/lab/research/ alone: the repository is not deployed, and
+# neither is the rest of docs/. Everything outside that one directory is copied
+# nowhere, so a file added elsewhere in the repository cannot reach the public site
+# by accident.
+name: pages-research
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/domains/lab/research/**"
+      - ".github/workflows/pages-research.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one that is already running: a
+# cancelled deployment leaves the live site on whichever version happened to win.
+concurrency:
+  group: pages-research
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Stage only the research directory
+        run: |
+          set -euo pipefail
+          test -f docs/domains/lab/research/index.html
+          mkdir -p _site
+          cp -R docs/domains/lab/research/. _site/
+          # The generator sources are published in the repository for traceability;
+          # they are not part of the served site.
+          rm -rf _site/_generator
+          touch _site/.nojekyll
+          find _site -type f | sort
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
