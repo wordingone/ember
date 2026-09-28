@@ -1,0 +1,858 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Research journal and experiment log</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap"><style>
+:root{
+  --paper:#f7f6f3; --panel:#fffefb; --rule:#ddd9d0; --rule-2:#eae6de;
+  --ink:#1b1c20; --ink-2:#4b4d55; --ink-3:#7c7f88;
+  --amber:#a8621b; --amber-soft:#f0e3d2; --deep:#23252c;
+  --mono-bg:#f1efe9;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}}
+:root[data-theme="dark"]{
+  --paper:#15161a; --panel:#1c1e23; --rule:#32353d; --rule-2:#262931;
+  --ink:#e9e7e1; --ink-2:#b0b2ba; --ink-3:#83868f;
+  --amber:#e0975a; --amber-soft:#3a2c1c; --deep:#e9e7e1;
+  --mono-bg:#23262d;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);margin:0;
+  font:400 16px/1.62 "Source Serif 4",Georgia,"Times New Roman",serif;}
+img,svg,video{max-width:100%}
+.ui,button,input,select,th,.chip,.meta,nav,footer,.label{
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+code,kbd,.mono,.hid{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.86em;}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:0;}
+a{color:var(--amber);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+header.site{border-bottom:1px solid var(--rule);background:var(--panel);
+  padding-block:18px calc(18px + env(safe-area-inset-top,0px));}
+header.site .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
+.brand{font:600 19px/1.1 "IBM Plex Sans",sans-serif;letter-spacing:-.01em;color:var(--ink)}
+.brand span{color:var(--amber)}
+nav{display:flex;gap:18px;flex-wrap:wrap;font-size:14px}
+nav a{color:var(--ink-2)}
+nav a[aria-current="page"]{color:var(--ink);font-weight:600;border-bottom:1.5px solid var(--amber)}
+
+main{padding-block:38px 10px}
+h1{font:600 clamp(26px,4vw,36px)/1.18 "IBM Plex Sans",sans-serif;letter-spacing:-.02em;
+   margin:0 0 10px;text-wrap:balance}
+h2{font:600 21px/1.28 "IBM Plex Sans",sans-serif;margin:38px 0 12px;text-wrap:balance;
+   padding-top:14px;border-top:1px solid var(--rule-2)}
+h3{font:600 16px/1.3 "IBM Plex Sans",sans-serif;margin:24px 0 8px}
+.lede{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0 0 20px}
+.prose{max-width:66ch}
+.prose p{margin:0 0 14px}
+.prose ol,.prose ul{max-width:64ch;padding-left:22px}
+.prose li{margin:0 0 8px}
+
+.label{font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3)}
+.meta{font-size:13px;color:var(--ink-3)}
+.chip{display:inline-block;font:600 10.5px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;
+  padding:5px 8px;border-radius:2px;white-space:nowrap;vertical-align:baseline}
+.v-ref{background:var(--deep);color:var(--paper)}
+.v-sup{background:transparent;color:var(--amber);border:1.5px solid var(--amber)}
+.v-inc{background:transparent;color:var(--ink-3);border:1.5px dashed var(--ink-3)}
+.v-open{background:var(--rule-2);color:var(--ink-2)}
+
+.note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:14px 16px;
+  margin:20px 0;max-width:66ch;font-size:15px}
+.note p{margin:0 0 10px} .note p:last-child{margin:0}
+.note .label{color:var(--amber);display:block;margin-bottom:6px}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 18px;margin:18px 0}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:13px 15px}
+.stat b{display:block;font:600 24px/1.1 "IBM Plex Sans",sans-serif;font-variant-numeric:tabular-nums;
+  margin-bottom:4px;letter-spacing:-.02em}
+
+.tablewrap{overflow-x:auto;margin:16px 0;border:1px solid var(--rule);border-radius:3px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-family:"IBM Plex Sans",sans-serif}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+th{font-weight:600;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+   white-space:nowrap;background:var(--mono-bg)}
+tbody tr:last-child td{border-bottom:none}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",monospace}
+td.none{color:var(--ink-3);font-style:italic}
+
+details{border-top:1px solid var(--rule-2);padding:10px 0}
+details>summary{cursor:pointer;font:600 13px/1.4 "IBM Plex Sans",sans-serif;color:var(--ink-2);
+  list-style:none;display:flex;gap:8px;align-items:baseline}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"+";color:var(--amber);font-weight:700;width:11px;flex:none}
+details[open]>summary::before{content:"\2212"}
+details .body{padding:10px 0 4px 19px;font-size:14.5px;color:var(--ink-2);max-width:70ch}
+details .body p{margin:0 0 10px}
+
+.hyp{border:1px solid var(--rule);background:var(--panel);border-radius:3px;padding:15px 17px;margin:0 0 12px}
+.hyp .hid{font-size:12.5px;color:var(--ink-3);word-break:break-all;display:block;margin-bottom:7px}
+.hyp h3{margin:0 0 9px;font-size:15.5px;line-height:1.38}
+.hyp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:9px}
+.hyp .snip{font-size:14px;color:var(--ink-2);margin:0 0 2px;max-width:82ch}
+.nc{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink-2)}
+.nc li{margin:0 0 6px}
+
+.searchbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);
+  padding:12px 0;border-bottom:1px solid var(--rule);margin-bottom:18px}
+.searchbar .in{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=search]{flex:1 1 280px;min-width:0;padding:9px 12px;font-size:15px;border-radius:3px;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink);
+  font-family:"IBM Plex Sans",sans-serif}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{padding:7px 11px;font:600 11px/1 "IBM Plex Sans",sans-serif;letter-spacing:.07em;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink-2);border-radius:2px;cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--deep);color:var(--paper);border-color:var(--deep)}
+#count{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif}
+.nojs{font-size:13px;color:var(--ink-3);margin:8px 0 0}
+
+figure{margin:22px 0;padding:0}
+figure svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:13.5px;color:var(--ink-2);margin-top:12px;max-width:74ch;
+  font-family:"IBM Plex Sans",sans-serif;line-height:1.55}
+.svgbox{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:16px 12px}
+
+footer{border-top:1px solid var(--rule);margin-top:48px;padding-block:22px
+  calc(26px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--ink-3);
+  font-family:"IBM Plex Sans",sans-serif}
+footer .wrap>div{margin-bottom:6px}
+
+/* ---------- multi-device ----------------------------------------------------------
+   The page is read on phones as well as desktops. Three things break at a narrow
+   column and each is handled where it breaks, rather than by a global override:
+   long identifiers overflow, the figure's labels shrink below legibility, and the
+   controls are too small for a finger. */
+
+/* A hypothesis id, a receipt filename or an absolute path is one unbroken token that
+   is wider than a phone column. Without this the token sets the page's minimum width
+   and the whole body scrolls sideways. */
+.prose p,.prose li,.hyp .snip,.hyp h3,.nc li,details .body,.lede,figcaption,.meta,
+footer .wrap>div{overflow-wrap:anywhere}
+.hyp .hid{overflow-wrap:anywhere}
+
+/* The figure is a 940-unit viewBox with 10-11px labels. Scaling it into a 360px column
+   renders that text near 4px. Below the width where it stays legible it gets its own
+   horizontal scroller and keeps a readable minimum -- the same treatment the tables
+   already have, and the reason neither is allowed to scroll the page body. */
+.svgbox{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fig-narrow{display:none}
+@media (max-width:720px){
+  .fig-wide{display:none}
+  .fig-narrow{display:block}
+  .svgbox{padding:12px 10px}
+  figure svg{min-width:320px}
+}
+
+/* Tables already scroll in .tablewrap; make the affordance reachable by touch and stop
+   a long cell forcing a second scroll surface. */
+.tablewrap{-webkit-overflow-scrolling:touch}
+
+@media (max-width:760px){
+  .wrap{padding-inline:16px}
+  main{padding-block:26px 8px}
+  h2{margin-top:30px}
+  .grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat b{font-size:20px}
+  .panel{padding:14px 15px}
+  .hyp{padding:13px 14px}
+  .note{padding:12px 14px}
+  .searchbar .in{gap:8px}
+  nav{gap:14px;width:100%}
+}
+
+@media (max-width:430px){
+  .wrap{padding-inline:13px}
+  body{font-size:15.5px}
+  .lede{font-size:16.5px}
+  .grid{grid-template-columns:1fr}
+  .stat b{font-size:19px}
+  header.site .wrap{gap:6px 14px}
+  .brand{font-size:17px}
+  nav{font-size:13px;gap:12px}
+  details .body{padding-left:14px}
+  .nc{padding-left:15px}
+  input[type=search]{flex:1 1 100%}
+  .filters{width:100%}
+}
+
+/* Finger-driven devices: the filter buttons and the search field were sized for a
+   cursor. Only the hit area grows; the type scale is untouched. */
+@media (pointer:coarse){
+  .filters button{min-height:44px;padding:0 15px;display:inline-flex;align-items:center}
+  input[type=search]{min-height:44px;padding:0 13px}
+  details>summary{padding:6px 0}
+  nav a{display:inline-block;padding:6px 0}
+  .hyp .hid{padding:2px 0}
+}
+
+/* A viewer who asks for less motion gets none. The page has no animation today; this
+   keeps that true if one is ever added. */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+
+/* ---------- Overview ---------------------------------------------------------------
+   What Ember is, then what is being worked on, then what was tried. In that order and
+   above the fold, because the reader arriving here is catching up, not auditing. */
+
+.hero{max-width:66ch;margin:0 0 6px}
+.hero p{margin:0 0 12px}
+.asof{display:inline-flex;align-items:baseline;gap:7px;font-family:"IBM Plex Sans",sans-serif;
+  font-size:12.5px;color:var(--ink-3);border:1px solid var(--rule);background:var(--panel);
+  border-radius:2px;padding:5px 9px}
+.asof{flex-wrap:wrap}
+.asof b{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.feature{border:1px solid var(--rule);border-left:3px solid var(--amber);background:var(--panel);
+  border-radius:3px;padding:18px 20px;margin:16px 0 0}
+.feature .eyebrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline;margin-bottom:9px}
+.feature h2{margin:0;padding:0;border:none;font-size:20px}
+.feature .goal{font-size:16.5px;color:var(--ink);margin:0 0 10px;max-width:68ch}
+.feature .why{font-size:14.5px;color:var(--ink-2);margin:0;max-width:68ch;
+  font-family:"IBM Plex Sans",sans-serif}
+
+.measure{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  margin:18px 0 0}
+.mcard{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:14px 16px}
+.mcard .label{display:block;margin-bottom:7px}
+.mcard .big{font:600 27px/1.05 "IBM Plex Sans",sans-serif;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;display:block}
+.mcard .unit{font-size:13px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;
+  font-weight:400;letter-spacing:0}
+.mcard .sub{font-size:13px;color:var(--ink-2);font-family:"IBM Plex Sans",sans-serif;
+  margin:7px 0 0;line-height:1.5}
+.mcard.flat .big{color:var(--ink-2)}
+
+.bar{height:9px;background:var(--mono-bg);border:1px solid var(--rule);border-radius:2px;
+  margin:11px 0 7px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--amber)}
+.barnote{font-size:12.5px;color:var(--ink-3);font-family:"IBM Plex Sans",sans-serif;
+  font-variant-numeric:tabular-nums}
+
+.conds{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px}
+.conds li{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+  background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:11px 14px}
+.pill{font:600 10px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;padding:5px 8px;
+  border-radius:2px;white-space:nowrap;margin-top:2px}
+.p-met{background:var(--amber);color:var(--panel)}
+.p-rem{background:transparent;color:var(--ink-3);border:1.5px solid var(--rule)}
+.conds .cname{font:600 14.5px/1.35 "IBM Plex Sans",sans-serif;margin:0 0 3px;color:var(--ink)}
+.conds .cplain{font-size:14px;color:var(--ink-2);margin:0;max-width:74ch}
+.conds .cwhy{font-size:13px;color:var(--ink-3);margin:5px 0 0;max-width:74ch;
+  font-family:"IBM Plex Sans",sans-serif}
+.condcount{font-family:"IBM Plex Sans",sans-serif;font-size:13.5px;color:var(--ink-2);margin:0}
+
+.sessionbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;
+  background:var(--mono-bg);border:1px solid var(--rule);border-left:3px solid var(--ink-3);
+  border-radius:2px;padding:9px 13px;margin:16px 0 0;
+  font-family:"IBM Plex Sans",sans-serif;font-size:13px;color:var(--ink-2)}
+.sessionbar b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.sessionbar .why{color:var(--ink-3);font-size:12.5px}
+
+/* The attempts table. Real table on a desktop; stacked rows on a phone, where five
+   columns of prose inside a horizontal scroller is unreadable on any screen. */
+table.attempts{font-size:13.5px}
+table.attempts td{vertical-align:top;overflow-wrap:anywhere}
+table.attempts .tname{font-weight:600;color:var(--ink);line-height:1.4}
+table.attempts .tkind{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin-top:4px}
+table.attempts tr.exp>td{padding-top:0;border-bottom:1px solid var(--rule-2)}
+table.attempts tr.exp details{border-top:none;padding:0 0 9px}
+table.attempts tr.exp details .body{padding-left:19px;font-size:14px}
+table.attempts tr.exp dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+table.attempts tr.exp dt{font:600 11px/1.5 "IBM Plex Sans",sans-serif;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+table.attempts tr.exp dd{margin:0;color:var(--ink-2);overflow-wrap:anywhere}
+table.attempts tr:target{background:var(--amber-soft)}
+
+@media (max-width:820px){
+  .tablewrap:has(table.attempts){overflow-x:visible;border:none;background:none}
+  table.attempts,table.attempts tbody,table.attempts tr,table.attempts td{display:block;width:auto}
+  table.attempts thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    white-space:nowrap}
+  table.attempts tr.row{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+    padding:13px 15px 4px;margin:0 0 2px}
+  table.attempts tr.row td{border:none;padding:0 0 9px}
+  table.attempts tr.row td[data-l]::before{content:attr(data-l);display:block;
+    font:600 10px/1 "IBM Plex Sans",sans-serif;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);margin-bottom:4px}
+  table.attempts tr.exp{background:var(--panel);border:1px solid var(--rule);border-top:none;
+    border-radius:0 0 3px 3px;margin:-3px 0 12px;padding:0 15px}
+  table.attempts tr.exp>td{border-bottom:none;padding:0}
+  table.attempts tr.exp details .body{padding-left:0}
+  /* One column: an unbreakable term in an `auto` track is wider than the screen, which
+     starves the value beside it down to a single character per line. */
+  table.attempts tr.exp dl{grid-template-columns:1fr;gap:0}
+  table.attempts tr.exp dt{white-space:normal;margin:9px 0 3px}
+  table.attempts tr.exp dt:first-child{margin-top:2px}
+}
+
+@media (max-width:760px){
+  .feature{padding:15px 16px}
+  .mcard{padding:12px 14px}
+  .mcard .big{font-size:23px}
+  .conds li{grid-template-columns:1fr;gap:7px}
+  .pill{justify-self:start}
+}
+</style></head><body><header class="site"><div class="wrap"><div class="brand">Ember <span>Research</span></div><nav class="ui"><a href="index.html">Overview</a><a href="research.html">Research</a><a href="journal.html" aria-current="page">Journal</a><a href="campaign.html">Ledger</a><a href="agents.html">Agents</a></nav></div></header><main><div class="wrap"><article class="prose md"><h1>Ember #1945 research journal and experiment log</h1>
+<p>A live record of what the #1945 throughput-and-qualification campaign is trying, what each attempt
+showed, and what it did not close. Its purpose is to make the next decision better than the last
+one. Read it before proposing any arm, and write to it every time an experiment is ruled.</p>
+<ul>
+<li><strong>Campaign ledger</strong> (the full history to 2026-09-27, by gate, with repeat detection):
+  <a href="campaign.html">campaign.html</a>, source <code>campaign.md</code>.</li>
+<li><strong>Experiment records</strong> (every loop hypothesis, frozen criterion and verdict): <a href="hypotheses.html">hypotheses.html</a>.</li>
+<li>The log below is appended automatically when a loop hypothesis is ruled or updated. Hand entries
+  record decisions, corrections and anything a loop stage does not capture.</li>
+</ul>
+<h2>How to use this before deciding</h2>
+<ol>
+<li>Search the log and the ledger for the proposition you are about to test, <strong>in its own words</strong>.
+   An empty search is not clearance.</li>
+<li>Check the <strong>Standing lessons</strong>. Each one names a mistake this campaign made more than once.</li>
+<li>State which gate the experiment moves, its ceiling, and its frozen refutation criterion. Then run it.</li>
+<li>After the ruling, check that the entry landed here. Add what the result does <strong>not</strong> close.</li>
+</ol>
+<h2>Current state</h2>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Requirement</th>
+<th>State</th>
+<th>Newest</th>
+<th>Best on the current image-inclusive arm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>complete-update p10 &gt; 80,000 loss-bearing positions/s over ≥1,024 warmed updates</td>
+<td>UNMET</td>
+<td>58,499 (attempt 14)</td>
+<td>85,551.3 (attempt 7, earlier mixture)</td>
+</tr>
+<tr>
+<td>B</td>
+<td>aggregate loss-bearing targets / governed wall &gt; 80,000 over a continuous governed hour (not a p10)</td>
+<td>UNMET</td>
+<td>61,740 (attempt 14)</td>
+<td>86,662.5 (attempt 7)</td>
+</tr>
+<tr>
+<td>C</td>
+<td>No-worse-learning licence on the measured arm</td>
+<td>MET (v3 arm)</td>
+<td>−0.505 / −0.472 nats vs control</td>
+<td>—</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Protected MMMU &gt; 0.2857 on the hour's trained child</td>
+<td>UNMET, never cleared</td>
+<td>0.263 (attempt 14)</td>
+<td>0.285 (attempt 13)</td>
+</tr>
+<tr>
+<td>E</td>
+<td>Frozen admitted production-mixture identity</td>
+<td>MET</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>F</td>
+<td>Single RTX 4090, truthful accounting, receipts intact</td>
+<td>MET</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>14 numbered attempts, none ACCEPTED. No governed hour may run until both of these exist:
+- a measured A/B cure: a matched pair, with a null pair first, showing p90 ≤ 40.6 ms;
+- a measured D cure: real MMMU beats both missing-image and wrong-image by more than one item standard error.</p>
+<h2>Standing lessons</h2>
+<ol>
+<li><strong>An instrument is proven before its verdict is trusted.</strong> From attempt 8 to 2026-09-27, every
+   missing-image and wrong-image MMMU control ran an evaluator that ignored the image condition. The
+   conclusion "the image rarely moves MMMU" was never measured. A control run must record the
+   condition it actually executed.</li>
+<li><strong>A claim is made by the acceptance consumer</strong>, never by the statistic the arm was built to move.
+   Several clearances of 80,000 were read from a row timer that covered only part of each update.</li>
+<li><strong>Fixing one gate has repeatedly broken another.</strong> Attempts 7 to 9 met A and B but failed D.
+   The v3 mixture that brought D closest (attempts 12 to 14) lost A and B. Judge every attempt on all
+   six gates.</li>
+<li><strong>Isolated probes overpredict governed gains</strong> (by 5× or more on this campaign). Size a treatment
+   with a matched captured pair, null pair first.</li>
+<li><strong>No attempt is dispatched while known to fail a gate.</strong> Attempts 11 to 14 were, four times, on
+   an unchanged arm.</li>
+</ol>
+<h2>Log</h2>
+<p>Newest first. Automatic entries carry the loop hypothesis id.</p>
+<!-- JOURNAL-LOG-BEGIN -->
+<h3>2026-09-28 01:18 PM LA — Record corrections: abandoned discriminator, withdrawn -1.9% estimate, gate B is aggregate/wall</h3>
+<p>Record corrections, from the causal-review seat's audit of the live journal (2026-09-28). The earlier entries keep their original text; this entry supersedes them for any decision taken from here on.</p>
+<ol>
+<li><strong>The 09:16 short-context control against full-context candidate is an abandoned discriminator. It is not the live gate C comparison.</strong> The required learning pair is full-compute against five-attention. Both arms use the corrected full-context input, with a matched parent and plan.</li>
+<li><strong>The -1.9% full-context target-rate estimate (38.6 ms A budget) is withdrawn.</strong> The whole-epoch mean image targets per update do scale by 74,080/87,680. The sampled 72-against-131 observation is not a global estimate of that scaling. The A budget is taken only from the measured prefix rate U_i/dt_i.</li>
+<li><strong>Gate definitions, as the executable predicate applies them.</strong>
+   - Gate A is the complete-update p10 over at least 1,024 warmed updates.
+   - Gate B is aggregate loss-bearing targets divided by governed wall over the continuous hour. It is not a p10.
+   - The gate table above now says this. The earlier wording "p10 over a governed hour" distorted budget reasoning.</li>
+<li><strong>The frozen REFUTED label on the lineage-write hypothesis stands, but its inference is narrower than it read.</strong> The CPU publish refusing cuda:0 does not show experimentally that lineage-induced write cost is absent, because that phase was not reproduced.</li>
+<li><strong>The chain-scope result supports the validator mechanism only.</strong> Reopens fell from 21 to 6 and wall from 79.3 s to 40.9 s. The full-checkpoint saving it implies is unmeasured, and no A or B gain is claimed from it.</li>
+</ol>
+<p>Owner rulings the same turn:
+- The same-source learner runs first.
+- A cross-revision execution-equivalence route is authorized as a CPU-only design leg. Each source is bound to its own real run under the existing bit-identity criterion.
+- A separate-process image producer is the first A candidate for that route. It has no prior attempt in the registry or the journal. It gets a null pair and then a matched captured pair after the learner releases the card, and no gain is claimed before then.</p>
+<h3>2026-09-28 12:37 PM LA — SUPPORTED: <code>chain-validation-linear-ancestor-keyed-cure-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Each level of _cia_validated_checkpoint re-snapshots the parent chain (depth d) and re-validates the parent, which recurses: sum over levels = d(d+1)/2. A cache scoped to one outermost call and keyed on the fingerprints of the WHOLE ancestor chain removes the repeats and cannot reuse across an ancestor change.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if reopens not linear in depth, or any verdict differs from memo=0, or the ancestor-change fixture reuses</li>
+<li><strong>Ruling:</strong> Frozen supported_if "reopen count == depth (6 at depth 6, 2 at depth 2), verdict and returned facts identical to memo=0, ancestor-change fixture reopens or refuses": scope-new.json shows depth 6 reopens 21-&gt;6, linear true, verdict_identical_to_memo0 true, ancestor change in scope reopens 7 (&gt; 6, no reuse) with verdict identical; depth 2 3-&gt;2 per a build seat 38682. Wall 79.3-&gt;40.9 s per validation pass. Enters the learner source (Path S).</li>
+<li><strong>Receipt:</strong> <code>seat record: scope-new.json</code></li>
+</ul>
+<h3>2026-09-28 12:11 PM LA — SUPPORTED: <code>image-path-optimizer-moments-nonzero-newest-child-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> If image-loss gradients reach the image projection on the captured 5-attention path, its Adam first and second moments are nonzero; all-zero moments mean zero gradient with weight decay alone moving the weights.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if exp_avg and exp_avg_sq are all-zero for every image_projection/modality parameter</li>
+<li><strong>Ruling:</strong> Frozen refuted_if "exp_avg and exp_avg_sq are all-zero for every image_projection/modality parameter" is not met: the receipt shows modality.weight exp_avg nonzero 2048/8192 (L2 0.155) and exp_avg_sq nonzero 2048/8192 at step 409652. The image.weight numbers (786432/786432 nonzero) were reported by mail only and are NOT in the receipt, so they do not support this ruling until written there. Moments are not moved by AdamW decay, so nonzero moments do evidence gradients; they do not show those gradients came from image-token loss.</li>
+<li><strong>Receipt:</strong> <code>seat record: image-moments.json</code></li>
+</ul>
+<h3>2026-09-28 12:10 PM LA — Next after <code>checkpoint-write-excess-lives-in-write-artifacts-lineage-or-object-io-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Refutation does not close: validation quadratic in lineage depth is measured, and memo=1 is refused (stale on ancestor change). Successor authored by a build seat on CPU; card-timed write comparison follows the gate D learning arm.</li>
+<li><strong>Successor id:</strong> <code>ancestor-keyed-linear-chain-validation-removes-quadratic-reopens-20260928</code></li>
+</ul>
+<h3>2026-09-28 12:10 PM LA — REFUTED: <code>checkpoint-write-excess-lives-in-write-artifacts-lineage-or-object-io-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> write_checkpoint_artifacts does lineage work outside the counter (cia_parent_checkpoint reopen/verify, owner_update_counts) and per-owner object hashing plus fsync for 26 files; one of those phases grows with lineage depth or with fragmentation of the B: custody volume.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if no pair of named phases accounts for &gt;= 70% of the 233.4 s delta, or the copied-chain write times do not reproduce at least half of the 233.4 s delta</li>
+<li><strong>Ruling:</strong> Frozen criterion quoted: "no pair of named phases accounts for &gt;= 70% of the 233.4 s delta, or the copied-chain write times do not reproduce at least half of the 233.4 s delta". The write was not reproduced at all because the CPU write refuses on cuda:0 placement binding, so the second disjunct holds and the hypothesis is REFUTED as frozen. Not closed: chain validation measured quadratic in lineage depth, 15.15 s at depth 2 to 71.45 s at depth 6 with 21 reopens, and the restore delta of +71 s matches it, so the arithmetic points at ~120-185 s of the delta but that is not a measurement of the write. memo=1 reuses a stale result after an ancestor change and is refused for governed use. Successor: an ancestor-keyed, linear, single-pass chain validation, timed on the card against the current write.</li>
+<li><strong>Receipt:</strong> <code>seat record: validate-new-memo0.json</code></li>
+</ul>
+<h3>2026-09-28 11:55 AM LA — Next after <code>checkpoint-write-cost-scales-with-lineage-not-bytes-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Not closed: restore/verify callers were not timed; the counter recursion is real and grows 2.3x with depth (a bounded cure is still worth taking later); ~200 s of the write delta is outside the counter. Successor: phase-timed cProfile of write_checkpoint_artifacts (cia_parent_checkpoint reopen/verify, owner_update_counts, per-owner object hash/fsync) against a copy of the newest child parent chain, CPU only.</li>
+<li><strong>Successor id:</strong> <code>checkpoint-write-excess-lives-in-write-artifacts-lineage-or-object-io-20260928</code></li>
+</ul>
+<h3>2026-09-28 11:55 AM LA — REFUTED: <code>checkpoint-write-cost-scales-with-lineage-not-bytes-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Payload is constant (6.48 GB) while write time grew from 70 s to about 500 s and restore/verify from 20 s to about 150 s. Candidate mechanism: the pre-publish verifier (independent parameter_counter subprocess) and restore/verify reopen and re-hash ancestor snapshots, so the work grows with lineage depth rather than child bytes. Scope limits carried (the counterpart seat 38641/38642): checkpoint cost stays inside the governed wall; the cure bounds repeated ancestor work and never skips current-child verification; host-only removal gives gate A feasibility only, B needs about 93.9k/s at 625 s checkpoint cost.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if ancestor-scaling functions explain &lt; 70% of the delta, or ancestor reopen/hash counts are equal between the two children</li>
+<li><strong>Ruling:</strong> Frozen: ancestor-scaling functions explain &lt; 70% of the delta -&gt; REFUTED. Measured: the pre-publish counter is ancestor-scaling (24.06 of 27.6 s is 6-level _cia_parent_snapshot recursion) but its delta is 15.8 s of a 233.4 s write delta = 6.8%.</li>
+<li><strong>Receipt:</strong> <code>seat record: counter-new.json</code></li>
+</ul>
+<h3>2026-09-28 11:49 AM LA — Next after <code>gate-ab-v4-governed-profile-union-null-b-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Device union fits the A budget on tail58 (38.2/37.7 ms vs 39.3), margin 1.1-1.6 ms; full-context lowers loss-bearing about 1.9 percent, so the A budget becomes 38.6 ms. NOT closed: gate B. The predicate charges checkpoint write+restore inside the wall, and that cost grew from 91 s to 625 s at a constant 6.48 GB payload, so B needs 93.9k pre-checkpoint, a per-update wall of 32.9 ms, below the device union. B is unreachable until the checkpoint cost is O(bytes) again. Also not closed: host-gap attribution inside the 52-63 ms span.</li>
+<li><strong>Successor id:</strong> <code>checkpoint-write-cost-scales-with-lineage-not-bytes-20260928</code></li>
+</ul>
+<h3>2026-09-28 11:49 AM LA — Next after <code>gate-ab-v4-governed-profile-union-null-a-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Device union fits the A budget on tail58 (38.2/37.7 ms vs 39.3), margin 1.1-1.6 ms; full-context lowers loss-bearing about 1.9 percent, so the A budget becomes 38.6 ms. NOT closed: gate B. The predicate charges checkpoint write+restore inside the wall, and that cost grew from 91 s to 625 s at a constant 6.48 GB payload, so B needs 93.9k pre-checkpoint, a per-update wall of 32.9 ms, below the device union. B is unreachable until the checkpoint cost is O(bytes) again. Also not closed: host-gap attribution inside the 52-63 ms span.</li>
+<li><strong>Successor id:</strong> <code>checkpoint-write-cost-scales-with-lineage-not-bytes-20260928</code></li>
+</ul>
+<h3>2026-09-28 11:46 AM LA — SUPPORTED: <code>gate-ab-v4-governed-profile-union-null-b-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> If the device kernel interval union per update on the actual captured workload exceeds the paired budget, no host-only cure (dispatch, lock, GC, input overlap) can reach 80k and the lever must be device work; if it is below, a host-only cure is possible but not proved. Profiler overhead inflates wall, never the kernel union, so only the union is read</li>
+<li><strong>Frozen criterion:</strong> REFUTED if both legs valid as above and union per update &gt;= budget p50 in both legs: a host-only cure is insufficient and the next intervention must remove device kernel time; INCONCLUSIVE if either leg invalid, spread &gt; 5%, or legs straddle the budget</li>
+<li><strong>Ruling:</strong> Frozen supported_if met: both legs ATTRIBUTION_COMPLETE, capture true, v4 manifest de32a445 bound; union per update 38,178.2 us (a) and 37,748.6 us (b), spread 1.14% &lt;= 5%; both below the budget p10 of 39,312.5 us (nearest-rank p10 of 6 rows = min of loss_bearing/80000). Host-only cure POSSIBLE, not proved: margin 1.1-1.6 ms; span per update 52.0/63.3 ms, so ~14-26 ms/update is host gap. Scope: tail58 baseline workload, not full-context (the counterpart seat 38620).</li>
+<li><strong>Receipt:</strong> <code>seat record: governed-profile-union-null-pair-20260928.json</code></li>
+</ul>
+<h3>2026-09-28 11:46 AM LA — SUPPORTED: <code>gate-ab-v4-governed-profile-union-null-a-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> If the device kernel interval union per update on the actual captured workload exceeds the paired budget, no host-only cure (dispatch, lock, GC, input overlap) can reach 80k and the lever must be device work; if it is below, a host-only cure is possible but not proved. Profiler overhead inflates wall, never the kernel union, so only the union is read</li>
+<li><strong>Frozen criterion:</strong> REFUTED if both legs valid as above and union per update &gt;= budget p50 in both legs: a host-only cure is insufficient and the next intervention must remove device kernel time; INCONCLUSIVE if either leg invalid, spread &gt; 5%, or legs straddle the budget</li>
+<li><strong>Ruling:</strong> Frozen supported_if met: both legs ATTRIBUTION_COMPLETE, capture true, v4 manifest de32a445 bound; union per update 38,178.2 us (a) and 37,748.6 us (b), spread 1.14% &lt;= 5%; both below the budget p10 of 39,312.5 us (nearest-rank p10 of 6 rows = min of loss_bearing/80000). Host-only cure POSSIBLE, not proved: margin 1.1-1.6 ms; span per update 52.0/63.3 ms, so ~14-26 ms/update is host gap. Scope: tail58 baseline workload, not full-context (the counterpart seat 38620).</li>
+<li><strong>Receipt:</strong> <code>seat record: governed-profile-union-null-pair-20260928.json</code></li>
+</ul>
+<h3>2026-09-28 10:54 AM LA — Next after <code>gate-ab-v4-5attn-device-union-census-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Not closed: the off-arm probe has no images and its own step, so the governed backward kernel union is inferred, not measured; the ~15 ms idle is span minus off-arm union. Not closed: which host work runs inside backward (engine-thread lock contention with pack/decode/prelaunch vs custom-Function Python backward); the counterpart seat selects the treatment class. Not closed: the ~9 ms p90 outside-span gap.</li>
+<li><strong>Successor id:</strong> <code>gate-ab-v4-backward-inside-span-host-cure-20260928</code></li>
+</ul>
+<h3>2026-09-28 10:53 AM LA — SUPPORTED: <code>gate-ab-v4-5attn-device-union-census-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> If the backward span holds substantial device idle (engine-thread interpreter-lock reacquisition, per the py-spy attribution), the backward kernel union is far below the span and the lever is host work inside backward; if the union is close to the span, the lever is device work. Instrument: the existing captured census probe at the T1 head with the arm template flags; it is OFF-ARM (text-only genesis stream, own step, no images, no parent), so it prices the template backward kernel union, not the governed host path.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if both arms assert capture, null spread &lt;= 5%, and the backward kernel union per step is &gt;= 30 ms: the backward span is device work and host-in-backward is not the lever; INCONCLUSIVE if capture not asserted in either arm, spread &gt; 5%, or union between 26 and 30 ms</li>
+<li><strong>Ruling:</strong> Frozen: SUPPORTED if both arms assert capture, null spread of backward union &lt;= 5%, and captured backward kernel union per step &lt;= 26 ms. Measured: capture_occurred true in null_a and null_b; null spread 1.35%; backward interval union 18.95 / 18.70 ms per step (median 18.83), forward 11.61 / 11.72 ms, loss 0.61 ms. Against the governed r2 backward CUDA-event span p50 of 32.3-36.2 ms, about 13.5-17.4 ms of each governed backward span is device-idle. Off-arm instrument (text-only genesis, own step; its optimizer 17.4 ms steps all params vs the arm 3.0 ms); the forward union 11.7 ms matches the governed forward span 11.2-12.9 ms, which supports comparability of the phase kernel sets.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\device-union-census-v4-5attn-20260928</code></li>
+</ul>
+<h3>2026-09-28 10:36 AM LA — Next after <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-b-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.</li>
+<li><strong>Successor id:</strong> <code>gate-ab-v4-5attn-device-union-census-20260928</code></li>
+</ul>
+<h3>2026-09-28 10:36 AM LA — Next after <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-a-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.</li>
+<li><strong>Successor id:</strong> <code>gate-ab-v4-5attn-device-union-census-20260928</code></li>
+</ul>
+<h3>2026-09-28 10:36 AM LA — SUPPORTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-b-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. Holding off backward's pack-pool lock contention during the step critical path removes the wait. Prediction basis: parent hypothesis gate-ab-engine-thread-a seat-wait-in-loss-backward-20260928's own supported_if (3-6 ms improvement, interval 1-8 ms).</li>
+<li><strong>Frozen criterion:</strong> REFUTED if treatment p90 improvement &lt;= the fresh null-pair difference, OR the treatment arm does not assert the gate executed (engaged_count&gt;0 in its counter file), OR engaged but improvement &lt; 2.0 ms</li>
+<li><strong>Ruling:</strong> Frozen: SUPPORTED if p90 below the fresh null-pair reference by more than the null-pair difference AND by &gt;= 2.0 ms, with engaged_count&gt;0. Matched pairing (b vs null-b): p90 60.00 -&gt; 57.67 = 2.33 ms &gt; 0.49 floor and &gt;= 2.0; engaged 1,025. Prediction 3-6 ms missed low. Rate p10 52,999 -&gt; 54,931. Pair reading: the holdoff is a real ~2 ms / ~+2k/s stack member, split across the 2.0 ms bar; nowhere near the 80,000 rate p10.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-28 10:36 AM LA — REFUTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-a-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. Holding off backward's pack-pool lock contention during the step critical path removes the wait. Prediction basis: parent hypothesis gate-ab-engine-thread-a seat-wait-in-loss-backward-20260928's own supported_if (3-6 ms improvement, interval 1-8 ms).</li>
+<li><strong>Frozen criterion:</strong> REFUTED if treatment p90 improvement &lt;= the fresh null-pair difference, OR the treatment arm does not assert the gate executed (engaged_count&gt;0 in its counter file), OR engaged but improvement &lt; 2.0 ms</li>
+<li><strong>Ruling:</strong> Frozen: REFUTED if improvement &lt;= fresh null-pair difference, OR not engaged, OR engaged but improvement &lt; 2.0 ms. Matched pairing (a vs null-a, the pairing the paired ids declare, fixed before reading which basis favours which): p90 59.51 -&gt; 57.70 = 1.81 ms &lt; 2.0 ms. Engaged 1,025, floor 0.49 ms cleared, so the gate is real but below the bar. Prediction 3-6 ms (interval 1-8) missed low. Rate p10 53,270 -&gt; 55,205. Recomputed by this seat from rows, matches a build seat 38573.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-28 09:16 AM LA - Gate D treatment selected: lossless full-answer-context packing (the counterpart seat 38495; this seat ruling 38496)</h3>
+<p>Decision: one declared gate D treatment. Every answer prompt is kept whole. Complete pairs are packed into the 1,024-position image document by a frozen v4 group plan (87,680 groups, mean 6.759 pairs, sha d2aad947). The 128-token selector is withdrawn to fallback, because it would exclude 30,552 long answer rows unequally.
+Short-context control and full-context candidate share the groups and have equal U=3072+2Q+C unique targets per update.
+Image position = parent global_step + local index, from the shared #2119 resume cure.
+Open defect to fix first: the staged_inputs dense fast path (the counterpart seat 38492). Checks 1-6 run before the bounded matched diagnostic, which registers numeric predictions for held-out answer loss and the real-vs-wrong gap.
+Gate A note: fewer caption pairs per update lower loss-bearing targets per update, so U is reported per arm. Gate moved: D (prospective). No learning claim.</p>
+<h3>2026-09-28 08:57 AM LA — Caption census part d withdrawn as evidence (the counterpart seat, mail 38478)</h3>
+<p>The census's train/eval parity leg (part d) did not test production parity. Its training side embedded text only, never replacing image rows with embed_image(patches) as cia_step_runner does. It read logits_train[answer_row_index-1], but document() records answer_rows as the logit row that predicts the letter. Its OK meant the script completed, not that parity held. Parts a/b/c (the truncation counts) stand. Production input/target parity is UNMEASURED until the counterpart seat's independent CPU verifier lands; a real mismatch there would outrank the caption flag for gate D.</p>
+<h3>2026-09-28 08:41 AM LA — Next after <code>caption-truncation-census-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> AMENDED per this seat mail 38464 (methodological correction, arrived after mail 38465's report but before this update): the original stem_survives/options_only classification was a binary substring-match heuristic that presupposed a conclusion. Corrected measurement uses exact tokenizer per-token character offsets (Tokenizer.encode(...).offsets) to classify each over-cap row's question-stem retention as complete/partial/none, counts options fully retained, and checks whether the answer-letter's own option text survives -- broken down per dataset_id. Receipt: seat record: caption-truncation-census-20260928.json (schema v2).</li>
+</ul>
+<p>Frozen claim, reworded per this seat's instruction: truncation occurs at rate 68.97% (121736/176518 answer-scoped rows), with retention distribution: 0% of over-cap rows retain the COMPLETE question stem in any dataset; the majority retain it PARTIALLY (arxivqa 41.7% partial/58.3% none -- arxivqa is 77% of all rows and 97% of all over-cap rows; ai2d 77.5%/22.5%; scienceqa 75%/25%; m3exam-english 63.4%/36.6%; mmbench-dev-scienceqa 70.9%/29.1%). Options are mostly fully retained (82.6%-93.0% across datasets) and the answer-letter's own option text stays intact 82.6%-96.5% of the time. This is NOT "options-only" (the prior wording) and this census does not itself establish D-cause -- it establishes the truncation rate and retention shape only.</p>
+<h3>2026-09-28 08:27 AM LA — Decision after the truncation census and the holdoff rulings</h3>
+<ul>
+<li><strong>Gate D:</strong> 69% of answer-scoped training captions are options-only after the 58-token cap. For those rows the model never saw a question during training. Our best candidate D cure is now a stem-preserving caption budget, measured as a bounded probe arm before any amendment. a build seat is authoring it behind a default-off flag (EMBER_ANSWER_CAPTION_TOKENS). It changes the frozen workload (amendment §5/§12), so it cannot enter a governed hour without a dated successor amendment. Prediction to register before the probe: in-distribution real-vs-blank gain rises, and MMMU real−missing rises above one item SE. Interval to be stated at <code>predict</code>.</li>
+<li><strong>Gate A/B:</strong> both holdoff treatment legs were ruled REFUTED on their frozen counter clause. The flag never reached the worker, because the governed-env allowlist dropped it. The mechanism is untested. Next steps: the allowlist fix, a preparer refusal on unlisted EMBER_* (deliberate red), and a worker-only merge-by-max counter; then re-dispatch. Correction to the 08:0x stem-probe note: its 600 rows are in-distribution, trained rows, not held-out.</li>
+<li><strong>A/B attribution from treatment-b's 1,024 rows</strong> (flag inert, so these rows are effectively reference rows). The per-update CUDA event spans sum to p50 47.90 / p90 54.68 ms, against a wall of p50 49.12 / p90 56.42 ms. Wall minus the event spans is p50 0.91 / p90 9.02 ms. The largest span is backward: p50 30.90 / p90 38.39 ms. Event spans still count device bubbles caused by late host launches, so this does NOT separate a seat-starved launch gaps from kernel time. The discriminator is the kernel-duration sum inside the backward span on one profiled update. If kernels fill the span, the holdoff ceiling is at most about 9 ms at p90, and 40.6 ms needs about 14 ms of device work removed from backward.</li>
+</ul>
+<h3>2026-09-28 08:23 AM LA — SUPPORTED: <code>caption-truncation-census-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> encoded[-58:] keeps only the LAST 58 tokens of the answer-scoped caption. If the question stem is at the front and options/answer are appended after it, any caption whose total token length exceeds 58 has its stem silently dropped from the kept tail -- the model trains and is scored on options-only (or partial options) context, with the loss-bearing answer-letter target still computed as if the full MC prompt were present. This would explain any measured gap between eval-time full-context scoring and training-time truncated scoring, and any anomaly in the answer-letter round-trip if the kept tail's tokenization boundary lands mid-token.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if fraction of answer-scoped captions exceeding 58 tokens is 0 (or negligible, &lt;1%) AND the kept-tail question-stem-survival fraction is ~100% -- i.e. truncation essentially never bites in the actual manifest distribution, so the mechanism the counterpart seat found is real code but inert in practice</li>
+<li><strong>Ruling:</strong> refuted-if required &lt;1% over-cap AND ~100% stem survival; observed 68.97% of answer-scoped captions (121736/176518) exceed the 58-token cap, and of those over-cap rows only 0.013% (16/121736) retain any surviving stem token -- 99.99% are options-only. Truncation is not an edge case, it is the majority behavior.</li>
+<li><strong>Receipt:</strong> <code>seat record: caption-truncation-census-20260928.json</code></li>
+</ul>
+<h3>2026-09-28 08:21 AM LA — Next after <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-b-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> not_closed: the holdoff mechanism itself (never executed). Readmit after: allowlist entries for both vars, a preparer refusal on any exported EMBER_* not allowlisted (with deliberate red), and a worker-guarded merge-by-max counter. Rows of this leg count as extra null data for the parent pair.</li>
+</ul>
+<h3>2026-09-28 08:21 AM LA — REFUTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-b-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Clearing the shared gate (image_text_stream.py) for the duration of loss.backward pauses every pack-feeding thread (image-read, image-decode, and the pack-ahead draw's own header reads) mid-item, not just at draw entry, releasing the interpreter lock contention the engine thread was waiting on during backward (host-block-profile-20260928: 57.9% of engine-thread samples in lock reacquisition).</li>
+<li><strong>Frozen criterion:</strong> REFUTED if treatment p90 improvement &lt;= the null-pair difference (0.96 ms), OR the treatment arm does not assert the gate executed (a counter written by the gate, one eligible writer), OR the reference arm engine-thread lock-wait share is &lt; 20% when re-sampled at &lt;= 50 Hz</li>
+<li><strong>Ruling:</strong> Frozen clause: 'the treatment arm does not assert the gate executed (a counter written by the gate, one eligible writer)'. counter-b.json reads engaged_count 0, park_count 0, park_seconds 0.0. Cause: prepare_template_hour_dispatch.py governed-env allowlist (lines 438-452) omits EMBER_BACKWARD_HOLDOFF and its counter path, so the worker never received the flag; the counter is also written by every process that imports cia_step_runner (not one eligible writer). The holdoff MECHANISM is untested, not refuted.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\backward-holdoff-treatment-1024-20260928\counter-b.json</code></li>
+</ul>
+<h3>2026-09-28 08:21 AM LA — Next after <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-a-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> not_closed: the holdoff mechanism itself (never executed). Readmit after: allowlist entries for both vars, a preparer refusal on any exported EMBER_* not allowlisted (with deliberate red), and a worker-guarded merge-by-max counter. Rows of this leg count as extra null data for the parent pair.</li>
+</ul>
+<h3>2026-09-28 08:21 AM LA — REFUTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-a-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Clearing the shared gate (image_text_stream.py) for the duration of loss.backward pauses every pack-feeding thread (image-read, image-decode, and the pack-ahead draw's own header reads) mid-item, not just at draw entry, releasing the interpreter lock contention the engine thread was waiting on during backward (host-block-profile-20260928: 57.9% of engine-thread samples in lock reacquisition).</li>
+<li><strong>Frozen criterion:</strong> REFUTED if treatment p90 improvement &lt;= the null-pair difference (0.96 ms), OR the treatment arm does not assert the gate executed (a counter written by the gate, one eligible writer), OR the reference arm engine-thread lock-wait share is &lt; 20% when re-sampled at &lt;= 50 Hz</li>
+<li><strong>Ruling:</strong> Frozen clause: 'the treatment arm does not assert the gate executed (a counter written by the gate, one eligible writer)'. counter-a.json reads engaged_count 0, park_count 0, park_seconds 0.0. Cause: prepare_template_hour_dispatch.py governed-env allowlist (lines 438-452) omits EMBER_BACKWARD_HOLDOFF and its counter path, so the worker never received the flag; the counter is also written by every process that imports cia_step_runner (not one eligible writer). The holdoff MECHANISM is untested, not refuted.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\backward-holdoff-treatment-1024-20260928\counter-a.json</code></li>
+</ul>
+<h3>2026-09-28 08:17 AM LA — The holdoff treatment was never applied (a build seat, mail 38459)</h3>
+<ul>
+<li><code>prepare_template_hour_dispatch.py</code>'s env allowlist omits <code>EMBER_BACKWARD_HOLDOFF</code> and the counter path.
+  The governed worker never saw the flag.</li>
+<li><code>enabled:true</code> in the counter file was written by the hour client process, not by the worker.</li>
+<li>Both treatment legs are therefore effectively null legs, and their rows serve as extra noise-floor data.</li>
+<li>The mechanism is untested. The ruling stays REFUTED on the frozen clause, with this cause recorded.</li>
+<li><strong>Cure, approved:</strong></li>
+<li>add both names to the allowlist;</li>
+<li>the preparer refuses on any exported EMBER_* missing from the allowlist, with a deliberate red;</li>
+<li>the counter writer is guarded to the worker and merges by maximum.</li>
+<li><strong>Measured commit cost (the counterpart seat's audit).</strong> 899–1,031 s per commit-only operation, 110 min 52 s over seven.
+  This replaces the unmeasured 24–43 min figure.</li>
+</ul>
+<h3>2026-09-28 08:12 AM LA — Control/TTQ inventory (the counterpart seat 38453/38455; this seat read)</h3>
+<ul>
+<li><strong>Learning comparison exists for both arms.</strong> <code>learning-pair-20260927T014012Z</code> holds text and caption NLL
+  for control and candidate at updates 2,048, 4,096, 8,192 and 16,384.</li>
+<li><strong>Its workload is not the current one.</strong> The image manifest is pd12m heldout-0, not the v3 college-MC
+  combined manifest the current lineage trains on.</li>
+<li><strong>The control weights are gone.</strong> The control 16,384 snapshot holds its manifest only; the 6.17 GB of
+  safetensors were compressed. Both-arm protected MMMU therefore needs at least a control re-run.</li>
+<li><strong>Still unchecked:</strong> training wall to update 8,192 (for TTQ). No energy record is known.</li>
+<li><strong>Status wording:</strong> today's closure is unestablished, not proven impossible. No reusable, complete
+  qualification package exists for the current candidate.</li>
+</ul>
+<h3>2026-09-28 08:09 AM LA — Backward holdoff treatment: REFUTED on its frozen counter clause</h3>
+<ul>
+<li>The frozen refuted_if requires the treatment arm to assert that the gate executed, with a counter written
+  by the gate and one eligible writer.</li>
+<li><code>counter-a.json</code> reads engaged_count 0. <code>counter-b.json</code> appeared 28 s into leg b.</li>
+<li><code>cia_step_runner.py:311-312</code> registers the atexit writer at import. The runner is loaded by the worker and
+  also by the orchestrator/probe processes, and every loader writes the same path in 'w' mode. This is the
+  2026-09-22 double-writer defect again.</li>
+<li>The counter cannot bind to the worker, so the clause fires whatever the p90 shows.</li>
+<li>not_closed: the holdoff mechanism itself remains untested. A successor needs the counter writer guarded to
+  the measuring worker (PID-bound, merge-by-max).</li>
+<li><strong>Gate D template check (the counterpart seat, 38448-38450).</strong> The Q2(a) hour-binding records the trained 5-attention /
+  1-FFN / 1-expert template, set before import. The evaluation tree differs from the training tree only in
+  the step runner and the image stream. No template mismatch is established.</li>
+</ul>
+<h3>2026-09-28 08:07 AM LA — The acceptance bar is wider than the six-gate adapter checks (the counterpart seat, mail 38446)</h3>
+<ul>
+<li><strong>Interval count.</strong> A 1,024-update leg gives 1,023 measured intervals. The adapter needs 1,025 measured
+  stamps. No prequalification claim may come from 1,024-row legs.</li>
+<li><strong>Gate B headroom.</strong> Attempt 14's checkpoint/restore overhead (3,600.06 s before checkpoint vs 3,935.88 s
+  governed) puts the required active average at about 87,462 positions/s, not 80,000. The 40.6 ms p90 is a
+  heuristic for gate A only.</li>
+<li><strong>Obligations the adapter omits</strong>, which are live under the 2026-09-23 multimodal qualification directive:</li>
+<li>time-to-quality against a matched control;</li>
+<li>the protected floor on both arms;</li>
+<li>candidate ≥ control − 0.02, with a paired sign test;</li>
+<li>the public terminal's time, energy and recovery gates.
+  No superseding authority is known. The adapter is not the acceptance consumer until it carries all of these.</li>
+</ul>
+<h3>2026-09-28 08:06 AM LA — Gate D: the stem is held behind a caption truncation census</h3>
+<ul>
+<li><strong>Source finding (the counterpart seat, mail 38443; read by this seat at the arm head).</strong> <code>image_text_stream.py</code> lines 192-193
+  keep <code>encoded[-58:]</code> for every answer-scoped caption. Any multiple-choice prompt longer than 58 tokens
+  therefore loses a prefix of whole tokens: none, part, or all of the question, depending on option lengths.
+  Correction (08:17 AM LA, the counterpart seat 38463): "question stem deleted" overstated it. Retention per row is to be
+  measured. The evaluator's
+  <code>build_document</code> keeps the full question. This is directly testable information loss, and no image-side
+  change can recover deleted text. Its extent is unmeasured, so it is not yet a causal attribution for D.</li>
+<li><strong>Label correction.</strong> The nonlinear-stem prediction's 600 caption rows are IN_DISTRIBUTION_TRAINED, not
+  held-out. Their receipt says so. They are a capacity/memorisation diagnostic only. Any generalisation claim
+  needs a separate frozen held-out set.</li>
+<li><strong>Treatment-a record.</strong> It was a deliberately bounded 1,024-update diagnostic. The hour-capacity refusal at
+  <code>cia_hour.py:379</code> is by design, and the 1,025 rows are valid. It was not a run failure.</li>
+<li><strong>Next (CPU, at the window gap, a build seat):</strong></li>
+<li>the token-length census of answer-scoped captions;</li>
+<li>the fraction truncated;</li>
+<li>letter-target round-trip;</li>
+<li>same-item train-vs-eval parity.
+  The stem, if it proceeds later, is a residual zero-init branch.</li>
+</ul>
+<h3>2026-09-28 07:33 AM LA — SUPPORTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-null-b-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. This leg measures the flag-off noise floor (identical code path, .wait() returns immediately) that the treatment pair's improvement is compared against.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists</li>
+<li><strong>Ruling:</strong> rows.jsonl has 1025 rows (1 warm + 1024 measured, geometry measured_steps=1024 warm_steps=1); complete_update_quantiles.py reads 1023 complete update intervals, p50 44.56 p90 52.49 p99 64.30 mean 45.29 ms, complete p10 61608.7 pos/s. Neither refutation clause holds.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-28 07:33 AM LA — SUPPORTED: <code>gate-ab-engine-thread-seat-wait-in-loss-backward-null-a-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. This leg measures the flag-off noise floor (identical code path, .wait() returns immediately) that the treatment pair's improvement is compared against.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists</li>
+<li><strong>Ruling:</strong> rows.jsonl has 1025 rows (1 warm + 1024 measured, geometry measured_steps=1024 warm_steps=1); complete_update_quantiles.py reads 1023 complete update intervals, p50 45.02 p90 53.45 p99 64.38 mean 45.75 ms, complete p10 60682.5 pos/s. Neither refutation clause (no rows file, or fewer than 1,024 measured updates) holds.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-28 06:16 AM LA — Next after <code>gate-ab-host-block-in-backward-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> The main-thread wait is the thread parked on the autograd engine. The engine thread itself spends 57.9% of its custom-Function backward samples reacquiring the interpreter lock, in the streamed-loss and cut-cross-entropy backward host code, behind the pack/decode pool. Not closed: whether the lock wait is on the critical path of the device (it would be if the device idles between loss-backward kernels); whether the switch-interval result of 2026-09-25 already prices this; whether sampling lag skews thread shares. Successor: remove Python lock contention from the loss backward on the engine thread (gate the pack worker off during backward, or take the loss backward out of Python), sized by a matched captured pair with a null pair first.</li>
+<li><strong>Successor id:</strong> <code>gate-ab-engine-thread-seat-wait-in-loss-backward-20260928</code></li>
+</ul>
+<h3>2026-09-28 06:15 AM LA — SUPPORTED: <code>gate-ab-host-block-in-backward-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> The host thread blocks inside loss.backward (13 graphed-backward segments) and inside optimizer_and_sync on synchronizing waits or Python dispatch, so the GPU starves between segments. A sampling profile of the worker main thread during measured updates names the frames that hold the wall time.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if main thread spends &lt; 20% of samples in synchronizing or waiting frames (host is not blocked; the idle is launch or dispatch cost), OR py-spy fails to attach or records &lt; 5,000 main-thread samples (INCONCLUSIVE, instrument did not run)</li>
+<li><strong>Ruling:</strong> Frozen criterion: refuted if main thread &lt; 20% of samples in synchronizing or waiting frames, or &lt; 5,000 main-thread samples. Observed 17,999 main-thread samples, 38.3% in wait frames; 84.1% of waits in _engine_run_backward, top 3 sites 86.5%. Caveats: py-spy lagged (samples not time-uniform); the wait is the main thread parked on the autograd engine thread, so the engine thread is the next sampling target.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\host-block-profile-20260928\analysis.md</code></li>
+</ul>
+<h3>2026-09-28 05:22 AM LA — Next after <code>gate-ab-backward-class-census-off2-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Not closed: which backward classes are heavy (instrument 4.0% null spread, above the 3% frozen floor). New finding from source: with EMBER_PRELAUNCH_FORWARD the row cuda_phase forward/backward events come from pre[events], recorded when the forward was launched ahead during the previous step (cia_step_runner.py 1819, 2097-2101). The row backward interval therefore starts at the prelaunched forward end and spans inter-step idle, so the 3.2x backward/forward premise of the A/B derivation is an attribution artifact. The captured device split without prelaunch reads fwd 11.7, loss 0.6, bwd 18.7 ms (1.59x). Probe boundaries: text-only genesis, and the optimizer steps all parameters (17.6 ms vs arm 2.99). Successor: device work of the arm fits 40.6 ms and the p90 excess is host/idle between steps.</li>
+<li><strong>Successor id:</strong> <code>gate-ab-device-work-fits-budget-idle-is-the-gap-20260928</code></li>
+</ul>
+<h3>2026-09-28 05:22 AM LA — INCONCLUSIVE: <code>gate-ab-backward-class-census-off2-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Candidate: a few backward kernel classes (recompute of skipped layers, unfused grouped-expert or attention backward) carry the ~11 ms excess over 2x forward. A captured class census, fwd and bwd split by graph-launch order, names them.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if null pair total device us/step differs by more than 3% (instrument cannot resolve; INCONCLUSIVE), OR captured backward/forward device ratio &lt;= 2.0, OR the top 3 backward kernel classes hold less than 50% of the backward time in excess of 2x forward</li>
+<li><strong>Ruling:</strong> Frozen criterion: INCONCLUSIVE if the null pair total device us/step differs by more than 3%. Observed 49,083 vs 47,115 us = 4.0%. Both runs split all 6 windows (0 residual). Secondary facts, not a verdict: captured backward/forward 1.59 (18.66 vs 11.73 ms), not 3.2; optimizer phase 17.6 ms here vs 2.99 ms in the hour rows, so this probe steps the full parameter set and is NOT the arm optimizer path.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\backward-census-off2-20260928\null_b.log</code></li>
+</ul>
+<h3>2026-09-28 05:02 AM LA — SUPPORTED: <code>issue2119-lineage-continuation-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> The arm tree lacked the merged runner gate, so no run could declare a purpose. With master merged into the arm head (worktree this seat-2119-lineage-continue), the hour preparer adds training_job_purpose and the runner validates it at prepare and execute. Continuation from a published child is the existing parent-receipt path.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if prepare or the runner refuses the purpose, OR no child is published, OR the child lineage parent differs from the 062803Z child, OR step_delta is 0</li>
+<li><strong>Ruling:</strong> Frozen criterion: refuted if prepare or the runner refuses the purpose, OR no child is published, OR the child lineage parent differs from the 062803Z child, OR step_delta is 0. Observed: CONTINUE_TRAINING frozen in the dispatch prediction, runner accepted it, hour executed rc=0 with 79,102 measured updates, trained child published, parent_matches=true, step_delta=79,103. None of the four refutation clauses holds.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-28 02:39 AM LA — Next after <code>gate-d-image-projection-movement-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Does not close: under-training as a partial cause (ratio 0.36). It weakens the near-genesis explanation: the projection moved 1.67x its genesis norm yet carries almost no content (caption wrong-real 0.026 nats). Leading successor: capacity, not learning. One linear map of raw 16x16 RGB patches, with no nonlinearity before the shared decoder, cannot build content features at 128 px. Test: a small nonlinear patch encoder (2-layer MLP or conv stem) trained under a bounded run with the same objective; measure caption wrong-real before any hour.</li>
+<li><strong>Successor id:</strong> <code>gate-d-linear-patch-projection-capacity-20260928</code></li>
+</ul>
+<h3>2026-09-28 02:39 AM LA — INCONCLUSIVE: <code>gate-d-image-projection-movement-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> The single linear image projection has received too little effective learning to encode content. Its presence signal can come from the BOI/EOI tokens and position structure alone, so the projection weights may still be near genesis.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if relative Frobenius change of embed_image from genesis ||W_child - W_genesis|| / ||W_genesis|| &gt;= 0.5x the median relative change of the decoder linear weights of the same child</li>
+<li><strong>Ruling:</strong> Frozen: refuted if image relative change from genesis &gt;= 0.5x the decoder moved-median; supported if &lt;= 0.1x. Observed: image 1.673, decoder median 4.634 over 23 moved 2-D weights, ratio 0.361, inside the undecided band (0.1, 0.5). Absolute: image.weight moved 1.67x its genesis norm (delta 29.5 vs 17.6), so the projection is NOT near genesis.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-image-projection-movement-20260928\image-projection-movement-receipt.json</code></li>
+</ul>
+<h3>2026-09-28 02:24 AM LA — Next after <code>gate-d-caption-nll-content-probe-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> Refuted as a content-use claim; it does NOT close: (1) content use at a larger grid (leg 4), now deprioritised because content is weak even at the trained resolution on trained captions; (2) content use after more image-path gradient; (3) a deeper patch encoder. Presence is used (4.76 nats). Next, understanding first: how far has embed_image moved from genesis, and what share of the gradient norm reaches it? If it barely moved, the cure is objective or learning-rate share on the image path, not resolution.</li>
+<li><strong>Successor id:</strong> <code>gate-d-image-projection-movement-20260928</code></li>
+</ul>
+<h3>2026-09-28 02:24 AM LA — REFUTED: <code>gate-d-caption-nll-content-probe-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Either the linear patch path carries image content and captioning uses it while MC training never needed it (cure: content-contingent supervision), or the decoder ignores patch content altogether (cure: architecture). On a caption the only conditioning input is the image, so a caption the model predicts better from its own image than from another image proves content is used, whether learned or memorised.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if Mean per-token caption NLL (caption tokens 2..end plus EOS, identical token set in every condition) on &gt;=500 trained caption rows (pd12m + docci, the child own minimum-touch bucket, seed 8080) satisfies NLL_wrong - NLL_real &lt; 0.05 nats</li>
+<li><strong>Ruling:</strong> Frozen criterion: refuted if NLL_wrong - NLL_real &lt; 0.05 nats on &gt;=500 trained caption rows. Observed on n=600 (0 refused): real 1.8967, wrong 1.9230, blank 6.6518 nats/token; wrong - real = 0.0263 &lt; 0.05. Blank - real = 4.755: image presence is used heavily, content barely (425 of 600 rows worse under the wrong image, so a small real content signal exists, about 1.4 percent of NLL).</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-caption-nll-content-probe-20260928\caption-nll-content-probe-receipt.json</code></li>
+</ul>
+<h3>2026-09-28 01:59 AM LA — REFUTED: <code>gate-d-in-distribution-wrong-image-control-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Hypothesis: the in-distribution real-vs-blank gain is content-based, not presence-based -- the model reads the actual image content when it is legible (in-distribution images, unlike 128px MMMU charts/diagrams), so a wrong (mismatched) image will score close to blank, well below real, because it supplies no correct-answer signal and may actively mislead.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if real minus wrong &lt;= 0.03 (wrong ties real within ~2 SE at n=2000; presence alone, not content, drives the in-distribution gain, matching the MMMU flat pattern one level down)</li>
+<li><strong>Ruling:</strong> real_minus_wrong = -0.0025 (accuracy_real 0.4007, accuracy_wrong 0.4032, n=1999), well below the refuted-if threshold of 0.03; wrong ties real. real_minus_blank = 0.1040 confirms the gain is real (presence matters), but wrong ties real means content is NOT read -- the same flat pattern as the MMMU result one level down. Content is not used even when in-distribution and legible; only image PRESENCE drives the gain.</li>
+<li><strong>Receipt:</strong> <code>seat record: image-dependence-probe-receipt.json</code></li>
+</ul>
+<h3>2026-09-28 01:09 AM LA — SUPPORTED: <code>gate-d-mmmu-per-item-agreement-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> SUPPORTED: any image moves the answer off the missing-image B prior (real-vs-missing agreement 0.23), but real and wrong images give the same answer on 85% of items, so the child reads that an image EXISTS and not what it shows. MMMU images reach the model at 8-64 patches on an 8-wide grid, which cannot resolve chart text or diagrams. Successor: raise the evaluation patch budget (and match it in training) and measure whether real-vs-wrong agreement falls and real separates. Not closed: whether the in-distribution real&gt;blank gain 0.53 vs 0.30 is also presence-only (needs an in-distribution wrong-image control); whether the letter-A preference under any image is a training-set prior.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if missing top-letter share &lt; 0.50 OR real-vs-wrong agreement &lt;= real-vs-missing agreement + 0.10 OR real-vs-wrong agreement &lt; 0.70</li>
+<li><strong>Ruling:</strong> ruled SUPPORTED; successor gate-d-mmmu-patch-budget-20260928 named</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-q2a-hour-dose-scored-20260928\per-item-agreement.json</code></li>
+</ul>
+<h3>2026-09-28 01:09 AM LA — REFUTED: <code>gate-d-q2a-hour-dose-scored-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> An hour of college-level visual MC at answer weight 200 (82,302 updates) did not make MMMU depend on the image: three conditions within 0.003. NOT CLOSED: (a) whether the image path reads MMMU images at all at the current patch budget and resolution; (b) a dose of image-NECESSARY items, where the text alone cannot answer; (c) whether the three conditions answer the same items (per-item agreement) or just score the same. Successor is analysis-only on these receipts: per-item agreement across conditions, answer-letter distribution per condition, per-subject breakdown.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if real - max(missing, wrong) &lt;= 0.0153 (one item SE), all three receipts carrying the requested image_condition</li>
+<li><strong>Ruling:</strong> Frozen criterion: real - max(missing, wrong) &lt;= 0.0153 (one item SE), all three receipts carrying the requested image_condition. Observed real 0.283, missing 0.286, wrong 0.283; all three image_condition fields honoured; real - max = -0.003. Prediction held on real (0.28 [0.25,0.32]) and wrong (0.26 predicted, 0.283 observed, just outside), missing 0.275 predicted vs 0.286 observed.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-q2a-hour-dose-scored-20260928</code></li>
+</ul>
+<h3>2026-09-28 01:09 AM LA — Next after <code>gate-d-mmmu-per-item-agreement-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> SUPPORTED: any image moves the answer off the missing-image B prior (real-vs-missing agreement 0.23), but real and wrong images give the same answer on 85% of items, so the child reads that an image EXISTS and not what it shows. MMMU images reach the model at 8-64 patches on an 8-wide grid, which cannot resolve chart text or diagrams. Successor: raise the evaluation patch budget (and match it in training) and measure whether real-vs-wrong agreement falls and real separates. Not closed: whether the in-distribution real&gt;blank gain 0.53 vs 0.30 is also presence-only (needs an in-distribution wrong-image control); whether the letter-A preference under any image is a training-set prior.</li>
+<li><strong>Successor id:</strong> <code>gate-d-mmmu-patch-budget-20260928</code></li>
+</ul>
+<h3>2026-09-28 01:09 AM LA — SUPPORTED: <code>gate-d-mmmu-per-item-agreement-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Hypothesis: the image changes answer SHAPE but not correctness. Without an image the model collapses to one letter prior; with any image (real or wrong) the answers spread, and real and wrong images produce nearly the same answers, so image content carries almost no signal to MMMU.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if missing top-letter share &lt; 0.50 OR real-vs-wrong agreement &lt;= real-vs-missing agreement + 0.10 OR real-vs-wrong agreement &lt; 0.70</li>
+<li><strong>Ruling:</strong> Frozen criterion supported-if: missing top-letter share &gt;= 0.50 AND real-vs-wrong &gt; real-vs-missing + 0.10 AND real-vs-wrong &gt;= 0.70. Observed missing top share 0.6718 (B 569/847); real-vs-wrong 0.8512 vs real-vs-missing 0.2279; none of the refuted-if disjuncts hold.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-q2a-hour-dose-scored-20260928\per-item-agreement.json</code></li>
+</ul>
+<h3>2026-09-28 01:07 AM LA — Next after <code>gate-d-q2a-hour-dose-scored-20260928</code></h3>
+<ul>
+<li><strong>Successor hypothesis / not closed:</strong> An hour of college-level visual MC at answer weight 200 (82,302 updates) did not make MMMU depend on the image: three conditions within 0.003. NOT CLOSED: (a) whether the image path reads MMMU images at all at the current patch budget and resolution; (b) a dose of image-NECESSARY items, where the text alone cannot answer; (c) whether the three conditions answer the same items (per-item agreement) or just score the same. Successor is analysis-only on these receipts: per-item agreement across conditions, answer-letter distribution per condition, per-subject breakdown.</li>
+<li><strong>Successor id:</strong> <code>gate-d-mmmu-per-item-agreement-20260928</code></li>
+</ul>
+<h3>2026-09-28 01:07 AM LA — REFUTED: <code>gate-d-q2a-hour-dose-scored-20260928</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> If the college-MC dose teaches the image path to carry MMMU signal, real MMMU exceeds both image controls by more than one item SE on this child. Prediction registered before scoring: real 0.28 [0.25,0.32], missing 0.275, wrong 0.26, P(clear)=0.25.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if real - max(missing, wrong) &lt;= 0.0153 (one item SE), all three receipts carrying the requested image_condition</li>
+<li><strong>Ruling:</strong> Frozen criterion: real - max(missing, wrong) &lt;= 0.0153 (one item SE), all three receipts carrying the requested image_condition. Observed real 0.283, missing 0.286, wrong 0.283; all three image_condition fields honoured; real - max = -0.003. Prediction held on real (0.28 [0.25,0.32]) and wrong (0.26 predicted, 0.283 observed, just outside), missing 0.275 predicted vs 0.286 observed.</li>
+<li><strong>Receipt:</strong> <code>state\issue1945-receipts\gate-d-q2a-hour-dose-scored-20260928</code></li>
+</ul>
+<h3>2026-09-28 12:51 AM LA — INCONCLUSIVE: <code>gate-d-college-mc-dose-q2a-20260927</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Candidate: college-level visual MC is too small a share (43.7 pct of rows, 98.6 pct arxivqa paper figures) for image-conditioned answering to transfer to MMMU exam figures. Tripling college dose (PERMS 2 to 6, share 0.70) isolates dose on the identical arm; a null would not separate dose from content mismatch.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if real minus max(missing, wrong) &lt;= 0.0153 (one item SE at p=0.27, n=847) on the 1,024-update v4 child, with every condition receipt reporting the condition it ran; or any condition receipt not honoured =&gt; INCONCLUSIVE</li>
+<li><strong>Ruling:</strong> Per the frozen criterion's own clause: any condition receipt not honoured =&gt; INCONCLUSIVE. The hour dose (retry8, 82,302 measured updates, full ~80min governed hour, real hour-result.json landed) completed cleanly and produced a real trained child -- but the MMMU real-condition eval refused before producing an mmmu-cia-evaluation-receipt.json: identity:candidate-differs (hour candidate 4a6dc8ca9fa4a9e3cb716067f18c92c5be8875f48188d8a91bd1ca853c67cd91 vs claim.json's hardcoded plan_sha256 22d2eca403b85b7e3fa33d73a6a1f0479b4e62034a86526b32eccaf8f01dc720, both cce-document-v1). GOT=NO_RECEIPT != real, so the real/missing/wrong loop broke before any accuracy number existed. Dose change note (per this seat mail 38397): the frozen prediction (real 0.28 [0.25, 0.32]) and the 0.0153 refutation margin were calibrated against the 1,024-update v4 child. Six attempts (retry2-6) at the original 1,024-step bound never produced a child at all (census refusals x5, my own HOUR_MEASURED_STEPS env mistake x1, then a B: disk-floor refusal at full-hour geometry on retry7, cleared by this seat). Retry8 is the first run at either dose to reach HOUR_EXECUTED rc=0. Journal: hour-dose timing p90=48.37ms p50=43.25ms p99=56.57ms mean=43.72ms (1023 complete-update intervals), measured_updates=82302, overall throughput ~68013 positions/sec, applied_positions=337113088. No MMMU real/missing/wrong accuracy numbers exist for either dose -- the claim.json identity binding needs repair (plan_sha256 recomputed for the hour-dose candidate) before this hypothesis can be re-run to a real verdict.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-27 10:27 PM LA — REFUTED: <code>optimizer-overlap-t1-matched-on-20260927</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Staging optimizer.step() on a side CUDA stream (EMBER_STAGE_OPTIMIZER_OVERLAP=1) overlaps it with next-pack staging; ceiling ~5.2 ms, bounded by _stage_next_early duration.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if pairwise with its sibling: (p90_off - p90_on) &lt;= |p90_null_a - p90_null_b| OR &lt; 2.0 ms</li>
+<li><strong>Ruling:</strong> p90_off=47.63ms, p90_on=51.25ms -&gt; (p90_off - p90_on) = -3.62ms &lt; 2.0ms -&gt; REFUTED_IF satisfied on the &lt; 2.0ms clause alone (independent of null-pair spread). The optimizer-overlap-stream treatment does not improve p90 complete-update interval; the on leg was slower.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-27 10:27 PM LA — REFUTED: <code>optimizer-overlap-t1-matched-off2-20260927</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Staging optimizer.step() on a side CUDA stream (EMBER_STAGE_OPTIMIZER_OVERLAP=1) overlaps it with next-pack staging; ceiling ~5.2 ms, bounded by _stage_next_early duration. This off leg (flag=0) is the paired control.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if pairwise with its sibling optimizer-overlap-t1-matched-on-20260927: (p90_off - p90_on) &lt;= |p90_null_a - p90_null_b| OR &lt; 2.0 ms</li>
+<li><strong>Ruling:</strong> p90_off=47.63ms, p90_on=51.25ms -&gt; (p90_off - p90_on) = -3.62ms &lt; 2.0ms -&gt; REFUTED_IF satisfied on the &lt; 2.0ms clause alone (independent of null-pair spread). The optimizer-overlap-stream treatment does not improve p90 complete-update interval; the on leg was slower.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
+</ul>
+<h3>2026-09-27 09:30 PM LA — INCONCLUSIVE: <code>optimizer-overlap-t1-matched-off-20260927</code></h3>
+<ul>
+<li><strong>Hypothesis:</strong> Staging optimizer.step() on a side CUDA stream (EMBER_STAGE_OPTIMIZER_OVERLAP=1) overlaps it with next-pack staging; ceiling ~5.2 ms, bounded by _stage_next_early duration.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if pairwise with its sibling: (p90_off - p90_on) &lt;= |p90_null_a - p90_null_b| OR &lt; 2.0 ms</li>
+<li><strong>Ruling:</strong> No real measurement: self-inflicted double-claim (see landed receipt) caused the dispatch's own gpu_window.sh open/loop.py claim call to be refused before any GPU work ran. Zero GPU time consumed. Re-dispatching fresh without a prior manual claim; the dispatch script's own internal claim/land will govern this hypothesis's real attempt.</li>
+<li><strong>Receipt:</strong> <code>&lt;host-local path&gt;\AppData\Local\Temp\claude\B--M-avir-a build seat\160296a1-ec08-4206-88a1-9317078deedf\scratchpad\t1-matched-off-aborted-receipt.json</code></li>
+</ul>
+<h3>2026-09-27 06:42 PM LA — MMMU anatomy: a missing image means answering B; any image spreads the answers; content barely matters</h3>
+<p>Understanding artifact on the attempt-14 child's r4 MMMU predictions (847 items, all three image conditions). Script: <code>seat record: mmmu_condition_anatomy.py</code>.</p>
+<ul>
+<li><strong>Missing image means one letter.</strong> With no image the model answers <code>B</code> on 727 of 847 items (86%). Missing scores 0.283 only because <code>B</code> is 27% of the gold answers. It is a letter prior, not reasoning.</li>
+<li><strong>Any image spreads the answers, and its content barely matters.</strong> Real: A 247, C 242, B 241, D 105, E 12. Wrong: C 264, A 239, B 214, D 115, E 15. Real and wrong pick the same letter on 81.4% of items; real and missing agree on 31.5%. The model responds to an image being PRESENT, far more than to what it shows.</li>
+<li><strong>Real is near chance given its own letter mix.</strong> Matching the prediction marginals against the gold marginals (A 242, B 230, C 198, D 149, E 25) gives about 0.249 expected. Observed real is 0.263, wrong is 0.253, and the constant-A floor is 0.2857.</li>
+<li><strong>Per subject:</strong> real beats missing most in Electronics (+0.19), Geography (+0.18), Biology, Management and Pharmacy (+0.11 to +0.14). Missing wins in Art Theory, Music, Mechanical Engineering, Diagnostics, Art and Accounting (+0.13 to +0.30). Those are the subjects where gold is concentrated on <code>B</code>. Subject counts are 16 to 30 items, so every per-subject difference sits inside about ±0.18 (1 SE).</li>
+</ul>
+<p><strong>What this changes.</strong> Gate D needs real &gt; max(0.2857, missing + 0.0155, wrong + 0.0155), so real must reach about 0.30. That is roughly +0.05 of CONTENT-grounded accuracy above today's chance level. A mixture change that only makes the model more confident with an image present (a presence effect) will move real and wrong together and cannot cure D. The in-distribution result (0.5335 real vs 0.296 blank) shows the model can use image content on items like its training data, so the gap is transfer to college-level content. The next D run is judged first by real-minus-wrong, not real alone.</p>
+<p><strong>Prediction registered for Q2(a) (college-level visual MC, bounded run):</strong> real 0.275 [0.245, 0.310]; wrong 0.260 [0.235, 0.290]; real-minus-wrong 0.015 [-0.010, 0.045]; missing stays a letter prior (top letter share &gt; 60%). Probability of clearing the D cure bar in one bounded run: 0.2.</p>
+<h3>2026-09-27 05:23 PM LA — Directives: predict and understand the network; autonomous execution; elastic host use</h3>
+<ul>
+<li><strong>Why #1945 is not complete.</strong> Gate D (MMMU) is a gap in understanding how Ember's image path responds to its
+  data. It learns in-distribution (0.5335 real vs 0.296 blank) and does not transfer to college-level MMMU items.
+  For seven attempts we changed the mixture without predicting MMMU first, and the image controls were inert.
+  Gates A and B are a systems gap: the optimizer runs serialized after backward, plus a stream-event race under
+  overlap. That is not a data gap.</li>
+<li><strong>Operating changes from today:</strong></li>
+<li>Every training or eval run registers a numeric prediction with an interval, and the index keeps calibration.</li>
+<li>Cheap dose-response probes run before any hour.</li>
+<li>The execution seat runs continuously and dispatches cure legs itself.</li>
+<li>Ember's memory and compute are to flex with host state instead of locking the device, with the
+    measurement arithmetic recalibrated before any elastic number is quoted.</li>
+<li><strong>T1 correction (execution seat, 05:09 PM LA).</strong> The crash is not an admission-set race: the resident set never
+  moves per step. With deferred verdicts on, the optimizer runs on the default stream, but the completion event is
+  recorded on the overlap stream. The next forward can therefore start while parameters are still being written.
+  Cure: record and wait on the event of the stream the optimizer actually ran on. A red test comes first.</li>
+</ul>
+<h3>2026-09-27 04:45 PM LA — D cure r4: REFUTED. The attempt-14 child does not use the image on MMMU</h3>
+<ul>
+<li><strong>Hypothesis</strong> <code>mmmu-image-path-d-cure-r4-20260927</code>. Gate D.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if real − max(missing, wrong) ≤ √(p(1−p)/847), with all three receipts
+  recording their own image condition.</li>
+<li><strong>Result:</strong> real 0.263, missing 0.283, wrong 0.253. The gap is −0.020 against SE 0.0151. Removing the
+  image scores higher than showing it.</li>
+<li><strong>Not closed:</strong> on training-distribution items the image path carries signal (real 0.5335 vs blank
+  0.296, n=2000, 2026-09-26), so the failure is in <strong>transfer to MMMU</strong> (college-level, chart and diagram
+  items). Still open: whether college-level visual multiple-choice data moves MMMU real above missing,
+  and whether answer weight 200 teaches a letter prior that ignores pixels.</li>
+</ul>
+<h3>2026-09-27 04:31 PM LA — Correction: every pre-r4 image control was inert</h3>
+<ul>
+<li>r3 produced byte-identical predictions for real, missing and wrong (0.263 each). The run had not
+  sourced the gate D binding. Without it, protected registry v3 runs an evaluator copy with no
+  image-condition logic.</li>
+<li>The same defect affected attempts 8 through 14 and the hour-8 controls. Hour 8's wrong-image arm
+  differed, but its missing-image arm was inert. All of those missing and wrong numbers are <strong>void</strong>.</li>
+<li>Cure: control runs source the binding and refuse unless each receipt's <code>image_condition</code> equals the
+  requested condition.</li>
+</ul>
+<h3>2026-09-27 04:39 PM LA — Optimizer-overlap (T1) matched-on arm: the crash is a residency race</h3>
+<ul>
+<li>The overlap-on run completed one update, then raised "routed expert is outside the admitted resident
+  set". With overlap on, the deferred routing settle checks residency after the next step's admission
+  or eviction has already moved the set.</li>
+<li>Cure authorised: an admission-generation barrier in the settle step (a stale generation resyncs,
+  never skips the check). It is frozen with a deliberate red test, then measured as a matched pair
+  against the no-fix floor.</li>
+<li><strong>No-fix floor:</strong> p90 49.32 / 49.76 / 50.47 ms (spread about 1.15 ms). The target is ≤ 40.6 ms.</li>
+</ul>
+<h3>2026-09-27 03:30 PM LA — Full campaign audit completed</h3>
+<ul>
+<li>499 rows from the attempt registry, loop log, state documents, push ledger and issue thread,
+  checked by a completeness critic. See <a href="campaign.html">campaign.html</a>.</li>
+<li>Headline finding: A and B have been met (attempts 7 and 9) and D has never been met. No attempt has
+  held A, B and D together. Routes named but never run are listed in the ledger, section 7.</li>
+</ul>
+<!-- JOURNAL-LOG-END -->
+
+<h2>2026-09-28 12:40 PM LA — Interpretation limits for the gate D corrected pair (pre-registered, not a criterion)</h2>
+<p>Frozen criteria are unchanged. These rules say what each outcome licenses, and were written before the learner runs.</p>
+<ol>
+<li>Control passes protected accuracy and image dependence, candidate fails: a candidate-specific limitation (reduced-template learning).</li>
+<li>Both fail: shared input, objective, optimization or representation explanations stay OPEN, not established. The shared parent (dispatch 103619Z, keep 0,6,12,18,23) was trained under the reduced template, so the full-template control can start with a predictive disadvantage in re-enabled layers. Matched storage is not matched starting quality.</li>
+<li>C passes but image dependence fails: NLL alone is not evidence of useful visual conditioning.</li>
+<li>C and D pass but A or B fails: keep that exact learning result; later changes are restricted to proven-equivalent execution changes.
+Endpoint C deltas are not learning gains from a matched predictive baseline.</li>
+</ol>
+<p>Source: counterpart-seat critique 38684 and 38688. The learner and final hour share one frozen source that includes the linear chain-validation cure (Path S).</p></article></div></main><footer><div class="wrap"><div><strong>Source events included through</strong> 2026-09-28T20:17:55Z &nbsp;&middot;&nbsp; <strong>export generated</strong> 2026-09-28T20:43:49Z</div><div>This page states what its export contains. It makes no claim about local events newer than the source snapshot above; establishing that would take a fresh source check, and a generation timestamp is not an evidence timestamp.</div><div>Ember Research &mdash; a rendering of an existing research record. It is not an acceptance authority and moves no campaign gate.</div></div></footer></body></html>

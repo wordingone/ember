@@ -359,6 +359,8 @@ def shell(title, current, body, stamp, standalone=True):
         '<a href="%s"%s>%s</a>' % (h, ' aria-current="page"' if k == current else '', esc(t))
         for k, h, t in (('index', 'index.html', 'Overview'),
                         ('research', 'research.html', 'Research'),
+                        ('journal', 'journal.html', 'Journal'),
+                        ('campaign', 'campaign.html', 'Ledger'),
                         ('agents', 'agents.html', 'Agents')))
     head = ('<title>%s</title>%s<style>%s</style>' % (esc(title), FONTS, CSS))
     page = (
@@ -935,3 +937,11 @@ def figure_table(sweep, audit):
             '<th>32F tile</th><th>16F tile</th><th>kernel</th>'
             '<th>audit ratio<br>(profiled, not a rate)</th><th>measured in</th>'
             '</tr></thead><tbody>%s</tbody></table></div>' % ''.join(tr))
+
+
+def markdown_page(title, current, md_text, stamp):
+    """A journal or ledger page rendered from its markdown source, inside the site shell."""
+    import markdown as _md
+    body = _md.markdown(md_text, extensions=['tables', 'fenced_code', 'sane_lists'])
+    body = body.replace('href="campaign.md"', 'href="campaign.html"')
+    return shell(title, current, '<article class="prose md">%s</article>' % body, stamp)
