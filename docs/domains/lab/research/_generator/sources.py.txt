@@ -46,6 +46,9 @@ _DEFAULT_SEAT_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
 SEAT_ROOT = (os.environ.get('EMBER_RESEARCH_SEAT_ROOT')
              or _DEFAULT_SEAT_ROOT).replace('\\', '/')
+# The ember checkout the published files land in. Set by the builder (never a host path in this file). A repo-shaped
+# path token that does not exist in that checkout is a seat-workspace citation, not a repository reference.
+REPO_ROOT = None
 REGISTRY = 'state/attempt-registry.jsonl'
 LOOP = 'state/issue1945-loop.jsonl'
 
@@ -101,7 +104,7 @@ _HOST_ACCOUNT = re.compile(r'[A-Za-z]:[\\/]Users[\\/][^\\/\s"\']+', re.I)
 _DRIVE_ABS = re.compile(r'\b[ABCE]:[\\/][^\s"\',;)]*', re.I)
 _OPERATOR_NAMES = tuple(
     n for n in os.environ.get('EMBER_RESEARCH_OPERATOR_NAMES', 'Jun').split(',') if n.strip())
-_CRED = re.compile(r'(?i)\b(api[_-]?key|secret|password|bearer\s+[A-Za-z0-9._-]{8,}|ghp_[A-Za-z0-9]{10,}|xox[baprs]-)')
+_CRED = re.compile(r'(?i)\b((?:api[_-]?key|secret|password)\b|bearer\s+[A-Za-z0-9._-]{8,}|ghp_[A-Za-z0-9]{10,}|xox[baprs]-)')
 
 # Seat names are the personal handles of the agents working the campaign, and the
 # ember repository refuses them in tracked content by policy -- the same rule that
@@ -133,6 +136,8 @@ _SEAT_ROLE_BY_SHA256 = {
 # Same token shape the repository's own hashed check uses, so a name it would catch
 # is a name this scrubs.
 _TOKEN = re.compile(r'[A-Za-z]{3,}/?')
+# A record id or anchor: scrubbed with a bare role word so links and joins keep working.
+_IDENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]*$')
 
 
 def _seat_role(token):
@@ -140,6 +145,46 @@ def _seat_role(token):
     return _SEAT_ROLE_BY_SHA256.get(
         hashlib.sha256(token.lower().encode('utf-8')).hexdigest())
 
+
+
+def reference_re():
+    """The docs information system's own current-reference pattern, imported from the checkout, never copied."""
+    if not REPO_ROOT:
+        return None
+    import sys
+    scripts = os.path.join(REPO_ROOT, 'scripts')
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    try:
+        from docs_information_system import CORRECTED_REFERENCE_RE
+    except Exception as error:
+        raise SystemExit('REFUSED: cannot import CORRECTED_REFERENCE_RE from %s: %r' % (scripts, error))
+    return CORRECTED_REFERENCE_RE
+
+
+def repo_path_exists(target, base=None):
+    """Resolve like the docs system: repository-relative, or relative to the document's own directory."""
+    for root in (REPO_ROOT, base):
+        if root and os.path.exists(os.path.join(root, target)):
+            return True
+    return False
+
+
+def rewrite_seat_paths(s):
+    """Rewrite every repo-shaped path token the ember checkout cannot resolve to 'seat record: <name>'. Returns
+    (text, count). Applied to EVERY published byte at write time, so no builder path can leak one."""
+    pattern = reference_re()
+    if pattern is None:
+        return s, 0
+    hits = []
+
+    def _record(m):
+        target = m.group(1).rstrip('.,:;)]}')
+        if repo_path_exists(target):
+            return m.group(0)
+        hits.append(target)
+        return 'seat record: ' + target.rsplit('/', 1)[-1] + m.group(1)[len(target):]
+    return pattern.sub(_record, s), len(hits)
 
 
 class Sanitizer(object):
@@ -150,6 +195,7 @@ class Sanitizer(object):
         self.abs_paths = 0
         self.operator_names = 0
         self.seat_names = 0
+        self.seat_records = 0
         self.credential_flags = []
 
     def text(self, s, where=''):
@@ -171,6 +217,10 @@ class Sanitizer(object):
                 return '/'.join(tail[i:])
             return '<host-local path>'
         s = _DRIVE_ABS.sub(_abs, s)
+        # A seat-workspace path (state/..., scripts/issue1945/..., an absolute seat root already cut to its tail above)
+        # that is not a file of the ember checkout must not read as a repository reference: rewrite it to its name.
+        s, n = rewrite_seat_paths(s)
+        self.seat_records += n
         for name in _OPERATOR_NAMES:
             pat = re.compile(r'\b%s\b' % re.escape(name.strip()), re.I)
             s, n = pat.subn('the operator', s)
@@ -182,7 +232,11 @@ class Sanitizer(object):
             if role is None:
                 return tok
             self.seat_names += 1
+            if ident:
+                # an identifier (a record id, an anchor) keeps its shape: no spaces, no apostrophe
+                return 'seat/' if slash else 'seat'
             return (role + "'s ") if slash else role
+        ident = bool(_IDENT.match(s))
         s = _TOKEN.sub(_seat, s)
         return s
 
@@ -199,6 +253,7 @@ class Sanitizer(object):
             'absolute_local_paths_normalized': self.abs_paths,
             'operator_name_occurrences_replaced': self.operator_names,
             'seat_name_occurrences_replaced': self.seat_names,
+            'seat_record_paths_rewritten': self.seat_records,
             'credential_shaped_strings_flagged': len(self.credential_flags),
             'credential_flag_sites': [w for w, _ in self.credential_flags][:20],
         }
@@ -260,6 +315,7 @@ def load_loop(san):
         hid = e.get('id')
         if not hid:
             continue
+        hid = san.text(hid, 'loop.id')
         if hid not in by:
             by[hid] = []
             order.append(hid)
