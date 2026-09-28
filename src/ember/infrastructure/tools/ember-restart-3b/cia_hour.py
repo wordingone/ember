@@ -296,11 +296,18 @@ def validate_identity(*, runner, identity):
 
 class HourPacks:
     """Generate only the next complete pack from an already verified immutable shard list."""
-    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4, image_text=None, fill=None):
+    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4, image_text=None, fill=None,
+                 image_start=0):
         self.stream, self.image_text, self.fill = stream, image_text, fill
         self.cursor = dict(cursor)
         self.maximum_steps = maximum_steps
         self.sequence, self.documents = sequence, documents
+        # The image-text stream is indexed by GLOBAL update position, not by this hour's local index, so a chained
+        # hour continues the image order where its parent stopped instead of replaying it from the first document
+        # (#2119 exact data position). Genesis starts at 0, which keeps a genesis hour byte-identical.
+        if type(image_start) is not int or image_start < 0:
+            raise ValueError('image-text start position must be a non-negative integer')
+        self.image_start = image_start
         self.index = 0
 
     def next_pack(self):
@@ -309,8 +316,10 @@ class HourPacks:
         before = dict(self.cursor)
         pack = dict(token_ids=[], target_ids=[], positions=[], document_starts=[],
                     index=self.index, phase='warm' if self.index == 0 else 'measured')
-        self.cursor = self.fill(pack, self.stream, self.cursor, self.image_text,
-                                sequence=self.sequence, documents=self.documents)
+        fill = dict(sequence=self.sequence, documents=self.documents)
+        if self.image_text is not None:
+            fill['image_index'] = self.image_start + self.index
+        self.cursor = self.fill(pack, self.stream, self.cursor, self.image_text, **fill)
         if len(pack['token_ids']) != self.sequence * self.documents or len(pack['target_ids']) != len(pack['token_ids']):
             raise ValueError('hour pack lost complete decoder targets')
         pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
@@ -318,7 +327,29 @@ class HourPacks:
         return pack
 
 
-def prepare_inputs(runner, data, geometry):
+def chained_image_start(runner, identity):
+    """Global update position the image-text stream resumes at: the parent's published step, or 0 at genesis.
+
+    Read from the parent manifest whose bytes match the bound digest; the worker re-checks it against the
+    restored checkpoint cursor before training (run_hour), so a stale or substituted parent refuses there."""
+    chain = identity.get('parent_checkpoint')
+    if chain is None:
+        return 0
+    manifest = bound_json(runner, Path(chain['root']) / 'checkpoint-manifest.json', chain['manifest_sha256'])
+    step = manifest['data_cursor']['global_step']
+    if type(step) is not int or step < 0:
+        raise ValueError('chained parent global step is not a non-negative integer')
+    return step
+
+
+def check_image_start(binding, base_steps):
+    """The bound image-text start must equal the global step actually restored (0 at genesis)."""
+    image_binding = binding.get('image_text')
+    if image_binding is not None and image_binding.get('start_pack') != base_steps:
+        raise ValueError('image-text start position differs from the restored parent global step')
+
+
+def prepare_inputs(runner, data, geometry, *, image_start=0):
     if data.get('shard_ledger_path') is None or data.get('shard_ledger_sha256') is None:
         raise ValueError('governed hour requires its frozen admitted shard ledger')
     sequence, documents, warm, maximum = runner.geometry_counts(geometry, hour=True)
@@ -337,11 +368,12 @@ def prepare_inputs(runner, data, geometry):
                     geometry=geometry, span=span, maximum_planned_positions=positions,
                     reference_positions_reserved=reference_positions)
     if image_text is not None:
-        identity['image_text'] = dict(data['image_text'], grammar=runner.load_image_text_module().GRAMMAR)
+        identity['image_text'] = dict(data['image_text'], grammar=runner.load_image_text_module().GRAMMAR,
+                                      start_pack=image_start)
     binding = dict(identity, input_sha256=hashlib.sha256(runner.canonical(identity)).hexdigest(),
                    input_digest_grammar='receipt-ledger-cursor-span-v1', shard_ledger_path=str(ledger))
     packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents,
-                      image_text=image_text, fill=runner.fill_pack)
+                      image_text=image_text, fill=runner.fill_pack, image_start=image_start)
     first = packs.next_pack()
     packs = runner.pack_lookahead(packs)
     for path, expected in ((receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256']),
@@ -816,6 +848,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
+    check_image_start(prepared['binding'], base_steps)
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)

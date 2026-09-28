@@ -211,8 +211,10 @@ def text_documents(image_text, documents):
     return documents - (1 if image_text is not None else 0)
 
 
-def fill_pack(pack, stream, cursor, image_text, *, sequence, documents):
-    """Text documents from the stream, then (A1) one image-text document chosen by the pack index."""
+def fill_pack(pack, stream, cursor, image_text, *, sequence, documents, image_index=None):
+    """Text documents from the stream, then (A1) one image-text document at the given global image position.
+
+    image_index defaults to the pack's local index (a non-chained run); a chained hour passes its global position."""
     for _ in range(text_documents(image_text, documents)):
         episode, after = stream.next_episode(**cursor, sequence_length=sequence)
         pack['document_starts'].append(len(pack['token_ids']))
@@ -221,7 +223,8 @@ def fill_pack(pack, stream, cursor, image_text, *, sequence, documents):
         pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
         cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
     if image_text is not None:
-        load_image_text_module().append_document(pack, image_text.document(pack['index']))
+        load_image_text_module().append_document(
+            pack, image_text.document(pack['index'] if image_index is None else image_index))
     return cursor
 
 
@@ -1134,7 +1137,8 @@ def prepare_execution(prediction):
         raise ValueError('measurement expert support is outside its fixed bound')
     if canonical(identity['optimizer']) != canonical(expected_optimizer(identity)):
         raise ValueError('fixed optimizer definition differs')
-    prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'])
+    prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'],
+                    image_start=load_hour_module().chained_image_start(sys.modules[__name__], identity))
                 if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
                 if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
     if hour:
