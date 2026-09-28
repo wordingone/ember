@@ -107,6 +107,11 @@ class AttentionSelectionTests(unittest.TestCase):
                 'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding',
                 'gpu_uuid', 'dispatch_resources')
         identity = dict.fromkeys(keys)
+        # Issue #2119: training_job_purpose is now a required identity key, checked by the
+        # closed-set schema gate that runs before attention_selection. Its value is never
+        # reached here -- attention_selection raises first -- so any declared purpose value
+        # is enough to clear the schema gate without widening what this test exercises.
+        identity['training_job_purpose'] = 'DIAGNOSTIC'
         identity['attention_backend'] = 'unknown'
         with patch.object(runner, 'file_sha256', side_effect=AssertionError('premature source read')):
             with self.assertRaisesRegex(ValueError, 'attention'):
