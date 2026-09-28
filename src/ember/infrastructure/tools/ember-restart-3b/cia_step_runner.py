@@ -1043,12 +1043,17 @@ def validate_training_job_purpose(identity, *, hour):
 
     has_resume/has_data_segment are read from fields this identity already carries and already
     verifies elsewhere in this function: checkpoint_probe/continuation reopen a real prior
-    admitted checkpoint (validate_checkpoint_probe, below); production_mixture is the admitted
-    next data segment for an hour (validate_identity, below). No second admission check is
-    introduced here.
+    admitted checkpoint (validate_checkpoint_probe, below); an arm's chained parent_checkpoint is
+    reopened by run_hour in cia_hour.py, which re-verifies the manifest digest against the
+    published receipt and restores every object before an hour trains from it -- this reads only
+    the key's PRESENCE, and prepare_execution's own shape check (above, before this call) has
+    already accepted its {root, manifest_sha256} shape, so no second admission check is
+    introduced here either; production_mixture is the admitted next data segment for an hour
+    (validate_identity, below).
     """
     purpose_module = load_purpose_module()
-    has_resume = bool(identity.get('checkpoint_probe')) or 'continuation' in identity
+    has_resume = (bool(identity.get('checkpoint_probe')) or 'continuation' in identity
+                  or 'parent_checkpoint' in identity)
     has_data_segment = bool(hour) and bool(identity.get('production_mixture'))
     return purpose_module._validate_training_job_purpose(
         identity, has_resume=has_resume, has_data_segment=has_data_segment)

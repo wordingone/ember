@@ -107,6 +107,27 @@ class PurposeGateRefusesBeforeSpawnTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'CONTINUE_TRAINING requires'):
             runner.validate_training_job_purpose(identity, hour=False)
 
+    def test_chained_arm_parent_checkpoint_counts_as_a_verified_resume(self):
+        """#2119: the arm chains a governed hour to its lineage parent via the arm-only
+        parent_checkpoint identity key ({'root', 'manifest_sha256'}), reopened by run_hour in
+        cia_hour.py against the parent's published receipt (manifest digest re-verified, every
+        object restored) before an hour trains from it. Master's shared predicate never learned
+        that key, so every arm continuation read as having no resume. With parent_checkpoint and
+        an hour's production_mixture both present, CONTINUE_TRAINING is admitted; the same
+        identity with parent_checkpoint removed refuses with the shared predicate's own
+        resume_checkpoint message (the deliberate red -- proves the key is load-bearing here,
+        not merely tolerated by the closed-set schema check)."""
+        parent_checkpoint = {'root': 'A:/ember-wt/fixture/trained-child',
+                              'manifest_sha256': hashlib.sha256(b'fixture-parent-manifest').hexdigest()}
+        identity = _bare_identity(training_job_purpose='CONTINUE_TRAINING',
+                                   parent_checkpoint=parent_checkpoint,
+                                   production_mixture={'shards': ['fixture-shard-0']})
+        self.assertEqual(runner.validate_training_job_purpose(identity, hour=True), 'CONTINUE_TRAINING')
+        del identity['parent_checkpoint']
+        with self.assertRaisesRegex(ValueError, r'CONTINUE_TRAINING requires a verified parent state '
+                                                  r'\(resume_checkpoint\)'):
+            runner.validate_training_job_purpose(identity, hour=True)
+
     def test_diagnostic_without_its_companion_fields_refuses(self):
         identity = _bare_identity(training_job_purpose='DIAGNOSTIC')
         with self.assertRaisesRegex(ValueError, 'DIAGNOSTIC requires a non-empty'):
