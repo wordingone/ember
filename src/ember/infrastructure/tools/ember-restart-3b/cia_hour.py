@@ -979,4 +979,32 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         learning_snapshot_pause_seconds=paused if learning else None,
         claim='Checkpoint probe only' if probe else 'A1 learning comparison: training and snapshots only; learning, '
               'evaluation and throughput are scored separately' if learning else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+    # Issue #2119 section 5: "the retained descendant becomes the actual next continuation
+    # source" -- advance the durable selected-continuation-head pointer, atomically, after this
+    # verified publication (the trained-child checkpoint above has already reopened and had its
+    # digest re-derived from disk by checkpoint_publisher; this call re-derives it a second time,
+    # independently, inside advance_selected_continuation_head itself, matching update_current_
+    # subject.py's own "never trust the caller" discipline for mechanism 1).
+    #
+    # Scope, deliberately narrow: only a governed CONTINUE_TRAINING hour advances the pointer.
+    # probe (a ~2-measured-update sanity check, claim='Checkpoint probe only') and learning (an
+    # A1 comparison, claim='...learning, evaluation and throughput are scored separately') both
+    # publish a real trained-child through this same function but neither is the lineage's
+    # forward-going checkpoint. DIAGNOSTIC gets no credit by construction (issue #2119's own
+    # language). RETENTION_ELIGIBLE_EXPERIMENT is deliberately excluded here too: whether it
+    # published an eligible descendant is decided at the process level in cia_step_runner.py's
+    # _launch (the `succeeded` predicate), not inside this function, and #2119 s5 names only the
+    # continuation case explicitly.
+    if not probe and not learning and identity.get('training_job_purpose') == 'CONTINUE_TRAINING':
+        import selected_continuation_head
+        import training_continuity_ledger
+        expected_parent = (chain['manifest_sha256'] if chain is not None
+                           else selected_continuation_head.GENESIS_SENTINEL)
+        selected_continuation_head.advance_selected_continuation_head(
+            repo_root=runner.ROOT,
+            receipts_root=training_continuity_ledger.ledger_root(custody.parent),
+            published_checkpoint_root=custody / 'trained-child',
+            hour_result_path=custody / 'hour-result.json',
+            hour_result_sha256=runner.file_sha256(custody / 'hour-result.json'),
+            expected_parent_checkpoint_manifest_sha256=expected_parent)
 
