@@ -419,6 +419,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
         raise ValueError('checkpoint counter launcher differs from dispatch')
     cap = 10 * runner.GIB
     def verifier(candidate, receipt):
+        runner.tail_stamp(custody, 'quarantine')
         command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper), '--', '-I',
             str(runner.ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py'),
             '--model-config', runner.ROOT / runner.CONFIG,
@@ -429,6 +430,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             raise ValueError('independent checkpoint counter refused: ' + result.stderr.decode('utf-8', errors='replace')[-2048:])
         measured = json.loads(result.stdout)
         runner._write_new(candidate / 'parameter-counter-receipt.json', measured)
+        runner.tail_stamp(custody, 'counter')
         return measured
     owner_update_counts = {}
     def publish(name, *, steps, tokens, cursor, parent=None):
@@ -972,6 +974,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         capture.invalidate()
     optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize(device)
+    runner.tail_stamp(custody, 'child_publish_start')
     child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
                     cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
@@ -1012,6 +1015,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         learning_snapshot_pause_seconds=paused if learning else None,
         claim='Checkpoint probe only' if probe else 'A1 learning comparison: training and snapshots only; learning, '
               'evaluation and throughput are scored separately' if learning else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+    runner.tail_stamp(custody, 'hour_result')
     # Issue #2119 section 5: "the retained descendant becomes the actual next continuation
     # source" -- advance the durable selected-continuation-head pointer, atomically, after this
     # verified publication (the trained-child checkpoint above has already reopened and had its
@@ -1040,4 +1044,5 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             hour_result_path=custody / 'hour-result.json',
             hour_result_sha256=runner.file_sha256(custody / 'hour-result.json'),
             expected_parent_checkpoint_manifest_sha256=expected_parent)
+        runner.tail_stamp(custody, 'pointer_cas')
 
