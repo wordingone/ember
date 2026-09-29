@@ -2187,7 +2187,7 @@ def _write_new(path, value):
         os.fsync(stream.fileno())
 
 
-TAIL_PHASES = ('child_publish_start', 'quarantine', 'counter', 'worker_terminal', 'hour_result', 'pointer_cas')
+TAIL_PHASES = ('segment_launch', 'child_publish_start', 'quarantine', 'counter', 'worker_terminal', 'hour_result', 'pointer_cas')
 
 
 def tail_stamp(custody, phase):
@@ -2586,6 +2586,7 @@ def launch(args, dispatch):
         raise ValueError('daemon custody must be an existing B directory')
     custody = parent / ('measurement-' + run_id)
     custody.mkdir()  # Exclusive creation is the one-use run-custody boundary.
+    tail_stamp(custody, 'segment_launch')  # typed wall start of the governed segment (#2119 accounting)
     helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
     hidden = args.hidden_helper.resolve(strict=True)
     preflight = headroom()
