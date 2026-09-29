@@ -2187,7 +2187,9 @@ def _write_new(path, value):
         os.fsync(stream.fileno())
 
 
-TAIL_PHASES = ('segment_launch', 'child_publish_start', 'quarantine', 'counter', 'worker_terminal', 'hour_result', 'pointer_cas')
+# Order of the real calls (cia_hour.run_hour emits hour_result then pointer_cas; the worker writes worker-terminal.json and stamps
+# worker_terminal only after run_hour returns; the parent stamps segment_complete after OwnedProcessRunner returns with cleanup verified).
+TAIL_PHASES = ('segment_launch', 'child_publish_start', 'quarantine', 'counter', 'hour_result', 'pointer_cas', 'worker_terminal', 'segment_complete')
 
 
 def tail_stamp(custody, phase):
@@ -2662,6 +2664,8 @@ def launch(args, dispatch):
     receipt.update(prediction_sha256=args.prediction_sha256, claim=CLAIM,
                    device_samples=jobs[0].samples, supervisor_failure=jobs[0].failure)
     _write_new(custody / 'owned.json', receipt)
+    if result.cleanup_verified:
+        tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
     succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
         # Reuses the exact success predicate this function already returns on -- no second,
