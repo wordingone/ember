@@ -125,7 +125,7 @@ class MeasurementIdentityTests(unittest.TestCase):
                          {k: v for k, v in runner.LIMITS.items() if k != 'wall_seconds'})
         self.assertEqual(runner.resource_limits({})['wall_seconds'], 600)
         self.assertEqual(runner.resource_limits(dict(hour=dict(schema='governed-hour-v1', arm='treatment',
-            minimum_wall_seconds=3600, minimum_measured_steps=1024)))['wall_seconds'], 4500)
+            minimum_wall_seconds=3600, minimum_measured_steps=1024)))['wall_seconds'], 5656)
 
     def test_fused_optimizer_is_a_declared_treatment_never_a_request(self):
         base = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],

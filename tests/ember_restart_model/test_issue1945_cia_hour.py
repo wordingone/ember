@@ -110,7 +110,7 @@ class HourContractTests(unittest.TestCase):
         self.assertTrue(runner.hour_mode(identity))
         self.assertFalse(runner.hour_mode({}))
         self.assertEqual(runner.resource_limits({})['wall_seconds'], 600)
-        self.assertEqual(runner.resource_limits(identity)['wall_seconds'], 4500)
+        self.assertEqual(runner.resource_limits(identity)['wall_seconds'], 5656)
         self.assertEqual(runner.resource_limits(identity)['max_b_write_gib'], 24)
         with self.assertRaises(ValueError):
             runner.hour_mode(dict(identity, trajectory={}))

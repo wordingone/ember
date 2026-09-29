@@ -948,10 +948,15 @@ def decoder_kwargs(identity):
             if attention_selection(identity)['attention_recompute'] == 'non_reentrant_checkpoint' else {})
 
 
+# Issue #2119 successor: 256 s measured startup + 3600 s governed hour + 1800 s provisional tail bound. The 4500 s wall cut the
+# post-hour tail (counter, quarantine, worker-terminal, hour-result, pointer CAS) of the first chained hour.
+HOUR_WALL_SECONDS = 5656
+
+
 def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
-        limits.update(wall_seconds=4500, max_b_write_gib=24)
+        limits.update(wall_seconds=HOUR_WALL_SECONDS, max_b_write_gib=24)
         if identity['hour']['schema'] == 'learning-comparison-v1':
             # Two checkpoints plus four full parameter snapshots; the full-compute control arm runs 16,384 updates.
             limits.update(wall_seconds=10800, max_b_write_gib=80)
@@ -2182,6 +2187,20 @@ def _write_new(path, value):
         os.fsync(stream.fileno())
 
 
+TAIL_PHASES = ('child_publish_start', 'quarantine', 'counter', 'worker_terminal', 'hour_result', 'pointer_cas')
+
+
+def tail_stamp(custody, phase):
+    """Append one (phase, monotonic_s, wall_utc) row to custody/tail-stamps.jsonl, fsynced, so a killed tail still names its last phase."""
+    if phase not in TAIL_PHASES:
+        raise ValueError('unknown tail phase: ' + str(phase))
+    row = {'phase': phase, 'monotonic_s': time.perf_counter(), 'wall_utc': time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + ('%.3f' % (time.time() % 1))[1:] + 'Z'}
+    with Path(custody).joinpath('tail-stamps.jsonl').open('ab') as stream:
+        stream.write(canonical(row) + b'\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 class GcPauseMeter:
     """Attribute host pauses to CPython cyclic-GC collections: a gc.callbacks hook records every collection's
     generation, duration and start instant; drain() hands back the collections since the previous drain, so the
@@ -2393,6 +2412,7 @@ def worker(binding_path):
                 device=device, compiler=c_compiler, applied=applied)
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
                 applied_positions=applied_positions, claim=CLAIM))
+            tail_stamp(custody, 'worker_terminal')
             return 0
         if trajectory_mode(prediction['identity']):
             def applied(count):
@@ -2537,6 +2557,19 @@ def worker(binding_path):
         attention_scope.close()
 
 
+def launch_succeeded(result, supervisor_failure, custody):
+    """A launch succeeded only if the owned process status is 'completed' with returncode 0, verified cleanup and no supervisor
+    failure, AND the worker wrote a worker-terminal.json whose status is 'completed'. The first chained hour was killed by its wall
+    with status 'terminated', returncode 0, cleanup verified and no supervisor failure, so the returncode alone read as success."""
+    if not (result.status == 'completed' and result.returncode == 0 and result.cleanup_verified and not supervisor_failure):
+        return False
+    try:
+        terminal = json.loads((Path(custody) / 'worker-terminal.json').read_bytes())
+    except (OSError, ValueError):
+        return False
+    return isinstance(terminal, dict) and terminal.get('status') == 'completed'
+
+
 def launch(args, dispatch):
     from ember.governance.scripts import cia_conformance_resources as resources, gpu_lock_guard
     from ember.governance.scripts.owned_process import OwnedProcessRunner
@@ -2628,7 +2661,7 @@ def launch(args, dispatch):
     receipt.update(prediction_sha256=args.prediction_sha256, claim=CLAIM,
                    device_samples=jobs[0].samples, supervisor_failure=jobs[0].failure)
     _write_new(custody / 'owned.json', receipt)
-    succeeded = result.returncode == 0 and result.cleanup_verified and not jobs[0].failure
+    succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
         # Reuses the exact success predicate this function already returns on -- no second,
         # independent notion of "eligible" is introduced here.
