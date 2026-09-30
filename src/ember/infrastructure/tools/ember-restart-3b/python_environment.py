@@ -876,6 +876,16 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
             )
 
 
+def _hidden_child_kwargs() -> dict[str, Any]:
+    """Popen options that keep a Windows child from opening a console window; nothing extra elsewhere."""
+    if os.name != "nt":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": startupinfo}
+
+
 def _tracked_python_paths(root: Path) -> list[Path]:
     result = subprocess.run(
         ["git", "ls-files", "*.py"],
@@ -885,6 +895,8 @@ def _tracked_python_paths(root: Path) -> list[Path]:
         errors="strict",
         capture_output=True,
         check=False,
+        shell=False,
+        **_hidden_child_kwargs(),
     )
     if result.returncode != 0:
         raise EnvironmentContractError(
@@ -896,10 +908,34 @@ def _tracked_python_paths(root: Path) -> list[Path]:
     return paths
 
 
+_VENDOR_MANIFEST = "src/ember/model/streamed_loss_vendor.json"
+
+
+def _vendored_paths(root: Path) -> frozenset[str]:
+    """Repo-relative paths of vendored third-party source, from the declared vendor manifest (absent = none)."""
+    path = root / _VENDOR_MANIFEST
+    if not path.is_file():
+        return frozenset()
+    try:
+        files = json.loads(path.read_text(encoding="utf-8"))["files"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise EnvironmentContractError(f"vendor manifest is unreadable: {_VENDOR_MANIFEST}: {exc}") from exc
+    if not isinstance(files, dict) or not all(isinstance(name, str) for name in files):
+        raise EnvironmentContractError(f"vendor manifest files must be a path map: {_VENDOR_MANIFEST}")
+    return frozenset(files)
+
+
 def production_import_roots(root: Path) -> list[str]:
     tracked = _tracked_python_paths(root)
+    vendored = _vendored_paths(root)
     local_roots: set[str] = set()
     for relative in tracked:
+        if relative.as_posix() in vendored:
+            # A vendored tree is one importable package: its package root is local, its nested directory and
+            # module names (e.g. cut_cross_entropy/transformers/) are not top-level roots and must not shadow
+            # the real third-party distributions of the same name.
+            local_roots.add(relative.parts[1] if relative.parts[0] == "src" else relative.parts[0])
+            continue
         local_roots.add(relative.stem)
         local_roots.update(relative.parts[:-1])
     stdlib = set(sys.stdlib_module_names)
