@@ -93,6 +93,7 @@ class SharedCheckpointPublisherTests(unittest.TestCase):
         self.runner = SimpleNamespace(ROOT=ROOT, CONFIG='configs/fixture.json', GIB=1024**3,
                                       file_sha256=lambda path: 'a'*64,
                                       hidden_kwargs=lambda: {},
+                                      tail_stamp=lambda *a, **k: None,
                                       _write_new=lambda path, value: self.events.append((path, value)))
         self.parameter = torch.nn.Parameter(torch.ones(2))
         self.optimizer = torch.optim.AdamW([self.parameter], foreach=False)

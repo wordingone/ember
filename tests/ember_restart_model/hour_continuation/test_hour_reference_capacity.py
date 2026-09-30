@@ -23,6 +23,18 @@ class Stream:
                 dict(shard_index=shard_index, token_offset=token_offset+sequence_length))
 
 
+def _fill_text_documents(pack, stream, cursor, image_text, *, sequence, documents, image_index=None):
+    # Text-only branch of the runner's fill_pack (no image-text stream in this fixture).
+    for _ in range(documents):
+        episode, after = stream.next_episode(**cursor, sequence_length=sequence)
+        pack['document_starts'].append(len(pack['token_ids']))
+        pack['token_ids'].extend(episode['token_ids'])
+        pack['target_ids'].extend(episode['target_ids'])
+        pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
+        cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+    return cursor
+
+
 class ReferenceCapacityTests(unittest.TestCase):
     def test_reference_pack_is_reserved_and_bound_without_extending_measured_geometry(self):
         with tempfile.TemporaryDirectory(prefix='reference-capacity-', dir=Path(__file__).parent) as temporary:
@@ -39,7 +51,10 @@ class ReferenceCapacityTests(unittest.TestCase):
             geometry = dict(measured_steps=2)
             runner = SimpleNamespace(geometry_counts=lambda geometry, hour: (1024, 4, 1, 2),
                 open_input_stream=lambda data: (stream, *paths), file_sha256=sha,
-                canonical=lambda value: json.dumps(value, sort_keys=True).encode())
+                canonical=lambda value: json.dumps(value, sort_keys=True).encode(),
+                open_image_text=lambda data, tokenizer, sequence: None,
+                fill_pack=_fill_text_documents, pack_lookahead=lambda packs: packs,
+                text_documents=lambda image_text, documents: documents)
             prepared = cia_hour.prepare_inputs(runner, data, geometry)
             self.assertEqual(stream.span['tokens'], 4*4096)
             self.assertEqual(prepared['geometry'], geometry)
