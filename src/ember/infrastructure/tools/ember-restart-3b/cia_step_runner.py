@@ -951,12 +951,98 @@ def decoder_kwargs(identity):
 # Issue #2119 successor: 256 s measured startup + 3600 s governed hour + 1800 s provisional tail bound. The 4500 s wall cut the
 # post-hour tail (counter, quarantine, worker-terminal, hour-result, pointer CAS) of the first chained hour.
 HOUR_WALL_SECONDS = 5656
+# Issue #2119 only: one optional declared wall for a governed-hour-v1 identity, HOUR_WALL_SECONDS < value <= this cap. Absent means
+# HOUR_WALL_SECONDS. It lives in the identity, so prediction, plan, worker and supervisor all read the same value through
+# resource_limits; there is no supervisor-side override and no mode alias.
+HOUR_WALL_SECONDS_CAP = 7200
+
+
+# Issue #2119 layer policy: the hour identity declares the layer template the child trains under, {mode: full} or three keep sets.
+# Full CLEARS the three EMBER_SKIP_KEEP* selectors in the child env; keep SETS them from the identity; the decoder's own receipt path
+# is always set to a custody file. The worker refuses before training when its env or the decoder's resolved sets differ.
+LAYER_KEYS = ('attention_keep', 'ffn_keep', 'expert_keep')
+LAYER_SELECTOR_ENV = ('EMBER_SKIP_KEEP', 'EMBER_SKIP_KEEP_FFN', 'EMBER_SKIP_KEEP_EXPERT')
+LAYER_RECEIPT_ENV = 'EMBER_LAYER_TEMPLATE_RECEIPT'
+LAYER_RECEIPT_NAME = 'layer-template-counts.json'
+LAYER_RESOLVED_NAME = 'layer-policy-resolved.json'
+ALL_LAYERS = tuple(range(24))
+
+
+def _layer_sets(value):
+    if value == {'mode': 'full'}:
+        return {key: ALL_LAYERS for key in LAYER_KEYS}
+    if type(value) is not dict or set(value) != set(LAYER_KEYS):
+        raise ValueError('layer template is neither {mode: full} nor the three keep fields')
+    sets = {}
+    for key in LAYER_KEYS:
+        raw = value[key]
+        layers = [int(part) for part in raw.split(',')] if isinstance(raw, str) else [int(item) for item in raw]
+        if not layers or any(item < 0 or item > 23 for item in layers):
+            raise ValueError(f'{key} has no layers or a layer outside 0..23')
+        sets[key] = tuple(sorted(set(layers)))
+    return sets
+
+
+def canonical_layer_template(value):
+    """{mode: full} when all three sets are 0..23, else the keep-set dict of sorted comma strings (same rule as the NLL adapter)."""
+    sets = _layer_sets(value)
+    if all(sets[key] == ALL_LAYERS for key in LAYER_KEYS):
+        return {'mode': 'full'}
+    return {key: ','.join(str(item) for item in sets[key]) for key in LAYER_KEYS}
+
+
+def declared_layer_template(identity):
+    hour = identity.get('hour') if isinstance(identity, dict) else None
+    return hour.get('layer_template') if isinstance(hour, dict) else None
+
+
+def layer_child_env(identity, custody, base_env=None):
+    """The explicit per-child environment: selectors from the identity (never ambient) and the decoder receipt path in custody."""
+    declared = declared_layer_template(identity)
+    if declared is None:
+        raise ValueError('governed-hour-v1 launch requires hour.layer_template')
+    env = dict(os.environ if base_env is None else base_env)
+    for name in LAYER_SELECTOR_ENV:
+        env.pop(name, None)
+    if declared != {'mode': 'full'}:
+        env.update(zip(LAYER_SELECTOR_ENV, (declared[key] for key in LAYER_KEYS)))
+    env[LAYER_RECEIPT_ENV] = str(Path(custody) / LAYER_RECEIPT_NAME)
+    return env
+
+
+def check_layer_env(identity, env=None):
+    """Before the decoder is imported: the worker's own selector env equals the declaration (full = all three unset)."""
+    declared = declared_layer_template(identity)
+    if declared is None:
+        return
+    env = os.environ if env is None else env
+    seen = {name: env.get(name) for name in LAYER_SELECTOR_ENV}
+    want = ({name: None for name in LAYER_SELECTOR_ENV} if declared == {'mode': 'full'}
+            else dict(zip(LAYER_SELECTOR_ENV, (declared[key] for key in LAYER_KEYS))))
+    if seen != want:
+        raise ValueError(f'worker layer selectors {seen} differ from the declared layer_template {declared}')
+    if not env.get(LAYER_RECEIPT_ENV):
+        raise ValueError('worker layer-template receipt path is not set')
+
+
+def check_resolved_layers(identity, resolved):
+    """After the decoder import: its resolved sets equal the canonical declaration. Returns the failure list (empty = equal)."""
+    declared = declared_layer_template(identity)
+    if declared is None:
+        return []
+    want = _layer_sets(declared)
+    failures = []
+    for key in LAYER_KEYS:
+        got = tuple(sorted(resolved.get(key, ())))
+        if got != want[key]:
+            failures.append(f'{key}: resolved {got} != declared {want[key]}; differing layers {sorted(set(got) ^ set(want[key]))}')
+    return failures
 
 
 def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
-        limits.update(wall_seconds=HOUR_WALL_SECONDS, max_b_write_gib=24)
+        limits.update(wall_seconds=identity['hour'].get('wall_seconds', HOUR_WALL_SECONDS), max_b_write_gib=24)
         if identity['hour']['schema'] == 'learning-comparison-v1':
             # Two checkpoints plus four full parameter snapshots; the full-compute control arm runs 16,384 updates.
             limits.update(wall_seconds=10800, max_b_write_gib=80)
@@ -978,8 +1064,26 @@ def hour_mode(identity):
             raise ValueError('continuation requires a bound governed hour')
         return False
     value = identity['hour']
+    fixed = {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
+    if isinstance(value, dict) and 'wall_seconds' in value:
+        wall = value['wall_seconds']
+        if (value.get('schema') != 'governed-hour-v1' or type(wall) is not int
+                or not HOUR_WALL_SECONDS < wall <= HOUR_WALL_SECONDS_CAP):
+            raise ValueError(f'hour wall_seconds is governed-hour-v1 only, an int in ({HOUR_WALL_SECONDS}, {HOUR_WALL_SECONDS_CAP}]; '
+                             'omit it for the default')
+        fixed = fixed | {'wall_seconds'}
+    if isinstance(value, dict) and 'layer_template' in value:
+        if value.get('schema') != 'governed-hour-v1':
+            raise ValueError('hour layer_template is governed-hour-v1 only')
+        try:
+            canonical = canonical_layer_template(value['layer_template'])
+        except (ValueError, TypeError, AttributeError) as error:
+            raise ValueError(f'hour layer_template is invalid: {error}')
+        if value['layer_template'] != canonical:
+            raise ValueError('hour layer_template must be written in canonical form')
+        fixed = fixed | {'layer_template'}
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
-            or set(value) != {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
+            or set(value) != fixed
             or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
             or value['arm'] not in ('control', 'treatment')
             or type(value['minimum_wall_seconds']) is not int
@@ -2381,10 +2485,20 @@ def worker(binding_path):
         if prediction['identity']['run_id'] != run_id or prediction['identity']['gpu_uuid'] != binding['launch']['gpu_uuid']:
             raise ValueError('prediction differs from owned run or selected GPU')
         config, prepared = prepare_execution(prediction)
+        check_layer_env(prediction['identity'])  # before ANY decoder import: the selectors the process holds equal the declaration
         attention_scope.enter_context(attention_context(prediction['identity']))
         import torch
         from ember.model.ember_v0_decoder import CIADecoder, bind_triton_c_compiler
         from ember.model.ember_v0_contract import validate_cia_architecture
+        if declared_layer_template(prediction['identity']) is not None:
+            import ember.model.ember_v0_decoder as resolved_decoder
+            resolved = dict(attention_keep=sorted(resolved_decoder._ATTENTION_KEEP), ffn_keep=sorted(resolved_decoder._FFN_KEEP),
+                            expert_keep=sorted(resolved_decoder._EXPERT_KEEP))
+            mismatch = check_resolved_layers(prediction['identity'], resolved)
+            _write_new(custody / LAYER_RESOLVED_NAME, dict(declared=declared_layer_template(prediction['identity']),
+                resolved=resolved, mismatch=mismatch, claim=CLAIM))
+            if mismatch:
+                raise ValueError('decoder resolved layer sets differ from the declared layer_template: ' + '; '.join(mismatch))
         # The fused elementwise chains compile through inductor/Triton on first CUDA use; bind Triton's C compiler
         # here, once, before activation, so the binding never happens inside a timed step and its identity is recorded.
         c_compiler = bind_triton_c_compiler()
@@ -2595,6 +2709,9 @@ def launch(args, dispatch):
     census = resource_census()
     _, prepared = prepare_execution(prediction)
     identity = prediction['identity']
+    child_env = None
+    if hour_mode(identity) and identity['hour']['schema'] == 'governed-hour-v1':
+        child_env = layer_child_env(identity, custody)  # refuses a governed hour whose identity declares no layer_template
     if identity.get('training_job_purpose') == 'DIAGNOSTIC':
         # Issue #2119 section 3: reserve the declared budget BEFORE any GPU spawn. The budget is
         # the same wall_seconds limit OwnedProcessRunner already enforces below -- no second,
@@ -2622,7 +2739,10 @@ def launch(args, dispatch):
         'hidden_helper': str(hidden), 'helpers': {str(path): file_sha256(path) for path in (helper, hidden)},
         'prediction_path': str(args.prediction), 'prediction_sha256': args.prediction_sha256,
         'gpu_uuid': gpu_uuid, 'gpu_lock': str(Path(gpu_lock_guard._require_lock_path()).resolve()),
-        'limits': resource_limits(prediction['identity']), 'worker_argv': worker_argv, 'dispatch': dispatch}}
+        'limits': resource_limits(prediction['identity']), 'worker_argv': worker_argv, 'dispatch': dispatch,
+        **({'layer_policy': {'declared': declared_layer_template(identity),
+                             'selectors': {name: child_env.get(name) for name in LAYER_SELECTOR_ENV},
+                             'receipt_path': child_env[LAYER_RECEIPT_ENV]}} if child_env is not None else {})}}
     _write_new(custody / 'launch.json', binding)
     command = _python_command(helper, hidden, ROOT / DISK_ENTRY,
         '--max-c-write-gib', str(LIMITS['max_c_write_gib']), '--max-b-write-gib', str(resource_limits(prediction['identity'])['max_b_write_gib']),
@@ -2640,7 +2760,7 @@ def launch(args, dispatch):
             headroom()
             resource_census()
             result = OwnedProcessRunner(windows_job_factory=factory).run(command,
-                timeout_s=resource_limits(prediction['identity'])['wall_seconds'], cwd=ROOT)
+                timeout_s=resource_limits(prediction['identity'])['wall_seconds'], cwd=ROOT, env=child_env)
     except BaseException as error:
         _write_new(custody / 'owned-failure.json', {'status': 'exception', 'error_type': type(error).__name__,
             'error': str(error), 'cleanup_verified': False, 'claim': CLAIM,
