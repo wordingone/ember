@@ -23,11 +23,98 @@ from .ember_v0_inventory import equation_inventory, update_support
 from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
 
+import atexit
+import json as _json
+
+# #1945 wide micro-step: the packed-positions ceiling of ONE captured micro-step. Default 4,096
+# (4 x 1,024). Raising it moves only the packed-batch ceiling; every document still attends within
+# itself, so the per-document context contract is untouched.
+_MAX_PACKED_POSITIONS = int(os.environ.get('EMBER_MAX_POSITIONS', '4096'))
+
+
+def _layer_set(name, default):
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    if raw.strip() == 'none':
+        return frozenset()
+    layers = frozenset(int(x) for x in raw.split(',') if x.strip())
+    if any(not 0 <= layer < 24 for layer in layers):
+        raise ValueError(name + ' names a layer outside 0..23')
+    return layers
+
+
+# #1945 layer template (numerical treatment, licensed only by gate C). A layer outside
+# _ATTENTION_KEEP passes values through its attention unchanged; outside _FFN_KEEP its shared
+# FFN; an odd layer outside _EXPERT_KEEP still routes but its grouped expert block is a zero
+# residual. Unset variables keep every layer, which is the unchanged model.
+_ATTENTION_KEEP = _layer_set('EMBER_SKIP_KEEP', frozenset(range(24)))
+_FFN_KEEP = _layer_set('EMBER_SKIP_KEEP_FFN', _ATTENTION_KEEP)
+_EXPERT_KEEP = _layer_set('EMBER_SKIP_KEEP_EXPERT', _FFN_KEEP)
+_layer_template_counts = {"attention_skipped": 0, "ffn_skipped": 0, "expert_skipped": 0,
+                          "attention_run": 0, "ffn_run": 0, "expert_run": 0}
+
+
+def _write_layer_template_receipt():
+    # The feature's own assertion that it executed (counted where each branch is TRACED, so on the
+    # captured path it counts exemplar/record calls, not replays). Per-key MAX merge: a process that
+    # imports this module and does no work cannot overwrite the counts of the one that did.
+    path = os.environ.get('EMBER_LAYER_TEMPLATE_RECEIPT')
+    if not path:
+        return
+    counts = dict(_layer_template_counts)
+    try:
+        with open(path, encoding='utf-8') as f:
+            prior = _json.load(f).get('counts', {})
+        counts = {k: max(v, int(prior.get(k, 0))) for k, v in counts.items()}
+    except (OSError, ValueError):
+        pass
+    with open(path, 'w', encoding='utf-8') as f:
+        _json.dump({'counts': counts, 'attention_keep': sorted(_ATTENTION_KEEP), 'ffn_keep': sorted(_FFN_KEEP),
+                    'expert_keep': sorted(_EXPERT_KEEP), 'max_packed_positions': _MAX_PACKED_POSITIONS}, f)
+
+
+atexit.register(_write_layer_template_receipt)
+
+_merged_kv_counts = {"merged": 0, "per_document": 0}
+
+
+def merged_kv_counts():
+    return dict(_merged_kv_counts)
+
+
+def _write_merged_kv_receipt():
+    # Per-key MAX merge, for the same reason the runner does it: the controller process
+    # carries the frozen environment, imports this module, does no work, and outlives
+    # the worker. A counter receipt is evidence only if a process that did nothing
+    # cannot overwrite the counts of the one that did.
+    path = os.environ.get("EMBER_MERGED_KV_RECEIPT")
+    if not path:
+        return
+    merged = dict(_merged_kv_counts)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            prior = _json.load(handle)
+        if type(prior) is dict:
+            for key, value in prior.items():
+                if type(value) is int and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            _json.dump(merged, handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_merged_kv_receipt)
+
 
 def _resident_geometry(lengths):
     from .ember_v0_residency import DeviceRouteGeometry
     if (type(lengths) is not tuple or not lengths or
-            any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > 4096):
+            any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > _MAX_PACKED_POSITIONS):
         raise ValueError('resident segment geometry requires complete positive document lengths')
     chunks, offset, epoch = [], 0, 0
     for document, length in enumerate(lengths):
@@ -513,7 +600,10 @@ class CIADecoder(nn.Module):
 
     def _input(self, value, trailing=None):
         if self._cuda_execution is not None:
-            self._cuda_execution.cache.check()
+            cache = self._cuda_execution.cache
+            # A resident execution is its own cache: state predicates here, the full owner compare at begin_step,
+            # at the resident forward's entry and at end_step (which precedes the optimizer update).
+            (cache.check_state if cache is self._cuda_execution and cache.active else cache.check)()
         if not isinstance(value, torch.Tensor) or value.device != self._execution_device:
             raise ValueError("input must share the declared model device")
         if trailing is not None and (value.ndim != 2 or value.shape[-1] != trailing):
@@ -689,8 +779,19 @@ class CIADecoder(nn.Module):
         routes = []
         for layer in range(24):
             prefix = f"layers.{layer}"
-            values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"), positions, prefix + ".attention")
-            shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            # The layer template governs the reference forward exactly as it governs the resident segment, so an
+            # evaluator scores the function that was trained (unset keeps every layer: unchanged model).
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"), positions, prefix + ".attention")
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if layer % 2:
                 pieces = []
                 for start in range(0, len(embedded), 256):
@@ -707,9 +808,14 @@ class CIADecoder(nn.Module):
                     chosen = local.expert if plan is None else self._planned_expert(
                         plan, (document_index, layer, start), candidates)
                     slot = candidates.index(chosen)
-                    residual = self.expert_block(
-                        self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
-                        expert=chosen, layer=layer)
+                    if layer in _EXPERT_KEEP:
+                        _layer_template_counts['expert_run'] += 1
+                        residual = self.expert_block(
+                            self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
+                            expert=chosen, layer=layer)
+                    else:  # routed, zero residual: the resident segment's skipped expert site
+                        _layer_template_counts['expert_skipped'] += 1
+                        residual = torch.zeros_like(shared[start:start + 256])
                     # The gate still consumes the NATIVE logits, so the selector gradient graph a
                     # planned execution builds is the one free execution would have built. Only the
                     # discrete winner comes from the plan.
@@ -747,10 +853,42 @@ class CIADecoder(nn.Module):
             # reduction exactly rather than reimplementing either. q and o do not need it: their
             # forward is already bit-equal merged, so only their reduction shape moves.
             q = self._document_linear(values, prefix + ".q.weight", lengths).view(total, 16, 64)
-            k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"),
-                                   values, lengths).view(total, 4, 64)
-            v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"),
-                                   values, lengths).view(total, 4, 64)
+            # EMBER_MERGED_KV: K and V issue one GEMM PER DOCUMENT where Q and O issue one
+            # merged GEMM over the same rows. Measured in isolation at this exact shape --
+            # 4 documents of 1024 rows, 1024 -> 256, bf16 -- the per-document form costs
+            # 490.81 us forward+backward against 144.87 us merged: 345.95 us per site,
+            # 16,605.5 us per step over 48 sites, 10.56% of the 157,260.6 us device step
+            # (state/issue1945-receipts/kv-merge-fwd-bwd-probe-20260922.json). Ceiling
+            # 1.1181x ALONE, below the 1.5x dispatch bar, so this is a stack member and
+            # never a standalone arm.
+            #
+            # It is a DECLARED NUMERICAL TREATMENT, not a refactor. The comment on
+            # _per_document says cuBLAS chooses its algorithm from M, so the merged form
+            # is not bit-equal; the probe reproduces that prediction almost exactly --
+            # relative L2 0.00286 against the stated 0.00283-0.00289, and 37.5% of
+            # elements differing against the stated ~37%. Admissible only under a gate-C
+            # licence pair. With the flag unset the expression is the original one, so
+            # flag-off execution is unchanged.
+            #
+            # TWO mechanisms move here, not one, and the comment directly above this block
+            # names both: the 1024 -> 256 forward is not bit-equal merged, AND _document_linear
+            # moves the weight-gradient reduction shape as well -- that is precisely why k and
+            # v were restored to _per_document, whose reduction reproduces the saved actual R1
+            # update-1 gradients bitwise on 24 of 24 weights. The flag re-opens that decision
+            # on the strength of a duration nobody had measured when it was made (345.95 us
+            # per site), and it re-opens it as a question for the licence pair to answer, not
+            # as a correction of it. If the pair refuses, the prior ruling stands and the flag
+            # is what made the refusal a measurement instead of an assumption.
+            _mkv = os.environ.get("EMBER_MERGED_KV") == "1"
+            _merged_kv_counts["merged" if _mkv else "per_document"] += 1
+            if _mkv:
+                k = self._document_linear(values, prefix + ".k.weight", lengths).view(total, 4, 64)
+                v = self._document_linear(values, prefix + ".v.weight", lengths).view(total, 4, 64)
+            else:
+                k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"),
+                                       values, lengths).view(total, 4, 64)
+                v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"),
+                                       values, lengths).view(total, 4, 64)
             q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
             k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
             out = self._document_attention(q, k.repeat_interleave(4, dim=1),
@@ -886,10 +1024,19 @@ class CIADecoder(nn.Module):
         equal = len(set(sizes)) == 1
         for layer in (2 * index, 2 * index + 1):
             prefix = f'layers.{layer}'
-            values = values + self._batched_attention(
-                self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
-            shared = values + self._document_swiglu(
-                self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared', lengths)
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._batched_attention(
+                    self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._document_swiglu(
+                    self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared', lengths)
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if layer % 2 == 0:
                 values = shared
                 continue
@@ -905,14 +1052,21 @@ class CIADecoder(nn.Module):
             else:
                 row_experts = torch.repeat_interleave(winners, repeats, output_size=sum(lengths))
                 row_gates = torch.repeat_interleave(gates, repeats, output_size=sum(lengths))
-            normed = self._norm(shared, prefix + '.expert_norm.weight')
+            # A skipped expert site consumes no norm: its output is replaced by zeros below, so computing the
+            # norm there is dead work that the function-correctness clause counts as an optional-site kernel.
+            normed = (self._norm(shared, prefix + '.expert_norm.weight')
+                      if not capture_experts or layer in _EXPERT_KEEP else shared)
             history = (winners.detach()[None, :] if history is None else
                        torch.cat((history, winners.detach()[None, :]), dim=0))
             if collector is not None:
                 collector('local', dict(layer=layer, winners=winners.detach().clone(), logits=logits.detach().clone(),
                                        gates=gates.detach().clone(), valid=valid.detach().clone(), native_winners=native_winners.detach().clone()))
-        if capture_experts:
+        if capture_experts and (2 * index + 1) in _EXPERT_KEEP:
+            _layer_template_counts['expert_run'] += 1
             normed = execution.grouped_block(normed, row_experts, 2 * index + 1, backend='dynamic')
+        elif capture_experts:
+            _layer_template_counts['expert_skipped'] += 1
+            normed = torch.zeros_like(normed)
         return shared, normed, row_experts, row_gates, positions, keys, priors, ranked, candidates, history
 
     def _resident_documents_forward(self, documents, *, collector=None, plan=None, head_output='logits'):
@@ -1014,11 +1168,20 @@ class CIADecoder(nn.Module):
         routes = []
         for layer in range(24):
             prefix = f"layers.{layer}"
-            values = values + self._batched_attention(
-                self._norm(values, prefix + ".attention_norm.weight"), positions_all, lengths, prefix + ".attention")
-            shared = values + self._per_document(
-                lambda piece: self._swiglu(piece, prefix + ".shared"),
-                self._norm(values, prefix + ".shared_norm.weight"), lengths)
+            if layer in _ATTENTION_KEEP:
+                _layer_template_counts['attention_run'] += 1
+                values = values + self._batched_attention(
+                    self._norm(values, prefix + ".attention_norm.weight"), positions_all, lengths, prefix + ".attention")
+            else:
+                _layer_template_counts['attention_skipped'] += 1
+            if layer in _FFN_KEEP:
+                _layer_template_counts['ffn_run'] += 1
+                shared = values + self._per_document(
+                    lambda piece: self._swiglu(piece, prefix + ".shared"),
+                    self._norm(values, prefix + ".shared_norm.weight"), lengths)
+            else:
+                _layer_template_counts['ffn_skipped'] += 1
+                shared = values
             if not layer % 2:
                 values = shared
                 continue
@@ -1072,6 +1235,11 @@ class CIADecoder(nn.Module):
                 gate = factor.repeat_interleave(sizes[0])
             else:
                 gate = torch.repeat_interleave(factor, size_tensor, output_size=total)
+            if layer not in _EXPERT_KEEP:  # routed, zero residual: the resident segment's skipped expert site
+                _layer_template_counts['expert_skipped'] += 1
+                residual = torch.zeros_like(residual)
+            else:
+                _layer_template_counts['expert_run'] += 1
             values = shared + residual * gate[:, None].to(residual.dtype)
         outputs = [self._linear(piece, "embedding.weight")
                    for piece in torch.split(self._norm(values, "final_norm.weight"), lengths)]
@@ -1119,7 +1287,7 @@ class CIADecoder(nn.Module):
             raise ValueError("numerical forward requires full physical materialization")
         self._input(embedded, 1024)
         self._input(positions)
-        if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= 4096:
+        if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= _MAX_PACKED_POSITIONS:
             raise ValueError("1..4096 unpadded BF16 positions required")
         if positions.dtype != torch.long or tuple(positions.shape) != (len(embedded), 3):
             raise ValueError("three integer axes required at every position")
@@ -1133,7 +1301,11 @@ class CIADecoder(nn.Module):
             raise ValueError("strictly increasing document starts beginning at zero required")
         if type(batch_documents) is not bool:
             raise ValueError("batch_documents must be a bool")
-        self.parameter_inventory()
+        execution = self._cuda_execution
+        if not (self._resident_experts and execution is not None and execution.cache is execution and execution.active):
+            # Under an active resident step the inventory was validated at begin_step and is re-run by end_step
+            # before the optimizer update; the full owner compare at the resident forward's entry covers the gap.
+            self.parameter_inventory()
         spans = list(zip(document_starts, document_starts[1:] + (len(embedded),)))
         if type(return_device_routes) is not bool:
             raise ValueError('return_device_routes must be a bool')

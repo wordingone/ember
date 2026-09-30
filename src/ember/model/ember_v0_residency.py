@@ -4,9 +4,19 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from collections import OrderedDict
 from contextlib import contextmanager
+import atexit
+import json
+import os
 import time
 import torch
 import torch.nn.functional as F
+try:
+    import triton
+    import triton.language as tl
+except ModuleNotFoundError as _triton_error:
+    # CPU-only hosts (the CI python job) have no triton; only EMBER_FUSED_SWIGLU_ACT=1 needs it and refuses by name.
+    triton = tl = None
+    _TRITON_ERROR = _triton_error
 from torch.autograd.function import once_differentiable
 from .ember_v0_inventory import equation_inventory
 
@@ -169,8 +179,150 @@ class ExpertCache:
             self.leased.remove(expert)
 
 
+# These are CAPTURE-TIME TRACE counts, not per-step counts: the dict increment is a Python
+# side effect inside _silu_mul, so it fires when the region is traced/captured, not on each
+# CUDA graph replay. A small nonzero count (e.g. 13, not 1024) is expected and is exactly what
+# the proof needs -- the question this receipt answers is binary (was the branch ever reached),
+# never how many training steps ran under it. 'fallback' counts the reference path taken
+# because the operands did not meet the kernel's layout/dtype requirements.
+_swiglu_activation_counts = {'fused': 0, 'unfused': 0, 'fallback': 0}
+
+
+def swiglu_activation_counts():
+    return dict(_swiglu_activation_counts)
+
+
+def _silu_mul_reference(gate_projection, up_projection):
+    return F.silu(gate_projection) * up_projection
+
+
+if triton is not None:
+    @triton.jit
+    def _silu_mul_kernel(G, U, O, N, BLOCK: tl.constexpr = 1024):
+        pid = tl.program_id(0)
+        offsets = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offsets < N
+        g = tl.load(G + offsets, mask, other=0)
+        u = tl.load(U + offsets, mask, other=0)
+        g32 = g.to(tl.float32)
+        silu32 = g32 * tl.sigmoid(g32)
+        # Explicit intermediate cast to the input dtype -- this IS the reference's own rounding
+        # boundary: `F.silu(g)` materialises a bf16-rounded tensor before the multiply ever runs.
+        # A bare torch.compile trace was found to elide exactly this cast under its own dtype
+        # propagation (measured: 27.5% of elements differed, 1 ulp each), which is why this is a
+        # real Triton-level cast rather than a Python-level annotation that Inductor can fold away.
+        silu_rounded = silu32.to(G.dtype.element_ty)
+        product = silu_rounded.to(tl.float32) * u.to(tl.float32)
+        tl.store(O + offsets, product.to(G.dtype.element_ty), mask)
+
+
+def _silu_mul_triton_launch(gate_projection, up_projection):
+    n = gate_projection.numel()
+    out = torch.empty_like(gate_projection)
+    grid = (triton.cdiv(n, 1024),)
+    _silu_mul_kernel[grid](gate_projection, up_projection, out, n, BLOCK=1024, num_warps=4)
+    return out
+
+
+class _SiluMulTriton(torch.autograd.Function):
+    """Wraps the raw kernel so gradient flows through it under torch.autograd.grad.
+
+    _grouped_swiglu's 'dynamic' backend is reached from inside `torch.enable_grad()` in
+    _ResidentGroupedSwiGLU.forward/backward, which differentiates the whole retained graph
+    with `torch.autograd.grad`. A bare kernel launch has no grad_fn and would break that
+    graph silently; this Function supplies one.
+
+    The backward reuses aten's own `silu_backward` exactly as `_swiglu_group_gradients`
+    already does for the native fast path, so the GRADIENT FORMULA is the one already
+    carrying this file's no-worse-learning licence. This is a distinct numerical claim from
+    the forward's and was checked, not assumed: both gate_gradient and up_gradient came back
+    bit-identical to autograd through the unfused reference at [4096,3072] and [4096,2048]
+    (verify_fused_swiglu_backward.py). Re-verify if this kernel or backward changes -- a
+    citation to a verifier is not itself a verification.
+    """
+    @staticmethod
+    def forward(ctx, gate_projection, up_projection):
+        ctx.save_for_backward(gate_projection, up_projection)
+        return _silu_mul_triton_launch(gate_projection, up_projection)
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, output_gradient):
+        gate_projection, up_projection = ctx.saved_tensors
+        activated = F.silu(gate_projection)
+        gate_gradient = torch.ops.aten.silu_backward.default(
+            output_gradient * up_projection, gate_projection)
+        up_gradient = output_gradient * activated
+        return gate_gradient, up_gradient
+
+
+def _silu_mul(gate_projection, up_projection):
+    """silu(gate_projection) * up_projection in one elementwise pass when EMBER_FUSED_SWIGLU_ACT=1.
+
+    `F.silu(x)` writes a full intermediate to device memory and the following multiply reads
+    it straight back. At the governed geometry the profiler prices `aten::mul [4096,3072]` at
+    2458.7 us/step over 36 calls and `aten::silu [4096,2048]` at 641.3 us/step over 24 calls --
+    one fused pass reads both operands once and writes the product once, removing that round
+    trip. Gated at the call site (never cached at import) so a manifest variable recording that
+    the flag reached the worker is distinct from a call-site count recording that the branch
+    which ran is the branch that was asked for.
+
+    CAPTURE RISK: the 'dynamic' backend of _grouped_swiglu can be reached from inside a CUDA
+    graph capture. The Triton kernel's FIRST launch at a given (shape, dtype) performs its own
+    JIT compilation, which allocates and synchronizes -- a synchronize inside a capture aborts
+    it, exactly the same hazard a torch.compile'd function would carry. The runner takes one
+    warm step before capture, so compilation is expected to land there and the capture should
+    then replay an already-compiled kernel, but that is a hypothesis resting on the warm step
+    reaching this call with the same shapes, not a proven property; the governed run settles it.
+    """
+    on = os.environ.get('EMBER_FUSED_SWIGLU_ACT') == '1'
+    if not on:
+        _swiglu_activation_counts['unfused'] += 1
+        return _silu_mul_reference(gate_projection, up_projection)
+    # Refuse rather than guess on any layout/dtype the kernel was not written for. A silent
+    # wrong-layout kernel is worse than an unfused one.
+    if (not gate_projection.is_contiguous() or not up_projection.is_contiguous()
+            or gate_projection.shape != up_projection.shape
+            or gate_projection.dtype != torch.bfloat16 or up_projection.dtype != torch.bfloat16):
+        _swiglu_activation_counts['fallback'] += 1
+        return _silu_mul_reference(gate_projection, up_projection)
+    if triton is None:
+        raise RuntimeError('TRITON_UNAVAILABLE: EMBER_FUSED_SWIGLU_ACT=1 requires triton (refusing rather than running unfused)')
+    _swiglu_activation_counts['fused'] += 1
+    return _SiluMulTriton.apply(gate_projection, up_projection)
+
+
+def _write_swiglu_activation_receipt():
+    path = os.environ.get('EMBER_SWIGLU_ACT_RECEIPT')
+    if not path:
+        return
+    # Merge rather than overwrite: this module could in principle be loaded a second time
+    # under an alternate module name by a non-worker process sharing the same receipt path
+    # (the exact mechanism that clobbered the loss-widen receipt with zeros on 2026-09-22).
+    # Taking the per-key maximum against whatever is already on disk means write order never
+    # matters and a bystander's zeros can never erase real counts.
+    merged = dict(_swiglu_activation_counts)
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            existing = json.load(handle)
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                if isinstance(value, int) and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(merged, handle)
+    except OSError:
+        pass
+
+
+atexit.register(_write_swiglu_activation_receipt)
+
+
 def _swiglu(value, up, gate, down):
-    return F.linear(F.silu(F.linear(value, gate)) * F.linear(value, up), down)
+    return F.linear(_silu_mul(F.linear(value, gate), F.linear(value, up)), down)
 
 
 class _PagedSwiGLU(torch.autograd.Function):
@@ -425,13 +577,15 @@ def _validate_resident_group(parameters, storage):
 def _grouped_swiglu(value, up, gate, down, offsets, backend='native', chunk_ends=None):
     if backend == 'dynamic':
         from .ember_v0_grouped_capture import grouped_mm
-        hidden = F.silu(grouped_mm(value, gate.transpose(1, 2), offsets, chunk_ends=chunk_ends))
-        hidden = hidden * grouped_mm(value, up.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        gate_projection = grouped_mm(value, gate.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        up_projection = grouped_mm(value, up.transpose(1, 2), offsets, chunk_ends=chunk_ends)
+        hidden = _silu_mul(gate_projection, up_projection)
         return grouped_mm(hidden, down.transpose(1, 2), offsets, chunk_ends=chunk_ends)
     if backend != 'native':
         raise ValueError('unknown resident grouped backend')
-    hidden = F.silu(F.grouped_mm(value, gate.transpose(1, 2), offs=offsets))
-    hidden = hidden * F.grouped_mm(value, up.transpose(1, 2), offs=offsets)
+    gate_projection = F.grouped_mm(value, gate.transpose(1, 2), offs=offsets)
+    up_projection = F.grouped_mm(value, up.transpose(1, 2), offs=offsets)
+    hidden = _silu_mul(gate_projection, up_projection)
     return F.grouped_mm(hidden, down.transpose(1, 2), offs=offsets)
 
 
@@ -439,7 +593,7 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
     """Grouped kernels share storage; gradients belong to the actual Parameters."""
     @staticmethod
     def forward(ctx, value, offsets, execution, layer, backend, chunk_ends, *parameters):
-        execution.check()
+        execution.check_state()
         ctx.execution, ctx.layer, ctx.step_id = execution, layer, execution.step_id
         ctx.completed = False
         ctx.backend = backend
@@ -466,7 +620,7 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
     @once_differentiable
     def backward(ctx, output_gradient):
         execution = ctx.execution
-        execution.check()
+        execution.check_state()
         if execution.step_id != ctx.step_id or ctx.completed:
             raise RuntimeError('stale or repeated resident grouped backward')
         value, offsets, *parameters = ctx.saved_tensors
@@ -564,7 +718,8 @@ class ResidentExecution:
         if self.active or self.retired or self.poisoned:
             raise RuntimeError('geometry binding requires a quiescent current execution')
         if (type(lengths) is not tuple or not lengths
-                or any(type(n) is not int or n <= 0 for n in lengths) or sum(lengths) > 4096):
+                or any(type(n) is not int or n <= 0 for n in lengths)
+                or sum(lengths) > int(os.environ.get('EMBER_MAX_POSITIONS', '4096'))):
             raise ValueError('complete positive document geometry within context required')
         sizes = tuple(min(256, n-start) for n in lengths for start in range(0,n,256))
         self._geometry_lengths = lengths
@@ -611,7 +766,7 @@ class ResidentExecution:
         return tuple(rows)
 
     def check_route_plan(self, plan):
-        self.check()
+        self.check_state()
         if self._plan_declaration is None:
             if plan is not None:
                 raise ValueError('route plan must be bound before the resident step')
@@ -619,7 +774,7 @@ class ResidentExecution:
             raise ValueError('route plan differs from its prebound declaration')
 
     def planned_routes(self, depth, geometry, candidates, native_winners, logits, gates):
-        self.check()
+        self.check_state()
         if self._plan_declaration is None:
             return native_winners,gates
         actual=torch.stack([candidates[row[4]] for row in geometry.chunks])
@@ -633,13 +788,13 @@ class ResidentExecution:
         return winners,(probability-probability.detach())+1.0
 
     def geometry_repeats(self, lengths, sizes):
-        self.check()
+        self.check_state()
         if lengths != self._geometry_lengths or sizes != self._geometry_sizes:
             raise ValueError('resident forward requires its prebound document geometry')
         return self._geometry_repeats
 
     def require_valid(self, predicate, reason):
-        self.check()
+        self.check_state()
         if (reason not in ('input', 'routing', 'plan') or not isinstance(predicate, torch.Tensor)
                 or predicate.shape != () or predicate.dtype != torch.bool or predicate.device != self.device):
             raise ValueError('declared scalar device validity predicate required')
@@ -657,9 +812,32 @@ class ResidentExecution:
         return (self.model.owner_declaration(), tuple((name, ExpertCache._signature(value))
                  for name, value in self.model.live_parameters().items()))
 
-    def check(self):
+    @staticmethod
+    def _structure(owner):
+        # The owner identity with every in-place version counter removed. Each field the full parameter
+        # inventory validates -- names, object identity, shape, stride (hence contiguity), dtype, device,
+        # storage address/offset/size, the typed config and placement declarations, and the resident group
+        # storage -- is a field of this tuple, so equality with a tuple taken right after a passing inventory
+        # proves the inventory would pass again. Versions move with every optimizer update and are excluded.
+        declaration, rows = owner
+        layout = declaration[5]
+        if isinstance(layout, tuple):
+            layout = tuple(row[:4] + row[5:] if isinstance(row, tuple) and len(row) == 12 else row for row in layout)
+        return (declaration[:5] + (layout,) + declaration[6:],
+                tuple((name, signature[:1] + signature[2:]) for name, signature in rows))
+
+    def _registration(self):
+        return tuple(name for name, _ in self.model.named_parameters(remove_duplicate=False))
+
+    def check_state(self):
+        # Per-layer sites inside the step: state predicates only. The owner identity is compared at begin_step,
+        # at the resident forward's entry and at end_step, and end_step precedes the optimizer update, so a
+        # mid-step owner change still refuses the step before it can mutate the model.
         if not self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution requires its current active candidate step')
+
+    def check(self):
+        self.check_state()
         if self.identity() != self.bound:
             raise RuntimeError('resident candidate owner changed during the step')
 
@@ -669,6 +847,8 @@ class ResidentExecution:
         if (self.active or self.retired or self.poisoned or self.pending
                 or self.model._cuda_execution is not self):
             raise RuntimeError('capture requires a quiescent current resident execution')
+        self._staged_identity = None
+        self._staged_validation = None
         self.model.parameter_inventory()
         owner = self.identity()
         saved = (self.bound, self.step_id, self.routed,
@@ -689,11 +869,28 @@ class ResidentExecution:
             self.routing_valid.copy_(saved[3])
             self.input_valid.copy_(saved[4])
 
+    def stage_next_identity(self):
+        # Taken after the previous step's optimizer call returns, beside the device update. end_step compares the
+        # live identity against this bound, so any owner change after staging refuses before the next update.
+        self._staged_identity = self.identity()
+        # The begin_step structure/registration tuple of that same staged owner, taken at the same instant. The
+        # guarantee is unchanged: a later owner or registration change is refused by end_step's identity compare and
+        # full parameter inventory, both before the next optimizer update.
+        self._staged_validation = ((self._structure(self._staged_identity), self._registration())
+                                   if getattr(self, 'stage_validation', False) else None)
+
     def begin_step(self):
         if self.active or self.retired or self.poisoned or self.model._cuda_execution is not self:
             raise RuntimeError('resident execution is not available for a new step')
-        self.model.parameter_inventory()
-        self.bound = self.identity()
+        staged, self._staged_identity = getattr(self, '_staged_identity', None), None
+        staged_validation, self._staged_validation = getattr(self, '_staged_validation', None), None
+        owner = staged if staged is not None else self.identity()
+        validated, self._validated = getattr(self, '_validated', None), None
+        current = (staged_validation if staged is not None and staged_validation is not None
+                   else (self._structure(owner), self._registration()))
+        if validated is None or validated != current:
+            self.model.parameter_inventory()
+        self.bound = owner
         self.step_id += 1
         self.pending = 0
         self.routed = []
@@ -703,10 +900,35 @@ class ResidentExecution:
 
     def end_step(self):
         try:
-            self.check()
+            # check(), with the identity read once and reused below: parameter_inventory() between them only validates.
+            self.check_state()
+            owner = self.identity()
+            if owner != self.bound:
+                raise RuntimeError('resident candidate owner changed during the step')
             if self.pending:
                 raise RuntimeError('incomplete resident expert backward')
-            self.model.parameter_inventory()
+            # _structure carries every field the full inventory validates (see its comment), so a structure and
+            # registration equal to those of the last PASSING inventory prove it would pass again; the full
+            # inventory runs whenever they differ. It was the largest host cost between backward and the optimizer
+            # enqueue, and its jitter set #1945's slow-update tail.
+            current = (self._structure(owner), self._registration())
+            if getattr(self, '_inventory_passed', None) != current:
+                self.model.parameter_inventory()
+                self._inventory_passed = current
+            self._validated = current
+            if getattr(self, 'deferred_verdict', None) is not None:
+                raise RuntimeError('the previous step\'s deferred verdict was never settled')
+            if getattr(self, 'defer_verdict', False):
+                # No drain: the predicates are copied to pinned host memory on the stream (ordered before the next
+                # step's begin_step refills them); the caller gates the optimizer on the device and settles after its
+                # completion wait, before the step's row exists.
+                self.defer_verdict = False
+                inputs = torch.empty(3, dtype=torch.bool, pin_memory=True)
+                inputs.copy_(self.input_valid.detach(), non_blocking=True)
+                routing = torch.empty((), dtype=torch.bool, pin_memory=True)
+                routing.copy_(self.routing_valid.detach(), non_blocking=True)
+                self.deferred_verdict = (self.step_id, inputs, routing, list(self.routed))
+                return
             torch.cuda.synchronize(self.device)
             predicates = self.input_valid.detach().cpu().tolist()
             if not all(predicates):
@@ -718,9 +940,27 @@ class ResidentExecution:
                 raise ResidentRoutingRefusal(self.step_id, unknown)
         except BaseException:
             self.poisoned = True
+            self._validated = None
             raise
         finally:
             self.active = False
+
+    def settle_deferred(self):
+        """Raise the refusals end_step would have raised, from the pinned copies; call after the completion wait."""
+        verdict, self.deferred_verdict = getattr(self, 'deferred_verdict', None), None
+        if verdict is None:
+            raise RuntimeError('no deferred verdict to settle')
+        step_id, inputs, routing, routed = verdict
+        predicates = inputs.tolist()
+        if not all(predicates):
+            self.poisoned = True
+            raise ResidentInputRefusal(step_id, [reason for reason, ok in
+                zip(('input', 'routing', 'plan'), predicates) if not ok])
+        if not bool(routing):
+            self.poisoned = True
+            unknown = [int(expert) for values in routed for expert in values.detach().cpu().tolist()
+                       if int(expert) not in self.ids]
+            raise ResidentRoutingRefusal(step_id, unknown)
 
     @contextmanager
     def step(self):
@@ -737,7 +977,7 @@ class ResidentExecution:
 
     def validate_routed(self, experts):
         """Accumulate a device validity predicate and return safe local group slots."""
-        self.check()
+        self.check_state()
         if (not isinstance(experts, torch.Tensor) or experts.ndim != 1 or experts.dtype != torch.long
                 or experts.device != self.device or not len(experts)):
             raise ValueError('one nonempty same-device integer expert vector required')
@@ -750,7 +990,7 @@ class ResidentExecution:
         return tuple(self.model._resident_groups[(layer, projection)] for projection in ('up', 'gate', 'down'))
 
     def grouped_block(self, values, experts, layer, *, backend='native'):
-        self.check()
+        self.check_state()
         if (type(layer) is not int or layer not in range(1, 24, 2)
                 or values.ndim != 2 or values.shape[1] != 1024 or values.dtype != torch.bfloat16
                 or values.device != self.device or len(experts) != len(values)):
@@ -777,7 +1017,7 @@ class ResidentExecution:
         return result.index_select(0, torch.argsort(order))
 
     def expert_block(self, values, expert, layer):
-        self.check()
+        self.check_state()
         if type(expert) is not int or expert not in self.ids:
             raise ResidentRoutingRefusal(self.step_id, (expert,))
         return self.model._swiglu(values, f'experts.{expert}.layers.{layer}')

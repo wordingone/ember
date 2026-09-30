@@ -77,7 +77,8 @@ OPERAND_SHA256 = 'e49ad84192da8f1f82b759e9360cba18b39eca2a716550048b08d2aa1197dc
 # Anchored substrings of the launch statements whose geometry this whole cycle reasons about.
 # If the source no longer contains them, the premise is not merely stale -- it is unread.
 GRID_ANCHORS = (
-    '_rows[(triton.cdiv(m, 64), triton.cdiv(n, 128), groups)]',
+    '_rows[(triton.cdiv(m, bm), triton.cdiv(n, bn), groups)]',
+    'return 64, 128, 32, 4, 3',
     'first = start + tl.program_id(0) * BM',
     'if first < end:',
     "_weights[(triton.cdiv(k, 64), triton.cdiv(n, 128), b.shape[0])]",
@@ -232,6 +233,28 @@ def check_device(available, count, capability):
     return tuple(capability)
 
 
+DEFAULT_ROWS_CONFIG = (64, 128, 32, 4, 3)
+
+
+def check_resolved_mode(api):
+    """The measured computation is the default 64x128 BF16 launch, or a refusal.
+
+    The source anchors prove the default branch EXISTS; only the resolved values prove it was SELECTED.
+    EMBER_ROWS_TILE changes the grid api.rows launches while program_counts still derives 64x128, and
+    EMBER_FP8_GROUPED=1 quantizes api.rows' inputs under a report that claims a BF16 denominator.
+    """
+    config = tuple(api._rows_config())
+    if config != DEFAULT_ROWS_CONFIG:
+        raise Refuse('ROWS_TILE_NOT_DEFAULT',
+                     'api._rows_config() resolved %r, not the default %r this instrument derives its grid from'
+                     % (config, DEFAULT_ROWS_CONFIG))
+    if api._grouped_fp8_enabled():
+        raise Refuse('GROUPED_FP8_NOT_BF16',
+                     'api._grouped_fp8_enabled() is True: rows() quantizes its inputs, but this instrument '
+                     'reports a BF16 denominator')
+    return config
+
+
 def program_counts(m, n, k, groups):
     """Derived, not observed: the grid the source launches at this geometry."""
     cd = lambda x, y: -(-x // y)
@@ -267,6 +290,7 @@ def run(args):
     kernel_path = os.path.join(args.root, KERNEL_REL).replace('\\', '/')
     kernel_sha, _text = read_kernel_source(kernel_path, args.expect_kernel_sha256)
     from ember.model import ember_v0_grouped_capture as api
+    check_resolved_mode(api)
 
     cap = check_device(torch.cuda.is_available(), torch.cuda.device_count(),
                        torch.cuda.get_device_capability(0) if torch.cuda.is_available() else None)
