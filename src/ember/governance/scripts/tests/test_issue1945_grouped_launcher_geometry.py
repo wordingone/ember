@@ -159,6 +159,34 @@ def test_red_device_not_single_ada():
     expect_refusal('DEVICE_NOT_SINGLE_ADA', arm.check_device, True, 1, (8, 6))
 
 
+class _FakeApi:
+    """Stands in for ember_v0_grouped_capture: only the two resolved-mode readers the arm consults."""
+
+    def __init__(self, config=(64, 128, 32, 4, 3), fp8=False):
+        self._config, self._fp8 = config, fp8
+
+    def _rows_config(self):
+        return self._config
+
+    def _grouped_fp8_enabled(self):
+        return self._fp8
+
+
+def test_red_rows_tile_not_default():
+    # EMBER_ROWS_TILE=32,64,32,4,3 leaves both source anchors present but launches ceil(m/32) x ceil(n/64).
+    expect_refusal('ROWS_TILE_NOT_DEFAULT', arm.check_resolved_mode, _FakeApi(config=(32, 64, 32, 4, 3)))
+    expect_refusal('ROWS_TILE_NOT_DEFAULT', arm.check_resolved_mode, _FakeApi(config=(128, 128, 32, 4, 3)))
+
+
+def test_red_grouped_fp8_not_bf16():
+    expect_refusal('GROUPED_FP8_NOT_BF16', arm.check_resolved_mode, _FakeApi(fp8=True))
+
+
+def test_green_default_resolved_mode_passes_and_explicit_default_is_equivalent():
+    assert arm.check_resolved_mode(_FakeApi()) == (64, 128, 32, 4, 3)
+    assert arm.check_resolved_mode(_FakeApi(config=[64, 128, 32, 4, 3])) == (64, 128, 32, 4, 3)
+
+
 # --------------------------------------------------------------------------- greens
 
 def test_green_partitions_sixteen_chunks_into_four_groups():
