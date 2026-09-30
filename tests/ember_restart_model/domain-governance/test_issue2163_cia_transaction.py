@@ -196,13 +196,15 @@ class TransactionTests(unittest.TestCase):
         path.write_bytes(path.read_bytes()+b'changed')
         with self.assertRaises(ValueError): self.publish()
 
-    def test_first_descendant_refuses_second_descendant(self):
+    def test_second_descendant_parent_is_admitted_then_judged_on_its_own_update(self):
+        # An admitted descendant is a lawful parent (chained governed hours); the child is still refused
+        # on its own evidence when it carries no optimizer or parameter update.
         self.prepare_first_descendant()
         self.publish()
         self.kwargs['cia_parent_checkpoint'] = self.root
         self.root = self.root.parent/'second-descendant'
         self.kwargs['data_cursor']['global_step'] = 2
-        with self.assertRaisesRegex(ValueError,'zero-step parent'):
+        with self.assertRaisesRegex(ValueError,'actual optimizer and parameter update support'):
             self.publish()
 
     def test_first_descendant_refuses_unadvanced_optimizer_clock(self):

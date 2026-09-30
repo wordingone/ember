@@ -2383,6 +2383,10 @@ def _validate_counter_receipt(manifest_receipt: Mapping[str, Any], returned: Map
     }
     for field in ("allocated_parameters", "unique_parameters", "trainable_parameters", "served_parameters", "active_parameters", "episode_trainable_parameters"):
         expected[field] = architecture.get(field)
+    if validated.get("counter_sha256") != expected["counter_sha256"]:
+        # A chained parent was counted by an earlier counter; admit it only when that counter is kept verbatim.
+        getattr(_ember_1601eccb5605602b_module, "_counter_for")(validated.get("counter_sha256"))
+        expected["counter_sha256"] = validated.get("counter_sha256")
     if any(validated.get(field) != value for field, value in expected.items()):
         raise ValueError("post-run counter receipt does not bind subject, source, genesis, or measured counts")
     return validated
@@ -4507,7 +4511,53 @@ def _cia_read_component(root, record):
     return torch.load(io.BytesIO(snapshot), map_location='cpu', weights_only=True)
 
 
+def _cia_ordered_parallel(function, items, *, workers=8):
+    """Apply function to independent items on a bounded pool; results and the first error keep item order."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        yield from pool.map(function, items)
+
+
+def _cia_in_operation(function):
+    """Run a top-level publication / admission / restore inside exactly one validation operation."""
+    import functools
+
+    @functools.wraps(function)
+    def scoped(*args, **kwargs):
+        import parameter_counter as cia_counter
+        with cia_counter.cia_validation_operation():
+            return function(*args, **kwargs)
+    return scoped
+
+
+def _cia_validate_parent_once(root, receipt):
+    """Validate an admitted parent to genesis. Within ONE validation operation a node is fully validated once per
+    (canonical root, complete receipt digest, role); the receipt carries the manifest digest, identity, caps and
+    counter receipts, so a changed identity/cap/profile cannot hit the same entry. Nothing survives the operation,
+    and a failed validation records nothing."""
+    import parameter_counter as cia_counter
+    operation = cia_counter._CIA_OPERATION.get()
+    if operation is None:
+        return _cia_validated_checkpoint(root, receipt)
+    operation.visits['validated_calls'] += 1
+    key = ('parent-validation', str(root),
+           hashlib.sha256(json.dumps(receipt, sort_keys=True, default=str).encode()).hexdigest())
+    if key in operation.validated:
+        return None
+    operation.visits['validated_full'] += 1
+    value = _cia_validated_checkpoint(root, receipt)
+    operation.validated.add(key)
+    return value
+
+
 def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_payload_bytes=None):
+    import parameter_counter as cia_counter
+    with cia_counter.cia_validation_operation():
+        return _cia_validated_checkpoint_impl(root, receipt, retain_model=retain_model,
+                                              max_restore_payload_bytes=max_restore_payload_bytes)
+
+
+def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_restore_payload_bytes=None):
     """Inspect one complete raw generation, optionally retaining verified tensors.
 
     A retained snapshot prevents a later pathname read during restore. Admission
@@ -4536,7 +4586,8 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
         raise ValueError('CIA checkpoint receipt differs from raw manifest')
     if manifest['architecture_revision'] != 'CIA3-R1-N61':
         raise ValueError('CIA checkpoint architecture revision mismatch')
-    if manifest['genesis_provenance'] != {'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}:
+    # A descendant of a descendant (a chained hour) is stamped VERIFIED_DESCENDANT_PARENT by the writer.
+    if manifest['genesis_provenance'] not in ([{'kind':'VERIFIED_ZERO_STEP_PARENT','independently_qualified':False},{'kind':'VERIFIED_DESCENDANT_PARENT','independently_qualified':False}] if descendant else [{'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}]):
         raise ValueError('CIA checkpoint genesis provenance is not an unqualified object binding')
     if manifest['qualification'] != {'clean_genesis':False,'trained':False,'served':False}:
         raise ValueError('CIA checkpoint bytes cannot grant model qualification')
@@ -4557,7 +4608,7 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
         import parameter_counter as cia_counter
         parent, parent_facts = cia_counter._cia_parent_snapshot(lineage.get('parent_checkpoint',''),
             max_restore_payload_bytes=cap, expected_digest=lineage.get('parent_manifest_sha256'))
-        _cia_validated_checkpoint(Path(lineage['parent_checkpoint']),parent)
+        _cia_validate_parent_once(Path(lineage['parent_checkpoint']),parent)
     index = manifest['expert_index']
     if type(index) is not dict or set(index) != {'path', 'sha256', 'bytes', 'expert_object_bytes'}:
         raise ValueError('CIA checkpoint expert index record schema mismatch')
@@ -4598,11 +4649,14 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
     inventory = {name: (tuple(value.shape), value.numel()) for name,value in tensors.items()}
     lineage_facts = _cia_lineage_facts(tensors,{}) if descendant else None
     if not retain_model: tensors = {}
-    for expert_id in range(25):
+    # The 25 objects are independent reads; hashing, reads and isfinite release the interpreter lock, so the
+    # same checks run on a bounded pool and merge in expert order (one pass was 29 s serial).
+    def load_expert(expert_id):
         expert = read_cia_expert_object(index_path, expected_index_sha256=index['sha256'], expert_id=expert_id)
+        return expert, (_cia_lineage_facts(expert,{}) if descendant else None)
+    for expert, expert_facts in _cia_ordered_parallel(load_expert, range(25)):
         inventory.update({name: (tuple(value.shape), value.numel()) for name,value in expert.items()})
         if descendant:
-            expert_facts = _cia_lineage_facts(expert,{})
             lineage_facts['parameters'].update(expert_facts['parameters'])
             lineage_facts['elements'].update(expert_facts['elements'])
         if retain_model: tensors.update(expert)
@@ -4663,6 +4717,7 @@ def _cia_validated_checkpoint(root, receipt, *, retain_model=False, max_restore_
     return result, tensors, optimizer, replay
 
 
+@_cia_in_operation
 def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_state, data_cursor,
         model_config_sha256, contract_sha256, expert_genesis_sha256, max_serialized_bytes,
         max_transient_scratch_bytes, pre_publish_verifier, host_commit_reserve_bytes=None,
@@ -4701,7 +4756,7 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         import parameter_counter as cia_counter
         parent, parent_facts = cia_counter._cia_parent_snapshot(cia_parent_checkpoint,
             max_restore_payload_bytes=max_transient_scratch_bytes)
-        _cia_validated_checkpoint(Path(cia_parent_checkpoint),parent)
+        _cia_validate_parent_once(Path(cia_parent_checkpoint),parent)
         if Path(root).resolve() == Path(cia_parent_checkpoint).resolve():
             raise ValueError('CIA child checkpoint cannot replace its parent')
     _validate_replay_bindings(launch_seed=launch_seed, rng_state=rng_state, data_cursor=data_cursor,
@@ -4746,7 +4801,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
             active_expert_ids=[str(i) for i in range(25) if any(spec.expert == i and parameters[spec.name].requires_grad for spec in specs)],
             core=core,expert_index=index,optimizer=components['optimizer-state.pt'],replay=components['replay-state.pt'],
             optimizer_identity=identity,placement=optimizer_payload['placement'],max_restore_payload_bytes=max_transient_scratch_bytes,
-            genesis_provenance={'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False},
+            genesis_provenance={'kind':('VERIFIED_DESCENDANT_PARENT' if 'lineage' in parent else 'VERIFIED_ZERO_STEP_PARENT')
+                if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False},
             qualification={'clean_genesis':False,'trained':False,'served':False})
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
@@ -4764,6 +4820,7 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         raise
 
 
+@_cia_in_operation
 def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_transient_scratch_bytes=None, host_commit_reserve_bytes=None):
     """Validate complete immutable payloads before the first runtime mutation."""
     root = _admitted_checkpoint_root(root)

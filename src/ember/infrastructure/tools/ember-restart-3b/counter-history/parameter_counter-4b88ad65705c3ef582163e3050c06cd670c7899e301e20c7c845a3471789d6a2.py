@@ -6,10 +6,8 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import io
-import os
 import json
 import pickle
 import sys
@@ -1583,74 +1581,11 @@ def _counter_for(digest):
         import importlib.util
         spec = importlib.util.spec_from_file_location('parameter_counter_%s' % digest[:16], path)
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-        # A historic counter's own resolver would look under counter-history/counter-history/; its chained
-        # ancestors resolve through this tree instead, still verified digest-to-bytes.
-        module._counter_for = _counter_for
-        # The historic reopen keeps its own verbatim logic; only its repeat visits inside one operation are folded.
-        # A profile that carries the process-global EMBER_CIA_PARENT_MEMO (the 7d46fc9d predecessor) exposes its
-        # uncached reopen as _cia_parent_snapshot_reopened: route through THAT, never its memoizing entry point,
-        # so nothing survives from an earlier operation. Older profiles (4b88ad65, ec9cde42) have no memo and
-        # keep their one entry point. Process env is never toggled.
-        reopen = getattr(module, '_cia_parent_snapshot_reopened', None) or module._cia_parent_snapshot
-        module._cia_parent_snapshot = _cia_operation_snapshot(reopen, digest)
         _COUNTERS[digest] = module
     return _COUNTERS[digest]
 
 
-import contextvars
-
-# One validation operation per top-level publication / admission / restore. Nothing is process-wide: the context
-# is dropped on success or failure, and it holds only facts derived from bytes read and verified inside it.
-_CIA_OPERATION = contextvars.ContextVar('cia_validation_operation', default=None)
-_SELF_SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-
-
-class _CiaValidationOperation:
-    def __init__(self):
-        self.snapshots = {}
-        self.validated = set()
-        self.visits = {'snapshot_calls': 0, 'snapshot_reopened': 0, 'validated_calls': 0, 'validated_full': 0}
-
-
-@contextmanager
-def cia_validation_operation():
-    """Open one validation context, or join the enclosing one (a nested entry never widens the scope)."""
-    outer = _CIA_OPERATION.get()
-    if outer is not None:
-        yield outer
-        return
-    operation = _CiaValidationOperation()
-    token = _CIA_OPERATION.set(operation)
-    try:
-        yield operation
-    finally:
-        _CIA_OPERATION.reset(token)
-
-
-def _cia_operation_snapshot(reopen, source_sha256):
-    """Wrap one counter module's parent reopen with per-operation, per-node deduplication.
-
-    Key = canonical path + expected manifest digest + caller byte bound + the counter source identity that derives
-    it (role: snapshot). Only a digest-bound call is cached; a value is stored only after the reopen succeeded."""
-    def snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
-        operation = _CIA_OPERATION.get()
-        if operation is not None: operation.visits['snapshot_calls'] += 1
-        if operation is None or expected_digest is None:
-            if operation is not None: operation.visits['snapshot_reopened'] += 1
-            return reopen(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
-                          expected_digest=expected_digest)
-        key = ('snapshot', str(parent_checkpoint), expected_digest, max_restore_payload_bytes, source_sha256)
-        if key in operation.snapshots:
-            return copy.deepcopy(operation.snapshots[key])
-        operation.visits['snapshot_reopened'] += 1
-        value = reopen(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
-                       expected_digest=expected_digest)
-        operation.snapshots[key] = copy.deepcopy(value)
-        return value
-    return snapshot
-
-
-def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
+def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
     """Reopen an admitted zero-step CIA parent using the existing byte counter."""
     parent_root = Path(parent_checkpoint)
     if not parent_root.is_absolute() or parent_root.resolve(strict=True) != parent_root:
@@ -1691,9 +1626,6 @@ def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_byte
         raise ValueError('CIA admitted parent counter receipt differs from reopened bytes')
     parent['_parent_counter_receipt_sha256'] = hashlib.sha256(persisted_raw).hexdigest()
     return parent, facts
-
-
-_cia_parent_snapshot = _cia_operation_snapshot(_cia_parent_snapshot_reopened, _SELF_SOURCE_SHA256)
 
 
 def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None):
