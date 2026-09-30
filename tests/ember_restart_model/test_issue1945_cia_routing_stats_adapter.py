@@ -308,13 +308,17 @@ class SkipSemanticsTests(unittest.TestCase):
 
     def test_measure_step_releases_after_the_snapshot_and_before_the_update(self):
         source = SOURCE.read_text(encoding='utf-8')
+        # The boundary snapshot and its trace check live in _take_route_snapshot since the per-micro-step split.
+        helper_start = source.index('def _take_route_snapshot(')
+        helper = source[helper_start:source.index('\ndef ', helper_start + 1)]
+        self.assertLess(helper.index('snapshot = buffers.snapshot()'),
+                        helper.index("raise ValueError('device routing buffers differ from the model trace')"))
         start = source.index('def measure_step(')
         body = source[start:source.index('\ndef ', start + 1)]
-        snapshot = body.index('snapshot = buffers.snapshot()')
-        release = body.index('release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))')
+        snapshot = body.index('unrouted = _take_route_snapshot(')
+        release = body.index('release_unrouted_expert_grads(expert_owners, {layer: tuple(sorted(experts))')
         self.assertLess(snapshot, release)
-        self.assertLess(body.index("raise ValueError('device routing buffers differ from the model trace')"), release)
-        self.assertLess(release, body.index('\n    optimizer.step()\n'))  # the call, not the docstring mention
+        self.assertLess(release, body.index('\n        optimizer.step()\n'))  # the call, not the docstring mention
         self.assertIn("'unrouted_expert_grads_released'", body)
         worker = source[source.index('def worker('):]
         self.assertLess(worker.index('expert_owners = expert_owner_index(inventory)'), worker.index("open('xb') as rows"))
