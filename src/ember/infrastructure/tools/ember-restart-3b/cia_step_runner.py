@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import ctypes
 from dataclasses import asdict, replace
 import contextlib
@@ -19,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -89,7 +91,7 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
     if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
         raise ValueError('geometry fields differ')
     sequence = positive_int(geometry['sequence_length'], 'sequence length', 1024)
-    documents = positive_int(geometry['documents_per_step'], 'documents per step', 4)
+    documents = positive_int(geometry['documents_per_step'], 'documents per step', MICRO_DOCUMENTS * MAX_MICRO_STEPS)
     warm = geometry['warm_steps']
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
@@ -97,21 +99,52 @@ def geometry_counts(geometry, *, trajectory=False, hour=False, measurement=False
                             131072 if hour else MEASUREMENT_UPDATES if measurement else 63 if trajectory else 8)
     if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
         raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
-    if measurement and (sequence, documents, warm, measured) != (1024, 4, 1, MEASUREMENT_UPDATES):
-        raise ValueError('long measurement requires exactly 1024 complete 4x1024 updates with one warm exemplar')
+    if measurement and ((sequence, warm, measured) != (1024, 1, MEASUREMENT_UPDATES)
+                        or documents % MICRO_DOCUMENTS or documents // MICRO_DOCUMENTS not in ACCUMULATION_DEPTHS):
+        raise ValueError('long measurement requires exactly 1024 complete updates of 4xN documents of 1024 positions '
+                         '(N in %s micro-steps) with one warm exemplar' % (ACCUMULATION_DEPTHS,))
+    if not measurement and documents > MICRO_DOCUMENTS:
+        raise ValueError('only the long measurement accumulates micro-steps; every other geometry is one 4x1024 step')
     if hour and ((sequence, documents, warm) != (1024, 4, 1) or measured < 2):
         raise ValueError('extended worker requires 4x1024 geometry, one warm exemplar and at least two measured updates')
     return sequence, documents, warm, measured
 
 
+ROW_FSYNC_EVERY = 64  # rows are flushed every update; fsync'd in batches (see patch note)
+
+
 def _pack_digest(packs):
-    body = [{name: pack[name] for name in INPUT_FIELDS} for pack in packs]
+    body = [{name: pack[name] for name in INPUT_FIELDS + (('images',) if 'images' in pack else ())}
+            for pack in packs]
     return hashlib.sha256(canonical(body)).hexdigest()
+
+
+_DRAWN_DIGESTS = {}
+# The look-ahead holds at most one pack in flight, so a handful of entries covers every consumer that pops. The bound
+# is what keeps a consumer that never pops (the governed hour) from retaining every pack it ever drew: 4,096 position
+# lists per update, a host MemoryError near update 28.8k, and a full collection scanning all of them.
+_DRAWN_DIGESTS_CAP = 8
+_DRAWN_DIGESTS_LOCK = threading.Lock()
+
+
+def _remember_drawn(pack, digest):
+    with _DRAWN_DIGESTS_LOCK:
+        _DRAWN_DIGESTS[id(pack)] = (pack, digest)
+        while len(_DRAWN_DIGESTS) > _DRAWN_DIGESTS_CAP:
+            _DRAWN_DIGESTS.pop(next(iter(_DRAWN_DIGESTS)))
+
+
+def _row_digest(pack):
+    """The row's pack digest: the producer's, when it digested this very object, else computed here."""
+    entry = _DRAWN_DIGESTS.pop(id(pack), None)
+    if entry is not None and entry[0] is pack:
+        return entry[1]
+    return _pack_digest([pack])
 
 
 def open_input_stream(data):
     """Verify the existing receipt and ledger and detach the admitted shard list."""
-    if not isinstance(data, dict) or set(data) != DATA_KEYS:
+    if not isinstance(data, dict) or set(data) not in (DATA_KEYS, DATA_KEYS | {'image_text'}):
         raise ValueError('data plan fields differ')
     semantic_path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py'
     spec = importlib.util.spec_from_file_location('cia_measurement_semantic_stream', semantic_path)
@@ -145,6 +178,56 @@ def open_input_stream(data):
     return stream, receipt, tokenizer, ledger
 
 
+IMAGE_TEXT_KEYS = {'manifest_path', 'manifest_sha256', 'seed'}
+
+
+def load_image_text_module():
+    name = 'cia_measurement_image_text_stream'
+    module = sys.modules.get(name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(name, ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/image_text_stream.py')
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return module
+
+
+def open_image_text(data, tokenizer, sequence):
+    """Mixture amendment A1: None for a text-only plan, else the frozen image-text document source."""
+    binding = data.get('image_text')
+    if binding is None:
+        return None
+    if type(binding) is not dict or set(binding) != IMAGE_TEXT_KEYS or type(binding['seed']) is not int:
+        raise ValueError('image-text binding fields differ')
+    from tokenizers import Tokenizer
+    frozen = Tokenizer.from_file(str(tokenizer))
+    def encode(text):
+        return list(frozen.encode(text, add_special_tokens=False).ids)
+    return load_image_text_module().ImageTextStream(binding['manifest_path'], checked_sha(binding['manifest_sha256']),
+                                                    encode, seed=binding['seed'], sequence=sequence)
+
+
+def text_documents(image_text, documents):
+    return documents - (1 if image_text is not None else 0)
+
+
+def fill_pack(pack, stream, cursor, image_text, *, sequence, documents, image_index=None):
+    """Text documents from the stream, then (A1) one image-text document at the given global image position.
+
+    image_index defaults to the pack's local index (a non-chained run); a chained hour passes its global position."""
+    for _ in range(text_documents(image_text, documents)):
+        episode, after = stream.next_episode(**cursor, sequence_length=sequence)
+        pack['document_starts'].append(len(pack['token_ids']))
+        pack['token_ids'].extend(episode['token_ids'])
+        pack['target_ids'].extend(episode['target_ids'])
+        pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
+        cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+    if image_text is not None:
+        load_image_text_module().append_document(
+            pack, image_text.document(pack['index'] if image_index is None else image_index))
+    return cursor
+
+
 def prepare_inputs(data, geometry, *, trajectory=False):
     """Open the real stream and freeze the whole short plan before model allocation."""
     stream, receipt, tokenizer, ledger = open_input_stream(data)
@@ -152,19 +235,14 @@ def prepare_inputs(data, geometry, *, trajectory=False):
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('cursor fields differ')
+    image_text = open_image_text(data, tokenizer, sequence)
     planned_positions = (warm + measured) * documents * sequence
-    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + measured) * text_documents(image_text, documents) * sequence)
     packs = []
     for index in range(warm + measured):
         pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
                 'index': index, 'phase': 'warm' if index < warm else 'measured'}
-        for _ in range(documents):
-            episode, next_cursor = stream.next_episode(**cursor, sequence_length=sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
-            cursor = {key: next_cursor[key] for key in ('shard_index', 'token_offset')}
+        cursor = fill_pack(pack, stream, cursor, image_text, sequence=sequence, documents=documents)
         packs.append(pack)
     if file_sha256(receipt) != data['receipt_sha256'] or file_sha256(tokenizer) != data['tokenizer_sha256']:
         raise ValueError('receipt or tokenizer changed during input preparation')
@@ -199,8 +277,8 @@ MEASUREMENT_INPUT_GRAMMAR = 'measurement-receipt-cursor-span-v1'
 class MeasurementPacks:
     """Generate only the next complete pack from the verified detached shard list. The 1,025-pack plan is never
     resident, and each emitted pack carries the cursor it consumed so every row accounts for its own input."""
-    def __init__(self, stream, cursor, *, maximum_steps, sequence, documents, warm):
-        self.stream = stream
+    def __init__(self, stream, cursor, *, maximum_steps, sequence, documents, warm, image_text=None):
+        self.stream, self.image_text = stream, image_text
         self.cursor = dict(cursor)
         self.maximum_steps, self.sequence, self.documents, self.warm = maximum_steps, sequence, documents, warm
         self.index = 0
@@ -211,16 +289,109 @@ class MeasurementPacks:
         before = dict(self.cursor)
         pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
                 'index': self.index, 'phase': 'warm' if self.index < self.warm else 'measured'}
-        for _ in range(self.documents):
-            episode, after = self.stream.next_episode(**self.cursor, sequence_length=self.sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(self.sequence)])
-            self.cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+        self.cursor = fill_pack(pack, self.stream, self.cursor, self.image_text,
+                                sequence=self.sequence, documents=self.documents)
         pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
         self.index += 1
         return pack
+
+
+class LookaheadPacks:
+    """One-pack look-ahead over a pack source (MeasurementPacks or cia_hour.HourPacks); see the A1 route record.
+
+    Reports the CONSUMED position through .cursor/.index, so the continuation reference and every published cursor
+    are unchanged. Assigning .cursor or .index drops the buffered pack and writes through to the inner source."""
+    def __init__(self, inner):
+        from concurrent.futures import ThreadPoolExecutor
+        self._inner = inner
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='ember-pack-ahead')
+        self._future = None
+        self._at_submit = None
+        self._submit()
+
+    def _submit(self):
+        if self._inner.index >= self._inner.maximum_steps:
+            self._future, self._at_submit = None, None
+            return
+        self._at_submit = (dict(self._inner.cursor), self._inner.index)
+        self._future = self._pool.submit(self._draw)
+
+    def _draw(self):
+        # The row digest is taken here, off the training thread; _row_digest uses it only for this same object.
+        pack = self._inner.next_pack()
+        _remember_drawn(pack, _pack_digest([pack]))
+        return pack
+
+    def _drop(self):
+        if self._future is not None:
+            try:
+                self._future.result()
+            except Exception:
+                pass
+            self._inner.cursor, self._inner.index = self._at_submit
+            self._future, self._at_submit = None, None
+
+    def next_pack(self):
+        if self._future is None:
+            pack = self._inner.next_pack()
+        else:
+            future, self._future, self._at_submit = self._future, None, None
+            pack = future.result()
+        self._submit()
+        return pack
+
+    def __getattr__(self, name):
+        # Every read the look-ahead does not redefine is the inner source's (image_text, stream, geometry):
+        # the hour reads .image_text for its experiment binding and the wrapper had no such attribute.
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return getattr(self._inner, name)
+
+    @property
+    def maximum_steps(self):
+        return self._inner.maximum_steps
+
+    @property
+    def cursor(self):
+        return dict(self._at_submit[0]) if self._future is not None else self._inner.cursor
+
+    @cursor.setter
+    def cursor(self, value):
+        self._drop()
+        self._inner.cursor = value
+
+    @property
+    def index(self):
+        return self._at_submit[1] if self._future is not None else self._inner.index
+
+    @index.setter
+    def index(self, value):
+        self._drop()
+        self._inner.index = value
+
+
+def pack_lookahead(packs):
+    if os.environ.get('EMBER_PACK_LOOKAHEAD') != '1':
+        return packs
+    # The lookahead thread and the step thread share the interpreter lock; a shorter switch interval bounds how long the step
+    # thread can wait for it behind the pack worker. Host scheduling only: no tensor, route or RNG state changes.
+    if os.environ.get('EMBER_SWITCH_INTERVAL_S'):
+        sys.setswitchinterval(float(os.environ['EMBER_SWITCH_INTERVAL_S']))
+    if os.environ.get('EMBER_HOST_PRIORITY') == '1' and sys.platform == 'win32':
+        # The step thread launches every captured segment; when it waits for the CPU behind the image read/decode pool the
+        # device idles inside the step. HIGH process class and HIGHEST priority for the calling (step) thread, both
+        # grantable without elevation. Host scheduling only: no tensor, route or RNG state changes.
+        import ctypes
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.GetCurrentThread.restype = ctypes.c_void_p
+        kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel32.SetThreadPriority.argtypes = (ctypes.c_void_p, ctypes.c_int)
+        if not kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00000080):
+            raise OSError(ctypes.get_last_error(), 'SetPriorityClass(HIGH) refused')
+        if not kernel32.SetThreadPriority(kernel32.GetCurrentThread(), 2):
+            raise OSError(ctypes.get_last_error(), 'SetThreadPriority(HIGHEST) refused')
+    return LookaheadPacks(packs)
 
 
 def prepare_measurement_inputs(data, geometry):
@@ -232,17 +403,21 @@ def prepare_measurement_inputs(data, geometry):
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('cursor fields differ')
+    image_text = open_image_text(data, tokenizer, sequence)
     planned_positions = (warm + measured) * documents * sequence
-    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + measured) * text_documents(image_text, documents) * sequence)
     declaration = {'receipt_sha256': data['receipt_sha256'], 'tokenizer_sha256': data['tokenizer_sha256'],
                    'shard_ledger_sha256': data['shard_ledger_sha256'], 'cursor_start': cursor,
                    'geometry': dict(geometry), 'span': span, 'planned_positions': planned_positions}
+    if image_text is not None:
+        declaration['image_text'] = dict(data['image_text'], grammar=load_image_text_module().GRAMMAR)
     binding = dict(declaration, input_sha256=hashlib.sha256(canonical(declaration)).hexdigest(),
                    input_digest_grammar=MEASUREMENT_INPUT_GRAMMAR,
                    shard_ledger_path=str(ledger) if ledger is not None else None)
     packs = MeasurementPacks(stream, cursor, maximum_steps=warm + measured, sequence=sequence, documents=documents,
-                             warm=warm)
+                             warm=warm, image_text=image_text)
     first = packs.next_pack()
+    packs = pack_lookahead(packs)
     bound = [(receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256'])]
     if ledger is not None:
         bound.append((ledger, data['shard_ledger_sha256']))
@@ -294,7 +469,7 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
         raise ValueError('prediction timing and rate must be finite positive numbers')
-    positive_int(positions_per_step, 'counted step positions', 4096)
+    positive_int(positions_per_step, 'counted step positions', 4096 * MAX_MICRO_STEPS)
     if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError('prediction arithmetic differs from counted positions')
     trajectory, hour = trajectory_mode(expected_identity), hour_mode(expected_identity)
@@ -439,6 +614,82 @@ def local_routing_mode(identity):
     return selected
 
 
+_loss_widen_counts = {'fused_widen': 0, 'materialised_widen': 0}
+
+
+def loss_widen_counts():
+    return dict(_loss_widen_counts)
+
+
+def _fused_logit_widen():
+    """Fold the fp32 widening of the logits INTO the log-softmax instead of materialising it.
+
+    `cross_entropy(logits.float(), targets)` upcasts the whole [positions, vocabulary] logit
+    tensor to fp32 first -- at this geometry a 4096x32768 fp32 copy, measured at 1,813.1 us
+    per step over two launches in the fusibility audit -- and only then reduces it. Passing
+    `dtype=torch.float32` to `log_softmax` performs the identical widening per element as the
+    reduction reads it, so the copy never exists.
+
+    BIT-EXACT BY CONSTRUCTION, not merely close: bf16 -> fp32 is an exact widening (every
+    bf16 value is representable in fp32), so the softmax arithmetic sees the same values in
+    the same order either way. `cross_entropy` is defined as `nll_loss(log_softmax(x))` and
+    both carry reduction='mean' over the same denominator.
+
+    Counted at the call site rather than read back from the environment: a frozen manifest
+    variable records that the flag reached the worker, and only a count records that the
+    branch which ran is the branch that was asked for.
+    """
+    on = os.environ.get('EMBER_FUSED_LOGIT_WIDEN') == '1'
+    _loss_widen_counts['fused_widen' if on else 'materialised_widen'] += 1
+    return on
+
+
+def _native_loss(logits, targets):
+    import torch
+    if _fused_logit_widen():
+        return torch.nn.functional.nll_loss(
+            torch.nn.functional.log_softmax(logits, dim=-1, dtype=torch.float32),
+            targets, reduction='mean')
+    return torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
+
+
+def _merge_counter_receipt(variable, counts):
+    # Two processes run THIS FILE per dispatch and both carry the frozen environment:
+    # the controller (--daemon-run --live --hidden-helper) re-execs itself as the worker
+    # (--worker <binding>) and verifies the ancestry, then outlives it. The controller
+    # never calls measure_step, so its counts are zero, and on 2026-09-22 it exited 1.2 s
+    # behind its child and overwrote a real count with those zeros -- twice, on two
+    # governed 1,024-update runs, each time reporting an executing member INERT.
+    # Taking the per-key MAXIMUM makes exit order irrelevant: whichever process did the
+    # work contributes its counts, and one that did none cannot erase them. The custody
+    # is fresh per run, so no stale count can be carried in from an earlier measurement.
+    path = os.environ.get(variable)
+    if not path:
+        return
+    merged = dict(counts)
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            prior = json.load(handle)
+        if type(prior) is dict:
+            for key, value in prior.items():
+                if type(value) is int and value > merged.get(key, 0):
+                    merged[key] = value
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(merged, handle)
+    except OSError:
+        pass
+
+
+def _write_loss_widen_receipt():
+    _merge_counter_receipt('EMBER_LOSS_WIDEN_RECEIPT', _loss_widen_counts)
+
+
+atexit.register(_write_loss_widen_receipt)
+
+
 def training_head(identity):
     selected = identity.get('training_head', 'native')
     if type(selected) is not str or selected not in ('native', 'cce-document-v1'):
@@ -499,13 +750,13 @@ def validate_experiment_plan(identity):
 def capture_loss_kwargs(model, identity, lengths):
     import torch
     if training_head(identity) == 'native':
-        return dict(loss_fn=lambda logits, targets:
-                    torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
+        return dict(loss_fn=_native_loss)
     from ember.model.ember_v0_streamed_loss import document_streamed_loss
     os.environ['CCE_AUTOTUNE'] = '0'
     lengths = tuple(lengths)
-    def loss(hidden, targets):
-        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths, sum(lengths))
+    def loss(hidden, targets, selections=None, denominator=None):
+        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                      sum(lengths) if denominator is None else denominator, selections=selections)
     loss.experiment_binding = experiment_fields(identity)
     return dict(head_output='hidden', loss_fn=loss)
 
@@ -606,6 +857,15 @@ def validate_document_permutation(value):
 
 
 MEASUREMENT_UPDATES = 1024
+# Gradient accumulation (#1945). The forward context is 4 documents of 1,024 positions -- routing buffers, captured
+# segments and the attention geometry are all bound to it -- so positions per OPTIMIZER step grow by running N such
+# micro-steps into the same gradients and applying ONE update. The pack is still one contiguous cursor span of 4N
+# documents, so the data plan, cursor chain and applied-position accounting are unchanged in kind; only the number of
+# positions each update applies changes, and that IS the learning contract, declared by the geometry itself.
+# #1945 wide micro-step: EMBER_MICRO_DOCUMENTS documents per captured micro-step (default 4).
+MICRO_DOCUMENTS = int(os.environ.get('EMBER_MICRO_DOCUMENTS', '4'))
+MAX_MICRO_STEPS = 16
+ACCUMULATION_DEPTHS = (1, 2, 4, 8, 16)
 MEASUREMENT_SCHEMA = 'governed-1024-v1'
 MEASUREMENT_WALL_SECONDS = 3000
 # Long-measurement arms: the declared execution regime of each; only the fused arm declares the fused optimizer.
@@ -688,10 +948,18 @@ def decoder_kwargs(identity):
             if attention_selection(identity)['attention_recompute'] == 'non_reentrant_checkpoint' else {})
 
 
+# Issue #2119 successor: 256 s measured startup + 3600 s governed hour + 1800 s provisional tail bound. The 4500 s wall cut the
+# post-hour tail (counter, quarantine, worker-terminal, hour-result, pointer CAS) of the first chained hour.
+HOUR_WALL_SECONDS = 5656
+
+
 def resource_limits(identity):
     limits = dict(LIMITS)
     if hour_mode(identity):
-        limits.update(wall_seconds=4500, max_b_write_gib=24)
+        limits.update(wall_seconds=HOUR_WALL_SECONDS, max_b_write_gib=24)
+        if identity['hour']['schema'] == 'learning-comparison-v1':
+            # Two checkpoints plus four full parameter snapshots; the full-compute control arm runs 16,384 updates.
+            limits.update(wall_seconds=10800, max_b_write_gib=80)
         if 'continuation' in identity:
             limits.update(wall_seconds=900, max_b_write_gib=1)
     elif trajectory_mode(identity):
@@ -712,11 +980,13 @@ def hour_mode(identity):
     value = identity['hour']
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != {'schema', 'arm', 'minimum_wall_seconds', 'minimum_measured_steps'}
-            or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['arm'] not in ('control', 'treatment')
+            or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
+            or value['arm'] not in ('control', 'treatment')
             or type(value['minimum_wall_seconds']) is not int
             or type(value['minimum_measured_steps']) is not int
             or (value['minimum_wall_seconds'], value['minimum_measured_steps']) !=
-               ((3600, 1024) if value['schema'] == 'governed-hour-v1' else (0, 2))):
+               {'governed-hour-v1': (3600, 1024), 'checkpoint-probe-v1': (0, 2),
+                'learning-comparison-v1': (0, 16383)}[value['schema']]):
         raise ValueError('explicit fixed governed-hour identity required')
     if 'continuation' in identity and value['schema'] != 'governed-hour-v1':
         raise ValueError('continuation requires the completed governed hour')
@@ -781,12 +1051,17 @@ def validate_training_job_purpose(identity, *, hour):
 
     has_resume/has_data_segment are read from fields this identity already carries and already
     verifies elsewhere in this function: checkpoint_probe/continuation reopen a real prior
-    admitted checkpoint (validate_checkpoint_probe, below); production_mixture is the admitted
-    next data segment for an hour (validate_identity, below). No second admission check is
-    introduced here.
+    admitted checkpoint (validate_checkpoint_probe, below); an arm's chained parent_checkpoint is
+    reopened by run_hour in cia_hour.py, which re-verifies the manifest digest against the
+    published receipt and restores every object before an hour trains from it -- this reads only
+    the key's PRESENCE, and prepare_execution's own shape check (above, before this call) has
+    already accepted its {root, manifest_sha256} shape, so no second admission check is
+    introduced here either; production_mixture is the admitted next data segment for an hour
+    (validate_identity, below).
     """
     purpose_module = load_purpose_module()
-    has_resume = bool(identity.get('checkpoint_probe')) or 'continuation' in identity
+    has_resume = (bool(identity.get('checkpoint_probe')) or 'continuation' in identity
+                  or 'parent_checkpoint' in identity)
     has_data_segment = bool(hour) and bool(identity.get('production_mixture'))
     return purpose_module._validate_training_job_purpose(
         identity, has_resume=has_resume, has_data_segment=has_data_segment)
@@ -797,8 +1072,11 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources', 'training_job_purpose'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
         raise ValueError('measurement identity fields differ')
+    if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
+            or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
+        raise ValueError('a chained parent checkpoint binds a governed hour by root and manifest digest')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
     local_routing_mode(identity)
@@ -864,7 +1142,8 @@ def prepare_execution(prediction):
         raise ValueError('measurement expert support is outside its fixed bound')
     if canonical(identity['optimizer']) != canonical(expected_optimizer(identity)):
         raise ValueError('fixed optimizer definition differs')
-    prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'])
+    prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'],
+                    image_start=load_hour_module().chained_image_start(sys.modules[__name__], identity))
                 if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
                 if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
     if hour:
@@ -887,6 +1166,18 @@ def _cache_values(cache):
 
 ROUTES_DIGEST_GRAMMARS = ('legacy-rows-v1', 'device-buffers-v1')
 _ROUTING_BUFFERS = {}
+_NEXT_STEP = None  # measure_step's staging of update index+1 (EMBER_STAGE_NEXT_STEP); consumed only for the same pack
+
+
+def _with_successor(packs):
+    """(pack, the pack after it or None): one pack of lookahead, drawn between steps, outside every wall."""
+    iterator = iter(packs)
+    end = object()
+    current = next(iterator, end)
+    while current is not end:
+        following = next(iterator, end)
+        yield current, (None if following is end else following)
+        current = following
 
 
 class RoutingStatisticsBuffers:
@@ -906,7 +1197,7 @@ class RoutingStatisticsBuffers:
     def __init__(self, lengths, *, device):
         import torch
         if (type(lengths) is not tuple or not lengths or any(type(n) is not int or n <= 0 for n in lengths)
-                or sum(lengths) > 4096):
+                or sum(lengths) > 1024 * MICRO_DOCUMENTS):
             raise ValueError('complete positive document geometry within context required')
         self.lengths = lengths
         chunks, offset, epochs = [], 0, 0
@@ -1068,6 +1359,230 @@ def expert_owner_index(inventory):
     return index
 
 
+def template_untrained_parameters(inventory):
+    """Parameters the decoder's fixed layer template never runs this step: attention (and its norm) outside
+    _ATTENTION_KEEP, shared FFN (and its norm) outside _FFN_KEEP, and the expert norm and every expert's weights at a
+    sparse layer outside _EXPERT_KEEP. The captured path materialises and zeroes grads IN PLACE for every registered
+    owner, so without release fused AdamW steps them with zero gradient: no moment change, but decoupled weight decay
+    shrinks weights the template never trains, and the kernel walks their elements. Releasing their grads to None
+    before optimizer.step gives them reference skip semantics (the release_unrouted_expert_grads rule applied to
+    template sites). With no template in force every set is the full range and this returns an empty list."""
+    from ember.model import ember_v0_decoder as decoder
+    layers = range(24)
+    attention = {layer for layer in layers if layer not in decoder._ATTENTION_KEEP}
+    ffn = {layer for layer in layers if layer not in decoder._FFN_KEEP}
+    expert = {layer for layer in layers if layer % 2 == 1 and layer not in decoder._EXPERT_KEEP}
+    released = []
+    for name, parameter in inventory.items():
+        match = re.match(r'(?:experts\.\d+\.)?layers\.(\d+)\.(attention|shared|expert_norm|down|up|gate)', name)
+        if match is None:
+            continue
+        layer, site = int(match.group(1)), match.group(2)
+        if name.startswith('experts.'):
+            hit = layer in expert
+        elif site == 'attention':
+            hit = layer in attention
+        elif site == 'shared':
+            hit = layer in ffn
+        elif site == 'expert_norm':
+            hit = layer in expert
+        else:
+            hit = False
+        if hit:
+            released.append(parameter)
+    if (attention or ffn or expert) and not released:
+        raise ValueError('layer template is in force but no untrained parameter name matched')
+    return released
+
+
+def deferred_verdict_enabled():
+    return os.environ.get('EMBER_DEFERRED_VERDICT') == '1'
+
+
+def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
+    """Fused AdamW over the parameters that carry a gradient, with found_inf on the device: the dense set gated by
+    `refused`, every expert owner by refused | unrouted (its expert won no chunk of its layer in this step's winners).
+    Per tensor this is the same kernel with the same arguments optimizer.step() launches; the partition changes only
+    which tensors share a launch. Returns (keys, skip): the gated expert owners and their device found_inf values."""
+    import torch
+    from torch.optim.adam import adam
+    cache = getattr(optimizer, '_ember_gate_cache', None)
+    if cache is None:
+        owner_of = {id(parameter): key for key, parameters in expert_owners.items() for parameter in parameters}
+        cache = optimizer._ember_gate_cache = {'owner_of': owner_of, 'index': {}}
+    owner_of = cache['owner_of']
+    members = []
+    for group in optimizer.param_groups:
+        if group.get('fused') is not True or group.get('amsgrad') or group.get('maximize'):
+            raise ValueError('the deferred verdict gates fused AdamW only')
+        split = {}
+        for parameter in group['params']:
+            if parameter.grad is not None:
+                split.setdefault(owner_of.get(id(parameter)), []).append(parameter)
+        members.append((group, split))
+    keys = tuple(sorted({key for _, split in members for key in split if key is not None}))
+    index = cache['index'].get(keys)
+    if index is None:
+        rows = torch.tensor([layer // 2 for layer, _ in keys], dtype=torch.long).to(buffers.device)
+        experts = torch.tensor([expert for _, expert in keys], dtype=torch.long).to(buffers.device)
+        index = cache['index'][keys] = (rows, experts, {key: k for k, key in enumerate(keys)})
+    rows, experts, position = index
+    dense = refused.to(torch.float32)
+    skip = None
+    if keys:
+        hits = (buffers.views['winners'].index_select(0, rows) == experts[:, None]).any(1)
+        skip = (refused | ~hits).to(torch.float32)
+    with torch.no_grad():
+        for group, split in members:
+            beta1, beta2 = group['betas']
+            for key, parameters in split.items():
+                sub = dict(group)
+                sub['params'] = parameters
+                params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
+                has_complex = optimizer._init_group(sub, params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps)
+                adam(params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps, amsgrad=False,
+                     has_complex=has_complex, beta1=beta1, beta2=beta2, lr=group['lr'],
+                     weight_decay=group['weight_decay'], eps=group['eps'], maximize=False, foreach=group['foreach'],
+                     capturable=group['capturable'], differentiable=group['differentiable'], fused=True,
+                     grad_scale=None, found_inf=(dense if key is None else skip[position[key]]),
+                     decoupled_weight_decay=group['decoupled_weight_decay'])
+    return keys, skip
+
+
+def segment_optimizer_enabled():
+    return os.environ.get('EMBER_SEGMENT_OPTIMIZER') == '1'
+
+
+class SegmentOptimizer:
+    """Gated fused AdamW per captured segment on a side stream, launched from post-accumulate-grad hooks as the
+    backward completes each segment. Per tensor the kernel and its arguments equal gated_optimizer_step's; only the
+    launch partition, the stream and the launch time change. Armed per update by arm() (before backward), closed by
+    finish() (after backward), which steps whatever did not complete early and joins the side stream."""
+
+    def __init__(self, optimizer, expert_owners, capture, device):
+        import torch
+        for group in optimizer.param_groups:
+            if group.get('fused') is not True or group.get('amsgrad') or group.get('maximize'):
+                raise ValueError('the segment optimizer gates fused AdamW only')
+        self.optimizer, self.device = optimizer, device
+        self.side = torch.cuda.Stream(device=device)
+        self.owner_of = {id(p): key for key, ps in expert_owners.items() for p in ps}
+        self.keys = tuple(sorted(expert_owners))
+        self.position = {key: k for k, key in enumerate(self.keys)}
+        self.group_index = {id(p): gi for gi, group in enumerate(optimizer.param_groups) for p in group['params']}
+        untrained = {id(p) for p in getattr(optimizer, '_ember_template_untrained', ())}
+        seen = {}
+        for segment in capture.segments:
+            for p in segment.params:
+                seen.setdefault(id(p), []).append(segment.index)
+        self.segment_of, self.members = {}, {}
+        for segment in capture.segments:
+            for p in segment.params:
+                i = id(p)
+                if (i in self.group_index and i not in untrained and p.requires_grad and len(seen[i]) == 1
+                        and i not in self.segment_of):
+                    self.segment_of[i] = segment.index
+                    self.members.setdefault(segment.index, []).append(p)
+        self.hooks = [p.register_post_accumulate_grad_hook(self._hook)
+                      for ps in self.members.values() for p in ps]
+        self.armed, self._index, self._gather, self.last_early = None, None, {}, None
+
+    def arm(self, execution, buffers, loss):
+        import torch
+        if self.keys and self._index is None:
+            self._index = (torch.tensor([layer // 2 for layer, _ in self.keys], dtype=torch.long).to(buffers.device),
+                           torch.tensor([expert for _, expert in self.keys], dtype=torch.long).to(buffers.device))
+        refused = ~(execution.input_valid.all() & execution.routing_valid
+                    & (buffers.views['reports'] == 1).all() & torch.isfinite(loss.detach().float()))
+        skip = None
+        if self.keys:
+            rows, experts = self._index
+            hits = (buffers.views['winners'].index_select(0, rows) == experts[:, None]).any(1)
+            skip = (refused | ~hits).to(torch.float32)
+        self.armed = dict(refused=refused, dense=refused.to(torch.float32), skip=skip, stepped=set(), early=0,
+                          twice=False, pending={index: {id(p) for p in ps} for index, ps in self.members.items()})
+        return refused
+
+    def _hook(self, parameter):
+        armed = self.armed
+        if armed is None:
+            return
+        i = id(parameter)
+        if i in armed['stepped']:
+            armed['twice'] = True
+            return
+        pending = armed['pending'][self.segment_of[i]]
+        pending.discard(i)
+        if not pending:
+            members = [p for p in self.members[self.segment_of[i]] if p.grad is not None]
+            if members:
+                self._launch(members, armed)
+                armed['early'] += 1
+
+    def _launch(self, params, armed):
+        import torch
+        from torch.optim.adam import adam
+        ready = torch.cuda.Event()
+        ready.record(torch.cuda.current_stream(self.device))
+        self.side.wait_event(ready)
+        split = {}
+        for p in params:
+            split.setdefault((self.group_index[id(p)], self.owner_of.get(id(p))), []).append(p)
+        with torch.cuda.stream(self.side), torch.no_grad():
+            for (gi, key), members in split.items():
+                group = self.optimizer.param_groups[gi]
+                beta1, beta2 = group['betas']
+                sub = dict(group)
+                sub['params'] = members
+                ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
+                has_complex = self.optimizer._init_group(sub, ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps)
+                adam(ps, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps, amsgrad=False,
+                     has_complex=has_complex, beta1=beta1, beta2=beta2, lr=group['lr'],
+                     weight_decay=group['weight_decay'], eps=group['eps'], maximize=False, foreach=group['foreach'],
+                     capturable=group['capturable'], differentiable=group['differentiable'], fused=True,
+                     grad_scale=None, found_inf=(armed['dense'] if key is None else armed['skip'][self.position[key]]),
+                     decoupled_weight_decay=group['decoupled_weight_decay'])
+        armed['stepped'].update(id(p) for p in params)
+
+    def finish(self, refused):
+        """Step every parameter with a gradient that did not complete early, join the side stream, and return
+        (stepped owner keys, their device skip values, device mismatch of the boundary verdict vs the armed one)."""
+        import torch
+        armed, self.armed = self.armed, None
+        if armed is None:
+            raise RuntimeError('segment optimizer finished an update it never armed')
+        remaining = [p for group in self.optimizer.param_groups for p in group['params']
+                     if p.grad is not None and id(p) not in armed['stepped']]
+        if remaining:
+            self._launch(remaining, armed)
+        torch.cuda.current_stream(self.device).wait_stream(self.side)
+        if armed['twice']:
+            raise RuntimeError('a segment owner accumulated twice in one backward')
+        keys = tuple(sorted({self.owner_of[i] for i in armed['stepped'] if i in self.owner_of}))
+        skip = None
+        if keys:
+            gather = self._gather.get(keys)
+            if gather is None:
+                gather = self._gather[keys] = torch.tensor([self.position[k] for k in keys],
+                                                           dtype=torch.long).to(self.device)
+            skip = armed['skip'].index_select(0, gather)
+        self.last_early = armed['early']
+        return keys, skip, refused != armed['refused']
+
+
+def _stage_next_early(next_pack, device, image_text, pack, two_ahead):
+    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream)."""
+    staged = (staged_inputs(next_pack, device),
+              load_image_text_module().load_patches(next_pack, device, pinned=True)
+              if next_pack.get('images') else (None, None),
+              load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
+    if image_text is not None and two_ahead:
+        # index+1's decode began one update earlier, so the staging above did not wait on it;
+        # index+2's begins now and is joined inside this update's wall.
+        load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 2)
+    return staged
+
+
 def release_unrouted_expert_grads(expert_owners, unrouted):
     """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
     step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
@@ -1139,10 +1654,155 @@ def document_lengths(starts, total):
     return tuple(b - a for a, b in zip(starts, starts[1:] + (total,)))
 
 
+def micro_packs(pack):
+    """Split one update's pack into its 4-document micro-steps (a 4-document pack is its own single micro-step).
+    Documents are whole and positions are per document, so each micro-step is exactly the forward geometry the
+    capture was recorded under."""
+    starts = tuple(pack['document_starts'])
+    total = len(pack['token_ids'])
+    if len(starts) <= MICRO_DOCUMENTS:
+        return [pack]
+    if pack.get('images'):
+        raise ValueError('image-text packs are defined for one 4-document micro-step only')
+    if len(starts) % MICRO_DOCUMENTS or starts[0] != 0:
+        raise ValueError('pack documents are not a whole number of micro-steps')
+    bounds = list(starts) + [total]
+    out = []
+    for first in range(0, len(starts), MICRO_DOCUMENTS):
+        lo, hi = bounds[first], bounds[first + MICRO_DOCUMENTS]
+        out.append({'token_ids': pack['token_ids'][lo:hi], 'target_ids': pack['target_ids'][lo:hi],
+                    'positions': pack['positions'][lo:hi],
+                    'document_starts': [s - lo for s in starts[first:first + MICRO_DOCUMENTS]]})
+    if sum(len(m['token_ids']) for m in out) != total:
+        raise ValueError('micro-steps do not cover the pack')
+    return out
+
+
+def _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrouted):
+    """Per-micro-step boundary copy: each micro-step's report set is validated on its own, and an expert owner is
+    unrouted for the UPDATE only if it routed no rows in ANY micro-step. Returns the updated unrouted map."""
+    snapshot = buffers.snapshot()
+    if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
+        raise ValueError('device routing buffers differ from the model trace')
+    micro_snapshots.append(snapshot)
+    these = {layer: set(experts) for layer, experts in buffers.unrouted(snapshot).items()}
+    return these if unrouted is None else {
+        layer: unrouted[layer] & these[layer] for layer in unrouted if layer in these}
+
+
+IGNORE_TARGET = -100
+
+
+def answer_weight():
+    """EMBER_ANSWER_WEIGHT: each answer-letter target counts this many times in the loss (unset: 1)."""
+    raw = os.environ.get('EMBER_ANSWER_WEIGHT', '')
+    if not raw:
+        return 1
+    weight = int(raw)
+    if weight < 2:
+        raise ValueError('EMBER_ANSWER_WEIGHT must be an integer >= 2 when set')
+    return weight
+
+
+def _weighted_rows(rows, answer_rows, weight):
+    """rows plus (weight - 1) repeats of every answer row inside them, repeats appended in row order."""
+    if weight == 1 or not answer_rows:
+        return rows
+    inside = [row for row in answer_rows if row in set(rows)]
+    return list(rows) + [row for row in inside for _ in range(weight - 1)]
+
+
+def loss_selection(micro, device):
+    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections."""
+    import torch
+    targets = micro['target_ids']
+    if IGNORE_TARGET not in targets:
+        return None
+    starts = list(micro['document_starts']) + [len(targets)]
+    selections, count = [], 0
+    for lo, hi in zip(starts, starts[1:]):
+        rows = [row for row in range(lo, hi) if targets[row] != IGNORE_TARGET]
+        if not rows:
+            raise ValueError('a document carries no loss-bearing target')
+        rows = _weighted_rows(rows, micro.get('answer_rows', ()), answer_weight())
+        count += len(rows)
+        selections.append(None if len(rows) == hi - lo and rows == list(range(lo, hi)) else
+                          (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True), len(rows)))
+    return {'selections': tuple(selections), 'denominator': count}
+
+
+def staged_inputs(micro, device):
+    """tokens, targets, positions and loss_selection(micro, device), through ONE pinned host array and ONE copy.
+
+    Same values and dtypes as the three torch.tensor(list, device=...) calls plus loss_selection: the selection rows
+    are the indices whose target is not IGNORE_TARGET within each document, in order, and a fully loss-bearing
+    document keeps None exactly as loss_selection does."""
+    import numpy
+    import torch
+    targets_host = numpy.asarray(micro['target_ids'], dtype=numpy.int64)
+    n = targets_host.shape[0]
+    # positions are [n] on text-only packs and [n, 3] (position, x, y) on image-text packs: flattened here,
+    # restored to their own shape on the device slice.
+    positions_host = numpy.asarray(micro['positions'], dtype=numpy.int64)
+    end = 2 * n + positions_host.size
+    parts = [numpy.asarray(micro['token_ids'], dtype=numpy.int64), targets_host, positions_host.reshape(-1)]
+    spans, weight, answers = None, answer_weight(), micro.get('answer_rows', ())
+    if (targets_host == IGNORE_TARGET).any():
+        starts = list(micro['document_starts']) + [n]
+        spans, offset = [], end
+        for lo, hi in zip(starts, starts[1:]):
+            rows = lo + numpy.flatnonzero(targets_host[lo:hi] != IGNORE_TARGET)
+            if rows.shape[0] == 0:
+                raise ValueError('a document carries no loss-bearing target')
+            if weight > 1 and answers:
+                rows = numpy.asarray(_weighted_rows(rows.tolist(), answers, weight), dtype=numpy.int64)
+            if rows.shape[0] == hi - lo:
+                spans.append(None)
+            else:
+                spans.append((offset, rows.shape[0]))
+                parts.append(rows.astype(numpy.int64))
+                offset += rows.shape[0]
+    host = torch.from_numpy(numpy.concatenate(parts))
+    if device.type == 'cuda':
+        host = host.pin_memory()
+    staged = host.to(device, non_blocking=True)
+    selection = None
+    if spans is not None:
+        selection = {'selections': tuple(None if span is None else (staged[span[0]:span[0] + span[1]], span[1])
+                                         for span in spans),
+                     'denominator': sum(length for *_, length in (s for s in spans if s is not None)) +
+                                    sum(hi - lo for (lo, hi), s in zip(zip(starts, starts[1:]), spans)
+                                        if s is None)}
+    return staged[:n], staged[n:2 * n], staged[2 * n:end].view(positions_host.shape), selection
+
+
+def exposure_fields(pack, wall):
+    """A1 counting: loss-bearing decoder targets, image patches, images and non-loss positions, never converted.
+    positions_per_second is loss-bearing decoder targets per second (identical to decoder positions/s on text packs)."""
+    targets = pack['target_ids']
+    loss_bearing = sum(1 for value in targets if value != IGNORE_TARGET)
+    images = pack.get('images', ())
+    return {'loss_bearing_positions': loss_bearing, 'non_loss_positions': len(targets) - loss_bearing,
+            'image_patches': sum(span['count'] for span in images), 'images': len(images),
+            'positions_per_second': loss_bearing / wall, 'decoder_positions_per_second': len(targets) / wall,
+            'images_per_second': len(images) / wall,
+            'rate_basis': 'loss-bearing-decoder-targets'}
+
+
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
-                 experiment_binding=None):
+                 experiment_binding=None, image_text=None, next_pack=None,
+                 prelaunch_next=False):
     """Return one row only after context exit, successful update and synchronization.
+
+    next_pack with EMBER_STAGE_NEXT_STEP=1 (on the resident captured path, after the recording step): once this step's
+    optimizer is launched, and before its wall closes, the host stages update index+1 while the device runs the
+    update -- the in-place gradient clear, the pinned input copy, the image patches, and the begin_step
+    structure/registration tuple of the staged owner. The next step consumes exactly that staging only when handed
+    the SAME pack object; otherwise it recomputes. Every staged cost is paid inside this measured wall.
+
+    image_text (the A1 stream) makes the step start decoding update index+1's images once its last backward is
+    launched, and join them before its own wall closes: the decode is paid inside a measured wall, beside device work.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
     inside the forward/backward; ONE device-to-host copy at the pre-update boundary validates the report set and
@@ -1168,86 +1828,303 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         raise ValueError('trajectory routing snapshot requires a plain output dictionary')
     experiment = step_experiment_fields(capture, experiment_binding)
     synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
-    synchronize()
+    global _NEXT_STEP
+    # A forward pre-launched by the previous call (prelaunch_next) is queued behind that call's optimizer on the
+    # same stream; draining here would idle the device while the host launches this step's backward.
+    if not (_NEXT_STEP is not None and 'forward' in _NEXT_STEP):
+        synchronize()
     if device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(device)
     before = _cache_values(model._cuda_execution.cache)
+    micros = micro_packs(pack)
+    depth = len(micros)
+    if depth > 1 and (route_observer is not None or route_snapshot is not None or verify_routes):
+        raise ValueError('reference routing observation is defined for one micro-step only')
     started = time.perf_counter()
-    tokens = torch.tensor(pack['token_ids'], dtype=torch.long, device=device)
-    targets = torch.tensor(pack['target_ids'], dtype=torch.long, device=device)
-    positions = torch.tensor(pack['positions'], dtype=torch.long, device=device)
-    starts = tuple(pack['document_starts'])
     resident = bool(getattr(model, '_resident_experts', None))
     if (route_snapshot is not None and not resident) or (route_observer is not None and resident):
         raise ValueError('routing observation interface differs from the selected execution mode')
-    buffers = routing_buffers(document_lengths(starts, len(pack['token_ids'])), device) if resident else None
-    if buffers is not None:
-        buffers.begin_step()
     if capture is not None:
-        if buffers is None:
+        if not resident:
             raise ValueError('segmented capture requires the resident routing buffers')
         if capture.execution is not model._cuda_execution or getattr(model._cuda_execution, 'segmented', None) is not capture:
             raise ValueError('segmented capture is not bound to this model execution')
-        capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
+    ahead, _NEXT_STEP = _NEXT_STEP, None
+    pre = ahead.get('forward') if ahead is not None else None
+    if pre is not None and (ahead['pack'] is not pack or depth != 1 or capture is None or record):
+        raise RuntimeError('a pre-launched forward was handed a different pack or path')
+    if ahead is not None and (ahead['pack'] is not pack or depth != 1 or capture is None or record):
+        ahead = None  # staged for a different pack or path: discarded, everything below recomputes
+    if capture is not None:
+        if ahead is None:
+            capture.zero_grad(optimizer=optimizer)  # one in-place clear across optimizer and captured owners
     else:
         optimizer.zero_grad(set_to_none=True)
+    if depth > 1 and expert_owners is not None:
+        # An owner released to None last update would receive its first micro-step gradient by AccumulateGrad
+        # STEALING the incoming tensor -- on the captured path that tensor aliases the graph's static gradient
+        # output, which the next micro-step's replay overwrites before adding it again. Materialised zeros force
+        # every micro-step onto the in-place += path, so the sum is the sum.
+        for parameters in expert_owners.values():
+            for parameter in parameters:
+                if parameter.requires_grad and parameter.grad is None:
+                    parameter.grad = torch.zeros_like(parameter)
     staged = time.perf_counter()
-    events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if device.type == 'cuda' else None
-    recording = capture.record() if (capture is not None and record) else contextlib.nullcontext()
-    with model.candidate_step(), recording:
-        if events is not None:
-            events[0].record()
+    events = (pre['events'] if pre is not None else
+              [torch.cuda.Event(enable_timing=True) for _ in range(3 * depth + 1)] if device.type == 'cuda' else None)
+    forward_seconds = backward_seconds = 0.0
+    losses = []
+    micro_snapshots = []
+    unrouted = None
+    routes = None
+    deferred_buffers = None
+    stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
+                  and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
+    staged_early = None
+
+    def _prepare(micro, staged_ahead):
+        # Inputs, embedding and routing-buffer reset for one micro-step (same calls, same order as before).
+        if staged_ahead is not None:
+            (tokens, targets, positions, selection), (image_rows, image_patches) = (staged_ahead['inputs'],
+                                                                                    staged_ahead['patches'])
+            patches_source = staged_ahead['patches_source']
+        else:
+            tokens, targets, positions, selection = staged_inputs(micro, device)
+            image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
+                                         if micro.get('images') else (None, None))
+            patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
+        starts = tuple(micro['document_starts'])
+        embedded = model.embed_text(tokens)
+        if image_rows is not None:
+            # Placeholder rows are REPLACED (out of place), so image.weight is trained through these rows and
+            # the placeholder token's embedding receives no gradient from them.
+            embedded = embedded.index_put((image_rows,), model.embed_image(image_patches))
+        buffers = routing_buffers(document_lengths(starts, len(micro['token_ids'])), device) if resident else None
         if buffers is not None:
-            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+            buffers.begin_step()
+        return dict(targets=targets, positions=positions, selection=selection, starts=starts, embedded=embedded,
+                    buffers=buffers, patches_source=patches_source)
+
+    def _launch(prep, micro_index, events):
+        # Forward and loss for one micro-step; returns what the backward and the row need.
+        targets, positions, selection = prep['targets'], prep['positions'], prep['selection']
+        starts, embedded, buffers = prep['starts'], prep['embedded'], prep['buffers']
+        micro_started = time.perf_counter()
+        if events is not None:
+            events[3 * micro_index].record()
+        if buffers is not None:
+            logits, routes = model(embedded, positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
                                    return_device_routes=True, device_route_collector=buffers.collector,
                                    **({'training_hidden': True} if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else {}))
         else:
-            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+            logits, routes = model(embedded, positions, document_starts=starts,
                                    return_routes=True, batch_documents=batch_documents,
                                    **({'route_observer': route_observer} if route_observer is not None else {}))
-        loss = (capture.loss(logits, targets) if capture is not None else
-                torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'))
+        streamed = capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden'
+        if streamed and selection is not None:
+            loss = capture.loss(logits, targets.clamp(min=0), **selection)
+        else:
+            loss = (capture.loss(logits, targets) if capture is not None else
+                    _native_loss(logits, targets))
         if events is not None:
-            events[1].record()
-        forwarded = time.perf_counter()
-        loss.backward()
-        if events is not None:
-            events[2].record()
-        backwarded = time.perf_counter()
+            events[3 * micro_index + 1].record()
+        return logits, routes, loss, micro_started, time.perf_counter()
+
+    deferred = deferred_verdict_enabled()
+    if deferred and (depth != 1 or verify_routes or route_observer is not None or route_snapshot is not None
+                     or expert_owners is None or capture is None or device.type != 'cuda'):
+        raise ValueError('the deferred verdict is defined for one captured resident micro-step on CUDA only')
+    if deferred:
+        model._cuda_execution.defer_verdict = True
+    segment_optimizer = None
+    if segment_optimizer_enabled():
+        if not deferred:
+            raise ValueError('the segment optimizer requires the deferred verdict')
+        if capture.captured and not record:
+            segment_optimizer = getattr(optimizer, '_ember_segment_optimizer', None)
+            if segment_optimizer is None:
+                segment_optimizer = optimizer._ember_segment_optimizer = SegmentOptimizer(
+                    optimizer, expert_owners, capture, device)
+    step_stack = pre['stack'] if pre is not None else contextlib.ExitStack()
+    if pre is None:
+        step_stack.enter_context(model.candidate_step())
+    with step_stack:
+        for micro_index, micro in enumerate(micros):
+            prep = pre['prepared'] if pre is not None else _prepare(micro, ahead)
+            buffers, patches_source = prep['buffers'], prep['patches_source']
+            recording = (capture.record() if (capture is not None and record and micro_index == 0)
+                         else contextlib.nullcontext())
+            with recording:
+                logits, routes, loss, micro_started, micro_forwarded = (
+                    pre['launched'] if pre is not None else _launch(prep, micro_index, events))
+                if segment_optimizer is not None:
+                    # The verdict and the unrouted gate are final once the forward is enqueued, so each segment's
+                    # owners are stepped (gated) on the side stream as the backward finishes that segment.
+                    segment_optimizer.arm(model._cuda_execution, buffers, loss)
+                loss.backward()
+                if events is not None:
+                    events[3 * micro_index + 2].record()
+                micro_backwarded = time.perf_counter()
+                two_ahead = stage_next and os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1'
+                stage_after_optimizer = stage_next and os.environ.get('EMBER_STAGE_AFTER_OPTIMIZER') == '1'
+                if image_text is not None and micro_index == len(micros) - 1 and not two_ahead:
+                    load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
+                if stage_next and micro_index == len(micros) - 1:
+                    # Update index+1's inputs, staged at the last backward launch: the device still has this
+                    # backward queued, and end_step below synchronizes, so staging after candidate_step exits
+                    # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
+                    if not stage_after_optimizer:
+                        staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead)
+            forward_seconds += micro_forwarded - micro_started
+            backward_seconds += micro_backwarded - micro_forwarded
+            losses.append(loss.detach())
+            deferred_buffers = None
+            if buffers is not None:
+                if micro_index == len(micros) - 1 and not verify_routes:
+                    # The last micro-step's copy blocks until backward drains; taken after candidate_step exits, the
+                    # end_step host checks overlap backward instead of following it. Still before optimizer.step.
+                    deferred_buffers = buffers
+                else:
+                    unrouted = _take_route_snapshot(buffers, routes, verify_routes, micro_snapshots, unrouted)
+            if capture is not None and record:
+                del logits, loss, routes
+                routes = None
+    forwarded = staged + forward_seconds
+    backwarded = forwarded + backward_seconds
     exited = time.perf_counter()
-    if not math.isfinite(float(loss.detach())):
-        raise ValueError('nonfinite step loss')
-    # Pre-update boundary: the ONE device-to-host copy of the routing buffers happens here, so an incomplete or
-    # duplicated report set (a captured segment that skipped the collector) and a trace mismatch refuse BEFORE
-    # optimizer.step() can mutate the model. The copy is step work and stays inside the wall; the digest and the
-    # statistics are decoded from the retained snapshot after timing, without a second copy.
-    snapshot = None
+    if deferred:
+        # No host read before the optimizer: one device refusal, pinned copies of the routing buffer and the loss.
+        if deferred_buffers is None:
+            raise ValueError('the deferred verdict requires the routing statistics buffers')
+        execution = model._cuda_execution
+        loss_device = losses[0].float()
+        refused = ~(execution.input_valid.all() & execution.routing_valid
+                    & (deferred_buffers.views['reports'] == 1).all() & torch.isfinite(loss_device))
+        raw_host = torch.empty(deferred_buffers.nbytes, dtype=torch.uint8, pin_memory=True)
+        raw_host.copy_(deferred_buffers.raw, non_blocking=True)
+        loss_host = torch.empty((), dtype=torch.float32, pin_memory=True)
+        loss_host.copy_(loss_device, non_blocking=True)
+        loss_value = snapshot = None
+    else:
+        if deferred_buffers is not None:
+            unrouted = _take_route_snapshot(deferred_buffers, None, False, micro_snapshots, unrouted)
+        loss_value = float(sum(float(value) for value in losses) / depth)
+        if not math.isfinite(loss_value):
+            raise ValueError('nonfinite step loss')
+        snapshot = micro_snapshots[-1] if micro_snapshots else None
     released = None
     routing_boundary_started = time.perf_counter()
-    if buffers is not None:
-        snapshot = buffers.snapshot()
-        if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
-            raise ValueError('device routing buffers differ from the model trace')
-        if expert_owners is not None:
-            # Reference skip semantics: unrouted expert owners carry no gradient into the update (per layer, per expert,
-            # from the same snapshot that validated the report set). Captured dense owners are not in this index.
-            released = release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))
+    if not deferred and unrouted is not None and expert_owners is not None:
+        # Reference skip semantics over the whole update: unrouted expert owners carry no gradient into it.
+        released = release_unrouted_expert_grads(expert_owners, {layer: tuple(sorted(experts))
+                                                                 for layer, experts in unrouted.items() if experts})
     routing_digest_seconds = time.perf_counter() - routing_boundary_started
-    if capture is not None and record:
-        # The exemplar step's autograd graph must not outlive the record: the harness captures on a side stream and a
-        # live AccumulateGrad node bound to the default stream invalidates the capture (proven in the harness fixture).
-        del routes
-    optimizer.step()
+    if depth > 1:
+        # Each micro-step loss is a mean over its own positions; the update applies the mean over all of them.
+        grads = [parameter.grad for group in optimizer.param_groups for parameter in group['params']
+                 if parameter.grad is not None]
+        if grads:
+            torch._foreach_mul_(grads, 1.0 / depth)
+    template_untrained = getattr(optimizer, '_ember_template_untrained', ())
+    for parameter in template_untrained:
+        parameter.grad = None
+    if deferred:
+        segment_mismatch_host = None
+        if segment_optimizer is not None:
+            gated_keys, gated_skip, segment_mismatch = segment_optimizer.finish(refused)
+            segment_mismatch_host = torch.empty((), dtype=torch.bool, pin_memory=True)
+            segment_mismatch_host.copy_(segment_mismatch, non_blocking=True)
+        else:
+            gated_keys, gated_skip = gated_optimizer_step(optimizer, expert_owners, deferred_buffers, refused)
+        skip_host = None
+        if gated_skip is not None:
+            skip_host = torch.empty(gated_skip.shape, dtype=torch.float32, pin_memory=True)
+            skip_host.copy_(gated_skip, non_blocking=True)
+        refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
+        refused_host.copy_(refused, non_blocking=True)
+    else:
+        optimizer.step()
     if events is not None:
-        events[3].record()
-    synchronize()
+        events[-1].record()
+    if stage_next and staged_early is None:
+        # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
+        staged_early = _stage_next_early(next_pack, device, image_text, pack,
+                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1')
+    if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
+        stage = getattr(model._cuda_execution, 'stage_next_identity', None)
+        if stage is not None:
+            model._cuda_execution.stage_validation = stage_next
+            stage()
+    if stage_next:
+        # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
+        # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
+        capture.zero_grad(optimizer=optimizer)
+        next_inputs, next_patches, next_source = staged_early
+        _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
+                      'patches_source': next_source}
+        if prelaunch_next:
+            # Update index+1's candidate step opens here (this update's step exited above and its routing
+            # snapshot is already on the host) and its forward is enqueued behind this update's optimizer, so
+            # the device is not drained between updates. The forward writes no parameter or gradient; its
+            # backward, end_step checks and optimizer run in the next call, which must be handed this pack.
+            next_events = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+            next_stack = contextlib.ExitStack()
+            next_stack.enter_context(model.candidate_step())
+            try:
+                next_prep = _prepare(micro_packs(next_pack)[0], _NEXT_STEP)
+                next_launched = _launch(next_prep, 0, next_events)
+            except BaseException:
+                next_stack.__exit__(*sys.exc_info())
+                raise
+            _NEXT_STEP['forward'] = dict(stack=next_stack, prepared=next_prep, launched=next_launched,
+                                         events=next_events)
+    if _NEXT_STEP is not None and 'forward' in _NEXT_STEP:
+        events[-1].synchronize()  # this update's optimizer has completed; the next forward stays queued
+    else:
+        synchronize()
+    if deferred:
+        try:
+            # The verdict end_step and the boundary snapshot used to give before the optimizer, given now from the
+            # pinned copies. Any refusal here found the kernels gated (found_inf 1.0): nothing was mutated.
+            model._cuda_execution.settle_deferred()
+            snapshot = bytes(raw_host.numpy().tobytes())
+            deferred_buffers.complete(snapshot)
+            loss_value = float(loss_host)
+            if not math.isfinite(loss_value):
+                raise ValueError('nonfinite step loss')
+            if bool(refused_host):
+                raise RuntimeError('device refusal set with every host predicate passing')
+            if segment_mismatch_host is not None and bool(segment_mismatch_host):
+                raise RuntimeError('the pre-backward verdict differs from the boundary verdict')
+            micro_snapshots.append(snapshot)
+            unrouted_host = deferred_buffers.unrouted(snapshot)
+            gated_unrouted = [key for key in gated_keys if key[1] in unrouted_host.get(key[0], ())]
+            if skip_host is not None and [key for key, value in zip(gated_keys, skip_host.tolist())
+                                          if value == 1.0] != gated_unrouted:
+                raise RuntimeError('device unrouted masks differ from the boundary snapshot')
+            released = {}
+            for layer, expert in gated_unrouted:
+                released.setdefault(layer, []).append(expert)
+        except BaseException:
+            forward = (_NEXT_STEP or {}).get('forward')
+            if forward is not None:
+                _NEXT_STEP = None
+                forward['stack'].__exit__(*sys.exc_info())
+            raise
+    if image_text is not None:
+        load_image_text_module().join_prefetch()
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
-    if buffers is not None:
+    if buffers is not None and depth == 1:
         routes_sha256, grammar = buffers.digest(snapshot), buffers.GRAMMAR
         routing_statistics, route_host_reads = buffers.statistics(snapshot), buffers.route_host_reads
+    elif buffers is not None:
+        routes_sha256 = hashlib.sha256(''.join(buffers.digest(s) for s in micro_snapshots).encode()).hexdigest()
+        grammar = buffers.GRAMMAR + '+accumulated-v1'
+        routing_statistics = [buffers.statistics(s) for s in micro_snapshots]
+        route_host_reads = buffers.route_host_reads
     else:
         routes_sha256, grammar, routing_statistics, route_host_reads = (
             hashlib.sha256(canonical(routes)).hexdigest(), ROUTES_DIGEST_GRAMMARS[0], None, None)
@@ -1263,13 +2140,19 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
             **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
-            'positions_per_second': len(pack['token_ids']) / wall,
+            **exposure_fields(pack, wall),
             'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
             'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
-            'optimizer_and_sync_seconds': finished - exited, 'loss': float(loss.detach()),
-            'cuda_phase_seconds': ({'forward': events[0].elapsed_time(events[1]) / 1000,
-                                   'backward': events[1].elapsed_time(events[2]) / 1000,
-                                   'context_exit_and_optimizer': events[2].elapsed_time(events[3]) / 1000}
+            'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
+            **({'image_patches_source': patches_source} if pack.get('images') else {}),
+            'staged_by_previous_step': ahead is not None, 'staged_next_step': stage_next,
+            'accumulation_micro_steps': depth,
+            'template_untrained_released': len(template_untrained),
+            'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
+                                                   for m in range(depth)) / 1000,
+                                   'backward': sum(events[3 * m + 1].elapsed_time(events[3 * m + 2])
+                                                   for m in range(depth)) / 1000,
+                                   'context_exit_and_optimizer': events[3 * depth - 1].elapsed_time(events[-1]) / 1000}
                                   if events is not None else None),
             'routes_sha256': routes_sha256, 'routes_digest_grammar': grammar,
             'routing_digest_seconds': routing_digest_seconds, 'routing_statistics': routing_statistics,
@@ -1300,6 +2183,22 @@ def _python_command(helper, hidden, *args):
 def _write_new(path, value):
     with Path(path).open('xb') as stream:
         stream.write(canonical(value))
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+# Order of the real calls (cia_hour.run_hour emits hour_result then pointer_cas; the worker writes worker-terminal.json and stamps
+# worker_terminal only after run_hour returns; the parent stamps segment_complete after OwnedProcessRunner returns with cleanup verified).
+TAIL_PHASES = ('segment_launch', 'child_publish_start', 'quarantine', 'counter', 'hour_result', 'pointer_cas', 'worker_terminal', 'segment_complete')
+
+
+def tail_stamp(custody, phase):
+    """Append one (phase, monotonic_s, wall_utc) row to custody/tail-stamps.jsonl, fsynced, so a killed tail still names its last phase."""
+    if phase not in TAIL_PHASES:
+        raise ValueError('unknown tail phase: ' + str(phase))
+    row = {'phase': phase, 'monotonic_s': time.perf_counter(), 'wall_utc': time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + ('%.3f' % (time.time() % 1))[1:] + 'Z'}
+    with Path(custody).joinpath('tail-stamps.jsonl').open('ab') as stream:
+        stream.write(canonical(row) + b'\n')
         stream.flush()
         os.fsync(stream.fileno())
 
@@ -1368,6 +2267,15 @@ class GcPauseMeter:
                     call_finished=call_finished, in_step=inside, outside_step=outside)
 
 
+def bounded_collect(step):
+    """The bound on a disabled collector, run every 64 steps. Generation 0 alone leaks: cycles still referenced
+    by the in-flight (staged or pre-launched) update at a pass are promoted, become garbage a step later, and a
+    disabled collector never examines them again. Two #1945 hours grew from ~33 to ~108 ms per update and died
+    at ~28,700 updates on host commit (WinError 1455). Generation 1 each pass reclaims them one pass later; a
+    full pass every 4,096 steps bounds anything that outlives two passes."""
+    return gc.collect(2 if step % 4096 == 4095 else 1)
+
+
 def freeze_resident_object_graph(**identity):
     """Move every object alive now -- the resident model, optimizer state, capture graphs, routing buffers -- into
     CPython's permanent generation after one full collection, so every later generation-2 collection traverses only
@@ -1376,8 +2284,11 @@ def freeze_resident_object_graph(**identity):
     warm update, whatever warm_steps in 0..2 declares), outside every timed interval."""
     collected = gc.collect()
     gc.freeze()
+    if os.environ.get('EMBER_GC_GEN0'):
+        gc.set_threshold(int(os.environ['EMBER_GC_GEN0']), *gc.get_threshold()[1:])
     return dict(identity, schema='gc-freeze-v1', collected=collected, frozen=gc.get_freeze_count(),
-                threshold=list(gc.get_threshold()), enabled=gc.isenabled())
+                threshold=list(gc.get_threshold()), enabled=gc.isenabled(),
+                switch_interval_seconds=sys.getswitchinterval())
 
 
 def verify_worker(binding, binding_path):
@@ -1453,6 +2364,7 @@ def verify_worker(binding, binding_path):
 
 def worker(binding_path):
     """Direct worker calls fail at actual job membership, before artifact reads."""
+    global _NEXT_STEP
     from ember.governance.scripts import cia_conformance_resources as resources
     binding_path = Path(binding_path)
     if not binding_path.parent.name.startswith('measurement-'):
@@ -1502,6 +2414,7 @@ def worker(binding_path):
                 device=device, compiler=c_compiler, applied=applied)
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
                 applied_positions=applied_positions, claim=CLAIM))
+            tail_stamp(custody, 'worker_terminal')
             return 0
         if trajectory_mode(prediction['identity']):
             def applied(count):
@@ -1520,12 +2433,15 @@ def worker(binding_path):
         definition = prediction['identity']['optimizer']
         measurement = measurement_mode(prediction['identity'])
         first = prepared['first'] if measurement else prepared['packs'][0]
-        first_lengths = document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+        first_micro = micro_packs(first)[0]
+        first_lengths = document_lengths(tuple(first_micro['document_starts']), len(first_micro['token_ids']))
 
         def optimizer_factory(inventory):
             if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
                 raise ValueError('full CIA-3B population is missing')
-            return torch.optim.AdamW(list(inventory.values()), **optimizer_kwargs(definition))
+            built = torch.optim.AdamW(list(inventory.values()), **optimizer_kwargs(definition))
+            built._ember_template_untrained = template_untrained_parameters(inventory)
+            return built
 
         inventory, optimizer = prepare_model(model, prediction['identity'], first_lengths, device, mode=mode,
                                              optimizer_factory=optimizer_factory)
@@ -1558,7 +2474,10 @@ def worker(binding_path):
         gc_identity = dict(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'])
         with GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
                 (custody / 'gc-events.jsonl').open('xb') as gc_rows:
-            for index, pack in enumerate(measurement_packs(prepared) if measurement else prepared['packs']):
+            source_packs = measurement_packs(prepared) if measurement else prepared['packs']
+            stage_next_step = measurement and capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
+            for index, (pack, next_pack) in enumerate(_with_successor(source_packs) if stage_next_step
+                                                      else ((pack, None) for pack in source_packs)):
                 if measurement:
                     verify_measurement_pack(pack, index, sequence=counts[0], documents=counts[1], warm=counts[2],
                                             measured=counts[3])
@@ -1569,29 +2488,43 @@ def worker(binding_path):
                     # before the first measured step's clock starts; eager and captured paths alike.
                     _write_new(custody / 'gc-freeze.json', freeze_resident_object_graph(**gc_identity))
                     frozen = True
+                    if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
+                        gc.disable()  # bounded below: bounded_collect every 64 rows
+                # EMBER_PRELAUNCH_FORWARD: the next update's forward is enqueued behind this update's optimizer
+                # (never on the recorded exemplar, index 0, whose capture follows the call); its pack is verified first.
+                prelaunch = (measurement and stage_next_step and next_pack is not None and index >= 1
+                             and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1')
+                if prelaunch:
+                    verify_measurement_pack(next_pack, index + 1, sequence=counts[0], documents=counts[1],
+                                            warm=counts[2], measured=counts[3])
                 call_started = time.perf_counter()
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
                                    capture=capture, record=(capture is not None and index == 0),
-                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']))
+                                   expert_owners=expert_owners, experiment_binding=experiment_fields(prediction['identity']),
+                                   image_text=getattr(prepared.get('packs'), 'image_text', None) if measurement else None,
+                                   next_pack=next_pack, prelaunch_next=prelaunch)
                 call_finished = time.perf_counter()
                 # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
                 # after the successful warm update leaves a truthful applied count in the terminal record.
                 row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
-                           input_sha256=prepared['binding']['input_sha256'])
+                           input_sha256=prepared['binding']['input_sha256'], update_completed_monotonic=call_finished)
                 if measurement:
                     row.update(cursor_before=pack['cursor_before'], cursor_after=pack['cursor_after'],
-                               pack_sha256=_pack_digest([pack]), measurement=prediction['identity']['measurement'])
+                               pack_sha256=_row_digest(pack), measurement=prediction['identity']['measurement'])
                     if pack['phase'] == 'measured':
                         measured_rates.append(row['positions_per_second'])
                 rows.write(canonical(row) + b'\n')
                 rows.flush()
-                os.fsync(rows.fileno())
+                if index == 0 or index % ROW_FSYNC_EVERY == ROW_FSYNC_EVERY - 1:
+                    os.fsync(rows.fileno())
                 # Collections since the previous row, classified in-step / outside-step by their start instant against
                 # this step call's window; filed beside (never inside) the row.
                 gc_rows.write(canonical(gc_meter.file(index, pack['phase'], call_started=call_started,
                                                       call_finished=call_finished)) + b'\n')
                 gc_rows.flush()
+                if frozen and not gc.isenabled() and index % 64 == 63:
+                    bounded_collect(index)
                 applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
                     capture.zero_grad(optimizer=optimizer)  # full retained membership, eager expert owners included
@@ -1601,6 +2534,9 @@ def worker(binding_path):
                     finally:
                         buffers.capturing = False
                     _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
+            if _NEXT_STEP is not None and 'forward' in _NEXT_STEP:
+                raise RuntimeError('measurement ended with a pre-launched update still open')
+            _NEXT_STEP = None
             # Collections after the last step (teardown side) are outside every step by construction.
             closing_instant = time.perf_counter()
             gc_rows.write(canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
@@ -1623,6 +2559,19 @@ def worker(binding_path):
         attention_scope.close()
 
 
+def launch_succeeded(result, supervisor_failure, custody):
+    """A launch succeeded only if the owned process status is 'completed' with returncode 0, verified cleanup and no supervisor
+    failure, AND the worker wrote a worker-terminal.json whose status is 'completed'. The first chained hour was killed by its wall
+    with status 'terminated', returncode 0, cleanup verified and no supervisor failure, so the returncode alone read as success."""
+    if not (result.status == 'completed' and result.returncode == 0 and result.cleanup_verified and not supervisor_failure):
+        return False
+    try:
+        terminal = json.loads((Path(custody) / 'worker-terminal.json').read_bytes())
+    except (OSError, ValueError):
+        return False
+    return isinstance(terminal, dict) and terminal.get('status') == 'completed'
+
+
 def launch(args, dispatch):
     from ember.governance.scripts import cia_conformance_resources as resources, gpu_lock_guard
     from ember.governance.scripts.owned_process import OwnedProcessRunner
@@ -1639,6 +2588,7 @@ def launch(args, dispatch):
         raise ValueError('daemon custody must be an existing B directory')
     custody = parent / ('measurement-' + run_id)
     custody.mkdir()  # Exclusive creation is the one-use run-custody boundary.
+    tail_stamp(custody, 'segment_launch')  # typed wall start of the governed segment (#2119 accounting)
     helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
     hidden = args.hidden_helper.resolve(strict=True)
     preflight = headroom()
@@ -1659,7 +2609,9 @@ def launch(args, dispatch):
             return_condition=identity['training_diagnostic_return_condition'],
             readiness_blocker=identity.get('training_diagnostic_readiness_blocker'))
     gpu_uuid = prediction['identity']['gpu_uuid']
-    resources.sample_device(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
+    # #1945: this one-shot preflight call had zero tolerance for a slow/failing nvidia-smi.
+    # sample_device_at_launch() retries only here; the watcher's own tolerance is unchanged.
+    resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
     with (custody / 'prediction.json').open('xb') as stream:
         stream.write(prediction_bytes)
     _write_new(custody / 'preflight.json', {'headroom': preflight, 'processes': census,
@@ -1712,7 +2664,9 @@ def launch(args, dispatch):
     receipt.update(prediction_sha256=args.prediction_sha256, claim=CLAIM,
                    device_samples=jobs[0].samples, supervisor_failure=jobs[0].failure)
     _write_new(custody / 'owned.json', receipt)
-    succeeded = result.returncode == 0 and result.cleanup_verified and not jobs[0].failure
+    if result.cleanup_verified:
+        tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
+    succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
         # Reuses the exact success predicate this function already returns on -- no second,
         # independent notion of "eligible" is introduced here.

@@ -158,6 +158,7 @@ class AttentionSelectionTests(unittest.TestCase):
                             (runner, 'load_trajectory_module', lambda: module),
                             (runner, 'load_hour_module', lambda: module),
                             (runner, '_write_new', lambda path, value: terminal.append(value)),
+                            (runner, 'tail_stamp', lambda *a, **k: None),
                             (ember_v0_decoder, 'bind_triton_c_compiler', lambda: {}),
                             (ember_v0_contract, 'validate_cia_architecture', lambda config: None),
                             (torch.cuda, 'is_available', lambda: True), (torch.cuda, 'device_count', lambda: 1),

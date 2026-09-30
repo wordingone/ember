@@ -2,6 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+import gc
 import math
 import hashlib
 import json
@@ -9,6 +10,72 @@ import os
 from pathlib import Path
 import subprocess
 import time
+
+# #1945 mixture amendment A1 section 9 (frozen before any A1 result): 16,384 optimizer updates per arm, the warm update
+# counted as update 1, full parameter snapshots at these update indices for held-out scoring and time-to-quality.
+LEARNING_SNAPSHOTS = (2048, 4096, 8192, 16384)
+LEARNING_MEASURED = LEARNING_SNAPSHOTS[-1] - 1
+
+
+_LEAK_PREVIOUS = {}
+
+
+def _leak_probe(custody, step):
+    """Diagnostic only (EMBER_LEAK_PROBE): process commit, host-allocator stats and the object types that grew since
+    the previous sample, filed beside the rows. Image hours exhaust host commit near 28.8k updates (#1945)."""
+    import collections
+    import ctypes
+    import sys
+    import threading
+    import torch
+
+    class Counters(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_size_t) for name in (
+            'cb', 'PageFaultCount', 'PeakWorkingSetSize', 'WorkingSetSize', 'QuotaPeakPagedPoolUsage',
+            'QuotaPagedPoolUsage', 'QuotaPeakNonPagedPoolUsage', 'QuotaNonPagedPoolUsage', 'PagefileUsage',
+            'PeakPagefileUsage', 'PrivateUsage')]
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(counters),
+                                             counters.cb)
+    types = collections.Counter(type(item).__qualname__ for item in gc.get_objects())
+    grew = {name: count - _LEAK_PREVIOUS.get(name, 0) for name, count in types.items()
+            if count - _LEAK_PREVIOUS.get(name, 0) > 64}
+    _LEAK_PREVIOUS.clear()
+    _LEAK_PREVIOUS.update(types)
+    host = {key: value for key, value in torch.cuda.host_memory_stats().items()
+            if key.endswith('.current') or 'num_host' in key}
+    stream = sys.modules.get('cia_measurement_image_text_stream')
+    record = dict(step=step, private_bytes=counters.PrivateUsage, working_set=counters.WorkingSetSize,
+                  blocks=sys.getallocatedblocks(), objects=sum(types.values()), threads=threading.active_count(),
+                  grew=dict(sorted(grew.items(), key=lambda item: -item[1])[:25]), host_allocator=host,
+                  verified=len(getattr(stream, '_VERIFIED', ())), ahead=len(getattr(stream, '_AHEAD', ())))
+    with open(custody / 'leak-probe.jsonl', 'a', encoding='utf-8') as handle:
+        handle.write(json.dumps(record, sort_keys=True) + '\n')
+
+
+def save_learning_snapshot(runner, inventory, root, *, update, budget_bytes):
+    """Every parameter, its own dtype, one safetensors file per owner; a manifest binds each file by digest."""
+    from safetensors.torch import save_file
+    root.mkdir(parents=False, exist_ok=False)
+    entries, written = {}, 0
+    for index, name in enumerate(sorted(inventory)):
+        value = inventory[name]
+        tensor = value.detach().cpu().contiguous()
+        size = tensor.numel() * tensor.element_size()
+        if written + size + 4096 > budget_bytes:
+            raise ValueError('learning snapshot byte budget would be exceeded')
+        path = root / ('owner-%04d.safetensors' % index)
+        save_file({'parameter': tensor}, str(path))
+        actual = path.stat().st_size
+        written += actual
+        entries[name] = dict(file=path.name, sha256=runner.file_sha256(path), bytes=actual,
+                             shape=list(value.shape), dtype=str(value.dtype))
+        del tensor
+    manifest = dict(schema='ember-1945-learning-snapshot-v1', update=update, tensors=entries, bytes=written,
+                    population=sum(value.numel() for value in inventory.values()))
+    runner._write_new(root / 'snapshot-manifest.json', manifest)
+    return manifest
 
 
 def bound_json(runner, path, digest):
@@ -100,9 +167,9 @@ def validate_probe_inputs(runner, prior, identity):
 def validate_checkpoint_probe(runner, identity):
     """Require a completed same-source probe and reopen its real admitted child."""
     selection = identity['hour']
-    if selection['schema'] == 'checkpoint-probe-v1':
+    if selection['schema'] in ('checkpoint-probe-v1', 'learning-comparison-v1'):
         if 'checkpoint_probe' in identity:
-            raise ValueError('checkpoint probe cannot consume another probe identity')
+            raise ValueError('checkpoint probe or learning comparison cannot consume another probe identity')
         return
     reference = identity.get('checkpoint_probe')
     required = {'custody_root', 'result_sha256', 'prediction_sha256', 'owned_sha256',
@@ -156,6 +223,8 @@ def validate_identity(*, runner, identity):
         raise ValueError('declared step capacity cannot satisfy hour minimum')
     if hour['schema'] == 'checkpoint-probe-v1' and geometry['measured_steps'] != 2:
         raise ValueError('checkpoint probe requires exactly two measured updates')
+    if hour['schema'] == 'learning-comparison-v1' and geometry['measured_steps'] != LEARNING_MEASURED:
+        raise ValueError('learning comparison requires exactly %d measured updates' % LEARNING_MEASURED)
     walls = identity['dispatch_resources'].get('disk_write_walls')
     if (not isinstance(walls, list) or len(walls) != 1 or walls[0].get('volume_root') != 'B:/'
             or walls[0].get('maximum_write_bytes') != runner.resource_limits(identity)['max_b_write_gib'] * runner.GIB):
@@ -227,11 +296,18 @@ def validate_identity(*, runner, identity):
 
 class HourPacks:
     """Generate only the next complete pack from an already verified immutable shard list."""
-    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4):
-        self.stream = stream
+    def __init__(self, stream, cursor, *, maximum_steps, sequence=1024, documents=4, image_text=None, fill=None,
+                 image_start=0):
+        self.stream, self.image_text, self.fill = stream, image_text, fill
         self.cursor = dict(cursor)
         self.maximum_steps = maximum_steps
         self.sequence, self.documents = sequence, documents
+        # The image-text stream is indexed by GLOBAL update position, not by this hour's local index, so a chained
+        # hour continues the image order where its parent stopped instead of replaying it from the first document
+        # (#2119 exact data position). Genesis starts at 0, which keeps a genesis hour byte-identical.
+        if type(image_start) is not int or image_start < 0:
+            raise ValueError('image-text start position must be a non-negative integer')
+        self.image_start = image_start
         self.index = 0
 
     def next_pack(self):
@@ -240,13 +316,10 @@ class HourPacks:
         before = dict(self.cursor)
         pack = dict(token_ids=[], target_ids=[], positions=[], document_starts=[],
                     index=self.index, phase='warm' if self.index == 0 else 'measured')
-        for _ in range(self.documents):
-            episode, after = self.stream.next_episode(**self.cursor, sequence_length=self.sequence)
-            pack['document_starts'].append(len(pack['token_ids']))
-            pack['token_ids'].extend(episode['token_ids'])
-            pack['target_ids'].extend(episode['target_ids'])
-            pack['positions'].extend([[position, 0, 0] for position in range(self.sequence)])
-            self.cursor = {key: after[key] for key in ('shard_index', 'token_offset')}
+        fill = dict(sequence=self.sequence, documents=self.documents)
+        if self.image_text is not None:
+            fill['image_index'] = self.image_start + self.index
+        self.cursor = self.fill(pack, self.stream, self.cursor, self.image_text, **fill)
         if len(pack['token_ids']) != self.sequence * self.documents or len(pack['target_ids']) != len(pack['token_ids']):
             raise ValueError('hour pack lost complete decoder targets')
         pack['cursor_before'], pack['cursor_after'] = before, dict(self.cursor)
@@ -254,26 +327,55 @@ class HourPacks:
         return pack
 
 
-def prepare_inputs(runner, data, geometry):
+def chained_image_start(runner, identity):
+    """Global update position the image-text stream resumes at: the parent's published step, or 0 at genesis.
+
+    Read from the parent manifest whose bytes match the bound digest; the worker re-checks it against the
+    restored checkpoint cursor before training (run_hour), so a stale or substituted parent refuses there."""
+    chain = identity.get('parent_checkpoint')
+    if chain is None:
+        return 0
+    manifest = bound_json(runner, Path(chain['root']) / 'checkpoint-manifest.json', chain['manifest_sha256'])
+    step = manifest['data_cursor']['global_step']
+    if type(step) is not int or step < 0:
+        raise ValueError('chained parent global step is not a non-negative integer')
+    return step
+
+
+def check_image_start(binding, base_steps):
+    """The bound image-text start must equal the global step actually restored (0 at genesis)."""
+    image_binding = binding.get('image_text')
+    if image_binding is not None and image_binding.get('start_pack') != base_steps:
+        raise ValueError('image-text start position differs from the restored parent global step')
+
+
+def prepare_inputs(runner, data, geometry, *, image_start=0):
     if data.get('shard_ledger_path') is None or data.get('shard_ledger_sha256') is None:
         raise ValueError('governed hour requires its frozen admitted shard ledger')
     sequence, documents, warm, maximum = runner.geometry_counts(geometry, hour=True)
     stream, receipt, tokenizer, ledger = runner.open_input_stream(data)
+    image_text = runner.open_image_text(data, tokenizer, sequence)
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('hour cursor fields differ')
     # Reserve the independently checked next update without adding throughput credit.
     reference_positions = sequence * documents
     positions = (warm + maximum) * sequence * documents + reference_positions
-    span = stream.check_cursor_span(**cursor, tokens=positions)
+    span = stream.check_cursor_span(**cursor, tokens=(warm + maximum + 1) * sequence
+                                    * runner.text_documents(image_text, documents))
     identity = dict(receipt_sha256=data['receipt_sha256'], tokenizer_sha256=data['tokenizer_sha256'],
                     shard_ledger_sha256=data['shard_ledger_sha256'], cursor_start=cursor,
                     geometry=geometry, span=span, maximum_planned_positions=positions,
                     reference_positions_reserved=reference_positions)
+    if image_text is not None:
+        identity['image_text'] = dict(data['image_text'], grammar=runner.load_image_text_module().GRAMMAR,
+                                      start_pack=image_start)
     binding = dict(identity, input_sha256=hashlib.sha256(runner.canonical(identity)).hexdigest(),
                    input_digest_grammar='receipt-ledger-cursor-span-v1', shard_ledger_path=str(ledger))
-    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents)
+    packs = HourPacks(stream, cursor, maximum_steps=warm + maximum + 1, sequence=sequence, documents=documents,
+                      image_text=image_text, fill=runner.fill_pack, image_start=image_start)
     first = packs.next_pack()
+    packs = runner.pack_lookahead(packs)
     for path, expected in ((receipt, data['receipt_sha256']), (tokenizer, data['tokenizer_sha256']),
                            (ledger, data['shard_ledger_sha256'])):
         if runner.file_sha256(path) != expected:
@@ -286,6 +388,22 @@ def hour_complete(*, measured_updates, elapsed_seconds):
             or type(elapsed_seconds) not in (int, float) or not math.isfinite(elapsed_seconds) or elapsed_seconds < 0):
         raise ValueError('finite observed duration and nonnegative measured update count required')
     return measured_updates >= 1024 and elapsed_seconds >= 3600
+
+
+class _HourPushback:
+    """One pack drawn early for next-step staging and returned to the stream when the hour stops, so the
+    continuation reference reads the identical pack at the identical cursor."""
+    def __init__(self, inner, pack):
+        self._inner, self._pack = inner, pack
+
+    def next_pack(self):
+        if self._pack is not None:
+            pack, self._pack = self._pack, None
+            return pack
+        return self._inner.next_pack()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
 
 
 def require_remaining_hour_capacity(measured_updates, maximum):
@@ -301,6 +419,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
         raise ValueError('checkpoint counter launcher differs from dispatch')
     cap = 10 * runner.GIB
     def verifier(candidate, receipt):
+        runner.tail_stamp(custody, 'quarantine')
         command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper), '--', '-I',
             str(runner.ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py'),
             '--model-config', runner.ROOT / runner.CONFIG,
@@ -311,11 +430,21 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             raise ValueError('independent checkpoint counter refused: ' + result.stderr.decode('utf-8', errors='replace')[-2048:])
         measured = json.loads(result.stdout)
         runner._write_new(candidate / 'parameter-counter-receipt.json', measured)
+        runner.tail_stamp(custody, 'counter')
         return measured
     owner_update_counts = {}
     def publish(name, *, steps, tokens, cursor, parent=None):
         torch.cuda.synchronize(device)
         optimizer.zero_grad(set_to_none=True)
+        # A gated fused step runs _init_group on every parameter carrying a gradient, then found_inf skips it and
+        # rolls its clock back to 0: state that no update ever applied (step 0, zero moments). Adam initialises
+        # exactly that lazily, so dropping it is semantically nil, and it keeps the child's inactive state equal
+        # to the parent's absent state for the lineage check.
+        for parameter in [p for p, s in optimizer.state.items()
+                          if s and float(s.get('step', 1)) == 0
+                          and all(not torch.is_tensor(v) or v.dim() == 0 or not bool(v.any())
+                                  for k, v in s.items() if k != 'step')]:
+            del optimizer.state[parameter]
         return artifacts.write_checkpoint_artifacts(model, optimizer, custody / name,
             launch_seed=identity['seed'], rng_state={'cpu': torch.get_rng_state(), 'cuda': torch.cuda.get_rng_state(device)},
             data_cursor=dict(shard=str(cursor['shard_index']), record_index=cursor['token_offset'],
@@ -538,7 +667,9 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
     def optimizer_factory(inventory):
         if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
             raise ValueError('continuation optimizer population is incomplete')
-        return torch.optim.AdamW(list(inventory.values()), **runner.optimizer_kwargs(identity['optimizer']))
+        built = torch.optim.AdamW(list(inventory.values()), **runner.optimizer_kwargs(identity['optimizer']))
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=runner.execution_mode(identity), optimizer_factory=optimizer_factory)
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, source['root'], source['child'])
@@ -669,6 +800,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     hour = identity['hour']
     mode = runner.execution_mode(identity)
     probe = hour['schema'] == 'checkpoint-probe-v1'
+    learning = hour['schema'] == 'learning-comparison-v1'
+    snapshots, paused = [], 0.0
     model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
@@ -676,9 +809,14 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     def optimizer_factory(inventory):
         if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
             raise ValueError('hour optimizer population is incomplete')
-        return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+        built = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
             eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
             **({'fused': True} if hour['arm'] == 'treatment' else {}))
+        # Same attach as cia_step_runner's own factory: under a layer template, measure_step releases the grads of
+        # parameters the template never runs, so fused AdamW neither walks nor weight-decays them. Without it the
+        # hour steps every weight (#1945: optimizer_and_sync 15.6 ms vs 2.8 ms) and is a different function.
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=mode, optimizer_factory=optimizer_factory)
     if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
@@ -690,7 +828,29 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         claim='Complete-model execution inventory; no model qualification'))
     publish, owner_update_counts = checkpoint_publisher(
         runner, model, optimizer, inventory, identity, binding, custody, device)
-    parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
+    chain = identity.get('parent_checkpoint')
+    base_steps = base_tokens = 0
+    if chain is None:
+        parent_root = custody / 'zero-parent'
+        parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
+    else:
+        # Chained start: the hour trains FROM an admitted checkpoint, bound by its manifest digest; the loader
+        # re-verifies every object before it mutates the model or the optimizer.
+        import hashlib
+        import checkpoint_artifacts as artifacts
+        parent_root = Path(chain['root'])
+        # The load receipt's outer checkpoint.byte_sha256 binding is derived from the exact manifest bytes parsed.
+        parent = artifacts.published_checkpoint_receipt(parent_root)
+        if parent['checkpoint_manifest_sha256'] != chain['manifest_sha256']:
+            raise ValueError('chained hour parent manifest differs from its bound digest')
+        restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
+            max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
+        cursor = parent['data_cursor']
+        if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
+                shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
+            raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
+        base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
+    check_image_start(prepared['binding'], base_steps)
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
@@ -702,28 +862,52 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
             (custody / 'gc-events.jsonl').open('xb') as gc_rows:
         pack = first
+        # EMBER_STAGE_NEXT_STEP: draw step N+1's pack before step N only when the end-of-step draw would happen
+        # anyway; a pack drawn early and not trained on is pushed back after the loop (continuation reservation).
+        stage_next = capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
+        upcoming = None
         while True:
             call_started = time.perf_counter()
+            if stage_next and total_steps >= 1 and measured + 1 < identity['geometry']['measured_steps']:
+                upcoming = prepared['packs'].next_pack()
             row = runner.measure_step(model, optimizer, pack, device=device, batch_documents=True,
                 run_id=identity['run_id'], capture=capture, record=(capture is not None and total_steps == 0), expert_owners=owners,
-                experiment_binding=runner.experiment_fields(identity))
+                experiment_binding=runner.experiment_fields(identity), image_text=prepared['packs'].image_text,
+                next_pack=upcoming, prelaunch_next=(
+                    upcoming is not None and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1' and not probe
+                    and not learning and started is not None and not hour_complete(
+                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)))
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
-                cursor_after=pack['cursor_after'], hour=hour)
+                cursor_after=pack['cursor_after'], hour=hour, update_completed_monotonic=call_finished)
             rows.write(runner.canonical(row) + b'\n')
-            rows.flush()
-            os.fsync(rows.fileno())
+            # Gate A reads completion-to-completion time from update_completed_monotonic. Durability is batched:
+            # one fsync per 64 rows (was per row, inside the between-call gap); the loop exit syncs the rest.
+            if total_steps % 64 == 0:
+                rows.flush()
+                os.fsync(rows.fileno())
             # Collections since the previous row, classified in-step / outside-step against this step call's window;
             # filed beside (never inside) the row.
             gc_rows.write(runner.canonical(gc_meter.file(total_steps, row['phase'], call_started=call_started,
                                                          call_finished=call_finished)) + b'\n')
             gc_rows.flush()
             applied(row['applied_positions'])
+            if started is not None and not gc.isenabled() and total_steps % 64 == 63:
+                runner.bounded_collect(total_steps)
+            if os.environ.get('EMBER_LEAK_PROBE') and total_steps % 1024 == 1023:
+                _leak_probe(custody, total_steps)
             total_steps += 1
             positions += row['applied_positions']
+            # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
+            # found_inf, so its clock does not advance; the row names those owners, and they are not counted.
+            skipped = {(int(layer), expert) for layer, experts in (row.get('unrouted_expert_grads_released') or {}).items()
+                       for expert in experts}
             for name, parameter in inventory.items():
                 if parameter.grad is not None:
+                    match = runner.EXPERT_OWNER.match(name)
+                    if match and (int(match.group(2)), int(match.group(1))) in skipped:
+                        continue
                     owner_update_counts[name] = owner_update_counts.get(name, 0) + 1
             if total_steps == 1:
                 if capture is not None:
@@ -738,19 +922,49 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 # Warm-to-measured transition (the hour's single warm update is step 1), outside every timed interval,
                 # eager control and captured treatment alike; the governed clock starts after it.
                 runner._write_new(custody / 'gc-freeze.json', runner.freeze_resident_object_graph(**gc_identity))
+                if os.environ.get('EMBER_GC_DISABLE_MEASURED') == '1':
+                    gc.disable()  # bounded below: runner.bounded_collect every 64 steps
                 energy.begin()
                 started = time.perf_counter()
             else:
                 measured += 1
                 step_rates.append(row['positions_per_second'])
                 elapsed = time.perf_counter() - started
-                if ((probe and measured == 2) or
-                        (not probe and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
-                    break
+                if learning and total_steps in LEARNING_SNAPSHOTS:
+                    # Training wall excludes snapshot writing; the snapshot reads parameters after the step completes.
+                    torch.cuda.synchronize(device)
+                    training_wall = time.perf_counter() - started - paused
+                    paused_from = time.perf_counter()
+                    snapshot = save_learning_snapshot(runner, inventory, custody / ('learning-snapshot-%05d' % total_steps),
+                                                      update=total_steps, budget_bytes=16 * runner.GIB)
+                    paused += time.perf_counter() - paused_from
+                    snapshots.append(dict(update=total_steps, training_wall_seconds=training_wall,
+                                          applied_positions=positions, manifest_sha256=runner.file_sha256(
+                                              custody / ('learning-snapshot-%05d' % total_steps) / 'snapshot-manifest.json'),
+                                          bytes=snapshot['bytes'], write_seconds=time.perf_counter() - paused_from))
+                prelaunched = runner._NEXT_STEP is not None and 'forward' in runner._NEXT_STEP
+                if ((probe and measured == 2) or (learning and total_steps == LEARNING_SNAPSHOTS[-1]) or
+                        (not probe and not learning and hour_complete(measured_updates=measured, elapsed_seconds=elapsed))):
+                    if not prelaunched:  # a pre-launched update is always completed (the hour is a minimum)
+                        break
             # Keep the one independently checked continuation pack reserved.
             # The finite measured allowance is not the hour completion condition.
             require_remaining_hour_capacity(measured, identity['geometry']['measured_steps'])
-            pack = prepared['packs'].next_pack()
+            pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
+        rows.flush()
+        os.fsync(rows.fileno())
+        gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
+        if upcoming is not None:
+            prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
+        if runner._NEXT_STEP is not None and 'forward' in runner._NEXT_STEP:
+            raise RuntimeError('hour loop exited with a pre-launched update still open')
+        runner._NEXT_STEP = None  # staged work for a step that will not run under this capture
+        execution = getattr(model, '_cuda_execution', None)
+        if execution is not None:
+            # The staged owner identity for a step that will not run: checkpoint restore bumps parameter
+            # versions, so the continuation step must bind the live identity, never this stale one.
+            execution._staged_identity = None
+            execution._staged_validation = None
         closing_instant = time.perf_counter()
         gc_rows.write(runner.canonical(gc_meter.file(None, 'after-last-step', call_started=closing_instant,
                                                      call_finished=closing_instant)) + b'\n')
@@ -760,8 +974,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         capture.invalidate()
     optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize(device)
-    child = publish('trained-child', steps=total_steps, tokens=positions,
-                    cursor=pack['cursor_after'], parent=custody / 'zero-parent')
+    runner.tail_stamp(custody, 'child_publish_start')
+    child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
+                    cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
@@ -772,7 +987,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     energy_binding = energy.end()
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
-    continuation = None if probe else publish_continuation_reference(
+    continuation = None if probe or learning else publish_continuation_reference(
         runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
         device, applied, governed_wall, energy_binding)
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
@@ -796,7 +1011,11 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         energy=energy_binding,
         continuation=continuation,
         production_mixture_validation=prepared['mixture_validation'],
-        claim='Checkpoint probe only' if probe else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+        learning_snapshots=snapshots if learning else None,
+        learning_snapshot_pause_seconds=paused if learning else None,
+        claim='Checkpoint probe only' if probe else 'A1 learning comparison: training and snapshots only; learning, '
+              'evaluation and throughput are scored separately' if learning else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
+    runner.tail_stamp(custody, 'hour_result')
     # Issue #2119 section 5: "the retained descendant becomes the actual next continuation
     # source" -- advance the durable selected-continuation-head pointer, atomically, after this
     # verified publication (the trained-child checkpoint above has already reopened and had its
@@ -805,23 +1024,25 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     # subject.py's own "never trust the caller" discipline for mechanism 1).
     #
     # Scope, deliberately narrow: only a governed CONTINUE_TRAINING hour advances the pointer.
-    # probe (a ~2-measured-update sanity check, claim='Checkpoint probe only') is excluded;
-    # RETENTION_ELIGIBLE_EXPERIMENT is deliberately excluded here too: whether it published an
-    # eligible descendant is decided at the process level in cia_step_runner.py's _launch (the
-    # `succeeded` predicate), not inside this function, and #2119 s5 names only the continuation
-    # case explicitly.
-    #
-    # Master's run_hour is unconditionally genesis-only today (parent is always the zero-parent
-    # published in this same run; there is no chained-start branch on this tree), so the expected
-    # parent for the CAS is always the GENESIS sentinel here.
-    if not probe and identity.get('training_job_purpose') == 'CONTINUE_TRAINING':
+    # probe (a ~2-measured-update sanity check, claim='Checkpoint probe only') and learning (an
+    # A1 comparison, claim='...learning, evaluation and throughput are scored separately') both
+    # publish a real trained-child through this same function but neither is the lineage's
+    # forward-going checkpoint. DIAGNOSTIC gets no credit by construction (issue #2119's own
+    # language). RETENTION_ELIGIBLE_EXPERIMENT is deliberately excluded here too: whether it
+    # published an eligible descendant is decided at the process level in cia_step_runner.py's
+    # _launch (the `succeeded` predicate), not inside this function, and #2119 s5 names only the
+    # continuation case explicitly.
+    if not probe and not learning and identity.get('training_job_purpose') == 'CONTINUE_TRAINING':
         import selected_continuation_head
         import training_continuity_ledger
+        expected_parent = (chain['manifest_sha256'] if chain is not None
+                           else selected_continuation_head.GENESIS_SENTINEL)
         selected_continuation_head.advance_selected_continuation_head(
             repo_root=runner.ROOT,
             receipts_root=training_continuity_ledger.ledger_root(custody.parent),
             published_checkpoint_root=custody / 'trained-child',
             hour_result_path=custody / 'hour-result.json',
             hour_result_sha256=runner.file_sha256(custody / 'hour-result.json'),
-            expected_parent_checkpoint_manifest_sha256=selected_continuation_head.GENESIS_SENTINEL)
+            expected_parent_checkpoint_manifest_sha256=expected_parent)
+        runner.tail_stamp(custody, 'pointer_cas')
 

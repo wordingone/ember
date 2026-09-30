@@ -25,7 +25,7 @@ class ContinuationModeTests(unittest.TestCase):
             minimum_wall_seconds=3600, minimum_measured_steps=1024))
         ordinary = runner.resource_limits(hour)
         reproduced = runner.resource_limits(dict(hour, continuation={}))
-        self.assertEqual((ordinary['wall_seconds'], ordinary['max_b_write_gib']), (4500, 24))
+        self.assertEqual((ordinary['wall_seconds'], ordinary['max_b_write_gib']), (5656, 24))
         self.assertEqual((reproduced['wall_seconds'], reproduced['max_b_write_gib']), (900, 1))
         for key in ordinary.keys() - {'wall_seconds', 'max_b_write_gib'}:
             self.assertEqual(ordinary[key], reproduced[key])
