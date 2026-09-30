@@ -355,3 +355,61 @@ def test_installed_direct_url_rejects_duplicate_json_object_keys(
         match="duplicate JSON object key",
     ):
         python_environment.current_installed_sources(manifest)
+
+
+def _git_repo(tmp_path: Path, files: dict[str, str]) -> Path:
+    import subprocess
+
+    for relative, text in files.items():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+_VENDORED_FILES = {
+    "src/cut_cross_entropy/__init__.py": "",
+    "src/cut_cross_entropy/transformers/__init__.py": "",
+    "src/cut_cross_entropy/transformers/patch.py": "import transformers\n",
+}
+
+
+def _vendor_manifest() -> str:
+    return json.dumps({"files": {name: "0" * 64 for name in _VENDORED_FILES}})
+
+
+def test_vendored_nested_directory_does_not_shadow_the_real_distribution(tmp_path: Path) -> None:
+    repo = _git_repo(
+        tmp_path,
+        {**_VENDORED_FILES, "src/ember/model/streamed_loss_vendor.json": _vendor_manifest()},
+    )
+    assert "transformers" in python_environment.production_import_roots(repo)
+
+
+def test_undeclared_nested_directory_still_shadows_as_before(tmp_path: Path) -> None:
+    # Without a vendor manifest the directory is an ordinary local root: the unfixed reading (the reproduction).
+    repo = _git_repo(tmp_path, dict(_VENDORED_FILES))
+    assert "transformers" not in python_environment.production_import_roots(repo)
+
+
+def test_a_genuine_local_package_named_like_a_distribution_is_still_local(tmp_path: Path) -> None:
+    repo = _git_repo(
+        tmp_path,
+        {
+            **_VENDORED_FILES,
+            "src/ember/model/streamed_loss_vendor.json": _vendor_manifest(),
+            "src/transformers/__init__.py": "",
+            "src/app.py": "import transformers\nimport requests\n",
+        },
+    )
+    roots = python_environment.production_import_roots(repo)
+    assert "transformers" not in roots
+    assert "requests" in roots
+
+
+def test_a_malformed_vendor_manifest_fails_closed(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path, {**_VENDORED_FILES, "src/ember/model/streamed_loss_vendor.json": "{"})
+    with pytest.raises(python_environment.EnvironmentContractError, match="vendor manifest is unreadable"):
+        python_environment.production_import_roots(repo)
