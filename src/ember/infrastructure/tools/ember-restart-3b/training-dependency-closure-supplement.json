@@ -3,7 +3,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02B",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "purpose": "Declare the seven 02B-owned code members introduced into the certified training closure by the repository-layout transition without mutating the 02A base manifest.",
+  "purpose": "Declare the seven 02B-owned code members introduced into the certified training closure by the repository-layout transition without mutating the 02A base manifest. It also declares the three kept prior parameter counters and the current counter's path-based load of them.",
   "entrypoints": [
     "src/ember/infrastructure/tools/ember-restart-3b/repository_layout.py"
   ],
@@ -14,9 +14,30 @@
     "src/ember/governance/scripts/r1_cheap_probe_suite.py",
     "src/ember/governance/scripts/r1_e8_validator.py",
     "src/ember/governance/scripts/r1_exit_battery.py",
-    "src/ember/governance/scripts/r1_frozen_eval_runner.py"
+    "src/ember/governance/scripts/r1_frozen_eval_runner.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-4b88ad65705c3ef582163e3050c06cd670c7899e301e20c7c845a3471789d6a2.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-ec9cde425421b62067048a5e2ca481875003b51c88dd3cd9270114f8badb42fd.py"
   ],
   "data": [],
-  "dynamic_call_sites": {},
-  "dynamic_call_site_notes": {}
+  "dynamic_call_sites": {
+    "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py": [
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-4b88ad65705c3ef582163e3050c06cd670c7899e301e20c7c845a3471789d6a2.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-ec9cde425421b62067048a5e2ca481875003b51c88dd3cd9270114f8badb42fd.py"
+    ],
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-4b88ad65705c3ef582163e3050c06cd670c7899e301e20c7c845a3471789d6a2.py": [
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-ec9cde425421b62067048a5e2ca481875003b51c88dd3cd9270114f8badb42fd.py"
+    ],
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47.py": [
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-4b88ad65705c3ef582163e3050c06cd670c7899e301e20c7c845a3471789d6a2.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-ec9cde425421b62067048a5e2ca481875003b51c88dd3cd9270114f8badb42fd.py"
+    ]
+  },
+  "dynamic_call_site_notes": {
+    "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py": "_counter_for loads a prior counter by path with importlib, only from counter-history/, only when its bytes hash to the digest a persisted counter receipt names; the three kept counters are the only targets.",
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-4b88ad65705c3ef582163e3050c06cd670c7899e301e20c7c845a3471789d6a2.py": "A kept prior counter; its own resolver is replaced at load by the current counter's _counter_for, which reaches only the kept counter-history files.",
+    "src/ember/infrastructure/tools/ember-restart-3b/counter-history/parameter_counter-7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47.py": "A kept prior counter; its own resolver is replaced at load by the current counter's _counter_for, which reaches only the kept counter-history files."
+  }
 }
