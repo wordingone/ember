@@ -40,8 +40,8 @@ class StreamedRunnerContract(unittest.TestCase):
         self.assertTrue(hasattr(runner,'capture_loss_kwargs'),'Capture producers need one selected loss')
         import ember.model.ember_v0_streamed_loss as module
         original=module.document_streamed_loss;seen={}
-        def inspect_call(hidden,owner,targets,lengths,denominator):
-            seen.update(owner=owner,lengths=lengths,denominator=denominator)
+        def inspect_call(hidden,owner,targets,lengths,denominator,selections=None):
+            seen.update(owner=owner,lengths=lengths,denominator=denominator,selections=selections)
             return hidden.sum()
         owner=torch.nn.Parameter(torch.ones(7,3))
         model=SimpleNamespace(_weight=lambda name:owner)
@@ -53,6 +53,7 @@ class StreamedRunnerContract(unittest.TestCase):
             selected['loss_fn'](torch.ones(8,3),torch.zeros(8,dtype=torch.long))
             self.assertIs(seen['owner'],owner)
             self.assertEqual((seen['lengths'],seen['denominator']),((2,2,2,2),8))
+            self.assertIsNone(seen['selections'])
         finally:module.document_streamed_loss=original
 
     def test_all_real_capture_producers_bind_selected_loss(self):

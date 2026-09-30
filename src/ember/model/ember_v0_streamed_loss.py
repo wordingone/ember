@@ -6,7 +6,10 @@
 The eager loss boundary is intentional. Each document's CCE backward produces
 one BF16 classifier partial; those partials are added in descending document
 order. This is a declared numerical function, not native BF16-logit equivalence.
-No filtering, ignored targets, vocabulary truncation or implicit denominator.
+No filtering, ignored targets, vocabulary truncation or implicit denominator. A document may
+declare an explicit loss-bearing row selection (mixture amendment A1: caption
+rows of an image-text document); unselected rows carry no loss and receive a
+zero hidden gradient, and the caller states the denominator.
 """
 from functools import lru_cache
 import importlib.util
@@ -39,22 +42,28 @@ def _cce_operator():
 
 class _DocumentStreamedLoss(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, hidden, classifier, targets, lengths, denominator, operator):
+    def forward(ctx, hidden, classifier, targets, lengths, denominator, operator, selections=None):
         parts, start = [], 0
         # Local graphs keep only the streaming primitive's saved tensors. They
         # end at detached operands; the outer Function returns the owner union.
         with torch.enable_grad():
-            for length in lengths:
+            for index, length in enumerate(lengths):
                 end = start + length
-                e = hidden[start:end].detach().requires_grad_(hidden.requires_grad)
+                rows = None if selections is None else selections[index]
+                if rows is None:
+                    e = hidden[start:end].detach().requires_grad_(hidden.requires_grad)
+                    t = targets[start:end]
+                else:
+                    e = hidden.index_select(0, rows).detach().requires_grad_(hidden.requires_grad)
+                    t = targets.index_select(0, rows)
                 c = classifier.detach().requires_grad_(classifier.requires_grad)
-                part = operator(e, c, targets[start:end])
-                parts.append((start, end, e, c, part))
+                part = operator(e, c, t)
+                parts.append((start, end, rows, e, c, part))
                 start = end
         ctx.parts = parts
         ctx.denominator = denominator
         ctx.hidden_shape = hidden.shape
-        result = sum(part.detach() for _, _, _, _, part in parts) / denominator
+        result = sum(part.detach() for *_, part in parts) / denominator
         return result
 
     @staticmethod
@@ -62,22 +71,27 @@ class _DocumentStreamedLoss(torch.autograd.Function):
     def backward(ctx, upstream):
         grad_hidden = grad_classifier = None
         scale = upstream / ctx.denominator
-        for start, end, e, c, part in reversed(ctx.parts):
+        selected = any(rows is not None for _, _, rows, *_ in ctx.parts)
+        for start, end, rows, e, c, part in reversed(ctx.parts):
             inputs = tuple(x for x in (e, c) if x.requires_grad)
             gradients = iter(torch.autograd.grad(part, inputs, scale))
             if e.requires_grad:
                 partial = next(gradients)
                 if grad_hidden is None:
-                    grad_hidden = torch.empty(ctx.hidden_shape, dtype=e.dtype, device=e.device)
-                grad_hidden[start:end].copy_(partial)
+                    grad_hidden = (torch.zeros if selected else torch.empty)(
+                        ctx.hidden_shape, dtype=e.dtype, device=e.device)
+                if rows is None:
+                    grad_hidden[start:end].copy_(partial)
+                else:
+                    grad_hidden.index_add_(0, rows, partial)  # repeated rows accumulate; unique rows equal copy
             if c.requires_grad:
                 partial = next(gradients)
                 grad_classifier = partial if grad_classifier is None else grad_classifier + partial
         ctx.parts = None
-        return grad_hidden, grad_classifier, None, None, None, None
+        return grad_hidden, grad_classifier, None, None, None, None, None
 
 
-def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *, operator=None):
+def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *, operator=None, selections=None):
     """Return summed full-vocabulary NLL divided by the whole update exposure.
 
     An injected operator is for derivative conformance only. Production selects
@@ -91,9 +105,30 @@ def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *,
             or targets.dtype != torch.int64 or hidden.dtype != classifier.dtype
             or hidden.device != classifier.device or hidden.device != targets.device):
         raise ValueError('Incompatible hidden, classifier or target tensors')
+    if selections is not None:
+        # Each entry: None (every row of the document) or (row LongTensor on the hidden device, its host count).
+        selections = tuple(selections)
+        if len(selections) != len(lengths):
+            raise ValueError('One selection per document is required')
+        counted, rows = 0, []
+        for length, entry in zip(lengths, selections):
+            if entry is None:
+                counted += length
+                rows.append(None)
+                continue
+            index, count = entry
+            # count may exceed length only by repeated rows (an answer-target weight, EMBER_ANSWER_WEIGHT).
+            if (type(count) is not int or count <= 0 or index.ndim != 1 or len(index) != count
+                    or index.dtype != torch.int64 or index.device != hidden.device):
+                raise ValueError('Document row selection is invalid')
+            counted += count
+            rows.append(index)
+        selections, exposure = tuple(rows), counted
+    else:
+        exposure = len(hidden)
     if (not lengths or any(type(n) is not int or n <= 0 for n in lengths)
             or sum(lengths) != len(hidden) or type(denominator) is not int
-            or denominator < len(hidden)):
+            or denominator < exposure):
         raise ValueError('Document exposure or whole-update denominator is invalid')
     valid = ((targets >= 0) & (targets < len(classifier))).all()
     if targets.device.type == 'cuda':
@@ -106,4 +141,4 @@ def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *,
         operator = _cce_operator()
     if not callable(operator):
         raise ValueError('Streamed loss operator must be callable')
-    return _DocumentStreamedLoss.apply(hidden, classifier, targets, lengths, denominator, operator)
+    return _DocumentStreamedLoss.apply(hidden, classifier, targets, lengths, denominator, operator, selections)
