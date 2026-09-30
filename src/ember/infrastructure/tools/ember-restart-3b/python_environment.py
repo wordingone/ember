@@ -876,6 +876,16 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
             )
 
 
+def _hidden_child_kwargs() -> dict[str, Any]:
+    """Popen options that keep a Windows child from opening a console window; nothing extra elsewhere."""
+    if os.name != "nt":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": startupinfo}
+
+
 def _tracked_python_paths(root: Path) -> list[Path]:
     result = subprocess.run(
         ["git", "ls-files", "*.py"],
@@ -885,6 +895,8 @@ def _tracked_python_paths(root: Path) -> list[Path]:
         errors="strict",
         capture_output=True,
         check=False,
+        shell=False,
+        **_hidden_child_kwargs(),
     )
     if result.returncode != 0:
         raise EnvironmentContractError(

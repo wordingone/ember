@@ -358,14 +358,21 @@ def test_installed_direct_url_rejects_duplicate_json_object_keys(
 
 
 def _git_repo(tmp_path: Path, files: dict[str, str]) -> Path:
+    import os
     import subprocess
 
     for relative, text in files.items():
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    hidden: dict = {}
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        hidden = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": startupinfo}
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, shell=False, **hidden)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, shell=False, **hidden)
     return tmp_path
 
 
