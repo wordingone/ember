@@ -10,8 +10,13 @@ import os
 import time
 import torch
 import torch.nn.functional as F
-import triton
-import triton.language as tl
+try:
+    import triton
+    import triton.language as tl
+except ModuleNotFoundError as _triton_error:
+    # CPU-only hosts (the CI python job) have no triton; only EMBER_FUSED_SWIGLU_ACT=1 needs it and refuses by name.
+    triton = tl = None
+    _TRITON_ERROR = _triton_error
 from torch.autograd.function import once_differentiable
 from .ember_v0_inventory import equation_inventory
 
@@ -191,23 +196,24 @@ def _silu_mul_reference(gate_projection, up_projection):
     return F.silu(gate_projection) * up_projection
 
 
-@triton.jit
-def _silu_mul_kernel(G, U, O, N, BLOCK: tl.constexpr = 1024):
-    pid = tl.program_id(0)
-    offsets = pid * BLOCK + tl.arange(0, BLOCK)
-    mask = offsets < N
-    g = tl.load(G + offsets, mask, other=0)
-    u = tl.load(U + offsets, mask, other=0)
-    g32 = g.to(tl.float32)
-    silu32 = g32 * tl.sigmoid(g32)
-    # Explicit intermediate cast to the input dtype -- this IS the reference's own rounding
-    # boundary: `F.silu(g)` materialises a bf16-rounded tensor before the multiply ever runs.
-    # A bare torch.compile trace was found to elide exactly this cast under its own dtype
-    # propagation (measured: 27.5% of elements differed, 1 ulp each), which is why this is a
-    # real Triton-level cast rather than a Python-level annotation that Inductor can fold away.
-    silu_rounded = silu32.to(G.dtype.element_ty)
-    product = silu_rounded.to(tl.float32) * u.to(tl.float32)
-    tl.store(O + offsets, product.to(G.dtype.element_ty), mask)
+if triton is not None:
+    @triton.jit
+    def _silu_mul_kernel(G, U, O, N, BLOCK: tl.constexpr = 1024):
+        pid = tl.program_id(0)
+        offsets = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offsets < N
+        g = tl.load(G + offsets, mask, other=0)
+        u = tl.load(U + offsets, mask, other=0)
+        g32 = g.to(tl.float32)
+        silu32 = g32 * tl.sigmoid(g32)
+        # Explicit intermediate cast to the input dtype -- this IS the reference's own rounding
+        # boundary: `F.silu(g)` materialises a bf16-rounded tensor before the multiply ever runs.
+        # A bare torch.compile trace was found to elide exactly this cast under its own dtype
+        # propagation (measured: 27.5% of elements differed, 1 ulp each), which is why this is a
+        # real Triton-level cast rather than a Python-level annotation that Inductor can fold away.
+        silu_rounded = silu32.to(G.dtype.element_ty)
+        product = silu_rounded.to(tl.float32) * u.to(tl.float32)
+        tl.store(O + offsets, product.to(G.dtype.element_ty), mask)
 
 
 def _silu_mul_triton_launch(gate_projection, up_projection):
@@ -280,6 +286,8 @@ def _silu_mul(gate_projection, up_projection):
             or gate_projection.dtype != torch.bfloat16 or up_projection.dtype != torch.bfloat16):
         _swiglu_activation_counts['fallback'] += 1
         return _silu_mul_reference(gate_projection, up_projection)
+    if triton is None:
+        raise RuntimeError('TRITON_UNAVAILABLE: EMBER_FUSED_SWIGLU_ACT=1 requires triton (refusing rather than running unfused)')
     _swiglu_activation_counts['fused'] += 1
     return _SiluMulTriton.apply(gate_projection, up_projection)
 
