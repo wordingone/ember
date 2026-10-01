@@ -242,22 +242,54 @@ def execute(
     return bundle
 
 
+def publish_bundle(repo_root: Path, staging_dir: Path) -> dict[str, Any]:
+    root = repo_root.resolve()
+    staging = staging_dir.resolve()
+    if not staging.is_relative_to(root):
+        raise ReleaseExecutionRefusal("STAGING_PATH_OUTSIDE_REPOSITORY")
+    bundle_path = staging / "release-bundle.json"
+    raw = bundle_path.read_bytes()
+    bundle_raw_sha256 = sha(raw)
+    relative_path = f"receipts/issue1947/releases/{bundle_raw_sha256}/release-bundle.json"
+    release_dir = root / "receipts" / "issue1947" / "releases" / bundle_raw_sha256
+    if release_dir.exists():
+        raise ReleaseExecutionRefusal("CONTENT_ADDRESSED_RELEASE_EXISTS_REFUSED")
+    receipt = {
+        "schema_version": "ember-issue1947-release-run-v1",
+        "result": "PRODUCED",
+        "bundle_path": relative_path,
+        "bundle_raw_sha256": bundle_raw_sha256,
+        "claim_boundary": "PRODUCER_OUTPUT_ONLY; NO INDEPENDENT_RECOMPUTATION_OR_RELEASE_ADMISSION",
+    }
+    receipt["self_sha256"] = sha(canonical(receipt))
+    receipt_raw = json.dumps(receipt, indent=2, sort_keys=True).encode() + b"\n"
+    with (staging / "release-run-receipt.json").open("xb") as stream:
+        stream.write(receipt_raw)
+    release_dir.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(staging, release_dir)
+    return receipt
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--execution-spec", type=Path, required=True)
     parser.add_argument("--preflight", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--repo-root", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True, help="unique staging directory beneath --repo-root")
     args = parser.parse_args()
+    repo_root = args.repo_root.resolve()
+    staging = args.output.resolve()
+    if not staging.is_relative_to(repo_root):
+        raise ReleaseExecutionRefusal("STAGING_PATH_OUTSIDE_REPOSITORY")
     spec_raw = args.execution_spec.read_bytes()
     bundle = execute(
         json.loads(spec_raw),
         load(args.preflight),
-        args.output,
+        staging,
         spec_raw_sha256=sha(spec_raw),
     )
-    print(json.dumps({"result": bundle["result"], "self_sha256": bundle["self_sha256"]}, sort_keys=True))
+    receipt = publish_bundle(repo_root, staging)
+    print(json.dumps({"result": bundle["result"], "self_sha256": bundle["self_sha256"], "bundle_path": receipt["bundle_path"], "bundle_raw_sha256": receipt["bundle_raw_sha256"]}, sort_keys=True))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

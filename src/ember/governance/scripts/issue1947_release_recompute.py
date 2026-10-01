@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +41,10 @@ def verify_self(value: dict[str, Any], label: str) -> None:
         raise ReleaseRecomputeRefusal(f"SELF_HASH_DRIFT:{label}")
 
 
-def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> dict[str, Any]:
-    bundle = load(bundle_path)
+def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None, *, bundle_raw: bytes | None = None) -> dict[str, Any]:
+    if bundle_raw is None:
+        bundle_raw = bundle_path.read_bytes()
+    bundle = json.loads(bundle_raw)
     verify_self(bundle, "bundle")
     forbid_protected_bytes(bundle)
     if bundle.get("schema_version") != "ember-issue1947-redacted-release-bundle-v1":
@@ -65,7 +68,7 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
         raw = path.read_bytes()
         if len(raw) != binding.get("bytes") or sha(raw) != binding.get("raw_sha256"):
             raise ReleaseRecomputeRefusal(f"RAW_ROW_BINDING_DRIFT:{row_id}")
-        row = load(path); verify_self(row, row_id)
+        row = json.loads(raw); verify_self(row, row_id)
         if binding.get("self_sha256") != row.get("self_sha256"):
             raise ReleaseRecomputeRefusal(f"ROW_SELF_HASH_BINDING_DRIFT:{row_id}")
         validate_row({key: value for key, value in row.items() if key != "self_sha256"}, row_id)
@@ -102,7 +105,7 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
     receipt = {
         "schema_version": "ember-issue1947-release-independent-recompute-v1",
         "result": "PASS" if cert_007 else "FAIL",
-        "bundle_raw_sha256": sha(bundle_path.read_bytes()),
+        "bundle_raw_sha256": sha(bundle_raw),
         "rows": results,
         "model_evidence_row_count": len(model_rows),
         "integrity_placeholder_row_count": len(placeholder_rows),
@@ -138,9 +141,49 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
     return receipt
 
 
+def select_bundle_from_pointer(pointer_file: Path, repo_root: Path) -> tuple[Path, bytes]:
+    try:
+        pointer = json.loads(pointer_file.read_bytes())
+    except FileNotFoundError as exc:
+        raise ReleaseRecomputeRefusal("no admitted release bundle pointer") from exc
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_INVALID") from exc
+    if not isinstance(pointer, dict) or pointer.get("schema_version") != "ember-issue1947-release-bundle-pointer-v1":
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_SCHEMA_DRIFT")
+    relative = pointer.get("bundle_path")
+    expected_sha = pointer.get("bundle_raw_sha256")
+    parts = relative.split("/") if isinstance(relative, str) else []
+    if (
+        len(parts) != 5
+        or parts[:3] != ["receipts", "issue1947", "releases"]
+        or parts[4] != "release-bundle.json"
+        or "\\" in relative or ":" in relative
+        or any(part in ("", ".", "..") for part in parts)
+        or not isinstance(expected_sha, str)
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha) is None
+        or parts[3] != expected_sha
+    ):
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_PATH_OR_DIGEST_INVALID")
+    root = repo_root.resolve()
+    bundle_path = (root / Path(*relative.split("/"))).resolve()
+    if not bundle_path.is_relative_to(root):
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_PATH_OUTSIDE_REPOSITORY")
+    try:
+        bundle_raw = bundle_path.read_bytes()
+    except FileNotFoundError as exc:
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_TARGET_MISSING") from exc
+    except OSError as exc:
+        raise ReleaseRecomputeRefusal("RELEASE_BUNDLE_POINTER_TARGET_UNREADABLE") from exc
+    if sha(bundle_raw) != expected_sha:
+        raise ReleaseRecomputeRefusal("BUNDLE_POINTER_DIGEST_MISMATCH")
+    return bundle_path, bundle_raw
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bundle", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--bundle", type=Path, help="explicit bundle path for direct audited invocations")
+    source.add_argument("--pointer", type=Path, default=Path("receipts/issue1947/release-bundle-pointer.json"))
+    parser.add_argument("--repo-root", type=Path, default=Path("."))
     parser.add_argument("--thresholds", type=Path)
     parser.add_argument("--expected-designation-manifest-sha256")
     parser.add_argument("--expected-matrix-self-sha256")
@@ -149,7 +192,14 @@ def main() -> int:
     args = parser.parse_args()
     if args.receipt.exists():
         raise FileExistsError("RECEIPT_EXISTS_REFUSED")
-    bundle = load(args.bundle)
+    repo_root = args.repo_root.resolve()
+    if args.bundle is not None:
+        bundle_path = args.bundle.resolve()
+        bundle_raw = bundle_path.read_bytes()
+    else:
+        pointer_file = args.pointer if args.pointer.is_absolute() else repo_root / args.pointer
+        bundle_path, bundle_raw = select_bundle_from_pointer(pointer_file, repo_root)
+    bundle = json.loads(bundle_raw)
     expected = {
         "designation_manifest_raw_sha256": args.expected_designation_manifest_sha256,
         "matrix_self_sha256": args.expected_matrix_self_sha256,
@@ -158,13 +208,12 @@ def main() -> int:
     for key, value in expected.items():
         if value is not None and bundle.get(key) != value:
             raise ReleaseRecomputeRefusal(f"EXPECTED_IDENTITY_DRIFT:{key}")
-    receipt = recompute(args.bundle, load(args.thresholds) if args.thresholds else None)
+    receipt = recompute(bundle_path, load(args.thresholds) if args.thresholds else None, bundle_raw=bundle_raw)
     args.receipt.parent.mkdir(parents=True, exist_ok=True)
     with args.receipt.open("xb") as stream:
         stream.write(json.dumps(receipt, indent=2, sort_keys=True).encode() + b"\n")
     print(json.dumps({"result": receipt["result"], "self_sha256": receipt["self_sha256"]}, sort_keys=True))
-    return 0
-
+    return 0 if receipt["result"] == "PASS" else 1
 
 if __name__ == "__main__":
     raise SystemExit(main())

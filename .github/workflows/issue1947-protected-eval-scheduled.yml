@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  family-fixtures-and-latest-bundle:
+  family-fixtures-and-admitted-bundle:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -26,14 +26,12 @@ jobs:
           tests/ember_restart_model/domain-governance/test_issue1947_release_preflight.py
           tests/ember_restart_model/domain-governance/test_issue1947_release_execute.py
           tests/ember_restart_model/domain-governance/test_issue1947_release_recompute.py
-      - name: Refuse without and verify newest committed redacted bundle
-        shell: bash
-        run: |
-          bundle="$(find receipts -type f -name release-bundle.json -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$bundle"
-          python src/ember/governance/scripts/issue1947_release_recompute.py \
-            --bundle "$bundle" \
-            --receipt "issue1947-scheduled-recompute-${GITHUB_RUN_ID}.json"
+      - name: Verify the admitted release bundle pointer
+        run: >-
+          python src/ember/governance/scripts/issue1947_release_recompute.py
+          --repo-root .
+          --pointer receipts/issue1947/release-bundle-pointer.json
+          --receipt "issue1947-scheduled-recompute-${GITHUB_RUN_ID}.json"
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
