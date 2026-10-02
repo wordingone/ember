@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-02T08:05:20Z",
- "generated_at": "2026-10-02T08:05:21Z",
+ "source_events_through": "2026-10-02T11:12:32Z",
+ "generated_at": "2026-10-02T11:12:44Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,19 +89,19 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 2677786,
-   "mtime_utc": "2026-10-02T08:05:20Z",
-   "records_in_source": 3598,
+   "bytes": 2687479,
+   "mtime_utc": "2026-10-02T11:12:32Z",
+   "records_in_source": 3613,
    "unparseable_records": 0,
-   "hypotheses": 455,
-   "included": 3598,
+   "hypotheses": 457,
+   "included": 3613,
    "omitted_fields": {
     "ceiling": {
      "occurrences": 26,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 31,
+     "occurrences": 32,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
@@ -109,47 +109,47 @@
      "reason": "not on the publication allowlist"
     },
     "expect": {
-     "occurrences": 54,
+     "occurrences": 56,
      "reason": "not on the publication allowlist"
     },
     "gate": {
-     "occurrences": 55,
+     "occurrences": 57,
      "reason": "not on the publication allowlist"
     },
     "gate_state": {
-     "occurrences": 42,
+     "occurrences": 43,
      "reason": "not on the publication allowlist"
     },
     "interval": {
-     "occurrences": 54,
+     "occurrences": 56,
      "reason": "not on the publication allowlist"
     },
     "interval_held": {
-     "occurrences": 40,
+     "occurrences": 41,
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 403,
+     "occurrences": 417,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 403,
+     "occurrences": 417,
      "reason": "not on the publication allowlist"
     },
     "observed": {
-     "occurrences": 42,
+     "occurrences": 43,
      "reason": "not on the publication allowlist"
     },
     "quantity": {
-     "occurrences": 54,
+     "occurrences": 56,
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 403,
+     "occurrences": 417,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 403,
+     "occurrences": 417,
      "reason": "not on the publication allowlist"
     },
     "voi": {
@@ -239,10 +239,10 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 40,
-   "absolute_local_paths_normalized": 714,
+   "absolute_local_paths_normalized": 719,
    "operator_name_occurrences_replaced": 0,
-   "seat_name_occurrences_replaced": 831,
-   "seat_record_paths_rewritten": 1467,
+   "seat_name_occurrences_replaced": 835,
+   "seat_record_paths_rewritten": 1471,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
@@ -283,8 +283,8 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-02T08:05:20Z",
-    "hypotheses": 346,
+    "ended": "2026-10-02T11:12:32Z",
+    "hypotheses": 348,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -24460,17 +24460,19 @@
   },
   {
    "id": "gate-d-128px-image-budget-erases-mmmu-detail-20260926",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-26T17:02:37Z",
-   "last_ts": "2026-09-26T17:03:46Z",
+   "last_ts": "2026-10-02T08:11:12Z",
    "events": [
     {
      "ts": "2026-09-26T17:02:37Z",
@@ -24505,6 +24507,18 @@
      "stage": "RULED",
      "verdict": "REFUTED",
      "because": "frozen: refuted if diagram-pooled gain difference (below minus above median size) < 2 points or reversed. Measured -2.0 pts (below 0.148, above 0.168, n=920). Not closed: within-source splits point the other way (iconqa +14.6, ai2d +3.5 pts); the pooled split is confounded by source mix (iconqa images small, ai2d large). Original size is also a weak proxy for fine detail."
+    },
+    {
+     "ts": "2026-10-02T08:11:00Z",
+     "stage": "UPDATED",
+     "hypothesis": "Pooled split REFUTED (-2.0 pts, n=920) but confounded by source mix: iconqa images are small and ai2d large, and within-source splits run the other way (iconqa +14.6, ai2d +3.5). The pooled test could not discriminate the image-budget mechanism from source identity. Not closed: a within-source stratified split on the SAME receipts (analysis-only, no card), with original size as a proxy only; fine-detail dependence needs an item-level detail label.",
+     "successor": "gate-d-128px-budget-within-source-stratified-split-20261002",
+     "because": "The frozen pooled criterion was met in the refuting direction; the confound was named in the ruling itself. No dispatch decision depends on it: gate D moved to the in-distribution image-signal and MMMU-transfer legs after 2026-09-27, and the successor is analysis-only on existing receipts."
+    },
+    {
+     "ts": "2026-10-02T08:11:12Z",
+     "stage": "CLOSED",
+     "because": "cycle complete: ruled REFUTED on the frozen pooled criterion, successor within-source stratified split registered by name (analysis-only)"
     }
    ],
    "observation": "Evaluator and training stream share image_patches with MAX_GRID=8, PATCH=16: every image is resized to at most 128x128 px (MMMU validation_Accounting_1 arrives as an 8x3 grid, 128x48 px). In-distribution gain is largest on natural photos (a-okvqa +39 pts), smaller on diagrams (ai2d +24) and smallest on icon/diagram puzzles (iconqa +6.5); MMMU is dominated by text-bearing diagrams, tables and charts.",
@@ -24516,7 +24530,10 @@
     "state\\issue1945-receipts\\gate-d-gain-by-original-size-20260926.json"
    ],
    "verdict": "REFUTED",
-   "ruling": "frozen: refuted if diagram-pooled gain difference (below minus above median size) < 2 points or reversed. Measured -2.0 pts (below 0.148, above 0.168, n=920). Not closed: within-source splits point the other way (iconqa +14.6, ai2d +3.5 pts); the pooled split is confounded by source mix (iconqa images small, ai2d large). Original size is also a weak proxy for fine detail."
+   "ruling": "frozen: refuted if diagram-pooled gain difference (below minus above median size) < 2 points or reversed. Measured -2.0 pts (below 0.148, above 0.168, n=920). Not closed: within-source splits point the other way (iconqa +14.6, ai2d +3.5 pts); the pooled split is confounded by source mix (iconqa images small, ai2d large). Original size is also a weak proxy for fine detail.",
+   "not_closed": "Pooled split REFUTED (-2.0 pts, n=920) but confounded by source mix: iconqa images are small and ai2d large, and within-source splits run the other way (iconqa +14.6, ai2d +3.5). The pooled test could not discriminate the image-budget mechanism from source identity. Not closed: a within-source stratified split on the SAME receipts (analysis-only, no card), with original size as a proxy only; fine-detail dependence needs an item-level detail label.",
+   "successor": "gate-d-128px-budget-within-source-stratified-split-20261002",
+   "closing": "cycle complete: ruled REFUTED on the frozen pooled criterion, successor within-source stratified split registered by name (analysis-only)"
   },
   {
    "id": "gate-d-mmmu-rises-with-cumulative-image-training-20260926",
@@ -33711,14 +33728,16 @@
   },
   {
    "id": "issue2119-h8-lineage-unchanged-20261002",
-   "stage": "PREDICTED",
+   "stage": "MEASURED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
-    "PREDICTED"
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED"
    ],
    "first_ts": "2026-10-02T08:05:15Z",
-   "last_ts": "2026-10-02T08:05:16Z",
+   "last_ts": "2026-10-02T10:17:10Z",
    "events": [
     {
      "ts": "2026-10-02T08:05:15Z",
@@ -33737,13 +33756,138 @@
      "refuted_if": "text delta outside [-0.20,+0.10] OR caption delta (H8 minus H7 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
      "supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21400, applied expect 101.3M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler outcome",
      "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+    },
+    {
+     "ts": "2026-10-02T08:24:16Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T10:17:10Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
     }
    ],
    "observation": "Eighth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H7 child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318, head bb272f0d, start cursor 512/2748144, sampler-only trainer telemetry (no overlap jobs). The seventh hour's row is RULED SUPPORTED (text -0.1295, caption -0.0105). The whole hour lies in pass 4 of the e4 ledger (start absolute 2,140,221,440): text positions are repeats.",
    "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The seventh fell further, partly the fifth-style recovery continuing; the eighth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (the same bar as before).",
    "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H8 minus H7 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
    "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21400, applied expect 101.3M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler outcome",
-   "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+   "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77",
+   "receipts": [
+    "<host-local path>"
+   ]
+  },
+  {
+   "id": "issue2119-h6-child-rescore-reproduces-20261002",
+   "stage": "RULED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED"
+   ],
+   "first_ts": "2026-10-02T10:22:17Z",
+   "last_ts": "2026-10-02T11:12:32Z",
+   "events": [
+    {
+     "ts": "2026-10-02T10:22:17Z",
+     "stage": "OBSERVED",
+     "observation": "The seventh-hour held-out text mean fell 0.1295 after a sixth-hour change of -0.0053. this seat 44937: before reading the eighth hour, rescore the sixth child (cf3124c9, head bb272f0d) with the same frozen plan, scorer child_nll_v11 (a5057eab), declaration and derived receipt (byte-copied), in one window. Original sixth-child scores: text 1.780831934294838, caption 1.2752068634601328.",
+     "receipt": "seat record: nll-H6-eval.json"
+    },
+    {
+     "ts": "2026-10-02T10:22:17Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The scorer is deterministic on identical inputs, so the rescore should reproduce both means exactly. Exact reproduction supports the comparison's repeatability only; it does not identify the cause of the seventh-hour drop (confounded with the fourth repeated exposure). Any difference makes the scorer or its inputs the finding."
+    },
+    {
+     "ts": "2026-10-02T10:22:18Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit of the stored double OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses, crashes or closes without a receipt. Decision consequence: the scorer is the finding; the seventh-hour ruling is re-examined against a non-reproducing scorer before the eighth-hour scores are read",
+     "supported_if": "text mean and caption mean equal the original receipt exactly, 512 packs, same pack-content digest, receipt nll-H6-rescore.json written. Consequence: data-cursor explanation becomes the eighth-hour reading and the sixth child payload may be released only by a separate ruling",
+     "instrument": "chain_segment_H6_rescore_v1.sh via child_nll_v11.py a5057eab; compare nll-H6-rescore.json vs nll-H6-eval.json"
+    },
+    {
+     "ts": "2026-10-02T10:22:23Z",
+     "stage": "RUNNING",
+     "note": "H6 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T10:39:00Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H6-rescore.json"
+    },
+    {
+     "ts": "2026-10-02T11:12:32Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Frozen criterion: refuted if the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses. Observed: text 1.780831934294838, caption 1.2752068634601328, digest 099ad8b7ef112eb8\u2026155297 identical in both receipts, 512 packs, receipt nll-H6-rescore.json written; absolute difference 0.0 inside [0.0, 0.0]. Caveat for the journal (the counterpart seat 45213): reproducibility of the scorer is supported; the cause of the seventh-hour improvement is not isolated, and a systematic scorer defect common to both runs is not ruled out by a reproduction."
+    }
+   ],
+   "observation": "The seventh-hour held-out text mean fell 0.1295 after a sixth-hour change of -0.0053. this seat 44937: before reading the eighth hour, rescore the sixth child (cf3124c9, head bb272f0d) with the same frozen plan, scorer child_nll_v11 (a5057eab), declaration and derived receipt (byte-copied), in one window. Original sixth-child scores: text 1.780831934294838, caption 1.2752068634601328.",
+   "explanation": "The scorer is deterministic on identical inputs, so the rescore should reproduce both means exactly. Exact reproduction supports the comparison's repeatability only; it does not identify the cause of the seventh-hour drop (confounded with the fourth repeated exposure). Any difference makes the scorer or its inputs the finding.",
+   "criterion": "the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit of the stored double OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses, crashes or closes without a receipt. Decision consequence: the scorer is the finding; the seventh-hour ruling is re-examined against a non-reproducing scorer before the eighth-hour scores are read",
+   "criterion_supported_if": "text mean and caption mean equal the original receipt exactly, 512 packs, same pack-content digest, receipt nll-H6-rescore.json written. Consequence: data-cursor explanation becomes the eighth-hour reading and the sixth child payload may be released only by a separate ruling",
+   "instrument": "chain_segment_H6_rescore_v1.sh via child_nll_v11.py a5057eab; compare nll-H6-rescore.json vs nll-H6-eval.json",
+   "receipts": [
+    "seat record: nll-H6-rescore.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Frozen criterion: refuted if the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses. Observed: text 1.780831934294838, caption 1.2752068634601328, digest 099ad8b7ef112eb8\u2026155297 identical in both receipts, 512 packs, receipt nll-H6-rescore.json written; absolute difference 0.0 inside [0.0, 0.0]. Caveat for the journal (the counterpart seat 45213): reproducibility of the scorer is supported; the cause of the seventh-hour improvement is not isolated, and a systematic scorer defect common to both runs is not ruled out by a reproduction."
+  },
+  {
+   "id": "issue2119-h9-lineage-unchanged-20261002",
+   "stage": "PREDICTED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "PREDICTED"
+   ],
+   "first_ts": "2026-10-02T10:50:25Z",
+   "last_ts": "2026-10-02T10:55:03Z",
+   "events": [
+    {
+     "ts": "2026-10-02T10:50:25Z",
+     "stage": "OBSERVED",
+     "observation": "Ninth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H8 child 36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623, head bb272f0d, start cursor 530/3657456 (start absolute 2,216,628,224), trainer sampler arm v2 (peak measurement, sampler-only, no overlap jobs). The eighth hour closed 10:17:10Z: p10 21,580.19 loss-target positions/s, applied 101,879,808, 24,872 updates; its held-out scores are deferred by the gap budget (the sixth-child rescore reproduced exactly). The whole hour lies in pass 4 of the e4 ledger: text positions are repeats.",
+     "receipt": "seat record: h9-prediction-20261002.txt"
+    },
+    {
+     "ts": "2026-10-02T10:50:25Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The eighth hour's own deltas are not yet read. The ninth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (same bar as before)."
+    },
+    {
+     "ts": "2026-10-02T10:50:25Z",
+     "stage": "PREDICTED",
+     "refuted_if": "text delta outside [-0.20,+0.10] OR caption delta (H9 minus H8 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+     "supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler peak (arm v2)",
+     "instrument": "child_nll_v11.py a5057eab via an H9 scoring chain pinned to the H9 child (the H8 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+    },
+    {
+     "ts": "2026-10-02T10:52:20Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T10:55:03Z",
+     "stage": "PREDICTED",
+     "note": "run produced no receipt: template probe produced no result (see seat record: issue1945-a1-hour-20261002T105142Z.log)",
+     "aborted": true
+    }
+   ],
+   "observation": "Ninth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H8 child 36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623, head bb272f0d, start cursor 530/3657456 (start absolute 2,216,628,224), trainer sampler arm v2 (peak measurement, sampler-only, no overlap jobs). The eighth hour closed 10:17:10Z: p10 21,580.19 loss-target positions/s, applied 101,879,808, 24,872 updates; its held-out scores are deferred by the gap budget (the sixth-child rescore reproduced exactly). The whole hour lies in pass 4 of the e4 ledger: text positions are repeats.",
+   "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The eighth hour's own deltas are not yet read. The ninth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (same bar as before).",
+   "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H9 minus H8 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+   "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler peak (arm v2)",
+   "instrument": "child_nll_v11.py a5057eab via an H9 scoring chain pinned to the H9 child (the H8 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
   }
  ],
  "registry": [
