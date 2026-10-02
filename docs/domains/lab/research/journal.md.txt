@@ -54,6 +54,15 @@ one. Read it before proposing any arm, and write to it every time an experiment 
 Newest first. Automatic entries carry the loop hypothesis id.
 
 <!-- JOURNAL-LOG-BEGIN -->
+### 2026-10-01 07:25 PM LA — Next after `issue2119-h5-heldout-nll-20261001`
+- **Successor hypothesis / not closed:** H5 child held-out text NLL 1.7861 vs H4 2.1728 (delta -0.387, below the forecast interval); caption delta -0.023 inside. Not closed: whether the drop is learning rate per token or distribution exposure; forecast calibration from one prior segment was too narrow.
+
+### 2026-10-01 07:25 PM LA — REFUTED: `issue2119-h5-heldout-nll-20261001`
+- **Hypothesis:** Continuing the same governed continuation may keep raising text NLL weakly while caption keeps falling (answer-weight 200 mixture); not a protected or card claim. Calibration row recorded either way.
+- **Frozen criterion:** REFUTED if text delta outside [-0.15,+0.35] OR caption delta (H5 minus H4 mean caption NLL, nats/target) outside [-0.08,+0.04] (caption expect -0.02)
+- **Ruling:** Frozen criterion: REFUTED if text delta (H5 minus H4, nats/target) outside [-0.15,+0.35] OR caption delta outside [-0.08,+0.04]. Observed text delta -0.3866742621612502 (compare-v3 f8d1e5ac, VALID, problems []), below the lower edge; caption delta -0.023192226978277164 inside. REFUTED: the prediction (+0.05) was too conservative in the favourable direction; the child learned more than forecast. Inputs: same-input digest 099ad8b7 equal on 512 ordered packs; H4 rescore reproduces the historical H4 exactly (gap 0); a seat check 8 PASS 44419.
+- **Receipt:** `seat record: nll-H5-eval.json`
+
 ### 2026-10-01 05:45 PM LA — Next after `issue2119-h5-hour-20261001`
 - **Successor hypothesis / not closed:** Not closed: the hour's p10 and held-out loss are not part of this row; held-out NLL is the successor row.
 - **Successor id:** `issue2119-h5-heldout-nll-20261001`
