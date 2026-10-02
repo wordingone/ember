@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-02T11:12:32Z",
- "generated_at": "2026-10-02T11:12:44Z",
+ "source_events_through": "2026-10-02T20:10:04Z",
+ "generated_at": "2026-10-02T20:10:05Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,19 +89,19 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 2687479,
-   "mtime_utc": "2026-10-02T11:12:32Z",
-   "records_in_source": 3613,
+   "bytes": 2718223,
+   "mtime_utc": "2026-10-02T20:10:04Z",
+   "records_in_source": 3656,
    "unparseable_records": 0,
-   "hypotheses": 457,
-   "included": 3613,
+   "hypotheses": 463,
+   "included": 3656,
    "omitted_fields": {
     "ceiling": {
      "occurrences": 26,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 32,
+     "occurrences": 39,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
@@ -109,47 +109,47 @@
      "reason": "not on the publication allowlist"
     },
     "expect": {
-     "occurrences": 56,
+     "occurrences": 62,
      "reason": "not on the publication allowlist"
     },
     "gate": {
-     "occurrences": 57,
+     "occurrences": 63,
      "reason": "not on the publication allowlist"
     },
     "gate_state": {
-     "occurrences": 43,
+     "occurrences": 49,
      "reason": "not on the publication allowlist"
     },
     "interval": {
-     "occurrences": 56,
+     "occurrences": 62,
      "reason": "not on the publication allowlist"
     },
     "interval_held": {
-     "occurrences": 41,
+     "occurrences": 47,
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 417,
+     "occurrences": 460,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 417,
+     "occurrences": 460,
      "reason": "not on the publication allowlist"
     },
     "observed": {
-     "occurrences": 43,
+     "occurrences": 49,
      "reason": "not on the publication allowlist"
     },
     "quantity": {
-     "occurrences": 56,
+     "occurrences": 62,
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 417,
+     "occurrences": 460,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 417,
+     "occurrences": 460,
      "reason": "not on the publication allowlist"
     },
     "voi": {
@@ -239,10 +239,10 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 40,
-   "absolute_local_paths_normalized": 719,
-   "operator_name_occurrences_replaced": 0,
-   "seat_name_occurrences_replaced": 835,
-   "seat_record_paths_rewritten": 1471,
+   "absolute_local_paths_normalized": 732,
+   "operator_name_occurrences_replaced": 1,
+   "seat_name_occurrences_replaced": 856,
+   "seat_record_paths_rewritten": 1476,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
@@ -283,8 +283,8 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-02T11:12:32Z",
-    "hypotheses": 348,
+    "ended": "2026-10-02T20:10:04Z",
+    "hypotheses": 354,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -24716,7 +24716,7 @@
   },
   {
    "id": "gate-c-v3-arm-learns-noninferior-20260926",
-   "stage": "RULED",
+   "stage": "UPDATED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24725,10 +24725,11 @@
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED"
    ],
    "first_ts": "2026-09-27T01:08:57Z",
-   "last_ts": "2026-09-27T04:57:24Z",
+   "last_ts": "2026-10-02T20:10:04Z",
    "events": [
     {
      "ts": "2026-09-27T01:08:57Z",
@@ -24776,6 +24777,13 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen criterion: refuted if candidate caption or text NLL exceeds control by more than 0.05 nats at 16,384 updates (licence verdict not PASS). Receipt seat record: gate-c-licence-v3-20260926.json: PASS; caption 2.0327 vs 2.5379 (delta -0.505), text 4.8818 vs 5.3542 (delta -0.472). Candidate arm needed a resume after a 5 s nvidia-smi timeout; control arm untouched."
+    },
+    {
+     "ts": "2026-10-02T20:10:04Z",
+     "stage": "UPDATED",
+     "hypothesis": "Gate C is MET on the v3 reduced-compute arm (licence PASS, caption -0.505 and text -0.472 nats vs control at 16,384 updates). What this did NOT close: the licence binds that arm identity (source, environment, geometry, mixture). The eleventh lineage hour (2026-10-02) applied the attempt-14 template to the lineage head, a different parent; its no-worse-learning evidence is the held-out text and caption scoring of child b87640f5 against the frozen bands, loop row issue2119-h11-heldout-nll-20261002 (PREDICTED, GO 46192). A six-gate attempt on the lineage arm needs a licence pair at the 4-document contract on that exact arm; the v3 licence is not transferable to it.",
+     "successor": "issue2119-h11-heldout-nll-20261002",
+     "because": "Gate C reading unchanged (MET on the v3 arm); the successor is the already-registered lineage held-out scoring row, no new leg created."
     }
    ],
    "observation": "Attempt 11 gate D real 0.266 < 0.2857 floor; SWITCH to v3 image manifest (ac0f6eb2, 316,264 rows, mc_share 0.5581). No licence carries across manifests, so the arm needs a fresh gate C pair on v3.",
@@ -24787,7 +24795,9 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen criterion: refuted if candidate caption or text NLL exceeds control by more than 0.05 nats at 16,384 updates (licence verdict not PASS). Receipt seat record: gate-c-licence-v3-20260926.json: PASS; caption 2.0327 vs 2.5379 (delta -0.505), text 4.8818 vs 5.3542 (delta -0.472). Candidate arm needed a resume after a 5 s nvidia-smi timeout; control arm untouched."
+   "ruling": "Frozen criterion: refuted if candidate caption or text NLL exceeds control by more than 0.05 nats at 16,384 updates (licence verdict not PASS). Receipt seat record: gate-c-licence-v3-20260926.json: PASS; caption 2.0327 vs 2.5379 (delta -0.505), text 4.8818 vs 5.3542 (delta -0.472). Candidate arm needed a resume after a 5 s nvidia-smi timeout; control arm untouched.",
+   "not_closed": "Gate C is MET on the v3 reduced-compute arm (licence PASS, caption -0.505 and text -0.472 nats vs control at 16,384 updates). What this did NOT close: the licence binds that arm identity (source, environment, geometry, mixture). The eleventh lineage hour (2026-10-02) applied the attempt-14 template to the lineage head, a different parent; its no-worse-learning evidence is the held-out text and caption scoring of child b87640f5 against the frozen bands, loop row issue2119-h11-heldout-nll-20261002 (PREDICTED, GO 46192). A six-gate attempt on the lineage arm needs a licence pair at the 4-document contract on that exact arm; the v3 licence is not transferable to it.",
+   "successor": "issue2119-h11-heldout-nll-20261002"
   },
   {
    "id": "attempt12-v3-six-gates-accepted-20260926",
@@ -33728,16 +33738,18 @@
   },
   {
    "id": "issue2119-h8-lineage-unchanged-20261002",
-   "stage": "MEASURED",
+   "stage": "UPDATED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "MEASURED"
+    "MEASURED",
+    "RULED",
+    "UPDATED"
    ],
    "first_ts": "2026-10-02T08:05:15Z",
-   "last_ts": "2026-10-02T10:17:10Z",
+   "last_ts": "2026-10-02T16:24:44Z",
    "events": [
     {
      "ts": "2026-10-02T08:05:15Z",
@@ -33767,6 +33779,18 @@
      "ts": "2026-10-02T10:17:10Z",
      "stage": "MEASURED",
      "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T16:24:43Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "this seat 45589: text +0.0642 inside [-0.20,+0.10] and caption +0.0089 inside [-0.08,+0.013); frozen bands met"
+    },
+    {
+     "ts": "2026-10-02T16:24:44Z",
+     "stage": "UPDATED",
+     "hypothesis": "The eighth hour's held-out loss ROSE on both sets versus the seventh child: text 1.7155 against 1.6513 (+0.0642 nats per target, inside the frozen band of -0.20 to +0.10) and captions 1.2736 against 1.2647 (+0.0089, inside the band of -0.08 to +0.013). Both children were scored on the same 512 packs with identical pack content (a seat's independent check passed). Signed learning efficiency for this hour is negative. No cause is claimed. The comparison against the first five hours' occurrence bound is still PENDING and is the unresolved reader of this row. this seat ruled SUPPORTED on the frozen bands.",
+     "because": "no decision changed: the eighth hour stays inside every frozen band; held-out loss rose, no cause claimed"
     }
    ],
    "observation": "Eighth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H7 child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318, head bb272f0d, start cursor 512/2748144, sampler-only trainer telemetry (no overlap jobs). The seventh hour's row is RULED SUPPORTED (text -0.1295, caption -0.0105). The whole hour lies in pass 4 of the e4 ledger (start absolute 2,140,221,440): text positions are repeats.",
@@ -33776,21 +33800,25 @@
    "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77",
    "receipts": [
     "<host-local path>"
-   ]
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "this seat 45589: text +0.0642 inside [-0.20,+0.10] and caption +0.0089 inside [-0.08,+0.013); frozen bands met",
+   "not_closed": "The eighth hour's held-out loss ROSE on both sets versus the seventh child: text 1.7155 against 1.6513 (+0.0642 nats per target, inside the frozen band of -0.20 to +0.10) and captions 1.2736 against 1.2647 (+0.0089, inside the band of -0.08 to +0.013). Both children were scored on the same 512 packs with identical pack content (a seat's independent check passed). Signed learning efficiency for this hour is negative. No cause is claimed. The comparison against the first five hours' occurrence bound is still PENDING and is the unresolved reader of this row. this seat ruled SUPPORTED on the frozen bands."
   },
   {
    "id": "issue2119-h6-child-rescore-reproduces-20261002",
-   "stage": "RULED",
+   "stage": "UPDATED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED"
    ],
    "first_ts": "2026-10-02T10:22:17Z",
-   "last_ts": "2026-10-02T11:12:32Z",
+   "last_ts": "2026-10-02T13:40:29Z",
    "events": [
     {
      "ts": "2026-10-02T10:22:17Z",
@@ -33826,6 +33854,12 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen criterion: refuted if the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses. Observed: text 1.780831934294838, caption 1.2752068634601328, digest 099ad8b7ef112eb8\u2026155297 identical in both receipts, 512 packs, receipt nll-H6-rescore.json written; absolute difference 0.0 inside [0.0, 0.0]. Caveat for the journal (the counterpart seat 45213): reproducibility of the scorer is supported; the cause of the seventh-hour improvement is not isolated, and a systematic scorer defect common to both runs is not ruled out by a reproduction."
+    },
+    {
+     "ts": "2026-10-02T13:40:29Z",
+     "stage": "UPDATED",
+     "hypothesis": "The sixth-to-seventh-hour held-out loss drop is spread across the fixed monitoring sample: 1,717 of 2,048 documents improve, 331 worsen, the largest 21 improvements carry 7.03% of the net reduction (the counterpart seat record 82486508). This is broad within-sample improvement, not generalization and not a training cause. The exact rescore supports repeatability only. The 0.00098-nat difference between the two net total loss deltas (4.7e-10 nats per target) is consistent with separate document and pack reduction grouping in the scorer; that mechanism is source-supported but not proven to be the sole cause, since the per-pack residuals were not reconstructed. Receipt means stay authoritative. Next persistence discriminator: the eighth-hour matched score. Vera independently reproduced the record and passed this interpretation (45457).",
+     "because": "journal wording only (this seat 45416/45422/45460); no next leg, route, ceiling or gate reading changed"
     }
    ],
    "observation": "The seventh-hour held-out text mean fell 0.1295 after a sixth-hour change of -0.0053. this seat 44937: before reading the eighth hour, rescore the sixth child (cf3124c9, head bb272f0d) with the same frozen plan, scorer child_nll_v11 (a5057eab), declaration and derived receipt (byte-copied), in one window. Original sixth-child scores: text 1.780831934294838, caption 1.2752068634601328.",
@@ -33837,20 +33871,25 @@
     "seat record: nll-H6-rescore.json"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen criterion: refuted if the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses. Observed: text 1.780831934294838, caption 1.2752068634601328, digest 099ad8b7ef112eb8\u2026155297 identical in both receipts, 512 packs, receipt nll-H6-rescore.json written; absolute difference 0.0 inside [0.0, 0.0]. Caveat for the journal (the counterpart seat 45213): reproducibility of the scorer is supported; the cause of the seventh-hour improvement is not isolated, and a systematic scorer defect common to both runs is not ruled out by a reproduction."
+   "ruling": "Frozen criterion: refuted if the text mean differs from 1.780831934294838 OR the caption mean differs from 1.2752068634601328 in any digit OR the pack-content digest differs from 099ad8b7... OR packs scored differ from 512 OR the leg refuses. Observed: text 1.780831934294838, caption 1.2752068634601328, digest 099ad8b7ef112eb8\u2026155297 identical in both receipts, 512 packs, receipt nll-H6-rescore.json written; absolute difference 0.0 inside [0.0, 0.0]. Caveat for the journal (the counterpart seat 45213): reproducibility of the scorer is supported; the cause of the seventh-hour improvement is not isolated, and a systematic scorer defect common to both runs is not ruled out by a reproduction.",
+   "not_closed": "The sixth-to-seventh-hour held-out loss drop is spread across the fixed monitoring sample: 1,717 of 2,048 documents improve, 331 worsen, the largest 21 improvements carry 7.03% of the net reduction (the counterpart seat record 82486508). This is broad within-sample improvement, not generalization and not a training cause. The exact rescore supports repeatability only. The 0.00098-nat difference between the two net total loss deltas (4.7e-10 nats per target) is consistent with separate document and pack reduction grouping in the scorer; that mechanism is source-supported but not proven to be the sole cause, since the per-pack residuals were not reconstructed. Receipt means stay authoritative. Next persistence discriminator: the eighth-hour matched score. Vera independently reproduced the record and passed this interpretation (45457)."
   },
   {
    "id": "issue2119-h9-lineage-unchanged-20261002",
-   "stage": "PREDICTED",
+   "stage": "UPDATED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED"
    ],
    "first_ts": "2026-10-02T10:50:25Z",
-   "last_ts": "2026-10-02T10:55:03Z",
+   "last_ts": "2026-10-02T16:24:45Z",
    "events": [
     {
      "ts": "2026-10-02T10:50:25Z",
@@ -33881,13 +33920,398 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: template probe produced no result (see seat record: issue1945-a1-hour-20261002T105142Z.log)",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T11:26:54Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T13:23:08Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T16:24:45Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "this seat 45589: text -0.0924 inside [-0.20,+0.10] and caption -0.0063 inside [-0.08,+0.013); frozen bands met"
+    },
+    {
+     "ts": "2026-10-02T16:24:45Z",
+     "stage": "UPDATED",
+     "hypothesis": "The ninth hour's held-out loss FELL on both sets versus the eighth child: text 1.6232 against 1.7155 (-0.0924, inside the frozen band) and captions 1.2673 against 1.2736 (-0.0063, inside the band). That reverses the eighth hour's text rise about 1.4 times; the ninth child sits below the seventh child on text (1.6513) and 0.0026 above it on captions (1.2647). Same 512 packs, identical pack content (a seat's independent check passed). No cause is claimed. The memory-peak measurement for this hour reads NOT_MEASURED_THIS_HOUR because the hour was dispatched without the telemetry wrapper that the plan called for; it cannot be added after the worker starts and it does not gate training. this seat ruled SUPPORTED on the frozen bands and ruled the missing measurement non-gating.",
+     "because": "no decision changed: the ninth hour stays inside every frozen band; the lineage continues; memory-peak miss ruled non-gating"
     }
    ],
    "observation": "Ninth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H8 child 36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623, head bb272f0d, start cursor 530/3657456 (start absolute 2,216,628,224), trainer sampler arm v2 (peak measurement, sampler-only, no overlap jobs). The eighth hour closed 10:17:10Z: p10 21,580.19 loss-target positions/s, applied 101,879,808, 24,872 updates; its held-out scores are deferred by the gap budget (the sixth-child rescore reproduced exactly). The whole hour lies in pass 4 of the e4 ledger: text positions are repeats.",
    "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The eighth hour's own deltas are not yet read. The ninth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (same bar as before).",
    "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H9 minus H8 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
    "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler peak (arm v2)",
-   "instrument": "child_nll_v11.py a5057eab via an H9 scoring chain pinned to the H9 child (the H8 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+   "instrument": "child_nll_v11.py a5057eab via an H9 scoring chain pinned to the H9 child (the H8 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "this seat 45589: text -0.0924 inside [-0.20,+0.10] and caption -0.0063 inside [-0.08,+0.013); frozen bands met",
+   "not_closed": "The ninth hour's held-out loss FELL on both sets versus the eighth child: text 1.6232 against 1.7155 (-0.0924, inside the frozen band) and captions 1.2673 against 1.2736 (-0.0063, inside the band). That reverses the eighth hour's text rise about 1.4 times; the ninth child sits below the seventh child on text (1.6513) and 0.0026 above it on captions (1.2647). Same 512 packs, identical pack content (a seat's independent check passed). No cause is claimed. The memory-peak measurement for this hour reads NOT_MEASURED_THIS_HOUR because the hour was dispatched without the telemetry wrapper that the plan called for; it cannot be added after the worker starts and it does not gate training. this seat ruled SUPPORTED on the frozen bands and ruled the missing measurement non-gating."
+  },
+  {
+   "id": "issue2119-h8-heldout-nll-20261002",
+   "stage": "UPDATED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED"
+   ],
+   "first_ts": "2026-10-02T13:42:08Z",
+   "last_ts": "2026-10-02T16:24:47Z",
+   "events": [
+    {
+     "ts": "2026-10-02T13:42:08Z",
+     "stage": "OBSERVED",
+     "observation": "The eighth lineage hour finished 07:43:12Z (24,726 updates, 101,281,792 positions, p10 21,446.5 positions/s as the hour result records it, child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318 on head bb272f0d). Its row needs the held-out text and caption deltas against the seventh child (scored in the same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T13:42:08Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The seventh-child scores came from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the eighth child give a comparable pair only if the pack-content digest and pack count are identical to the seventh's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not."
+    },
+    {
+     "ts": "2026-10-02T13:42:09Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the scoring leg refuses, crashes, closes without nll-H8-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the seventh child's: the deltas would not be comparable and the H8 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H8 row; no delta is read from a non-comparable pair",
+     "supported_if": "512 packs scored, digest equal to the seventh child's, ordered producer index 0..511 accounted (v11 completion check), nll-H8-eval.json written",
+     "instrument": "chain_segment_H8_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H8_H7_compare_v1.py"
+    },
+    {
+     "ts": "2026-10-02T13:42:14Z",
+     "stage": "RUNNING",
+     "note": "H8 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T13:59:09Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H8-eval.json"
+    },
+    {
+     "ts": "2026-10-02T16:24:46Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "512 packs scored, pack-content digest 099ad8b7 equal to the previous child's, receipt written; a seat check 8 PASS"
+    },
+    {
+     "ts": "2026-10-02T16:24:47Z",
+     "stage": "UPDATED",
+     "hypothesis": "CORRECTION to the OBSERVED row of 13:42:08Z: its text carries the seventh hour's numbers and receipt under the eighth hour's name. The eighth hour's own facts: hour-result <host-local path>, 24,872 updates, 101,879,808 applied positions, p10 21,580.19 loss-bearing targets/s, child 36235962de35. The scoring leg itself scored the eighth child (derived-child receipt b77f2023), so the measurement is unaffected: 512 packs, equal digest, text +0.0642, caption +0.0089 versus the seventh child. The original rows stay unedited.",
+     "because": "the scoring measurement was bound to the right child; only the registration text mislabeled the hour"
+    }
+   ],
+   "observation": "The eighth lineage hour finished 07:43:12Z (24,726 updates, 101,281,792 positions, p10 21,446.5 positions/s as the hour result records it, child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318 on head bb272f0d). Its row needs the held-out text and caption deltas against the seventh child (scored in the same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+   "explanation": "The seventh-child scores came from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the eighth child give a comparable pair only if the pack-content digest and pack count are identical to the seventh's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
+   "criterion": "the scoring leg refuses, crashes, closes without nll-H8-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the seventh child's: the deltas would not be comparable and the H8 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H8 row; no delta is read from a non-comparable pair",
+   "criterion_supported_if": "512 packs scored, digest equal to the seventh child's, ordered producer index 0..511 accounted (v11 completion check), nll-H8-eval.json written",
+   "instrument": "chain_segment_H8_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H8_H7_compare_v1.py",
+   "receipts": [
+    "seat record: nll-H8-eval.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "512 packs scored, pack-content digest 099ad8b7 equal to the previous child's, receipt written; a seat check 8 PASS",
+   "not_closed": "CORRECTION to the OBSERVED row of 13:42:08Z: its text carries the seventh hour's numbers and receipt under the eighth hour's name. The eighth hour's own facts: hour-result <host-local path>, 24,872 updates, 101,879,808 applied positions, p10 21,580.19 loss-bearing targets/s, child 36235962de35. The scoring leg itself scored the eighth child (derived-child receipt b77f2023), so the measurement is unaffected: 512 packs, equal digest, text +0.0642, caption +0.0089 versus the seventh child. The original rows stay unedited."
+  },
+  {
+   "id": "issue2119-h9-heldout-nll-20261002",
+   "stage": "RULED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED"
+   ],
+   "first_ts": "2026-10-02T14:02:09Z",
+   "last_ts": "2026-10-02T16:24:46Z",
+   "events": [
+    {
+     "ts": "2026-10-02T14:02:09Z",
+     "stage": "OBSERVED",
+     "observation": "The ninth lineage hour finished 13:23:08Z (24,856 updates, 101,814,272 applied positions, p10 21,574.906 loss-target positions/s as hour-result.json records it, child d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4 on head bb272f0d, parent the eighth child 36235962). Its row needs the held-out text and caption deltas against the eighth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T14:02:09Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The eighth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the ninth child give a comparable pair only if the pack-content digest and pack count are identical to the eighth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not."
+    },
+    {
+     "ts": "2026-10-02T14:02:09Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the scoring leg refuses, crashes, closes without nll-H9-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the eighth child's: the deltas would not be comparable and the H9 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H9 row; no delta is read from a non-comparable pair",
+     "supported_if": "512 packs scored, digest equal to the eighth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H9-eval.json written",
+     "instrument": "chain_segment_H9_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H9_H8_compare_v1.py"
+    },
+    {
+     "ts": "2026-10-02T14:06:19Z",
+     "stage": "RUNNING",
+     "note": "H9 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T14:23:19Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H9-eval.json"
+    },
+    {
+     "ts": "2026-10-02T16:24:46Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "512 packs scored, pack-content digest 099ad8b7 equal to the previous child's, receipt written; a seat check 8 PASS"
+    }
+   ],
+   "observation": "The ninth lineage hour finished 13:23:08Z (24,856 updates, 101,814,272 applied positions, p10 21,574.906 loss-target positions/s as hour-result.json records it, child d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4 on head bb272f0d, parent the eighth child 36235962). Its row needs the held-out text and caption deltas against the eighth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+   "explanation": "The eighth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the ninth child give a comparable pair only if the pack-content digest and pack count are identical to the eighth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
+   "criterion": "the scoring leg refuses, crashes, closes without nll-H9-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the eighth child's: the deltas would not be comparable and the H9 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H9 row; no delta is read from a non-comparable pair",
+   "criterion_supported_if": "512 packs scored, digest equal to the eighth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H9-eval.json written",
+   "instrument": "chain_segment_H9_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H9_H8_compare_v1.py",
+   "receipts": [
+    "seat record: nll-H9-eval.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "512 packs scored, pack-content digest 099ad8b7 equal to the previous child's, receipt written; a seat check 8 PASS"
+  },
+  {
+   "id": "issue2119-h10-lineage-unchanged-20261002",
+   "stage": "MEASURED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED"
+   ],
+   "first_ts": "2026-10-02T14:23:47Z",
+   "last_ts": "2026-10-02T16:24:08Z",
+   "events": [
+    {
+     "ts": "2026-10-02T14:23:47Z",
+     "stage": "OBSERVED",
+     "observation": "Tenth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H9 child d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4, head bb272f0d, start cursor 549/326384 (start absolute 2,292,988,928), trainer sampler arm v2 (peak measurement, sampler-only, no overlap jobs). The ninth hour closed 13:23:08Z: p10 21,574.906 loss-target positions/s, applied 101,814,272, 24,856 updates; its held-out scores are measured in a separate window (issue2119-h9-heldout-nll-20261002) and are read before this row is ruled; the eighth-hour pair read +0.0642 text, +0.0089 caption (worse than the seventh child). The whole hour lies in pass 4 of the e4 ledger: text positions are repeats.",
+     "receipt": "seat record: h10-prediction-20261002.txt"
+    },
+    {
+     "ts": "2026-10-02T14:23:48Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295, H8 +0.0642; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105, +0.0089. The ninth hour's own deltas are not yet read. The tenth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (same bar as before)."
+    },
+    {
+     "ts": "2026-10-02T14:23:48Z",
+     "stage": "PREDICTED",
+     "refuted_if": "text delta outside [-0.20,+0.10] OR caption delta (H10 minus H9 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+     "supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler peak (arm v2)",
+     "instrument": "child_nll_v11.py a5057eab via an H10 scoring chain pinned to the H10 child (the H9 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+    },
+    {
+     "ts": "2026-10-02T14:26:17Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T16:24:08Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    }
+   ],
+   "observation": "Tenth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H9 child d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4, head bb272f0d, start cursor 549/326384 (start absolute 2,292,988,928), trainer sampler arm v2 (peak measurement, sampler-only, no overlap jobs). The ninth hour closed 13:23:08Z: p10 21,574.906 loss-target positions/s, applied 101,814,272, 24,856 updates; its held-out scores are measured in a separate window (issue2119-h9-heldout-nll-20261002) and are read before this row is ruled; the eighth-hour pair read +0.0642 text, +0.0089 caption (worse than the seventh child). The whole hour lies in pass 4 of the e4 ledger: text positions are repeats.",
+   "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295, H8 +0.0642; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105, +0.0089. The ninth hour's own deltas are not yet read. The tenth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (same bar as before).",
+   "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H10 minus H9 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+   "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler peak (arm v2)",
+   "instrument": "child_nll_v11.py a5057eab via an H10 scoring chain pinned to the H10 child (the H9 scoring chain is the template), same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77",
+   "receipts": [
+    "<host-local path>"
+   ]
+  },
+  {
+   "id": "issue2119-h10-heldout-nll-20261002",
+   "stage": "UPDATED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED"
+   ],
+   "first_ts": "2026-10-02T16:25:23Z",
+   "last_ts": "2026-10-02T16:46:25Z",
+   "events": [
+    {
+     "ts": "2026-10-02T16:25:23Z",
+     "stage": "OBSERVED",
+     "observation": "The tenth lineage hour's own hour-result.json records 24895 updates, 101974016 applied positions, p10 21585.856571304812 loss-target positions/s, child 51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce on head bb272f0d, parent the ninth child d293659853d8. Its row needs the held-out text and caption deltas against the ninth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs); the ninth-child scores read text 1.623152239335468, caption 1.2673118448635594.",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T16:25:23Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The ninth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the tenth child give a comparable pair only if the pack-content digest and pack count are identical to the ninth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not."
+    },
+    {
+     "ts": "2026-10-02T16:25:23Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the scoring leg refuses, crashes, closes without nll-H10-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the ninth child's: the deltas would not be comparable and the H10 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H10 row; no delta is read from a non-comparable pair",
+     "supported_if": "512 packs scored, digest equal to the ninth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H10-eval.json written",
+     "instrument": "chain_segment_H10_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H10_H9_compare_v1.py"
+    },
+    {
+     "ts": "2026-10-02T16:26:17Z",
+     "stage": "RUNNING",
+     "note": "H10 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T16:44:42Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H10-eval.json"
+    },
+    {
+     "ts": "2026-10-02T16:46:24Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "this seat 45806: 512 packs scored, digest 099ad8b7 equal to the ninth child's; text delta +0.0307019 inside [-0.20,+0.10], caption delta +0.0112959 inside [-0.08,+0.013); a seat check 8 PASS 45804"
+    },
+    {
+     "ts": "2026-10-02T16:46:25Z",
+     "stage": "UPDATED",
+     "hypothesis": "The tenth child's held-out loss rose against the ninth on both sets, inside the frozen bands: text 1.65385 against 1.62315 (+0.03070 nats per target, band -0.20 to +0.10) and captions 1.27861 against 1.26731 (+0.01130, band -0.08 to +0.013; 0.0017 below the refuting edge). Scored by the frozen scorer over the same 512 held-out packs (pack digest 099ad8b7 equal to the ninth's, a seat check 8 PASS). Over hours seven to ten, all repeat passes of the same base with fresh data 0, text held-out loss alternates 1.6513, 1.7155, 1.6232, 1.6539 and the caption loss is highest at 1.2786. Learning per 100M applied targets this hour = (1.62315 - 1.65385) x 1e8 / 101,974,016 = -0.0301 nats, negative: the repeat passes are not reducing held-out loss. No cause is claimed. This does not change the eleventh-hour decision (the operator's fast path on the same head) and the bands stay frozen; it is reported as measured.",
+     "because": "no decision changed: the tenth child stays inside every frozen band; the negative learning per 100M applied targets is reported as measured"
+    }
+   ],
+   "observation": "The tenth lineage hour's own hour-result.json records 24895 updates, 101974016 applied positions, p10 21585.856571304812 loss-target positions/s, child 51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce on head bb272f0d, parent the ninth child d293659853d8. Its row needs the held-out text and caption deltas against the ninth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs); the ninth-child scores read text 1.623152239335468, caption 1.2673118448635594.",
+   "explanation": "The ninth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the tenth child give a comparable pair only if the pack-content digest and pack count are identical to the ninth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
+   "criterion": "the scoring leg refuses, crashes, closes without nll-H10-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the ninth child's: the deltas would not be comparable and the H10 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H10 row; no delta is read from a non-comparable pair",
+   "criterion_supported_if": "512 packs scored, digest equal to the ninth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H10-eval.json written",
+   "instrument": "chain_segment_H10_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H10_H9_compare_v1.py",
+   "receipts": [
+    "seat record: nll-H10-eval.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "this seat 45806: 512 packs scored, digest 099ad8b7 equal to the ninth child's; text delta +0.0307019 inside [-0.20,+0.10], caption delta +0.0112959 inside [-0.08,+0.013); a seat check 8 PASS 45804",
+   "not_closed": "The tenth child's held-out loss rose against the ninth on both sets, inside the frozen bands: text 1.65385 against 1.62315 (+0.03070 nats per target, band -0.20 to +0.10) and captions 1.27861 against 1.26731 (+0.01130, band -0.08 to +0.013; 0.0017 below the refuting edge). Scored by the frozen scorer over the same 512 held-out packs (pack digest 099ad8b7 equal to the ninth's, a seat check 8 PASS). Over hours seven to ten, all repeat passes of the same base with fresh data 0, text held-out loss alternates 1.6513, 1.7155, 1.6232, 1.6539 and the caption loss is highest at 1.2786. Learning per 100M applied targets this hour = (1.62315 - 1.65385) x 1e8 / 101,974,016 = -0.0301 nats, negative: the repeat passes are not reducing held-out loss. No cause is claimed. This does not change the eleventh-hour decision (the operator's fast path on the same head) and the bands stay frozen; it is reported as measured."
+  },
+  {
+   "id": "issue2119-h11-template-lineage-20261002",
+   "stage": "UPDATED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED"
+   ],
+   "first_ts": "2026-10-02T17:45:58Z",
+   "last_ts": "2026-10-02T19:53:13Z",
+   "events": [
+    {
+     "ts": "2026-10-02T17:45:58Z",
+     "stage": "OBSERVED",
+     "observation": "Eleventh lineage hour on the LAYER TEMPLATE (attempt-14 identity: attention keep 0,6,12,18,23, FFN keep 11, expert keep 23) from the tenth-hour child 51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce, head bb272f0d, repeat pass 4 (fresh admitted 0), 4 docs x 1,024, start cursor 567/1309424 (start absolute 2,369,469,440), cap 130,922 measured updates, wall: runner HOUR_WALL_SECONDS 5,656, minimum 3,600 s, early-bind trainer sampler v4. The template probe on the tenth child loaded the lineage head (ancestry 21) and trained 3 updates with no load refusal; it was refuted on its frozen 1,200 s card budget, not on a refusal (this seat 45876).",
+     "receipt": "seat record: h11-prediction-v3-20261002.txt"
+    },
+    {
+     "ts": "2026-10-02T17:45:58Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Attempt 14 (template, same identity) measured p10 58,499.1 (receipt text; predicate recomputation 60,845.23) against the six-gate bar above 80,000 and was NOT_ACCEPTED; H4 full compute 22,020.1 on the same statistic. The template updates 72,630,912 parameters (50 tensors) against 474,816,512 (352) in full compute, so the eleventh hour is expected near 58,500 loss-target positions/s. This leg does not claim the A/B bar. Held-out deltas are read against the frozen bands: text [-0.20,+0.10], caption [-0.08,+0.013)."
+    },
+    {
+     "ts": "2026-10-02T17:45:58Z",
+     "stage": "PREDICTED",
+     "refuted_if": "p10 below 52,650 loss-target positions/s OR no hour-result.json OR text delta outside [-0.20,+0.10] OR caption delta (H11 minus H10 mean image_caption.mean_nll) at or above +0.013 or below -0.08. A load refusal or restore refusal in the hour stops the run; full compute is dispatched by no seat; this seat takes it to the operator.",
+     "supported_if": "p10 in [52650,64350] loss-target positions/s AND hour-result complete (parent = tenth child, applied_positions > 0, worker-terminal completed, cleanup verified) AND text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013). applied_positions stated only from the completed counts in hour-result.json after END, loss-target aggregate counted independently from rows.jsonl; trainer sampler peak (early-bind v4, verify TRAINER_SAMPLER_OK) measured, non-gating",
+     "instrument": "probe leg wall 1,800 s + preparation 600 s + hour 5,656 s (this seat 45950); hour-result.json (p10, applied_positions), rows.jsonl via h_rows_loss_bearing_sum_v2.py, held-out text/caption from child_nll_v11.py via an H11 scoring chain pinned to the H11 child, wall from launch.json (h11_wall_readback.sh)"
+    },
+    {
+     "ts": "2026-10-02T17:46:50Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T19:48:53Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T19:53:05Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "Frozen criterion REFUTED IF p10 below 52,650 loss-target positions/s: observed complete_step_p10 39,652.77 loss-target positions/s (hour-result.json sha 987a3156...6ae0, 49,285 measured updates) is below it (this seat ruling 46140). Held-out text and caption deltas not yet measured; those clauses are not read."
+    },
+    {
+     "ts": "2026-10-02T19:53:13Z",
+     "stage": "UPDATED",
+     "hypothesis": "Did NOT close: the held-out text and caption bands for child b87640f5 (not yet measured), the gap between the lineage-head fast path (39,653 loss-target positions/s) and the reduced-compute 58,499 (update-stage geometry/head; wall-bound at 49,285 of 130,922 updates), and the sampler peak (NOT_MEASURED_THIS_HOUR; START sampler check FAILED, no ARMED line).",
+     "because": "head advances to the eleventh-hour child b87640f5 (run rc 0 completed, pointer valid, ancestry closure depth 22); the next leg is the held-out scoring of that child after an ancestry-checked B: reclaim; no twelfth hour until this seat rules"
+    }
+   ],
+   "observation": "Eleventh lineage hour on the LAYER TEMPLATE (attempt-14 identity: attention keep 0,6,12,18,23, FFN keep 11, expert keep 23) from the tenth-hour child 51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce, head bb272f0d, repeat pass 4 (fresh admitted 0), 4 docs x 1,024, start cursor 567/1309424 (start absolute 2,369,469,440), cap 130,922 measured updates, wall: runner HOUR_WALL_SECONDS 5,656, minimum 3,600 s, early-bind trainer sampler v4. The template probe on the tenth child loaded the lineage head (ancestry 21) and trained 3 updates with no load refusal; it was refuted on its frozen 1,200 s card budget, not on a refusal (this seat 45876).",
+   "explanation": "Attempt 14 (template, same identity) measured p10 58,499.1 (receipt text; predicate recomputation 60,845.23) against the six-gate bar above 80,000 and was NOT_ACCEPTED; H4 full compute 22,020.1 on the same statistic. The template updates 72,630,912 parameters (50 tensors) against 474,816,512 (352) in full compute, so the eleventh hour is expected near 58,500 loss-target positions/s. This leg does not claim the A/B bar. Held-out deltas are read against the frozen bands: text [-0.20,+0.10], caption [-0.08,+0.013).",
+   "criterion": "p10 below 52,650 loss-target positions/s OR no hour-result.json OR text delta outside [-0.20,+0.10] OR caption delta (H11 minus H10 mean image_caption.mean_nll) at or above +0.013 or below -0.08. A load refusal or restore refusal in the hour stops the run; full compute is dispatched by no seat; this seat takes it to the operator.",
+   "criterion_supported_if": "p10 in [52650,64350] loss-target positions/s AND hour-result complete (parent = tenth child, applied_positions > 0, worker-terminal completed, cleanup verified) AND text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013). applied_positions stated only from the completed counts in hour-result.json after END, loss-target aggregate counted independently from rows.jsonl; trainer sampler peak (early-bind v4, verify TRAINER_SAMPLER_OK) measured, non-gating",
+   "instrument": "probe leg wall 1,800 s + preparation 600 s + hour 5,656 s (this seat 45950); hour-result.json (p10, applied_positions), rows.jsonl via h_rows_loss_bearing_sum_v2.py, held-out text/caption from child_nll_v11.py via an H11 scoring chain pinned to the H11 child, wall from launch.json (h11_wall_readback.sh)",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "Frozen criterion REFUTED IF p10 below 52,650 loss-target positions/s: observed complete_step_p10 39,652.77 loss-target positions/s (hour-result.json sha 987a3156...6ae0, 49,285 measured updates) is below it (this seat ruling 46140). Held-out text and caption deltas not yet measured; those clauses are not read.",
+   "not_closed": "Did NOT close: the held-out text and caption bands for child b87640f5 (not yet measured), the gap between the lineage-head fast path (39,653 loss-target positions/s) and the reduced-compute 58,499 (update-stage geometry/head; wall-bound at 49,285 of 130,922 updates), and the sampler peak (NOT_MEASURED_THIS_HOUR; START sampler check FAILED, no ARMED line)."
+  },
+  {
+   "id": "issue2119-h11-heldout-nll-20261002",
+   "stage": "PREDICTED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED"
+   ],
+   "first_ts": "2026-10-02T20:06:23Z",
+   "last_ts": "2026-10-02T20:06:24Z",
+   "events": [
+    {
+     "ts": "2026-10-02T20:06:23Z",
+     "stage": "OBSERVED",
+     "observation": "The eleventh lineage hour's own hour-result.json records 49285 updates, 201875456 applied positions, p10 39652.77033617388 loss-target positions/s, child b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1 on head bb272f0d, parent the tenth child 51c50753. Its row needs the held-out text and caption deltas against the tenth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs); the tenth-child scores read text 1.6538541415793588, caption 1.2786077820644628.",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T20:06:23Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The tenth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the eleventh child give a comparable pair only if the pack-content digest and pack count are identical to the tenth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not."
+    },
+    {
+     "ts": "2026-10-02T20:06:24Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the scoring leg refuses, crashes, closes without nll-H11-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the tenth child's: the deltas would not be comparable and the H11 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H11 row; no delta is read from a non-comparable pair",
+     "supported_if": "512 packs scored, digest equal to the tenth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H11-eval.json written",
+     "instrument": "chain_segment_H11_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H11_H10_compare_v1.py"
+    }
+   ],
+   "observation": "The eleventh lineage hour's own hour-result.json records 49285 updates, 201875456 applied positions, p10 39652.77033617388 loss-target positions/s, child b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1 on head bb272f0d, parent the tenth child 51c50753. Its row needs the held-out text and caption deltas against the tenth child (same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs); the tenth-child scores read text 1.6538541415793588, caption 1.2786077820644628.",
+   "explanation": "The tenth-child scores come from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the eleventh child give a comparable pair only if the pack-content digest and pack count are identical to the tenth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
+   "criterion": "the scoring leg refuses, crashes, closes without nll-H11-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the tenth child's: the deltas would not be comparable and the H11 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H11 row; no delta is read from a non-comparable pair",
+   "criterion_supported_if": "512 packs scored, digest equal to the tenth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H11-eval.json written",
+   "instrument": "chain_segment_H11_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H11_H10_compare_v1.py"
   }
  ],
  "registry": [
