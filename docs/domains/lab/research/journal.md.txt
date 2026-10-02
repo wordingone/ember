@@ -54,6 +54,341 @@ one. Read it before proposing any arm, and write to it every time an experiment 
 Newest first. Automatic entries carry the loop hypothesis id.
 
 <!-- JOURNAL-LOG-BEGIN -->
+### 2026-10-01 05:45 PM LA — Next after `issue2119-h5-hour-20261001`
+- **Successor hypothesis / not closed:** Not closed: the hour's p10 and held-out loss are not part of this row; held-out NLL is the successor row.
+- **Successor id:** `issue2119-h5-heldout-nll-20261001`
+
+### 2026-10-01 05:45 PM LA — SUPPORTED: `issue2119-h5-hour-20261001`
+- **Hypothesis:** H2, H3b and H4 each completed this same governed continuation (applied positions 104.25M, 105.18M, 105.28M; hour-results SUPPORTED); H5 repeats it from the H4 child. Text positions remain pass index 3 repeats (fresh-text share line NOT MET, not a blocker).
+- **Frozen criterion:** REFUTED if Anything else: NO ADVANCE(reason). No score bar.
+- **Ruling:** applied 101,781,504 inside the frozen [96M,109M]; criterion was applied-positions interval only
+- **Receipt:** `<host-local path>`
+
+### 2026-10-01 03:46 PM LA — Next after `issue1945-stem-probe-r3-20261001`
+- **Successor hypothesis / not closed:** REFUTED: the stem probe (college-level visual MC dose) did not raise caption image-dependence over control at 16,384 updates (-0.0013 nats vs a +0.05 bar). Not closed: MMMU DiD on the two children (unrun, scorable in a card gap); the dose was one level, so a larger dose or longer horizon is unmeasured; text NLL was unchanged under real/wrong in both arms, so caption image-dependence is the only lever this pair measured. Decision: no further stem-probe arm; the card returns to the lineage (fifth hour) once a seat passes the release checks; gate D cure evidence still absent.
+
+### 2026-10-01 03:46 PM LA — REFUTED: `issue1945-stem-probe-r3-20261001`
+- **Hypothesis:** 80.0% of selected answer rows exceed 58 tokens so cap 58 truncates the stem; cap 79 fits 50.3% fully. If truncation hides image-dependent signal the treatment raises caption wrong-real and MMMU real-minus-contrast.
+- **Frozen criterion:** REFUTED if SUCCESSOR of issue1945-stem-probe-r2-20261001 (no-result: arm A nullA3 died in 20 s, PRELAUNCH_REJECTED by the disk-budget runner, 80 GiB declared vs space then; cured by reclaim, B: 369 GiB free, preflight PASS declared 80). Criterion unchanged:
+  answer rows exceed 58 tokens (contrast real). Stop and re-rule if the first arm runs above 0.25 s per update.
+
+## Frozen criterion (unchanged from 41515; pasted verbatim into loop predict before claim)
+- caption wrong-real (NLL wrong-image minus NLL real-image): REFUTED if the treatment does not exceed the control
+  by 0.05 nats.
+- MMMU real-missing and real-wrong, n=847, no score bar. The statistic is the difference-in-differences:
+  (treatment real-minus-contrast) minus (control real-minus-contrast).
+  - Its interval is computed from PAIRED per-question outcomes, matched across every condition and both arms. It
+    comes from a paired item bootstrap, resampling questions and never conditions independently. All per-question
+    correctness vectors are saved in the receipt.
+  - Exact method (the counterpart seat 42180): the interval is a 95% percentile interval over 10,000 paired bootstrap resamples of
+    the 847 questions, seed 0. It is applied to control/treatment, and separately to the control/control null
+    pair. The null pair is the INSTRUMENT CHECK, not an additive term. If its interval excludes 0, the run is
+    REFUSED as non-discriminating before any verdict, and that check is applied before the treatment pair is read.
+  - 0.0154, the one-score standard error, is NOT that interval. It is kept only as a preset OPERATING THRESHOLD:
+    the treatment's statistic must exceed +0.0154 to count as a rise. (the counterpart seat 42166 correction, adopted before any
+    predict.)
+  - DECISION ORDER (amended 2026-10-01 02:06 AM LA on the counterpart seat 42760; mutually exclusive, first match wins; s = the
+    statistic, [L,U] = its 95% interval):
+    1. Null-pair interval excludes 0 -> REFUSED (instrument does not discriminate; no verdict read).
+    2. U < 0 -> REFUTED-HARM (treatment worse than control).
+    3. s > +0.0154 and L > 0 -> SUPPORTED (a rise past the operating threshold).
+    4. s > +0.0154 and L <= 0 -> INCONCLUSIVE (point past the threshold, interval includes 0).
+    5. U < +0.0154 -> REFUTED (failed the preset bar; NOT evidence of harm).
+    6. Otherwise -> INCONCLUSIVE.
+    Counterexamples: s=-0.002, [-0.010,0.005] -> rule 5 REFUTED. s=0.020, [-0.004,0.044] -> rule 4 INCONCLUSIVE.
+    s=0.010, [-0.010,0.030] -> rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -> rule 3 SUPPORTED.
+  - Arm values (02:20 AM LA ruling WITHDRAWN 02:28 AM LA on the counterpart seat 42781: the carrier has no separate stem switch; the
+    answer cap IS the treatment, so equal caps made the arms identical). Corrected, at carrier da91b549 (the counterpart seat source
+    PASS 42781): CONTROL cap 58 (EMBER_ANSWER_CAPTION_TOKENS=58 set explicitly), TREATMENT cap 79 (the largest cap
+    that fits 7 pairs: 7*(1+64+1+79+1)=1022 <= 1024); both arms 7 pairs per document (EMBER_PAIRS_PER_DOCUMENT=7;
+    production is 8, so this is NOT production geometry) and image row start 149,664 in the seed-2163 order of
+    manifest de32a445 (592,640 rows). 149,664 is the row OFFSET R: the first consumed row is (149,664 + 7*S) mod
+    592,640 with S the parent step, and the prep receipt binds S and that first row (the counterpart seat 42785). The null pair is
+    control/control at cap 58. This is a CONTEXT-LENGTH observation: it does not prove the whole question survives.
+    Loss-bearing targets per answer-scoped pair stay two (answer letter + end token) in both arms; the treatment adds
+    conditioning tokens only (the counterpart seat 42785, image_text_stream.py 193-201). Before the card, the prep-only proof reports,
+    for the actually selected answer rows, the count and fraction whose encoded length exceeds 58 (retained tokens
+    differ between arms), and separately the full-fit fractions at 58 and 79. The dispatch receipt's emitted geometry must
+    equal these values per arm or the run is REFUSED. The probe rows are NOT unseen: the lineage has consumed the manifest about 8.25 times. The
+- **Ruling:** Frozen criterion: treatment caption wrong-minus-real exceeds control by 0.05 nats at 16,384 updates. Observed treatment 0.029336 minus control 0.030622 = -0.001286 nats (69,236 caption targets): wrong sign, 39x short. MMMU DiD unrun (no receipt). Receipts: learning-pair-armC2 nll2-armC2-{real,wrong}-16384.json (9581981909, 6d1d17aa46); learning-pair-armD4 nll-control-{real,wrong}-learning-snapshot-16384.json (d043143148, a2e6b67c5d); arithmetic seat record: learning-per-token-pair-20261001.json. a seat post-run PASS 8/8 receipts valid.
+- **Receipt:** `<host-local path>`
+
+### 2026-10-01 01:11 PM LA — Next after `issue2119-d0-admission-probe-20260930-attempt2`
+- **Successor hypothesis / not closed:** SUPPORTED admission probe on merged source 2d0ce2fa from the R3 child; the successor was the governed hour A on S4 (issue2119-a-hour-s4-20260930), which ran and advanced the lineage. Not closed by this row: nothing (the probe answered only admissibility, which hour A then consumed).
+- **Successor id:** `issue2119-a-hour-s4-20260930`
+
+### 2026-10-01 01:50 AM LA — SUPPORTED: `issue2119-speed-null-a-20261001`
+- **Hypothesis:** Two N=5 full-layer arms with the same seed, parent (fourth-hour child), data order, head and image give completion-to-completion update rates that agree within run noise. Rows and receipts, not executor exit, are the readout: the executor 1,024-update/3,600 s assert will exit 1 after the worker completes and is NOT part of this criterion (this seat 42706).
+- **Frozen criterion:** REFUTED if Any of: measured rows != 4; terminal-state.json absent or stop_at != 5; non-finite loss; pointer sha256 after != before (3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce); rows lack update_completed_monotonic.
+- **Ruling:** 4 measured rows, terminal-state stop_at 5, pointer sha equal before/after; losses finite; update_completed_monotonic present. Arm validity only: 3 intervals cannot carry a null pair (this seat 42723).
+- **Receipt:** `<host-local path>`
+
+### 2026-10-01 12:49 AM LA — SUPPORTED: `issue2119-stopswitch-red2-20261001`
+- **Hypothesis:** With the blocker named, the ledger admits the reservation; the loop break then compares total_steps (warm update counts as step 1) with the switch, so STOP_AT=5 stops after 5 total updates (4 measured rows) and writes terminal-state.json plus a trained-child; the ordinary child write and one separately accounted auxiliary continuation update after terminal publication still happen (the counterpart seat 42604).
+- **Frozen criterion:** REFUTED if Any of: rows.jsonl measured-row count != 4; terminal-state.json absent or stop_at != 5; completion_failures/refusal; pointer sha256 after != 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; non-finite loss in any row. REFUTED = the switch does not behave as built.
+- **Ruling:** All supported_if clauses held on the arm's own bytes: rows.jsonl has 1 warm + 4 measured rows (losses 0.4218, 0.5418, 0.4651, 0.4272, all finite); terminal-state.json stop_at 5 with child_manifest_sha256 07988e24925f6bca56e3473c0c1332fb4c56fce2b3b5326dd3b552cd69c0cfbb equal to the arm's trained-child checkpoint-manifest sha256; pointer sha256 after equals before (3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce); worker-terminal status completed, no refusal. Consumer on the 4 rows: 'only 3 complete updates' (expected: 4 measured rows = 3 intervals). Scope: N=5 only. Note: the the counterpart seat executor wrapper's own post-assert (observed >= 1024 and pre_checkpoint_wall >= 3600) exited rc=1 after the worker had completed; it is not a worker refusal and is not in the frozen criterion.
+- **Receipt:** `<host-local path>`
+
+### 2026-10-01 12:24 AM LA — Next after `issue2119-stopswitch-red-20261001`
+- **Successor hypothesis / not closed:** The first run was refused by the continuity ledger (diagnostic allowance exhausted) before any row; the stop-at path was not exercised. Successor reruns the same frozen criterion with the lineage's real readiness blocker named through the identity's own field.
+- **Successor id:** `issue2119-stopswitch-red2-20261001`
+
+### 2026-10-01 12:23 AM LA — INCONCLUSIVE: `issue2119-stopswitch-red-20261001`
+- **Hypothesis:** The loop break condition compares total_steps (warm update counts as step 1) with the switch value; with STOP_AT=5 the runner should stop after 5 total updates (4 measured rows) and write terminal-state.json plus a trained-child, and with the switch unset it must not.
+- **Frozen criterion:** REFUTED if Any of: rows.jsonl measured-row count != 4; terminal-state.json absent or stop_at != 5; completion_failures/refusal; pointer sha256 after != 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; non-finite loss in any row. REFUTED = the switch does not behave as built.
+- **Ruling:** Frozen criterion: any of rows.jsonl measured-row count != 4; terminal-state.json absent or stop_at != 5; completion_failures/refusal; pointer sha256 after != 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; non-finite loss in any row. Observed: worker refused at the continuity ledger (diagnostic allowance exhausted, postponement) before any row; the stop-at path was not exercised; 0 measured rows; pointer equal before and after. Not REFUTED because the instrument never ran.
+- **Receipt:** `seat record: issue1945-a1-hour-20261001T072055Z.log`
+
+### 2026-09-30 11:17 PM LA — Next after `issue2119-range2-S4-20261001`
+- **Successor hypothesis / not closed:** Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).
+
+### 2026-09-30 11:17 PM LA — Next after `issue2119-range2-S3-20261001`
+- **Successor hypothesis / not closed:** Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).
+
+### 2026-09-30 11:17 PM LA — SUPPORTED: `issue2119-range2-S4-20261001`
+- **Hypothesis:** Scoring one frozen child that saw neither range holds exposure matched, so only range content differs. Ranked causes: 1 range difficulty, 2 exposure (refuted if the gap collapses), 3 child-specific interaction.
+- **Frozen criterion:** REFUTED if Criterion (joint, from BOTH receipts, declaration be527f0848d237afae2a7cc6c5d8c9c3682c3c12eec62b28c08449507f94d7a1): gap = text.mean_nll(S4 receipt) - text.mean_nll(S3 receipt); SUPPORTED if gap > 0.10; REFUTED if gap <= 0.05; INCONCLUSIVE between; per-run integrity: completion_failures empty, manifest binding d157f2df, text.targets 524288, finite means, pointer equal; any integrity failure INCONCLUSIVE.
+- **Ruling:** Joint criterion from both receipts: gap = 1.8218500 - 1.5777117 = +0.244138 > 0.10 (SUPPORTED); integrity: completion_failures empty both, manifest d157f2df, text.targets 524288 both, finite, scorer 53011c8d same as first pair, pointer 3c41b369 equal. Scope: text half is TRAINING-RANGE loss (receipt claim label 'held-out' is wrong for it); caption half held-out and identical. Expected +0.10 [-0.10,+0.35]: inside the interval, above the point.
+- **Receipt:** `seat record: nll-range-S4.json`
+
+### 2026-09-30 11:17 PM LA — SUPPORTED: `issue2119-range2-S3-20261001`
+- **Hypothesis:** Scoring one frozen child that saw neither range holds exposure matched, so only range content differs. Ranked causes: 1 range difficulty, 2 exposure (refuted if the gap collapses), 3 child-specific interaction.
+- **Frozen criterion:** REFUTED if Criterion (joint, from BOTH receipts, declaration be527f0848d237afae2a7cc6c5d8c9c3682c3c12eec62b28c08449507f94d7a1): gap = text.mean_nll(S4 receipt) - text.mean_nll(S3 receipt); SUPPORTED if gap > 0.10; REFUTED if gap <= 0.05; INCONCLUSIVE between; per-run integrity: completion_failures empty, manifest binding d157f2df, text.targets 524288, finite means, pointer equal; any integrity failure INCONCLUSIVE.
+- **Ruling:** Joint criterion from both receipts: gap = 1.8218500 - 1.5777117 = +0.244138 > 0.10 (SUPPORTED); integrity: completion_failures empty both, manifest d157f2df, text.targets 524288 both, finite, scorer 53011c8d same as first pair, pointer 3c41b369 equal. Scope: text half is TRAINING-RANGE loss (receipt claim label 'held-out' is wrong for it); caption half held-out and identical. Expected +0.10 [-0.10,+0.35]: inside the interval, above the point.
+- **Receipt:** `seat record: nll-range-S3.json`
+
+### 2026-09-30 10:53 PM LA — Next after `issue2119-range-r3-20261001`
+- **Successor hypothesis / not closed:** see R4 ruling for the joint verdict
+
+### 2026-09-30 10:53 PM LA — Next after `issue2119-range-r4-20261001`
+- **Successor hypothesis / not closed:** Same frozen third-hour child scores the fourth-hour text range 0.325 nats worse than its own range (1.7882 vs 1.4630): cause 1 (range content) accounts for most of the 0.355 fourth-hour jump (2.1728 vs 1.8181); residual ~0.03 unexplained. Registered expectation 0.03 [-0.10,0.30] missed high.
+- **Successor id:** `issue2119-fresh-text-fifth-hour`
+
+### 2026-09-30 10:53 PM LA — SUPPORTED: `issue2119-range-r4-20261001`
+- **Hypothesis:** Scoring one frozen child on two ranges holds training fixed so only range content differs. Ranked causes: 1 range content, 2 repeat exposure, 3 unrecorded update event.
+- **Frozen criterion:** REFUTED if Criterion pasted (joint, computed from BOTH receipts): gap = text.mean_nll(R4 receipt) - text.mean_nll(R3 receipt); SUPPORTED if gap > 0.10; REFUTED if gap <= 0.05; INCONCLUSIVE between; per-run integrity: completion_failures empty, manifest binding 242357b6, text.targets 524288, finite means, pointer equal; any integrity failure INCONCLUSIVE. Declaration 1dae4dae5326e97295bb7d95b7872bf9da7ef23622d25ccc30543acc1bc79116
+- **Ruling:** joint criterion: gap = 1.788174 - 1.463020 = +0.325154 > 0.10; both runs integrity held
+- **Receipt:** `seat record: nll-range-R4.json`
+
+### 2026-09-30 10:45 PM LA — SUPPORTED: `issue2119-range-r3-20261001`
+- **Hypothesis:** Scoring one frozen child on two ranges holds training fixed so only range content differs. Ranked causes: 1 range content, 2 repeat exposure, 3 unrecorded update event.
+- **Frozen criterion:** REFUTED if Criterion pasted (joint, computed from BOTH receipts): gap = text.mean_nll(R4 receipt) - text.mean_nll(R3 receipt); SUPPORTED if gap > 0.10; REFUTED if gap <= 0.05; INCONCLUSIVE between; per-run integrity: completion_failures empty, manifest binding 242357b6, text.targets 524288, finite means, pointer equal; any integrity failure INCONCLUSIVE. Declaration 1dae4dae5326e97295bb7d95b7872bf9da7ef23622d25ccc30543acc1bc79116
+- **Ruling:** R3 integrity clauses held (completion_failures empty, manifest binding 242357b6, targets 524288, finite, pointer equal); the gap verdict is the joint criterion computed in the R4 ruling
+- **Receipt:** `seat record: nll-range-R3.json`
+
+### 2026-09-30 10:20 PM LA — Next after `issue2119-h4-eval-20261001`
+- **Successor hypothesis / not closed:** fourth-hour child text NLL 2.1728 (+0.355 vs third hour); image real-minus-missing +0.017
+- **Successor id:** `issue2119-trend-h3-20261001`
+
+### 2026-09-30 10:20 PM LA — Next after `issue2119-trend-h3-20261001`
+- **Successor hypothesis / not closed:** third-hour child text NLL 1.8181 vs registered 2.05; integrity held
+- **Successor id:** `issue2119-range-gap-20261001`
+
+### 2026-09-30 10:20 PM LA — Next after `issue2119-trend-h2-20261001`
+- **Successor hypothesis / not closed:** CORRECTION: RULED row says REFUTED in error; frozen criterion is integrity-only and all clauses held, so the correct verdict is SUPPORTED(integrity). Second-hour child text NLL 1.7967 (caption 1.3160); registered expectation 1.95 [1.80,2.10] missed low. Text NLL by hour: ref 1.8664, second 1.7967, third 1.8181, fourth 2.1728: the jump is isolated to the fourth hour.
+- **Successor id:** `issue2119-range-gap-20261001`
+
+### 2026-09-30 10:19 PM LA — REFUTED: `issue2119-trend-h2-20261001`
+- **Hypothesis:** If the held-out text worsening is gradual with repeated text, the second-hour value sits between 1.866 and 2.173 and the third-hour value is above the second; a flat-then-jump pattern would point at the fourth hour alone.
+- **Frozen criterion:** REFUTED if NLL receipt completion_failures non-empty, bindings.checkpoint_manifest_sha256 not the child's manifest, text.targets not 2097152, non-finite means, or pointer sha256 changed (REFUTED with reason); no score bar
+- **Ruling:** observed 1.7967 is below the registered interval [1.80,2.10] around 1.95; text NLL fell from reference 1.8664 to 1.7967, so no early regression
+- **Receipt:** `seat record: nll-H2-trend.json`
+
+### 2026-09-30 10:02 PM LA — SUPPORTED: `issue2119-trend-h3-20261001`
+- **Hypothesis:** If the held-out text worsening is gradual with repeated text, the second-hour value sits between 1.866 and 2.173 and the third-hour value is above the second; a flat-then-jump pattern would point at the fourth hour alone.
+- **Frozen criterion:** REFUTED if NLL receipt completion_failures non-empty, bindings.checkpoint_manifest_sha256 not the child's manifest, text.targets not 2097152, non-finite means, or pointer sha256 changed (REFUTED with reason); no score bar
+- **Ruling:** Frozen criterion (receipt integrity) held: NLL receipt complete_failures empty, text targets 2,097,152, bound to 242357b6, pointer unchanged. PREDICTION MISSED LOW: text NLL 1.8181 vs predicted 2.05 [1.85,2.25] (below the interval); caption 1.3015. Third-hour child is better than the reference child 1.8664 and far better than the fourth-hour child 2.1728: text NLL is not monotone across hours.
+- **Receipt:** `seat record: nll-H3-trend.json`
+
+### 2026-09-30 09:46 PM LA — SUPPORTED: `issue2119-h4-eval-20261001`
+- **Hypothesis:** The fourth hour added 105.28M positions after the reference child; text NLL should move down slightly from the reference 1.866 and MMMU stay in the chance band. Criterion is identity and receipt integrity, not score.
+- **Frozen criterion:** REFUTED if any clause of the declaration frozen criterion fails (REFUTED with reason); no score bar, no timing claim
+- **Ruling:** Frozen criterion (receipt integrity) held: verdict.json SUPPORTED; NLL receipt complete, bound to d7c34b42, text targets 2,097,152; three MMMU receipts n=847 bound to d7c34b42, missing 847/847 imageless, wrong shift 423 (767/847 differ); pointer 3c41b369 equal before/after; source 2d0ce2fa. PREDICTION MISSED: text NLL observed 2.1728 vs predicted 1.80 [1.72,1.90] (reference 1.8664; +0.3064, 86% of documents worse); caption 1.2853 vs 1.30 [1.22,1.40] inside. MMMU real 0.286 (bar 0.2857, 242/847 = 0.2857 exactly), missing 0.269, wrong 0.299; real-minus-wrong -0.013. Descriptive, no retained credit.
+- **Receipt:** `seat record: verdict.json`
+
+### 2026-09-30 09:01 PM LA — Next after `issue2119-h4b-hour-20260930`
+- **Successor hypothesis / not closed:** The fourth training hour is SUPPORTED: 105,275,392 positions applied, new child d7c34b42 published and pointer advanced. Successor: the fifth hour, chained from this child, with a fresh warm-up check, same data identity; gated on disk space.
+- **Successor id:** `issue2119-h5-hour-20261001`
+
+### 2026-09-30 09:01 PM LA — SUPPORTED: `issue2119-h4b-hour-20260930`
+- **Hypothesis:** H2 104,247,296 and H3b 105,181,184 applied on the same config with rising p10; this hour should apply a comparable count and publish a descendant advancing the head; text delta = 0.75 x applied (confirmed twice).
+- **Frozen criterion:** REFUTED if any clause of declaration frozen criterion fails: NO ADVANCE(reason)
+- **Ruling:** All frozen clauses met: complete hour-result, parent 242357b6, child d7c34b42, applied_positions 105,275,392 in [96M,109M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced 7ae8b66e->3c41b3693 naming the new child; text delta 78,956,544 = 0.75 x applied, pass 3 REPEATS.
+- **Receipt:** `state\issue2119-receipts\H4-20260930\h4b-ruling-evidence.md`
+
+### 2026-09-30 07:33 PM LA — Next after `issue2119-h4-hour-20260930`
+- **Successor hypothesis / not closed:** No hour ran (floor refusal after the probe). Re-registered as issue2119-h4b-hour-20260930: same declaration (sha 6dd7adb0), same prediction, reusing the finished probe b5be3dc9; claim happens through the chain's own window open.
+- **Successor id:** `issue2119-h4b-hour-20260930`
+
+### 2026-09-30 07:33 PM LA — INCONCLUSIVE: `issue2119-h4-hour-20260930`
+- **Hypothesis:** H2 104,247,296 and H3b 105,181,184 applied on the same config with rising p10 (22,124 -> 22,295 pos/s); H4 should apply a comparable count and publish a descendant advancing the head; text delta = 0.75 x applied (confirmed twice).
+- **Frozen criterion:** REFUTED if any clause of declaration frozen criterion fails: NO ADVANCE(reason)
+- **Ruling:** No hour ran, so no applied_positions was produced: the free-space floor refused after the probe (planned budget gap, fixed by the 284 GiB chain-start floor and probe reuse). Neither support nor refutation.
+- **Receipt:** `<host-local path>`
+
+### 2026-09-30 05:21 PM LA — Next after `issue2119-h3b-hour-20260930`
+- **Successor hypothesis / not closed:** H3b SUPPORTED (applied 105181184 tokens, guard met). Successor: H4 chained from H3 child 242357b6, fresh probe+hour, same e4 identity.
+- **Successor id:** `issue2119-h4-hour-20260930`
+
+### 2026-09-30 05:18 PM LA — SUPPORTED: `issue2119-h3b-hour-20260930`
+- **Hypothesis:** H2 applied 104,247,296 positions on the same config; H3 has the same config and a fresh probe on its own parent/cursor/e4, so it should apply a comparable count and publish a descendant that advances the head. Repeat text changes no compute; text delta tracks 0.75 x applied.
+- **Frozen criterion:** REFUTED if any clause fails: NO ADVANCE(reason); no score bar
+- **Ruling:** All frozen clauses met: complete hour-result, parent d157f2df, child 242357b6, applied_positions 105,181,184 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced f859775d->7ae8b66e naming the new child; fresh probe admitted first. Text delta 78,885,888 = 0.75 x applied, pass 3 REPEATS.
+- **Receipt:** `state\issue2119-receipts\H3-20260930\h3b-ruling-evidence.md`
+
+### 2026-09-30 03:36 PM LA — Next after `issue2119-h3-hour-20260930`
+- **Successor hypothesis / not closed:** Superseded by issue2119-h3b-hour-20260930 (same hypothesis, prediction, declaration); the chain claims through its own window open.
+- **Successor id:** `issue2119-h3b-hour-20260930`
+
+### 2026-09-30 03:36 PM LA — INCONCLUSIVE: `issue2119-h3-hour-20260930`
+- **Hypothesis:** H2 (same full-model config, default 5,656 s wall) applied 104,247,296 positions and published d157f2df; H3 has the same config and geometry and a fresh probe on its own parent/cursor/e4, so it should apply a comparable count and publish a descendant that advances the selected continuation head. Text positions are repeats of the frozen ledger, which changes no compute; the text-cursor delta tracks 0.75 x applied as in H2.
+- **Frozen criterion:** REFUTED if any clause fails: NO ADVANCE(reason); no score bar
+- **Ruling:** Process error, not a result: the chain's own window-open performs the claim, and my manual claim left the row RUNNING so the window refused; no probe or hour ran (observed 0 = nothing executed). Re-registered as issue2119-h3b-hour-20260930 with the identical declaration and prediction.
+- **Receipt:** `state\issue2119-h3-chain-20260930.log`
+
+### 2026-09-30 03:33 PM LA — Next after `issue2119-h2-hour-20260930`
+- **Successor hypothesis / not closed:** H2 held: applied 104.2M, head advanced to d157f2df. Successor H3: same config from the H2 child on repeat-ledger e4; data identity changed so a fresh probe precedes the hour.
+- **Successor id:** `issue2119-h3-hour-20260930`
+
+### 2026-09-30 03:22 PM LA — SUPPORTED: `issue2119-h2-hour-20260930`
+- **Hypothesis:** R (same full-model config, 5,656 s wall) applied 103,354,368 positions; H2 has the same config, geometry and a valid probe on its own parent, so it should apply a comparable count and publish a descendant that advances the selected continuation head.
+- **Frozen criterion:** REFUTED if any clause fails: NO ADVANCE(reason); no score bar
+- **Ruling:** All frozen criterion clauses met (complete result, child d157f2df, parent 198f60cb, positions 104,247,296 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, pointer advanced 78d9e4c8->d157f2df). Disclosed 21:03-21:08Z check clean; residual: edits present 21:03-21:08Z, no mid-hour load evidence.
+- **Receipt:** `state\issue2119-receipts\H2-20260930\h2-ruling-evidence.md`
+
+### 2026-09-30 01:50 PM LA — Next after `issue2119-d2-probe-20260930`
+- **Successor hypothesis / not closed:** D2 admitted R child for H2; probe occupancy 893 s not 1,600 s, so the fold-the-probe ceiling is ~893/5,656 = 15.8% of cycle wall (not 28%).
+
+### 2026-09-30 01:50 PM LA — SUPPORTED: `issue2119-d2-probe-20260930`
+- **Hypothesis:** The probe binds its parent's data cursor (cia_hour.py:156 validate_probe_inputs 'data'); H2's parent is R's child, so H2 needs its own probe. Same mechanism as D1 on A child, which ADMITted.
+- **Frozen criterion:** REFUTED if any clause fails: REFUSE(reason); no timing claim
+- **Ruling:** Every frozen clause evidenced: verdict.json ADMIT; parent 198f60cb, source_commit 2d0ce2fa, cursor_start {401,345248}, purpose DIAGNOSTIC, pointer sha unchanged 78d9e4c8, R child manifest unchanged, occupancy 893 s <= 1,760. The registered occupancy interval [1300,1760] MISSED low (893 s): probe ran 44% faster than D1-based calibration.
+- **Receipt:** `state\issue2119-receipts\d2-20260930\verdict.json`
+
+### 2026-09-30 01:33 PM LA — Next after `issue2119-r-eval-20260930`
+- **Successor hypothesis / not closed:** R child 198f60cb evaluated SUPPORTED; text NLL improved 1.905->1.866 and caption 1.370->1.324 vs A child; MMMU at chance band, no image use signal (real-missing 0.004).
+
+### 2026-09-30 01:33 PM LA — SUPPORTED: `issue2119-r-eval-20260930`
+- **Hypothesis:** R added 103.35M positions on A's ledger family; NLL should move slightly down from A (1.905 text / 1.370 caption) and MMMU stay at chance band with real-missing within 1 SE. Criterion is identity and receipt integrity, not score.
+- **Frozen criterion:** REFUTED if any clause above fails (REFUTED with reason); no score bar, no timing claim
+- **Ruling:** Every frozen clause evidenced from emitted fields in verdict.json: manifest 198f60cb on all four receipts, n=847 each, image_condition recorded real/missing/wrong, wrong shift 423, hour-binding source_head_sha 2d0ce2fa, pointer unchanged. Text NLL 1.866 in [1.85,2.02], caption 1.324 in [1.28,1.44], MMMU 0.274/0.270/0.280 in intervals, real-missing 0.004 within 1 SE, NLL wall 928 s in [700,1100].
+- **Receipt:** `state\issue2119-receipts\r-eval-20260930\verdict.json`
+
+### 2026-09-30 12:49 PM LA — Next after `issue2119-r-hour-s4-20260930`
+- **Successor hypothesis / not closed:** R published child 198f60cb at step 534,516, cursor shard 401 offset 345,248; next: health (NLL/MMMU on R child), next-parent choice, upload R child to the mirror, fresh-text tranche deadline (shortfall 25,332,465 positions).
+
+### 2026-09-30 12:49 PM LA — SUPPORTED: `issue2119-r-hour-s4-20260930`
+- **Hypothesis:** A completed the same governed continuation one link earlier (24,986 measured updates, 4,696 s, SUPPORTED); R repeats it from A's child with its own admitted probe D1 (809 s, ADMIT). Expected: governed success record, step starts 509,284, cursor_before = A cursor_after, >=1,024 measured updates and >=3,600 s, rows bound by rows_sha256, pointer advances by CAS from 36eb0f8a.
+- **Frozen criterion:** REFUTED if Anything else: REFUSE/REFUTED(reason). Timing is judged against the dated wall only (clause 9); no retained-credit claim beyond the governed record; pass predicate 10: an increment, not the whole route.
+- **Ruling:** Governed success record as A: measured_updates 25,232 (>=1,024), pre_checkpoint_wall 3,600.09 s (>=3,600), owned completed rc 0 cleanup verified, worker-terminal completed, rows_sha256 b989453b...; parent_manifest_sha256 = 36eb0f8a; first row cursor_before {382,2521248} = A cursor_after, child data_cursor step 534,516 (509,283 + 25,233 applied), shard 401 record 345,248; D1 result 5b06c447 reused (PROBE_REUSED); P4: first 64 measured rows finite, mean 1.7448 vs A's last 64 1.8616, diff -0.117, within 0.25; retained applied targets 103,354,368 increase; pointer CAS to child 198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a (selected-continuation-head sha 0d9e4c88... read, lineage key = 198f60cb; preparer no-parent selection not separately run); all 8 tail-stamp phases in order; segment 4,783.05 s launch-to-complete < 5,656 enforced wall, no wall kill. Wall calibration: formula 4,990.94, actual 4,783.05.
+- **Receipt:** `<host-local path>`
+
+### 2026-09-30 11:21 AM LA — Next after `issue2119-d1-admission-probe-20260930-attempt2`
+- **Successor hypothesis / not closed:** R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on 2d0ce2fa).
+
+### 2026-09-30 11:21 AM LA — SUPPORTED: `issue2119-d1-admission-probe-20260930-attempt2`
+- **Hypothesis:** Attempt 1's identity was correct; the only failure was the allowance reservation, now with 5,656 s headroom. Mechanism expected as D0's identical probe (ADMIT, 774 s occupancy). Source fields named: hour-result.json source_commit and prediction.json identity.source_commit (emitted in D0's probe custody). Dry run prints purpose=DIAGNOSTIC, full-model forward (ARM_NO_TEMPLATE=1, layer_template none), parent 36eb0f8a.
+- **Frozen criterion:** REFUTED if Anything else: REFUSE(reason). Budget 1,700 s + 60 s; no timing claim (clause 9). Any D1 refusal, and any R failure to reuse D1, is a REFUSAL under S4's fixed total. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3.
+- **Ruling:** ADMIT: all six clauses read from emitted fields: probe terminal records completed rc0 cleanup-verified, dispatcher rc 0; parent_manifest_sha256 = 36eb0f8a...; source_commit = 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15 in hour-result.json and prediction.json identity; input_binding.cursor_start = {382, 2521248} = A cursor_after; pointer e834ebde equal after, A child manifest equal after; result reference hour-result.json sha256 5b06c4470c066135476f02305eff62a78e4a397f8c5777c5a7151f12332cd73d. Occupancy 809 s (descriptive prediction 1,600 [1,300,1,760] MISSED low; no timing claim).
+- **Receipt:** `seat record: verdict.json`
+
+### 2026-09-30 11:06 AM LA — Next after `issue2119-d1-admission-probe-20260930`
+- **Successor hypothesis / not closed:** cured by operator_extension 8,224 s (ledger row read back); attempt 2 registered as issue2119-d1-admission-probe-20260930-attempt2
+- **Successor id:** `issue2119-d1-admission-probe-20260930-attempt2`
+
+### 2026-09-30 11:06 AM LA — REFUTED: `issue2119-d1-admission-probe-20260930`
+- **Hypothesis:** D0's identical probe on R3's child reached ADMIT in 774 s occupancy (prediction.json identity.source_commit 2d0ce2fa, hour-result.json source_commit, hour-result.json parent_manifest_sha256, input_binding.cursor_start, worker-terminal.json and owned.json terminal records). D1 repeats it one link deeper on A's child; expected ADMIT, launch-through-cleanup 1,600 s [1,300,1,760] per the declaration. Source field grep (D0 probe custody cia-probe-...152756Z/measurement-6f7724e6...): emitted fields are hour-result.json source_commit and prediction.json identity.source_commit (2d0ce2fa); this criterion names only those.
+- **Frozen criterion:** REFUTED if Anything else: REFUSE(reason). Budget 1,700 s + 60 s; no timing claim (clause 9). Any D1 refusal, and any R failure to reuse D1, is a REFUSAL under S4's fixed total. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3.
+- **Ruling:** REFUSE(diagnostic allowance exhausted (occupancy) for lineage bf20f050...: 11,312 reserved + 5,656 > 14,400 cap; pre-run refusal, no probe ran, 26 s charged). Pointer e834ebde and A child manifest unchanged. this seat 41612 ruled attempt 1 REFUSE; attempt 2 lawful under the same declaration.
+- **Receipt:** `seat record: verdict.json`
+
+### 2026-09-30 10:59 AM LA — Next after `issue2119-d-child-eval-20260930`
+- **Successor hypothesis / not closed:** source identity is present in hour-binding.json; a successor criterion must name emitted fields.
+
+### 2026-09-30 10:59 AM LA — REFUTED: `issue2119-d-child-eval-20260930`
+- **Hypothesis:** A added 102,346,752 positions on pass-3 repeats of the e3 ledger from R3's child; D measures whether NLL and the three MMMU conditions moved. Registered predictions are descriptive only: text NLL 1.95 [1.85,2.05]; caption NLL 1.44 [1.38,1.50]; MMMU real 0.27, missing 0.27 [0.24,0.30], wrong 0.26 [0.23,0.29]; real minus missing within +-1 SE.
+- **Frozen criterion:** REFUTED if Anything else: REFUTED(reason). No score bar and no timing claim (clause 9). Occupancy counts as diagnostic. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3 recorded in custody before launch.
+- **Ruling:** frozen clause 'source_commit is 2d0ce2fa in every receipt' fails literally: no NLL or MMMU receipt emits a source_commit field (source-commit-clause.json); declaration defect of this seat's, not a model finding. Every other clause held: NLL complete and bound to 36eb0f8a, three MMMU n=847 bound, conditions proven (missing 847/847 imageless, wrong shift 423, 767/847 differ), pointer e834ebde equal before/after; hour-binding source_head_sha = 2d0ce2fa in all three. Observed value: text NLL 1.9052; caption 1.3703; real-missing 1.04 SE.
+- **Receipt:** `seat record: verdict.json`
+
+### 2026-09-30 10:11 AM LA — SUPPORTED: `issue2119-a-hour-s4-20260930`
+- **Hypothesis:** R2 and R3 completed hours of 24,875 and 24,820 measured updates at about 0.144 s/update from chained parents on the full model; A repeats the same governed continuation one link deeper on the merged head, with the wall raised to 6033 s and the declared layer template full. D0 proved the merged source admits from this parent.
+- **Frozen criterion:** REFUTED if Any of S4 pass predicates 1 and 9 fails: A does not produce a complete child within wall_A_enforced with a governed success record (>= 1,024 measured updates, >= 3,600 s, hour_result stamp, worker-terminal completed, owned completed returncode 0, rows bound by rows_sha256), or the child does not reopen through the counter, or the pointer does not advance by CAS from R3's child f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f. A is judged against its own dated enforced wall (6033 s), no wall kill. The head advances only on rc 0 plus a valid published checkpoint; a failed attempt never moves the pointer. Pointer BEFORE-value aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec recorded in custody before launch (predicate 0).
+- **Ruling:** owned.json completed rc 0 cleanup verified no supervisor failure; worker-terminal completed; measured_updates 24,986 (>=1,024, inside the 44,000 interval bound); elapsed 4,696 s (15:52:53Z to 17:11:09Z, >= 3,600 s, inside the 6,033 s wall, no wall kill); rows_sha256 8cbaac77 bound; hour_result stamp present; pointer after = child manifest 36eb0f8a (CAS from R3 child f4831d3b; before-value aa6c5e6f recorded pre-launch). Observed 24,986 is below the 36,000 point estimate; the interval was wide, the point estimate overstated the hour.
+- **Receipt:** `<host-local path>`
+
+### 2026-09-30 08:41 AM LA — SUPPORTED: `issue2119-d0-admission-probe-20260930-attempt2`
+- **Hypothesis:** Attempt 1 died on a transient python.exe row with a null CommandLine in the runner's resource census, so the mechanism is host activity during the window, not the source. Attempt 2 runs unchanged source with all seats python-silent and a python census quoted immediately before dispatch.
+- **Frozen criterion:** REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15; training_job_purpose == DIAGNOSTIC; charged occupancy <= 1,700 s + 60 s. Any miss is REFUSE(reason). No timing-bound claim (S4 clause 9).
+- **Ruling:** verdict.json ADMIT: rc 0 with result reference (measurement-6f7724e6, result sha 57a981bd); pointer sha after == aa6c5e6f; R3 manifest after == f4831d3b; source_commit 2d0ce2fa; purpose DIAGNOSTIC; occupancy 774 s <= 1,760 s. Attempt 1 charged 27 s + 60 s.
+- **Receipt:** `seat record: verdict.json`
+
+### 2026-09-30 08:27 AM LA — REFUTED: `issue2119-d0-admission-probe-20260930`
+- **Hypothesis:** The preparation on the merged head was proven executable in prep-only (red: CONTINUE_TRAINING refused rc 6; green: DIAGNOSTIC prepared). Whether the probe runs to a result on 2d0ce2fa from R3's child is unmeasured; R3's probe ran on an older head and cannot serve.
+- **Frozen criterion:** REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15; training_job_purpose == DIAGNOSTIC; charged occupancy <= 1,700 s + 60 s. Any miss is REFUSE(reason), records branch C NOT SUCCESSFUL, no fallback. No timing-bound claim (S4 clause 9).
+- **Ruling:** Attempt 1 is REFUSE(worker exception in resource_census: ValueError cannot classify model process resources, no probe result) under the declaration's frozen criterion (this seat 41392). Pointer and R3 manifest unchanged. Funded retry follows from S4's 3,400 D0 reserve; attempt 1 charged 27 s + 60 s.
+- **Receipt:** `<host-local path>`
+
+### 2026-09-30 08:04 AM LA — Answer-stem census: predicate bound, wording narrowed
+Correction and binding for the answer-stem census entry. 22.36% (101,274 / 452,894) is FULL TEXTUAL RETENTION of stem plus options over the manifest pool after encoded[-58:]; it is not the ordered exposure of the next run and not answerability. Exact predicate: first kept token starts at or before the first char of the stem and of the options block (so 90,962 not-truncated rows plus 10,312 truncated rows that lost only the Question: header). The other 351,620 rows: 142,252 keep part of the stem, 40,570 lose it fully, 168,798 have options partly cut or answer only; the earlier phrase 'omit the needed question context for 77.6%' is withdrawn. The census does not explain the 09-28 caption-NLL result (pd12m/docci caption rows). Producer: seat record: answer_stem_survival.py sha256 70c11dbcd796ddf37dbf5cf56d2837a01912686112b793631585f4d93b7397bf; receipt answer-stem-survival.json sha256 09d766b7c47e20fe87fcb0e01f896a1856e39888d41aca2281540f5e467780de; sidecar answer-stem-survival.producer.json.
+
+### 2026-09-30 07:48 AM LA — Capacity successor narrowed to optimisation hypothesis; answer-stem survival measured on real rows
+The gate-D capacity successor is narrowed to an optimisation / representation-efficiency HYPOTHESIS, not an insufficient-capacity finding. Two facts replace the inference that a linear entrance means insufficient capacity: (a) image.weight is (1024,768), an expanding projection, followed by nonlinear SwiGLU layers; (b) ViT uses a linear patch embedding and works. The 09-28 caption-NLL REFUTED receipt keeps its historical scope (child step 330549, trained rows, no paired statistic bound) and is never relabelled as a current-head result.
+
+Data/source check (CPU only, no card), receipt seat record: answer-stem-survival.json (sha256 282e47e44d4c3391d04270f398c882fe99be7591a00d18df29c5d0928c576d24). Source image_text_stream.py at b3a11cf7 (blob sha256 658e18c1c8a12aac0d446afa4d43bd8dbfbf7be556458766984c76058869bc8c), MAX_CAPTION_TOKENS 58, answer rows keep encoded[-58:]. Real training manifest combined-train-manifest.jsonl (sha256 de32a445f2f4504a...) and frozen tokenizer 2c557e7f (encode add_special_tokens=False as in cia_step_runner). 452,894 answer-scoped rows of 592,640: 361,932 truncated (79.9%); stem start AND all options survive in 101,274 (22.4%); stem start lost but all options kept 182,822 (40.4%, of which 40,570 lose the whole stem); options partly cut or answer-only 168,798 (37.3%). Per dataset (answer rows / stem+options survive): ai2d 7,774/7,654; a-okvqa 9,216/9,216; scienceqa 9,718/8,312; iconqa 11,622/11,622; arxivqa 408,474/62,934; m3exam-english 3,600/654; mmbench-dev-scienceqa 2,490/882. The pool is the manifest, not the shuffled subset one hour consumes; arxivqa is 90% of it. Historical 69% options-only is not reused.
+Selection rule outcome: the inputs OMIT the needed question context for 77.6% of answer rows (arxivqa 84.6%), so the stem-preserving carrier comes before any encoder comparison.
+Carrier: EMBER_ANSWER_CAPTION_TOKENS is absent at b3a11cf7; it lives only in unmerged branches exp/issue1945-governed-profiler (360037ae, worktree <host-local path>) and exp/issue1945-optimizer-overlap-t1 (a330bc4d), file src/ember/infrastructure/tools/ember-restart-3b/image_text_stream.py lines 34-46 (env read at 43), file sha256 72a2303ee6daacd4ba694ff789722fff24cf496282782131453bbfbe6d971beb (identical on both).
+
+### 2026-09-30 04:55 AM LA — Next after `nll-a2-r2-v9-heavy-path-full-profile-20260930`
+- **Successor hypothesis / not closed:** A2/R2 NLL health measured. Wall: restore 160.0/179.2 s, score 621.1/632.8 s, interior 787.7/818.3 s; NLL cap 1,500 s holds with margin.
+
+### 2026-09-30 04:55 AM LA — SUPPORTED: `nll-a2-r2-v9-heavy-path-full-profile-20260930`
+- **Hypothesis:** Restore, template check, identity binding and scoring passed on the real child under v8; the only defect was json.dumps on Path values in the receipt, now normalised by json_safe and covered by a red. Both children should score the frozen 512-pack / 128-image slice with complete coverage.
+- **Frozen criterion:** REFUTED if either run refuses or writes no receipt; any NLL non-finite; text targets != 2097152 or caption_targets != 47539 or image_patches != 46856; observed resolved sets != all 24 layers; receipt binding differs from the frozen declaration
+- **Ruling:** Frozen criterion not met (no refusal, both receipts written COMPLETE, completion_failures empty; text targets 2097152, caption 47539, patches 46856 both; NLL finite; observed sets all 24; binding equals declaration). Digest equality holds per child: hour-result == expected == manifest == output (A2 ccf2229c, R2 70280377). A2 text 2.43737 caption 1.60482; R2 text 2.03930 caption 1.47842. Evaluated under the prospectively selected full profile; R1-R3 runtime selectors unproven (the counterpart seat 41190). Scores sidecar diagnostic only.
+- **Receipt:** `nll-R2.json`
+
+### 2026-09-30 04:17 AM LA — Next after `nll-a2-r2-v8-heavy-path-full-profile-20260930`
+- **Successor hypothesis / not closed:** v8 defect was receipt serialization (Path values); v9 adds json_safe plus a red
+- **Successor id:** `nll-a2-r2-v9-heavy-path-full-profile-20260930`
+
+### 2026-09-30 04:17 AM LA — REFUTED: `nll-a2-r2-v8-heavy-path-full-profile-20260930`
+- **Hypothesis:** Restore, template check and identity binding are unchanged and passed on the real child; the only defect was the decoder constructor argument, now covered by a real-decoder red. Under the prospectively selected full profile both children should score the frozen 512-pack / 128-image slice with complete coverage.
+- **Frozen criterion:** REFUTED if either run refuses or writes no receipt; any NLL non-finite; text targets != 2097152 or caption_targets != 47539 or image_patches != 46856; observed resolved sets != all 24 layers; receipt binding differs from the frozen declaration
+- **Ruling:** run wrote no receipt: receipt serialization refused on Path values after scoring; refutation clause 'writes no receipt' met
+- **Receipt:** `v8-attempt-failure.json`
+
+### 2026-09-30 03:59 AM LA — Next after `nll-a2-r2-v7-heavy-path-full-profile-20260930`
+- **Successor hypothesis / not closed:** Successor: nll-a2-r2-v8-heavy-path-full-profile-20260930 on child_nll_v8 (85137d8c). Restore and validation passed on the real A2 child; only the decoder constructor argument was wrong.
+- **Successor id:** `nll-a2-r2-v8-heavy-path-full-profile-20260930`
+
+### 2026-09-30 03:59 AM LA — REFUTED: `nll-a2-r2-v7-heavy-path-full-profile-20260930`
+- **Hypothesis:** Both children were trained under the prospectively selected FULL profile (selectors declared unset; R1-R3 runtime selectors unproven per the counterpart seat 41190). v7 canonicalizes {mode: full} and observes the decoder's resolved sets, so a full evaluation should bind, restore under the tail-cure validation context, and score the frozen 512-pack/128-image slice with complete coverage.
+- **Frozen criterion:** REFUTED if either run refuses or writes no receipt; any NLL non-finite; text targets != 2097152 or caption_targets != 47539 or image_patches != 46856; observed resolved sets != all 24 layers; receipt binding differs from the frozen declaration
+- **Ruling:** Frozen criterion 'either run refuses or writes no receipt' met: A2 and R2 both refused (rc=1) at CIADecoder(architecture_config=<validate_cia_architecture return object>); no NLL was produced (observed = nan, not measured); restore and validation had passed. Cured in child_nll_v8 (config dict to the decoder) with a real-decoder red.
+- **Receipt:** `seat record: v7-attempt-failure.json`
+
+### 2026-09-30 03:04 AM LA — SUPPORTED: `issue2119-sequence-segment-R3-20260929`
+- **Hypothesis:** A2 showed the full model at depth 8 trains about 0.144 s/update (p10 21,639 pos/s) and the tail completes inside the wall from a depth-1 parent. R2 repeats the same governed continuation one link deeper: the parent-validation recursion (the counterpart seat 40841) adds work at depth+1, which this seat ruled a risk not a gate. If the tail fits, R2 publishes a child whose lineage parent is 70280377 and advances the pointer by CAS; the update count is set inside the 3,600 s pre-checkpoint window so the tail does not touch it.
+- **Frozen criterion:** REFUTED if Any of: the worker is not completed with rc=0 (owned.json completed, returncode 0, cleanup verified, no supervisor failure; worker-terminal completed); measured_updates < 1,024; elapsed < 3,600 s; no valid published child checkpoint whose lineage parent is 70280377 (the R2 child, manifest 702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e) or the pointer does not advance by CAS from 70280377 to the child manifest digest; measured_updates outside 20,000-30,000; EMBER_SKIP_KEEP, EMBER_SKIP_KEEP_FFN, EMBER_SKIP_KEEP_EXPERT, EMBER_ROWS_TILE or EMBER_FP8_GROUPED present in the worker env; ARM_ADHOC_WINDOW or ARM_PROBE_ONLY present in the launch env; any non-finite loss row; wall kill at 5,656 s (a tail breach is a failed attempt with no head movement).
+- **Ruling:** Every clause of the frozen criterion decides mechanically and none fires: owned.json completed returncode 0 cleanup_verified true supervisor_failure null; worker-terminal completed; measured_updates 24,820 (>=1,024, inside 20,000-30,000); pre_checkpoint_wall_seconds 3,600.17 (>=3,600); published child f4831d3b with lineage parent 702803774263 (parent_matches true; hour-result parent_manifest_sha256 702803774263); pointer advanced by CAS to f4831d3b (selected_continuation_head.py:165 refuses unless expected parent equals the current pointer; cia_hour.py:1038 passes 702803 as expected); restored_state_matches true; losses all finite (24,821 of 24,821); tail-stamps in TAIL_PHASES order; EMBER_SKIP_KEEP/_FFN/_EXPERT, EMBER_ROWS_TILE, EMBER_FP8_GROUPED, ARM_ADHOC_WINDOW, ARM_PROBE_ONLY absent (0 grep hits in launch.json, child-env-startup.json, dispatch-manifest-frozen.json, daemon-handles-frozen.json, daemon-preflight.json; worker-env-assert.json absent); no wall kill (segment 5,402.09 s < 5,656). Diagnostics (never refute): governed_wall_seconds 4,739.0 (interval 4,000-5,400), tail after child_publish_start 1,405 s (interval 800-1,700), segment inside the counterpart seat's 5,371.46-5,408.98 band. Files read: tail-stamps.jsonl, hour-result.json, owned.json, worker-terminal.json, rows.jsonl, launch.json, child-env-startup.json, dispatch-manifest-frozen.json, worker-env-assert.json, pointer-after.json, r3-chain.log.
+- **Receipt:** `seat record: sequence-segment-R3-20260929`
+
+### 2026-09-30 12:49 AM LA — SUPPORTED: `issue2119-sequence-segment-R2-20260929-v2`
+- **Hypothesis:** A2 showed the full model at depth 8 trains about 0.144 s/update (p10 21,639 pos/s) and the tail completes inside the wall from a depth-1 parent. R2 repeats the same governed continuation one link deeper: the parent-validation recursion (the counterpart seat 40841) adds work at depth+1, which this seat ruled a risk not a gate. If the tail fits, R2 publishes a child whose lineage parent is ccf2229c and advances the pointer by CAS; the update count is set inside the 3,600 s pre-checkpoint window so the tail does not touch it.
+- **Frozen criterion:** REFUTED if Any of: the worker is not completed with rc=0 (owned.json completed, returncode 0, cleanup verified, no supervisor failure; worker-terminal completed); measured_updates < 1,024; elapsed < 3,600 s; no valid published child checkpoint whose lineage parent is ccf2229c (the A2 child) or the pointer does not advance by CAS from ccf2229c to the child manifest digest; measured_updates outside 20,000-30,000; EMBER_SKIP_KEEP, EMBER_SKIP_KEEP_FFN, EMBER_SKIP_KEEP_EXPERT, EMBER_ROWS_TILE or EMBER_FP8_GROUPED present in the worker env; ARM_ADHOC_WINDOW or ARM_PROBE_ONLY present in the launch env; any non-finite loss row; wall kill at 5,656 s (a tail breach is a failed attempt with no head movement).
+- **Ruling:** Every frozen clause held. worker-terminal completed and owned.json completed, returncode 0, cleanup_verified true, supervisor_failure null; measured_updates 24,875 (hour-result; rows.jsonl 24,876; lineage step_delta 24,876), inside 20,000-30,000 and >= 1,024; governed wall 4,499.6 s and pre-checkpoint wall 3,600.08 s (>= 3,600); child lineage parent = ccf2229c6584f2a6...; pointer CAS advanced ccf2229c -> child manifest 70280377...ffbb4e (parent_matches true, hour-result sha b1b7b533...); restored_state_matches and published_state_restored true; all 74,628 loss values finite (0 non-finite); tail-stamps in run order (segment_launch 06:23:04.143Z .. segment_complete 07:47:35.170Z, segment wall 5,071.0 s inside the 5,656 s envelope, no wall kill); EMBER_SKIP_KEEP/_FFN/_EXPERT, EMBER_ROWS_TILE, EMBER_FP8_GROUPED, ARM_ADHOC_WINDOW, ARM_PROBE_ONLY, REUSE_PROBE_IN absent from the worker env. The L2119_DONE rc=1 is outside the criterion: it is the exit status of the failed [ R2_PREP_ONLY = 1 ] guard on the line before the echo in chain_segment_R2.sh l.99-100 (DRC is captured separately at l.97; A2 printed the identical rc=1). Diagnostics (never refute): governed_wall 4,499.6 s (expect 4,600, interval 4,000-5,400); tail after 3,856 s about 1,213 s (expect 1,100, interval 800-1,700).
+- **Receipt:** `seat record: sequence-segment-R2-20260929`
+
+### 2026-09-29 10:40 PM LA — Next after `issue2119-sequence-segment-A2-20260929-v3`
+- **Successor hypothesis / not closed:** not_closed: the count interval was mis-set from a cold probe; the throughput of the full model at depth 8 is now measured, and R2 step prediction uses 0.144 s/update, not 0.52
+
+### 2026-09-29 10:40 PM LA — REFUTED: `issue2119-sequence-segment-A2-20260929-v3`
+- **Hypothesis:** Segment A's hour ran out of wall before its tail completed. With the wall re-declared at 5,656 s and tail phases stamped in run order, the same pointer-derived continuation, run as the full model from a tree that carries the lineage checkpoint/counter admission and supervision, completes its tail, publishes the child, and advances the pointer by CAS. The probe (cia-probe-a1-five-attn-stage-d4-20260930T033837Z, rc=0, 2 updates, p10 7,825 pos/s) shows the tree reaches measured updates; the step is about 0.52 s/update so the 3,600 s hour should measure about 7,000 updates.
+- **Frozen criterion:** REFUTED if Any of: the worker is not completed with rc=0 (owned.json completed, returncode 0, cleanup complete; worker-terminal completed); measured_updates < 1,024; elapsed < 3,600 s; no valid published child checkpoint whose lineage parent is 9a1bed51 (the 103619Z child), or the pointer does not advance by CAS from 9a1bed51 to the child manifest digest; measured_updates outside 5,000-12,000; EMBER_SKIP_KEEP, EMBER_SKIP_KEEP_FFN or EMBER_SKIP_KEEP_EXPERT, EMBER_ROWS_TILE or EMBER_FP8_GROUPED present in the worker env; ARM_ADHOC_WINDOW or ARM_PROBE_ONLY present in the launch env; any non-finite loss row; wall kill at 5,656 s.
+- **Ruling:** Refuted on the clause "measured_updates outside 5,000-12,000": the run made 24,946 updates. Every other clause held: worker completed rc 0, owned.json completed, worker-terminal completed, measured_updates >= 1,024, hour ran to completion, valid child ccf2229c with lineage parent 9a1bed51 and step_delta 24,947, pointer advanced by CAS. The refutation is in the prediction (0.52 s/update came from a cold 2-update probe; actual about 0.144 s/update), not the run. Head advances to ccf2229c per the one-lineage contract. Ruled by this seat 40865.
+- **Receipt:** `seat record: sequence-segment-A2-20260929`
+
 ### 2026-09-29 03:56 PM LA — Next after `ember-d-pairing-probe-margin-20260929`
 - **Successor hypothesis / not closed:** Ruled REFUTED (accepted this seat 40429). Successor hypothesis: a bounded contrastive update on REAL pairing changes real-vs-shuffled correct-label margin (pairing sensitivity) beyond the SHUF-trained twin; draft seat record: predict-draft-a build seat.md v2 (the counterpart seat 40443/this seat 40444 folded), in review, queued after A2.
 - **Successor id:** `ember-d-contrastive-pairing-sensitivity-20260929`
