@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-02T05:03:52Z",
- "generated_at": "2026-10-02T05:09:50Z",
+ "source_events_through": "2026-10-02T08:05:20Z",
+ "generated_at": "2026-10-02T08:05:21Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,67 +89,67 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 2638842,
-   "mtime_utc": "2026-10-02T05:03:52Z",
-   "records_in_source": 3519,
+   "bytes": 2677786,
+   "mtime_utc": "2026-10-02T08:05:20Z",
+   "records_in_source": 3598,
    "unparseable_records": 0,
-   "hypotheses": 452,
-   "included": 3519,
+   "hypotheses": 455,
+   "included": 3598,
    "omitted_fields": {
     "ceiling": {
      "occurrences": 26,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 28,
+     "occurrences": 31,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
-     "occurrences": 3,
+     "occurrences": 10,
      "reason": "not on the publication allowlist"
     },
     "expect": {
-     "occurrences": 51,
+     "occurrences": 54,
      "reason": "not on the publication allowlist"
     },
     "gate": {
-     "occurrences": 52,
+     "occurrences": 55,
      "reason": "not on the publication allowlist"
     },
     "gate_state": {
-     "occurrences": 37,
+     "occurrences": 42,
      "reason": "not on the publication allowlist"
     },
     "interval": {
-     "occurrences": 51,
+     "occurrences": 54,
      "reason": "not on the publication allowlist"
     },
     "interval_held": {
-     "occurrences": 36,
+     "occurrences": 40,
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 324,
+     "occurrences": 403,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 324,
+     "occurrences": 403,
      "reason": "not on the publication allowlist"
     },
     "observed": {
-     "occurrences": 37,
+     "occurrences": 42,
      "reason": "not on the publication allowlist"
     },
     "quantity": {
-     "occurrences": 51,
+     "occurrences": 54,
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 324,
+     "occurrences": 403,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 324,
+     "occurrences": 403,
      "reason": "not on the publication allowlist"
     },
     "voi": {
@@ -239,10 +239,10 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 40,
-   "absolute_local_paths_normalized": 707,
+   "absolute_local_paths_normalized": 714,
    "operator_name_occurrences_replaced": 0,
-   "seat_name_occurrences_replaced": 775,
-   "seat_record_paths_rewritten": 1460,
+   "seat_name_occurrences_replaced": 831,
+   "seat_record_paths_rewritten": 1467,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
@@ -283,8 +283,8 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-02T05:03:52Z",
-    "hypotheses": 343,
+    "ended": "2026-10-02T08:05:20Z",
+    "hypotheses": 346,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -24371,7 +24371,7 @@
   },
   {
    "id": "gate-d-model-never-learned-pixel-use-in-distribution-20260926",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24381,10 +24381,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-26T16:35:04Z",
-   "last_ts": "2026-09-26T17:02:36Z",
+   "last_ts": "2026-10-02T05:20:27Z",
    "events": [
     {
      "ts": "2026-09-26T16:35:04Z",
@@ -24437,6 +24438,11 @@
      "ts": "2026-09-26T17:02:36Z",
      "stage": "UPDATED",
      "hypothesis": "refuted: pixels used in-distribution (+23.8 pts). Successor: gate-d-128px-image-budget-erases-mmmu-detail-20260926"
+    },
+    {
+     "ts": "2026-10-02T05:20:27Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Hour 9 child: MMMU real 0.262, missing 0.251, wrong 0.253 (floor 0.2857); ~8 images/step over 96k steps (~770k image exposures), yet image conditions barely move the score. Image projector is wired and receives gradient.",
@@ -24449,7 +24455,8 @@
    ],
    "verdict": "REFUTED",
    "ruling": "frozen: refuted if real-minus-blank >= 3 points. Measured on 2,000 in-distribution MC rows (trained rows, manifest fully consumed): real 0.5335, blank 0.296, +23.75 pts (a-okvqa +39, ai2d +24, iconqa +6.5). Pixels ARE used in-distribution. Caveat: rows were trained 3-4x, so part of the gap may be memorisation; defect points to transfer to MMMU, not a dead image path.",
-   "not_closed": "refuted: pixels used in-distribution (+23.8 pts). Successor: gate-d-128px-image-budget-erases-mmmu-detail-20260926"
+   "not_closed": "refuted: pixels used in-distribution (+23.8 pts). Successor: gate-d-128px-image-budget-erases-mmmu-detail-20260926",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-d-128px-image-budget-erases-mmmu-detail-20260926",
@@ -24513,7 +24520,7 @@
   },
   {
    "id": "gate-d-mmmu-rises-with-cumulative-image-training-20260926",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24523,10 +24530,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-26T17:14:28Z",
-   "last_ts": "2026-09-26T20:18:38Z",
+   "last_ts": "2026-10-02T05:20:28Z",
    "events": [
     {
      "ts": "2026-09-26T17:14:28Z",
@@ -24580,6 +24588,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: the 3-hour criterion itself; carried verbatim to the successor. Hour 1 moved both terms in the predicted direction.",
      "successor": "gate-d-mmmu-rises-with-cumulative-image-training-hour2-20260926"
+    },
+    {
+     "ts": "2026-10-02T05:20:28Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "MMMU real across hours 3/4/7/8/9 = 0.263/0.259/0.222/0.248/0.262, but hours 7-9 each chained from the same parent: no checkpoint has more than ~2 h of image training, so no learning curve exists and the hours-to-floor is not calculable.",
@@ -24593,11 +24606,12 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Frozen criterion is over 3 chained hours; this run is hour 1 of 3 and cannot discriminate it alone. Hour 1: real 0.262 -> 0.272 (+1.0 pt), real-minus-missing +0.011 -> +0.036 (rose). Criterion carried UNCHANGED to the hour-2 successor; fadv-1027-final D1 STAY (g10 +0.036 >= +0.030).",
    "not_closed": "Not closed: the 3-hour criterion itself; carried verbatim to the successor. Hour 1 moved both terms in the predicted direction.",
-   "successor": "gate-d-mmmu-rises-with-cumulative-image-training-hour2-20260926"
+   "successor": "gate-d-mmmu-rises-with-cumulative-image-training-hour2-20260926",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-d-mmmu-rises-with-cumulative-image-training-hour2-20260926",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24607,10 +24621,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-26T20:18:39Z",
-   "last_ts": "2026-09-27T00:13:39Z",
+   "last_ts": "2026-10-02T05:20:28Z",
    "events": [
     {
      "ts": "2026-09-26T20:18:39Z",
@@ -24662,6 +24677,11 @@
      "ts": "2026-09-27T00:13:39Z",
      "stage": "UPDATED",
      "hypothesis": "Not closed: whether image-conditioned training helps MMMU on a different mixture (v3: arxivqa/M3Exam/MMBench-dev with disjointness receipts); whether a longer single hour (not chained) behaves differently; missing/wrong arms for hour 2 were not run (branch d), so g11 is unmeasured."
+    },
+    {
+     "ts": "2026-10-02T05:20:28Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Hour 1 of the 3-hour chain (attempt 10) landed: real 0.272, missing 0.236; gate D still below the 0.2857 floor.",
@@ -24674,7 +24694,8 @@
    ],
    "verdict": "REFUTED",
    "ruling": "Frozen criterion REFUTED-in-part at hour 2 per attempt-11 branch rule 3: real fell 0.272 -> 0.266 (hour 2 of 3), so real has not risen by >=2.5 pts and cannot on this trajectory; fadv-1027 falsifier (real11 < 0.277) fires -> SWITCH to v3. Third identical hour not dispatched (branch rule 3).",
-   "not_closed": "Not closed: whether image-conditioned training helps MMMU on a different mixture (v3: arxivqa/M3Exam/MMBench-dev with disjointness receipts); whether a longer single hour (not chained) behaves differently; missing/wrong arms for hour 2 were not run (branch d), so g11 is unmeasured."
+   "not_closed": "Not closed: whether image-conditioned training helps MMMU on a different mixture (v3: arxivqa/M3Exam/MMBench-dev with disjointness receipts); whether a longer single hour (not chained) behaves differently; missing/wrong arms for hour 2 were not run (branch d), so g11 is unmeasured.",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-c-v3-arm-learns-noninferior-20260926",
@@ -24753,7 +24774,7 @@
   },
   {
    "id": "attempt12-v3-six-gates-accepted-20260926",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24767,10 +24788,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T05:06:32Z",
-   "last_ts": "2026-09-27T10:26:46Z",
+   "last_ts": "2026-10-02T05:20:28Z",
    "events": [
     {
      "ts": "2026-09-27T05:06:32Z",
@@ -24848,6 +24870,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: the arm is sound on C/E/F; D is 0.003 below floor and moving; A/B need a ~23% p90 step cut on the loss-bearing basis.",
      "successor": "attempt13-v3-lineage-six-gates-20260927"
+    },
+    {
+     "ts": "2026-10-02T05:20:28Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Attempt 11 cleared throughput but gate D real MMMU scored 0.266 and its hour did not complete (restore growth vs the 4500 s worker bound). v3 manifest licence now PASS (caption -0.505, text -0.472 nats vs control).",
@@ -24861,11 +24888,12 @@
    "verdict": "REFUTED",
    "ruling": "frozen criterion: six_gate_verdict.py returns anything other than ACCEPTED. It returned NOT_ACCEPTED: A 61,408.1, B 67,267.55, D real 0.283 below 0.2857; C/E/F MET.",
    "not_closed": "Not closed: the arm is sound on C/E/F; D is 0.003 below floor and moving; A/B need a ~23% p90 step cut on the loss-bearing basis.",
-   "successor": "attempt13-v3-lineage-six-gates-20260927"
+   "successor": "attempt13-v3-lineage-six-gates-20260927",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "attempt13-v3-lineage-six-gates-20260927",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -24873,10 +24901,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T10:25:31Z",
-   "last_ts": "2026-09-27T12:15:41Z",
+   "last_ts": "2026-10-02T05:20:29Z",
    "events": [
     {
      "ts": "2026-09-27T10:25:31Z",
@@ -24918,6 +24947,11 @@
      "stage": "UPDATED",
      "hypothesis": "D moved 0.283 -> 0.285 (slope slowing); A/B unchanged on this arm.",
      "successor": "attempt14-v3-lineage-six-gates-20260927"
+    },
+    {
+     "ts": "2026-10-02T05:20:29Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "A12 child: gate D real 0.283 vs floor 0.2857 (A11 0.266 one hour earlier); A/B 61,408/67,268 on the loss-bearing basis; image controls equal real.",
@@ -24931,7 +24965,8 @@
    "verdict": "REFUTED",
    "ruling": "frozen criterion: six_gate_verdict.py returns anything other than ACCEPTED. It returned NOT_ACCEPTED: A 62,606.6, B 66,964.8, D real 0.285 below 0.2857; C/E/F MET.",
    "not_closed": "D moved 0.283 -> 0.285 (slope slowing); A/B unchanged on this arm.",
-   "successor": "attempt14-v3-lineage-six-gates-20260927"
+   "successor": "attempt14-v3-lineage-six-gates-20260927",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "attempt14-v3-lineage-six-gates-20260927",
@@ -25059,7 +25094,7 @@
   },
   {
    "id": "optimizer-overlap-t1-null-a-20260927",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -25071,10 +25106,11 @@
     "RUNNING",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T19:28:35Z",
-   "last_ts": "2026-09-28T05:28:50Z",
+   "last_ts": "2026-10-02T05:19:25Z",
    "events": [
     {
      "ts": "2026-09-27T19:28:35Z",
@@ -25140,17 +25176,23 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: sequencing correction: this seat wants Q2(a) dispatched first, killed the premature null-pair leg",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T05:19:25Z",
+     "stage": "CLOSED",
+     "because": "Superseded: the noise-floor legs for the matched pair never completed (aborted runs); the pair was ruled on its own matched-on row (optimizer-overlap-t1-matched-on-20260927 RULED REFUTED: p90 off 47.63 ms vs on 51.25 ms, -3.62 ms < 2.0 ms), which needs no null floor. Not closed by this: a fresh null floor for any later optimizer-overlap treatment."
     }
    ],
    "observation": "A14 governed hour: complete-update p90 55.31 ms, p50 47.48 ms on loss-bearing basis; gate needs p90 <= 40.6 ms. Optimizer step runs serially after backward on one stream.",
    "explanation": "Staging optimizer.step() on a side CUDA stream (EMBER_STAGE_OPTIMIZER_OVERLAP=1) overlaps it with next-pack staging; ceiling ~5.2 ms, bounded by _stage_next_early duration.",
    "criterion": "the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists",
    "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable; paired with its sibling null leg it yields the noise floor |p90_a - p90_b|",
-   "instrument": "dispatch_a1_hour.sh governed path, HOUR_MEASURED_STEPS=1024, T1 head in a build seat-1945-optimizer-overlap-t1; statistic complete-to-complete p90 on loss-bearing basis via complete_update_quantiles.py"
+   "instrument": "dispatch_a1_hour.sh governed path, HOUR_MEASURED_STEPS=1024, T1 head in a build seat-1945-optimizer-overlap-t1; statistic complete-to-complete p90 on loss-bearing basis via complete_update_quantiles.py",
+   "closing": "Superseded: the noise-floor legs for the matched pair never completed (aborted runs); the pair was ruled on its own matched-on row (optimizer-overlap-t1-matched-on-20260927 RULED REFUTED: p90 off 47.63 ms vs on 51.25 ms, -3.62 ms < 2.0 ms), which needs no null floor. Not closed by this: a fresh null floor for any later optimizer-overlap treatment."
   },
   {
    "id": "optimizer-overlap-t1-null-b-20260927",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -25158,10 +25200,11 @@
     "RUNNING",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T19:28:36Z",
-   "last_ts": "2026-09-27T20:53:52Z",
+   "last_ts": "2026-10-02T05:19:26Z",
    "events": [
     {
      "ts": "2026-09-27T19:28:36Z",
@@ -25203,13 +25246,19 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: template hour produced no hour-result (see seat record: issue1945-a1-hour-20260927T202933Z.log)",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T05:19:26Z",
+     "stage": "CLOSED",
+     "because": "Superseded: the noise-floor legs for the matched pair never completed (aborted runs); the pair was ruled on its own matched-on row (optimizer-overlap-t1-matched-on-20260927 RULED REFUTED: p90 off 47.63 ms vs on 51.25 ms, -3.62 ms < 2.0 ms), which needs no null floor. Not closed by this: a fresh null floor for any later optimizer-overlap treatment."
     }
    ],
    "observation": "A14 governed hour: complete-update p90 55.31 ms, p50 47.48 ms on loss-bearing basis; gate needs p90 <= 40.6 ms. Optimizer step runs serially after backward on one stream.",
    "explanation": "Staging optimizer.step() on a side CUDA stream (EMBER_STAGE_OPTIMIZER_OVERLAP=1) overlaps it with next-pack staging; ceiling ~5.2 ms, bounded by _stage_next_early duration.",
    "criterion": "the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists",
    "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable; paired with its sibling null leg it yields the noise floor |p90_a - p90_b|",
-   "instrument": "dispatch_a1_hour.sh governed path, HOUR_MEASURED_STEPS=1024, T1 head in a build seat-1945-optimizer-overlap-t1; statistic complete-to-complete p90 on loss-bearing basis via complete_update_quantiles.py"
+   "instrument": "dispatch_a1_hour.sh governed path, HOUR_MEASURED_STEPS=1024, T1 head in a build seat-1945-optimizer-overlap-t1; statistic complete-to-complete p90 on loss-bearing basis via complete_update_quantiles.py",
+   "closing": "Superseded: the noise-floor legs for the matched pair never completed (aborted runs); the pair was ruled on its own matched-on row (optimizer-overlap-t1-matched-on-20260927 RULED REFUTED: p90 off 47.63 ms vs on 51.25 ms, -3.62 ms < 2.0 ms), which needs no null floor. Not closed by this: a fresh null floor for any later optimizer-overlap treatment."
   },
   {
    "id": "optimizer-overlap-t1-matched-off-20260927",
@@ -25426,7 +25475,7 @@
   },
   {
    "id": "mmmu-image-path-d-cure-20260927",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -25434,10 +25483,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T21:52:13Z",
-   "last_ts": "2026-09-27T22:49:55Z",
+   "last_ts": "2026-10-02T05:20:29Z",
    "events": [
     {
      "ts": "2026-09-27T21:52:13Z",
@@ -25477,6 +25527,11 @@
      "ts": "2026-09-27T22:49:55Z",
      "stage": "UPDATED",
      "hypothesis": "Successor mmmu-image-path-d-cure-r2-20260927: identical criterion, run with the lease only (the gate D runner refuses under the window marker)."
+    },
+    {
+     "ts": "2026-10-02T05:20:29Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "1945-no-hour-without-a-measured-cure rule requires D cure evidence before any governed hour: real MMMU must exceed missing and wrong controls by more than the item SE, on the A14 trained child. No recent archive (checked gate-d-template-a1-hour8-20260926) has a completed missing/wrong control pair -- dirs exist but are empty, so this has not actually been measured end-to-end. this seat ruled (38341): full N=847 per condition, existing harness shape, three separate loads.",
@@ -25489,11 +25544,12 @@
    ],
    "verdict": "INCONCLUSIVE",
    "ruling": "Did not discriminate: all three conditions refused before loading (run_gate_d_mmmu_for_hour.py exits 3 while gpu-window-open exists, and my wrapper opened the window). Criterion unchanged, not evaluated: real - max(missing, wrong) <= sqrt(p*(1-p)/847). Rerun as -r2 without the marker.",
-   "not_closed": "Successor mmmu-image-path-d-cure-r2-20260927: identical criterion, run with the lease only (the gate D runner refuses under the window marker)."
+   "not_closed": "Successor mmmu-image-path-d-cure-r2-20260927: identical criterion, run with the lease only (the gate D runner refuses under the window marker).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "mmmu-image-path-d-cure-r2-20260927",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -25501,10 +25557,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-27T22:49:58Z",
-   "last_ts": "2026-09-27T22:53:38Z",
+   "last_ts": "2026-10-02T05:20:29Z",
    "events": [
     {
      "ts": "2026-09-27T22:49:58Z",
@@ -25543,6 +25600,11 @@
      "ts": "2026-09-27T22:53:38Z",
      "stage": "UPDATED",
      "hypothesis": "Successor mmmu-image-path-d-cure-r3-20260927 with claim.json bound to the A14 candidate plan."
+    },
+    {
+     "ts": "2026-10-02T05:20:29Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Rerun of mmmu-image-path-d-cure-20260927 (refused pre-load under the window marker). Real/missing/wrong MMMU on the A14 trained child, N=847 each.",
@@ -25554,7 +25616,8 @@
    ],
    "verdict": "INCONCLUSIVE",
    "ruling": "Did not discriminate: all three conditions went RED identity:candidate-differs before loading. The claim.json copied from hour8 carried plan 78660fe3; A14 hour candidate is 22d2eca4. Criterion not evaluated: real - max(missing, wrong) <= sqrt(p*(1-p)/847).",
-   "not_closed": "Successor mmmu-image-path-d-cure-r3-20260927 with claim.json bound to the A14 candidate plan."
+   "not_closed": "Successor mmmu-image-path-d-cure-r3-20260927 with claim.json bound to the A14 candidate plan.",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "mmmu-image-path-d-cure-r3-20260927",
@@ -25976,7 +26039,7 @@
   },
   {
    "id": "gate-d-q2a-hour-dose-scored-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -25984,10 +26047,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T07:51:48Z",
-   "last_ts": "2026-09-28T08:07:40Z",
+   "last_ts": "2026-10-02T05:20:30Z",
    "events": [
     {
      "ts": "2026-09-28T07:51:48Z",
@@ -26029,6 +26093,11 @@
      "stage": "UPDATED",
      "hypothesis": "An hour of college-level visual MC at answer weight 200 (82,302 updates) did not make MMMU depend on the image: three conditions within 0.003. NOT CLOSED: (a) whether the image path reads MMMU images at all at the current patch budget and resolution; (b) a dose of image-NECESSARY items, where the text alone cannot answer; (c) whether the three conditions answer the same items (per-item agreement) or just score the same. Successor is analysis-only on these receipts: per-item agreement across conditions, answer-letter distribution per condition, per-subject breakdown.",
      "successor": "gate-d-mmmu-per-item-agreement-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:30Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Retry8 hour-dose child (82,302 updates, college-MC dose, answer weight 200) exists and loads; the Q2(a) predecessor scored nothing because the chain claim carried a prior retry plan digest. This scores the same child with the claim taken from the frozen dispatch manifest.",
@@ -26042,7 +26111,8 @@
    "verdict": "REFUTED",
    "ruling": "Frozen criterion: real - max(missing, wrong) <= 0.0153 (one item SE), all three receipts carrying the requested image_condition. Observed real 0.283, missing 0.286, wrong 0.283; all three image_condition fields honoured; real - max = -0.003. Prediction held on real (0.28 [0.25,0.32]) and wrong (0.26 predicted, 0.283 observed, just outside), missing 0.275 predicted vs 0.286 observed.",
    "not_closed": "An hour of college-level visual MC at answer weight 200 (82,302 updates) did not make MMMU depend on the image: three conditions within 0.003. NOT CLOSED: (a) whether the image path reads MMMU images at all at the current patch budget and resolution; (b) a dose of image-NECESSARY items, where the text alone cannot answer; (c) whether the three conditions answer the same items (per-item agreement) or just score the same. Successor is analysis-only on these receipts: per-item agreement across conditions, answer-letter distribution per condition, per-subject breakdown.",
-   "successor": "gate-d-mmmu-per-item-agreement-20260928"
+   "successor": "gate-d-mmmu-per-item-agreement-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-d-mmmu-per-item-agreement-20260928",
@@ -26228,7 +26298,7 @@
   },
   {
    "id": "gate-d-caption-nll-content-probe-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -26236,10 +26306,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T09:13:06Z",
-   "last_ts": "2026-09-28T09:24:27Z",
+   "last_ts": "2026-10-02T05:20:30Z",
    "events": [
     {
      "ts": "2026-09-28T09:13:06Z",
@@ -26281,6 +26352,11 @@
      "stage": "UPDATED",
      "hypothesis": "Refuted as a content-use claim; it does NOT close: (1) content use at a larger grid (leg 4), now deprioritised because content is weak even at the trained resolution on trained captions; (2) content use after more image-path gradient; (3) a deeper patch encoder. Presence is used (4.76 nats). Next, understanding first: how far has embed_image moved from genesis, and what share of the gradient norm reaches it? If it barely moved, the cure is objective or learning-rate share on the image path, not resolution.",
      "successor": "gate-d-image-projection-movement-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:30Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Leg 1: in-distribution MC accuracy real 0.4007, wrong 0.4032, blank 0.2966 on the hour-dose child. Presence moves MC, content does not. MC rows keep the question text, so a text-memorised answer survives a wrong image.",
@@ -26294,7 +26370,8 @@
    "verdict": "REFUTED",
    "ruling": "Frozen criterion: refuted if NLL_wrong - NLL_real < 0.05 nats on >=500 trained caption rows. Observed on n=600 (0 refused): real 1.8967, wrong 1.9230, blank 6.6518 nats/token; wrong - real = 0.0263 < 0.05. Blank - real = 4.755: image presence is used heavily, content barely (425 of 600 rows worse under the wrong image, so a small real content signal exists, about 1.4 percent of NLL).",
    "not_closed": "Refuted as a content-use claim; it does NOT close: (1) content use at a larger grid (leg 4), now deprioritised because content is weak even at the trained resolution on trained captions; (2) content use after more image-path gradient; (3) a deeper patch encoder. Presence is used (4.76 nats). Next, understanding first: how far has embed_image moved from genesis, and what share of the gradient norm reaches it? If it barely moved, the cure is objective or learning-rate share on the image path, not resolution.",
-   "successor": "gate-d-image-projection-movement-20260928"
+   "successor": "gate-d-image-projection-movement-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-d-image-projection-movement-20260928",
@@ -26375,20 +26452,27 @@
   },
   {
    "id": "gate-ab-p90-device-floor-above-budget-20260928",
-   "stage": "OBSERVED",
+   "stage": "CLOSED",
    "stages_seen": [
-    "OBSERVED"
+    "OBSERVED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T09:55:33Z",
-   "last_ts": "2026-09-28T09:55:33Z",
+   "last_ts": "2026-10-02T05:19:04Z",
    "events": [
     {
      "ts": "2026-09-28T09:55:33Z",
      "stage": "OBSERVED",
      "observation": "Off2 arm (n=1023 intervals): p50 42.29 ms, p90 47.63 ms against the 40.6 ms budget. Mid band device time forward 9.31 + backward 29.8 + optimizer 2.99 = 42.1 ms, already above 40.6 before any host gap. Tail: backward 30.5-33.2 ms and host gap grows (host gap corr with interval 0.593, backward 0.281, image patches ~0.04). In-step GC is zero on all but one step (frozen heap, one gen-2 event). So a cure must cut >= ~2 ms of device time at the median AND the host-gap tail; tail removal alone cannot reach 40.6."
+    },
+    {
+     "ts": "2026-10-02T05:19:04Z",
+     "stage": "CLOSED",
+     "because": "Absorbed: the observation (device time fwd 9.31 + bwd 29.8 + opt 2.99 = 42.1 ms vs 40.6 ms budget; host-gap tail) is carried as the premise of the live PREDICTED rows p90-climb-is-gpu-clock-or-power-20260927 and optimizer-overlap-t1-* and was later bounded by the governed H4/H5/H6 hours (p10 21.5k positions/s); no separate mechanism is owed."
     }
    ],
-   "observation": "Off2 arm (n=1023 intervals): p50 42.29 ms, p90 47.63 ms against the 40.6 ms budget. Mid band device time forward 9.31 + backward 29.8 + optimizer 2.99 = 42.1 ms, already above 40.6 before any host gap. Tail: backward 30.5-33.2 ms and host gap grows (host gap corr with interval 0.593, backward 0.281, image patches ~0.04). In-step GC is zero on all but one step (frozen heap, one gen-2 event). So a cure must cut >= ~2 ms of device time at the median AND the host-gap tail; tail removal alone cannot reach 40.6."
+   "observation": "Off2 arm (n=1023 intervals): p50 42.29 ms, p90 47.63 ms against the 40.6 ms budget. Mid band device time forward 9.31 + backward 29.8 + optimizer 2.99 = 42.1 ms, already above 40.6 before any host gap. Tail: backward 30.5-33.2 ms and host gap grows (host gap corr with interval 0.593, backward 0.281, image patches ~0.04). In-step GC is zero on all but one step (frozen heap, one gen-2 event). So a cure must cut >= ~2 ms of device time at the median AND the host-gap tail; tail removal alone cannot reach 40.6.",
+   "closing": "Absorbed: the observation (device time fwd 9.31 + bwd 29.8 + opt 2.99 = 42.1 ms vs 40.6 ms budget; host-gap tail) is carried as the premise of the live PREDICTED rows p90-climb-is-gpu-clock-or-power-20260927 and optimizer-overlap-t1-* and was later bounded by the governed H4/H5/H6 hours (p10 21.5k positions/s); no separate mechanism is owed."
   },
   {
    "id": "issue2119-lineage-continuation-20260928",
@@ -26452,7 +26536,7 @@
   },
   {
    "id": "gate-ab-backward-class-census-off2-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -26460,10 +26544,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T12:18:04Z",
-   "last_ts": "2026-09-28T12:22:48Z",
+   "last_ts": "2026-10-02T05:20:30Z",
    "events": [
     {
      "ts": "2026-09-28T12:18:04Z",
@@ -26505,6 +26590,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: which backward classes are heavy (instrument 4.0% null spread, above the 3% frozen floor). New finding from source: with EMBER_PRELAUNCH_FORWARD the row cuda_phase forward/backward events come from pre[events], recorded when the forward was launched ahead during the previous step (cia_step_runner.py 1819, 2097-2101). The row backward interval therefore starts at the prelaunched forward end and spans inter-step idle, so the 3.2x backward/forward premise of the A/B derivation is an attribution artifact. The captured device split without prelaunch reads fwd 11.7, loss 0.6, bwd 18.7 ms (1.59x). Probe boundaries: text-only genesis, and the optimizer steps all parameters (17.6 ms vs arm 2.99). Successor: device work of the arm fits 40.6 ms and the p90 excess is host/idle between steps.",
      "successor": "gate-ab-device-work-fits-budget-idle-is-the-gap-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:30Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "off2 arm mid-band device: forward 9.31 ms, backward 29.8 ms, optimizer 2.99 ms per update (42.1 ms > 40.6 budget). Backward is 3.2x forward; a plain fwd+bwd without recompute runs about 2x.",
@@ -26518,7 +26608,8 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Frozen criterion: INCONCLUSIVE if the null pair total device us/step differs by more than 3%. Observed 49,083 vs 47,115 us = 4.0%. Both runs split all 6 windows (0 residual). Secondary facts, not a verdict: captured backward/forward 1.59 (18.66 vs 11.73 ms), not 3.2; optimizer phase 17.6 ms here vs 2.99 ms in the hour rows, so this probe steps the full parameter set and is NOT the arm optimizer path.",
    "not_closed": "Not closed: which backward classes are heavy (instrument 4.0% null spread, above the 3% frozen floor). New finding from source: with EMBER_PRELAUNCH_FORWARD the row cuda_phase forward/backward events come from pre[events], recorded when the forward was launched ahead during the previous step (cia_step_runner.py 1819, 2097-2101). The row backward interval therefore starts at the prelaunched forward end and spans inter-step idle, so the 3.2x backward/forward premise of the A/B derivation is an attribution artifact. The captured device split without prelaunch reads fwd 11.7, loss 0.6, bwd 18.7 ms (1.59x). Probe boundaries: text-only genesis, and the optimizer steps all parameters (17.6 ms vs arm 2.99). Successor: device work of the arm fits 40.6 ms and the p90 excess is host/idle between steps.",
-   "successor": "gate-ab-device-work-fits-budget-idle-is-the-gap-20260928"
+   "successor": "gate-ab-device-work-fits-budget-idle-is-the-gap-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-ab-host-block-in-backward-20260928",
@@ -26641,16 +26732,17 @@
   },
   {
    "id": "gate-ab-engine-thread-seat-wait-in-loss-backward-20260928",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T13:17:28Z",
-   "last_ts": "2026-09-28T13:49:15Z",
+   "last_ts": "2026-10-02T05:19:26Z",
    "events": [
     {
      "ts": "2026-09-28T13:17:28Z",
@@ -26680,13 +26772,19 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: premature manual loop.py claim before building the dispatch script; the actual claim point is gpu_window.sh open per-leg (per dispatch_a1_hour.sh's own internal call), releasing so the per-leg dispatch can claim correctly",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T05:19:26Z",
+     "stage": "CLOSED",
+     "because": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
     }
    ],
    "observation": "On the arm (off2 reference: row wall p50 40.83 ms, p90 46.06 ms; device backward p50 29.14 ms), the autograd engine thread running the streamed-loss and cut-cross-entropy custom backward spends 57.9% of its sampled time reacquiring the interpreter lock, while the pack/decode pool (PIL decode, file opens, memcpy) runs Python on other threads.",
    "explanation": "Each host allocation and Python step in the loss backward releases and retakes the lock; with a 20 ms switch interval and a busy decode pool, each retake can wait. If the device drains its queue during those waits, the wait is on the step critical path, and gating the pack/decode pool off the lock during the loss backward (or holding it for the backward window) removes it. The 2026-09-25 switch-interval sweep moved the whole interpreter and priced a different trade: the step thread against the pool, not the engine thread in the loss backward.",
    "criterion": "treatment p90 improvement <= the null-pair difference, OR the treatment arm does not assert the gate executed (a counter written by the gate, one eligible writer), OR the reference arm engine-thread lock-wait share is < 20% when re-sampled at <= 50 Hz",
    "criterion_supported_if": "treatment p90 update wall below reference by more than the null-pair difference AND by >= 2.0 ms (prediction: 3-6 ms, interval 1-8 ms)",
-   "instrument": "matched captured pair at one head and geometry, null pair (reference vs reference) first, differing only in a pack-pool gate env flag held closed across the loss backward; statistic = completion-to-completion p90 update wall and per-step device interval union"
+   "instrument": "matched captured pair at one head and geometry, null pair (reference vs reference) first, differing only in a pack-pool gate env flag held closed across the loss backward; statistic = completion-to-completion p90 update wall and per-step device interval union",
+   "closing": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
   },
   {
    "id": "gate-d-linear-patch-projection-capacity-20260928",
@@ -27050,7 +27148,7 @@
   },
   {
    "id": "caption-truncation-census-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27058,10 +27156,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T15:16:56Z",
-   "last_ts": "2026-09-28T15:41:49Z",
+   "last_ts": "2026-10-02T05:20:31Z",
    "events": [
     {
      "ts": "2026-09-28T15:16:56Z",
@@ -27102,6 +27201,11 @@
      "ts": "2026-09-28T15:41:49Z",
      "stage": "UPDATED",
      "hypothesis": "AMENDED per this seat mail 38464 (methodological correction, arrived after mail 38465's report but before this update): the original stem_survives/options_only classification was a binary substring-match heuristic that presupposed a conclusion. Corrected measurement uses exact tokenizer per-token character offsets (Tokenizer.encode(...).offsets) to classify each over-cap row's question-stem retention as complete/partial/none, counts options fully retained, and checks whether the answer-letter's own option text survives -- broken down per dataset_id. Receipt: seat record: caption-truncation-census-20260928.json (schema v2).\n\nFrozen claim, reworded per this seat's instruction: truncation occurs at rate 68.97% (121736/176518 answer-scoped rows), with retention distribution: 0% of over-cap rows retain the COMPLETE question stem in any dataset; the majority retain it PARTIALLY (arxivqa 41.7% partial/58.3% none -- arxivqa is 77% of all rows and 97% of all over-cap rows; ai2d 77.5%/22.5%; scienceqa 75%/25%; m3exam-english 63.4%/36.6%; mmbench-dev-scienceqa 70.9%/29.1%). Options are mostly fully retained (82.6%-93.0% across datasets) and the answer-letter's own option text stays intact 82.6%-96.5% of the time. This is NOT \"options-only\" (the prior wording) and this census does not itself establish D-cause -- it establishes the truncation rate and retention shape only."
+    },
+    {
+     "ts": "2026-10-02T05:20:31Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "image_text_stream.py encoded[-58:] truncation for answer-scoped rows: any MC prompt whose token length exceeds 58 loses its question stem, kept-tail is options-only. the counterpart seat found this at src/ember/infrastructure/tools/ember-restart-3b/image_text_stream.py:192-193.",
@@ -27114,7 +27218,8 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "refuted-if required <1% over-cap AND ~100% stem survival; observed 68.97% of answer-scoped captions (121736/176518) exceed the 58-token cap, and of those over-cap rows only 0.013% (16/121736) retain any surviving stem token -- 99.99% are options-only. Truncation is not an edge case, it is the majority behavior.",
-   "not_closed": "AMENDED per this seat mail 38464 (methodological correction, arrived after mail 38465's report but before this update): the original stem_survives/options_only classification was a binary substring-match heuristic that presupposed a conclusion. Corrected measurement uses exact tokenizer per-token character offsets (Tokenizer.encode(...).offsets) to classify each over-cap row's question-stem retention as complete/partial/none, counts options fully retained, and checks whether the answer-letter's own option text survives -- broken down per dataset_id. Receipt: seat record: caption-truncation-census-20260928.json (schema v2).\n\nFrozen claim, reworded per this seat's instruction: truncation occurs at rate 68.97% (121736/176518 answer-scoped rows), with retention distribution: 0% of over-cap rows retain the COMPLETE question stem in any dataset; the majority retain it PARTIALLY (arxivqa 41.7% partial/58.3% none -- arxivqa is 77% of all rows and 97% of all over-cap rows; ai2d 77.5%/22.5%; scienceqa 75%/25%; m3exam-english 63.4%/36.6%; mmbench-dev-scienceqa 70.9%/29.1%). Options are mostly fully retained (82.6%-93.0% across datasets) and the answer-letter's own option text stays intact 82.6%-96.5% of the time. This is NOT \"options-only\" (the prior wording) and this census does not itself establish D-cause -- it establishes the truncation rate and retention shape only."
+   "not_closed": "AMENDED per this seat mail 38464 (methodological correction, arrived after mail 38465's report but before this update): the original stem_survives/options_only classification was a binary substring-match heuristic that presupposed a conclusion. Corrected measurement uses exact tokenizer per-token character offsets (Tokenizer.encode(...).offsets) to classify each over-cap row's question-stem retention as complete/partial/none, counts options fully retained, and checks whether the answer-letter's own option text survives -- broken down per dataset_id. Receipt: seat record: caption-truncation-census-20260928.json (schema v2).\n\nFrozen claim, reworded per this seat's instruction: truncation occurs at rate 68.97% (121736/176518 answer-scoped rows), with retention distribution: 0% of over-cap rows retain the COMPLETE question stem in any dataset; the majority retain it PARTIALLY (arxivqa 41.7% partial/58.3% none -- arxivqa is 77% of all rows and 97% of all over-cap rows; ai2d 77.5%/22.5%; scienceqa 75%/25%; m3exam-english 63.4%/36.6%; mmbench-dev-scienceqa 70.9%/29.1%). Options are mostly fully retained (82.6%-93.0% across datasets) and the answer-letter's own option text stays intact 82.6%-96.5% of the time. This is NOT \"options-only\" (the prior wording) and this census does not itself establish D-cause -- it establishes the truncation rate and retention shape only.",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-sequence-segment-A-20260928",
@@ -27194,7 +27299,7 @@
   },
   {
    "id": "gate-ab-engine-thread-seat-wait-in-loss-backward-null-r2-a-20260928",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27204,10 +27309,11 @@
     "RUNNING",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T16:39:47Z",
-   "last_ts": "2026-09-28T17:14:42Z",
+   "last_ts": "2026-10-02T05:19:26Z",
    "events": [
     {
      "ts": "2026-09-28T16:39:47Z",
@@ -27260,25 +27366,32 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: template hour produced no hour-result (see seat record: issue1945-a1-hour-20260928T170752Z.log)",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T05:19:26Z",
+     "stage": "CLOSED",
+     "because": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
     }
    ],
    "observation": "Re-run of the void pre-a330bc4d null pair (gate-ab-engine-thread-a seat-wait-in-loss-backward-null-a/b-20260928, closed as void: pre-fix head). This leg measures the flag-off noise floor at the current head a330bc4d, EMBER_BACKWARD_HOLDOFF unset in both legs.",
    "explanation": "Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. This leg measures the flag-off noise floor (identical code path, .wait() returns immediately) that the treatment pair's improvement is compared against.",
    "criterion": "the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists",
-   "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable at head a330bc4d; paired with its sibling it yields the noise floor |p90_a - p90_b| (prediction: p90 50-56 ms, interval 48-60 ms, basis: voided pre-fix null pair measured 52.49/53.45 ms)"
+   "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable at head a330bc4d; paired with its sibling it yields the noise floor |p90_a - p90_b| (prediction: p90 50-56 ms, interval 48-60 ms, basis: voided pre-fix null pair measured 52.49/53.45 ms)",
+   "closing": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
   },
   {
    "id": "gate-ab-engine-thread-seat-wait-in-loss-backward-null-r2-b-20260928",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T16:39:47Z",
-   "last_ts": "2026-09-28T17:05:35Z",
+   "last_ts": "2026-10-02T05:19:27Z",
    "events": [
     {
      "ts": "2026-09-28T16:39:47Z",
@@ -27307,16 +27420,22 @@
      "stage": "PREDICTED",
      "note": "run produced no receipt: template hour produced no hour-result (see seat record: issue1945-a1-hour-20260928T164303Z.log)",
      "aborted": true
+    },
+    {
+     "ts": "2026-10-02T05:19:27Z",
+     "stage": "CLOSED",
+     "because": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
     }
    ],
    "observation": "Re-run of the void pre-a330bc4d null pair (gate-ab-engine-thread-a seat-wait-in-loss-backward-null-a/b-20260928, closed as void: pre-fix head). This leg measures the flag-off noise floor at the current head a330bc4d, EMBER_BACKWARD_HOLDOFF unset in both legs.",
    "explanation": "Each host allocation and Python step in loss.backward releases and retakes the interpreter lock; with a busy pack/decode pool, the retake can wait on the step critical path. This leg measures the flag-off noise floor (identical code path, .wait() returns immediately) that the treatment pair's improvement is compared against.",
    "criterion": "the leg produces no rows file or fewer than 1,024 measured updates, so no noise floor exists",
-   "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable at head a330bc4d; paired with its sibling it yields the noise floor |p90_a - p90_b| (prediction: p90 50-56 ms, interval 48-60 ms, basis: voided pre-fix null pair measured 52.49/53.45 ms)"
+   "criterion_supported_if": "this leg completes 1,024 measured updates with rows readable at head a330bc4d; paired with its sibling it yields the noise floor |p90_a - p90_b| (prediction: p90 50-56 ms, interval 48-60 ms, basis: voided pre-fix null pair measured 52.49/53.45 ms)",
+   "closing": "Superseded: the holdoff question was ruled by its r2 treatment pair (treatment-r2-a RULED REFUTED 1.81 ms < 2.0 ms; UPDATED to the device-union census). Not closed by this: whether a separate input process contends for the same interpreter-lock milliseconds."
   },
   {
    "id": "gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-a-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27328,10 +27447,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T16:39:56Z",
-   "last_ts": "2026-09-28T17:36:56Z",
+   "last_ts": "2026-10-02T05:20:31Z",
    "events": [
     {
      "ts": "2026-09-28T16:39:56Z",
@@ -27396,6 +27516,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.",
      "successor": "gate-ab-v4-5attn-device-union-census-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:31Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Re-run of the void pre-a330bc4d treatment pair (gate-ab-engine-thread-a seat-wait-in-loss-backward-treatment-a/b-20260928, closed as void: pre-fix head AND gate-executed failure, engaged_count=0 both legs, traced to prepare_template_hour_dispatch.py's allowlist gap, fixed by 8a65a58b at 15:56Z). This leg measures EMBER_BACKWARD_HOLDOFF=1 at head a330bc4d, with the allowlist fix present, so the mechanism can actually engage this time.",
@@ -27408,11 +27533,12 @@
    "verdict": "REFUTED",
    "ruling": "Frozen: REFUTED if improvement <= fresh null-pair difference, OR not engaged, OR engaged but improvement < 2.0 ms. Matched pairing (a vs null-a, the pairing the paired ids declare, fixed before reading which basis favours which): p90 59.51 -> 57.70 = 1.81 ms < 2.0 ms. Engaged 1,025, floor 0.49 ms cleared, so the gate is real but below the bar. Prediction 3-6 ms (interval 1-8) missed low. Rate p10 53,270 -> 55,205. Recomputed by this seat from rows, matches a build seat 38573.",
    "not_closed": "Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.",
-   "successor": "gate-ab-v4-5attn-device-union-census-20260928"
+   "successor": "gate-ab-v4-5attn-device-union-census-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-ab-engine-thread-seat-wait-in-loss-backward-treatment-r2-b-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27422,10 +27548,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T16:39:56Z",
-   "last_ts": "2026-09-28T17:36:57Z",
+   "last_ts": "2026-10-02T05:20:32Z",
    "events": [
     {
      "ts": "2026-09-28T16:39:56Z",
@@ -27478,6 +27605,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.",
      "successor": "gate-ab-v4-5attn-device-union-census-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:32Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Re-run of the void pre-a330bc4d treatment pair (gate-ab-engine-thread-a seat-wait-in-loss-backward-treatment-a/b-20260928, closed as void: pre-fix head AND gate-executed failure, engaged_count=0 both legs, traced to prepare_template_hour_dispatch.py's allowlist gap, fixed by 8a65a58b at 15:56Z). This leg measures EMBER_BACKWARD_HOLDOFF=1 at head a330bc4d, with the allowlist fix present, so the mechanism can actually engage this time.",
@@ -27490,11 +27622,12 @@
    "verdict": "SUPPORTED",
    "ruling": "Frozen: SUPPORTED if p90 below the fresh null-pair reference by more than the null-pair difference AND by >= 2.0 ms, with engaged_count>0. Matched pairing (b vs null-b): p90 60.00 -> 57.67 = 2.33 ms > 0.49 floor and >= 2.0; engaged 1,025. Prediction 3-6 ms missed low. Rate p10 52,999 -> 54,931. Pair reading: the holdoff is a real ~2 ms / ~+2k/s stack member, split across the 2.0 ms bar; nowhere near the 80,000 rate p10.",
    "not_closed": "Not closed: the holdoff moves ~2 ms p90 and ~+2k/s rate p10 on the v4 5-attn arm (matched pairs 1.81 and 2.33 ms), so it is a small stack member, not the A/B cure; the remaining ~15k/s to 80,000 rate p10 needs a class the census names. Not closed: whether a separate input PROCESS (the counterpart seat 38553) reclaims the same interpreter-lock milliseconds the holdoff does (they likely contend; rule overlap before stacking). Successor: the bounded device-union census of the current arm.",
-   "successor": "gate-ab-v4-5attn-device-union-census-20260928"
+   "successor": "gate-ab-v4-5attn-device-union-census-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-ab-v4-5attn-device-union-census-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27502,10 +27635,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T17:49:37Z",
-   "last_ts": "2026-09-28T17:54:09Z",
+   "last_ts": "2026-10-02T05:20:32Z",
    "events": [
     {
      "ts": "2026-09-28T17:49:37Z",
@@ -27547,6 +27681,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: the off-arm probe has no images and its own step, so the governed backward kernel union is inferred, not measured; the ~15 ms idle is span minus off-arm union. Not closed: which host work runs inside backward (engine-thread lock contention with pack/decode/prelaunch vs custom-Function Python backward); the counterpart seat selects the treatment class. Not closed: the ~9 ms p90 outside-span gap.",
      "successor": "gate-ab-v4-backward-inside-span-host-cure-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:32Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "On the four r2 legs (v4 5-attn arm, head a330bc4d) the CUDA phase-event spans sum to ~50 ms p50 and cover ~98% of the ~52 ms completion interval; the backward span alone is 32-36 ms p50; the 80k budget is 39.6 ms p50. Spans are event intervals, not a kernel union, so device idle inside the backward span is unmeasured.",
@@ -27560,25 +27699,33 @@
    "verdict": "SUPPORTED",
    "ruling": "Frozen: SUPPORTED if both arms assert capture, null spread of backward union <= 5%, and captured backward kernel union per step <= 26 ms. Measured: capture_occurred true in null_a and null_b; null spread 1.35%; backward interval union 18.95 / 18.70 ms per step (median 18.83), forward 11.61 / 11.72 ms, loss 0.61 ms. Against the governed r2 backward CUDA-event span p50 of 32.3-36.2 ms, about 13.5-17.4 ms of each governed backward span is device-idle. Off-arm instrument (text-only genesis, own step; its optimizer 17.4 ms steps all params vs the arm 3.0 ms); the forward union 11.7 ms matches the governed forward span 11.2-12.9 ms, which supports comparability of the phase kernel sets.",
    "not_closed": "Not closed: the off-arm probe has no images and its own step, so the governed backward kernel union is inferred, not measured; the ~15 ms idle is span minus off-arm union. Not closed: which host work runs inside backward (engine-thread lock contention with pack/decode/prelaunch vs custom-Function Python backward); the counterpart seat selects the treatment class. Not closed: the ~9 ms p90 outside-span gap.",
-   "successor": "gate-ab-v4-backward-inside-span-host-cure-20260928"
+   "successor": "gate-ab-v4-backward-inside-span-host-cure-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-ab-v4-census-scope-withdrawal-20260928",
-   "stage": "OBSERVED",
+   "stage": "CLOSED",
    "stages_seen": [
-    "OBSERVED"
+    "OBSERVED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T17:56:03Z",
-   "last_ts": "2026-09-28T17:56:03Z",
+   "last_ts": "2026-10-02T05:19:05Z",
    "events": [
     {
      "ts": "2026-09-28T17:56:03Z",
      "stage": "OBSERVED",
      "observation": "the counterpart seat 38587/38588: the device-union census (gate-ab-v4-5attn-device-union-census-20260928) ran the off-arm probe on text-only genesis in its own step. Its unions describe that workload only; subtracting them from governed r2 v4 image-workload backward spans is not licensed. The 13.5-17.4 ms device-idle and ~86k ceiling are WITHDRAWN. The SUPPORTED label does not transfer to v4. Successor instrument: bounded profiler window inside the actual governed runner (the counterpart seat standalone wrapper) or a matched current-parent intervention.",
      "receipt": "seat record: analysis.json"
+    },
+    {
+     "ts": "2026-10-02T05:19:05Z",
+     "stage": "CLOSED",
+     "because": "Absorbed: a withdrawal record (text-only census does not license v4 image-workload subtraction; 86k ceiling withdrawn). Its successor instrument, the governed-profile union, ran as gate-ab-v4-governed-profile-union-null-a-20260928 (UPDATED). Nothing further to explain."
     }
    ],
-   "observation": "the counterpart seat 38587/38588: the device-union census (gate-ab-v4-5attn-device-union-census-20260928) ran the off-arm probe on text-only genesis in its own step. Its unions describe that workload only; subtracting them from governed r2 v4 image-workload backward spans is not licensed. The 13.5-17.4 ms device-idle and ~86k ceiling are WITHDRAWN. The SUPPORTED label does not transfer to v4. Successor instrument: bounded profiler window inside the actual governed runner (the counterpart seat standalone wrapper) or a matched current-parent intervention."
+   "observation": "the counterpart seat 38587/38588: the device-union census (gate-ab-v4-5attn-device-union-census-20260928) ran the off-arm probe on text-only genesis in its own step. Its unions describe that workload only; subtracting them from governed r2 v4 image-workload backward spans is not licensed. The 13.5-17.4 ms device-idle and ~86k ceiling are WITHDRAWN. The SUPPORTED label does not transfer to v4. Successor instrument: bounded profiler window inside the actual governed runner (the counterpart seat standalone wrapper) or a matched current-parent intervention.",
+   "closing": "Absorbed: a withdrawal record (text-only census does not license v4 image-workload subtraction; 86k ceiling withdrawn). Its successor instrument, the governed-profile union, ran as gate-ab-v4-governed-profile-union-null-a-20260928 (UPDATED). Nothing further to explain."
   },
   {
    "id": "gate-ab-v4-governed-profile-null-a-20260928",
@@ -27668,7 +27815,7 @@
   },
   {
    "id": "gate-ab-v4-governed-profile-union-null-a-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -27678,10 +27825,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T18:16:49Z",
-   "last_ts": "2026-09-28T18:49:22Z",
+   "last_ts": "2026-10-02T05:20:33Z",
    "events": [
     {
      "ts": "2026-09-28T18:16:49Z",
@@ -27734,6 +27882,11 @@
      "stage": "UPDATED",
      "hypothesis": "Device union fits the A budget on tail58 (38.2/37.7 ms vs 39.3), margin 1.1-1.6 ms; full-context lowers loss-bearing about 1.9 percent, so the A budget becomes 38.6 ms. NOT closed: gate B. The predicate charges checkpoint write+restore inside the wall, and that cost grew from 91 s to 625 s at a constant 6.48 GB payload, so B needs 93.9k pre-checkpoint, a per-update wall of 32.9 ms, below the device union. B is unreachable until the checkpoint cost is O(bytes) again. Also not closed: host-gap attribution inside the 52-63 ms span.",
      "successor": "checkpoint-write-cost-scales-with-lineage-not-bytes-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:33Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "r2 null legs on the v4 arm (de32a445) sit at p90 58-63 ms per update against the 80k paired budget of about 38.6-39.6 ms per update; CUDA phase-event spans bound device busy only from above, so whether device kernel time alone already exceeds the budget is unmeasured on the governed captured path",
@@ -27747,7 +27900,8 @@
    "verdict": "SUPPORTED",
    "ruling": "Frozen supported_if met: both legs ATTRIBUTION_COMPLETE, capture true, v4 manifest de32a445 bound; union per update 38,178.2 us (a) and 37,748.6 us (b), spread 1.14% <= 5%; both below the budget p10 of 39,312.5 us (nearest-rank p10 of 6 rows = min of loss_bearing/80000). Host-only cure POSSIBLE, not proved: margin 1.1-1.6 ms; span per update 52.0/63.3 ms, so ~14-26 ms/update is host gap. Scope: tail58 baseline workload, not full-context (the counterpart seat 38620).",
    "not_closed": "Device union fits the A budget on tail58 (38.2/37.7 ms vs 39.3), margin 1.1-1.6 ms; full-context lowers loss-bearing about 1.9 percent, so the A budget becomes 38.6 ms. NOT closed: gate B. The predicate charges checkpoint write+restore inside the wall, and that cost grew from 91 s to 625 s at a constant 6.48 GB payload, so B needs 93.9k pre-checkpoint, a per-update wall of 32.9 ms, below the device union. B is unreachable until the checkpoint cost is O(bytes) again. Also not closed: host-gap attribution inside the 52-63 ms span.",
-   "successor": "checkpoint-write-cost-scales-with-lineage-not-bytes-20260928"
+   "successor": "checkpoint-write-cost-scales-with-lineage-not-bytes-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-ab-v4-governed-profile-union-null-b-20260928",
@@ -28057,7 +28211,7 @@
   },
   {
    "id": "gate-d-full-answer-context-stream-candidate-arm-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28067,10 +28221,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T19:13:39Z",
-   "last_ts": "2026-09-28T20:47:46Z",
+   "last_ts": "2026-10-02T05:20:33Z",
    "events": [
     {
      "ts": "2026-09-28T19:13:39Z",
@@ -28123,6 +28278,11 @@
      "stage": "UPDATED",
      "hypothesis": "REFUTED. Real 0.231 below the 0.2857 floor alone; this arm does not cure D. The controls did not execute: a build seat's gate_d_candidate script omitted issue1945-gate-d-binding.env, so registry v3's older evaluator ran (byte-identical predictions, no image_condition key) - the same defect A14 r3 had and r4 cured. Successor: gate-d-candidate-controls-r4 (rerun missing and wrong with the binding, refusing on requested!=executed condition and on identical predictions).",
      "successor": "gate-d-candidate-controls-r4"
+    },
+    {
+     "ts": "2026-10-02T05:20:33Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Gate D never cleared (best 0.285 vs 0.2857; newest 0.263); v3-era conditions ran an evaluator that ignored the image condition. The frozen full-answer-context stream (plan d2aad947, manifest de32a445, head 348721d8) keeps answer rows full length and caption rows at 58 tokens; gate D checks 1-6 passed 2026-09-28.",
@@ -28136,7 +28296,8 @@
    "verdict": "REFUTED",
    "ruling": "Frozen clause: real MMMU does not exceed missing or wrong by more than one item SE (0.0145; differences 0.000), and none of the three receipts is PASS (all RED evaluation:below-minimum, 0.231 < floor 0.2857, also below A14 0.263). not_closed: real 0.231 is below the 0.2857 floor on its own; whether the image moves this child is UNMEASURED, because the controls were not shown to execute.",
    "not_closed": "REFUTED. Real 0.231 below the 0.2857 floor alone; this arm does not cure D. The controls did not execute: a build seat's gate_d_candidate script omitted issue1945-gate-d-binding.env, so registry v3's older evaluator ran (byte-identical predictions, no image_condition key) - the same defect A14 r3 had and r4 cured. Successor: gate-d-candidate-controls-r4 (rerun missing and wrong with the binding, refusing on requested!=executed condition and on identical predictions).",
-   "successor": "gate-d-candidate-controls-r4"
+   "successor": "gate-d-candidate-controls-r4",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "chain-validation-linear-ancestor-keyed-cure-20260928",
@@ -28202,7 +28363,7 @@
   },
   {
    "id": "gate-d-learning-pair-409652-v4-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28212,10 +28373,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-28T21:39:56Z",
-   "last_ts": "2026-09-28T21:56:58Z",
+   "last_ts": "2026-10-02T05:20:33Z",
    "events": [
     {
      "ts": "2026-09-28T21:39:56Z",
@@ -28269,6 +28431,11 @@
      "stage": "UPDATED",
      "hypothesis": "Cancelled DIAGNOSTIC (weight 1 unset). Successor carries the same frozen section 10/14 criterion at weight 200.",
      "successor": "gate-d-learning-pair-409652-v4-w200-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:33Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "A14 r4 (bound v4, N=847): lineage child real 0.263 vs missing 0.283 vs wrong 0.253, all RED vs 0.2857; gate D unmet. Genesis learning run cia-learning-candidate-20260928T195423Z started from a zero-parent (binding defect), real 0.231, controls unexecuted; DIAGNOSTIC ONLY, never cited as the pair. Binding repair committed ce7db987/175d0402: dispatch and consumer refuse unless parent == 9a1bed51 (409652, b 58932, cursor 308/3496528, e3 mixture f8e5663b, ledger 4be49dde, plan d2aad947). Production input/target parity PASS at f2d2d7e5 (receipt sha 715da30f...): 8 groups from b 58932, 38 over-cap answer stems complete and target==gold letter, truncated-stem red refuses.",
@@ -28282,20 +28449,22 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "DIAGNOSTIC, answer_weight 1 (unset), not the section-14 candidate: EMBER_ANSWER_WEIGHT was not exported, the signed v4 amendment freezes 200. Cancelled at 21:57Z (this seat 38807), no reading taken; its snapshots do not enter C or D. Criterion unchanged; carried to gate-d-learning-pair-409652-v4-w200-20260928.",
    "not_closed": "Cancelled DIAGNOSTIC (weight 1 unset). Successor carries the same frozen section 10/14 criterion at weight 200.",
-   "successor": "gate-d-learning-pair-409652-v4-w200-20260928"
+   "successor": "gate-d-learning-pair-409652-v4-w200-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "gate-d-learning-pair-409652-v4-w200-20260928",
-   "stage": "MEASURED",
+   "stage": "RULED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "MEASURED"
+    "MEASURED",
+    "RULED"
    ],
    "first_ts": "2026-09-28T21:56:58Z",
-   "last_ts": "2026-09-28T22:25:50Z",
+   "last_ts": "2026-10-02T05:14:43Z",
    "events": [
     {
      "ts": "2026-09-28T21:56:58Z",
@@ -28325,6 +28494,12 @@
      "ts": "2026-09-28T22:25:50Z",
      "stage": "MEASURED",
      "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T05:14:43Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "Frozen criterion (Section 10): REFUTED if candidate real <= 0.2857. Candidate real = 0.263 (missing 0.264, wrong 0.261), n=847, from seat record: {mmmu,missing/mmmu,wrong/mmmu}/mmmu-cia-evaluation-receipt.json. Validity: dispatch-manifest EMBER_ANSWER_WEIGHT=200; evaluator digest 2a7fdcd63148ae73d6468cc1bf02e8b187300dcd8907afc79ad9a1429ffa6159 (registry v4 2a7fdcd6); image_condition real/missing/wrong each executed as requested. 0.263 <= 0.2857, so the first clause holds; later hours superseded this arm."
     }
    ],
    "observation": "Successor of gate-d-learning-pair-409652-v4-20260928 (cancelled: answer_weight 1, unexported). Same observation base: A14 r4 real 0.263/missing 0.283/wrong 0.253; binding repair ce7db987/175d0402; parity PASS 715da30f; v4 gate E amendment c3cc20c0 signed 854d3785. Launcher now refuses unless EMBER_ANSWER_WEIGHT equals the amendment's answer_weight (bdccd326).",
@@ -28334,7 +28509,9 @@
    "instrument": "grouped launcher with answer_weight refusal (bdccd326); run_gate_d_mmmu_for_hour.py bound; frozen dispatch-manifest EMBER_ANSWER_WEIGHT verified before ARM_START.",
    "receipts": [
     "<host-local path>"
-   ]
+   ],
+   "verdict": "REFUTED",
+   "ruling": "Frozen criterion (Section 10): REFUTED if candidate real <= 0.2857. Candidate real = 0.263 (missing 0.264, wrong 0.261), n=847, from seat record: {mmmu,missing/mmmu,wrong/mmmu}/mmmu-cia-evaluation-receipt.json. Validity: dispatch-manifest EMBER_ANSWER_WEIGHT=200; evaluator digest 2a7fdcd63148ae73d6468cc1bf02e8b187300dcd8907afc79ad9a1429ffa6159 (registry v4 2a7fdcd6); image_condition real/missing/wrong each executed as requested. 0.263 <= 0.2857, so the first clause holds; later hours superseded this arm."
   },
   {
    "id": "fold-weight200-answer-rows-ceiling-20260928",
@@ -28596,7 +28773,7 @@
   },
   {
    "id": "quad-v6-pair-loss-candidate-clears-d-cure-20260928",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28604,10 +28781,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T03:39:16Z",
-   "last_ts": "2026-09-29T03:48:08Z",
+   "last_ts": "2026-10-02T05:20:34Z",
    "events": [
     {
      "ts": "2026-09-29T03:39:16Z",
@@ -28650,6 +28828,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not a refutation. The run never executed. Successor re-runs the identical frozen criterion with bounded-GC env in both arms, after B: reclaim to >= 330 GiB (target 415).",
      "successor": "quad-v6-pair-loss-candidate-clears-d-cure-r2-20260928"
+    },
+    {
+     "ts": "2026-10-02T05:20:34Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Pair-contrast quad recipe (amendment 20): image-first 4x1024 quad plan with one complementary pair per update, L_pair k=(0.245733-gamma)/(2P) in both arms, W125, saved bf16 head. Prior successors leave the D cure unmet; the fast template candidate is measured for D on this plan.",
@@ -28663,7 +28846,8 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Frozen criterion (D cure per amendment 15, 847 protected items, real > 0.2857 and beats missing and wrong by paired SE with sign test p < 0.05) was never evaluated: the arm refused at the disk_budget_runner wall before any compute (326.69 GiB free minus 80 GiB declared writes vs 250 GiB reserve), rc 125, no trained child exists. The run did not discriminate. The identical criterion is re-registered as quad-v6-pair-loss-candidate-clears-d-cure-r2-20260928, with the bounded-GC env added to both arms before any result.",
    "not_closed": "Not a refutation. The run never executed. Successor re-runs the identical frozen criterion with bounded-GC env in both arms, after B: reclaim to >= 330 GiB (target 415).",
-   "successor": "quad-v6-pair-loss-candidate-clears-d-cure-r2-20260928"
+   "successor": "quad-v6-pair-loss-candidate-clears-d-cure-r2-20260928",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "quad-v6-pair-loss-candidate-clears-d-cure-r2-20260928",
@@ -28788,7 +28972,7 @@
   },
   {
    "id": "timing-pair-readback-lookahead-quad-candidate-20260929",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28796,10 +28980,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T06:09:33Z",
-   "last_ts": "2026-09-29T07:15:30Z",
+   "last_ts": "2026-10-02T05:20:34Z",
    "events": [
     {
      "ts": "2026-09-29T06:09:33Z",
@@ -28841,6 +29026,11 @@
      "stage": "UPDATED",
      "hypothesis": "Update stage: host wrapper cost exhausted (0.43 ms); device-busy p90 50.63 ms, gap p90 9.09 ms is host serialization (pair-index sync copies, late prefetch). Successor tests removing them.",
      "successor": "speed-only-pinned-index-early-prefetch-quad-candidate-20260929"
+    },
+    {
+     "ts": "2026-10-02T05:20:34Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Rank-1 host cost at rows 9000-10023 (this seat 39247): forward host +6.82 ms, wrapper gap 11.24 ms, backward host +1.30 ms. Pair aux/margin .tolist() sits inside the forward launch; lookahead moves the pack draw off the loop thread.",
@@ -28854,7 +29044,8 @@
    "verdict": "SUPPORTED",
    "ruling": "Against the frozen criterion (bar = max null 53478.7 + floor 1398.4 = 54877.1): readback p10 55214.8 clears it by 337.7 (delta vs null mean +2435); both p10 66408.0 clears it by 11531 (delta +13628.5). Neither arm falls at or below the bar; all legs reached 1198 intervals >= 1024 on head 31305835 with one config. Lookahead-only not run (this seat 39371). Addendum ae9a90be. not_closed: the pair sizes two host components (host entry now 0.43 ms); the remaining gap to 80k (p90 interval 59.38 ms vs 49.5 ms needed) is the step body, not addressed; floor-relative equivalence of lookahead, not tested.",
    "not_closed": "Update stage: host wrapper cost exhausted (0.43 ms); device-busy p90 50.63 ms, gap p90 9.09 ms is host serialization (pair-index sync copies, late prefetch). Successor tests removing them.",
-   "successor": "speed-only-pinned-index-early-prefetch-quad-candidate-20260929"
+   "successor": "speed-only-pinned-index-early-prefetch-quad-candidate-20260929",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "speed-only-pinned-index-early-prefetch-quad-candidate-20260929",
@@ -28918,7 +29109,7 @@
   },
   {
    "id": "per-view-ce-speed-only-quad-candidate-clears-d-cure-20260929",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28926,10 +29117,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T07:44:02Z",
-   "last_ts": "2026-09-29T09:13:46Z",
+   "last_ts": "2026-10-02T05:20:35Z",
    "events": [
     {
      "ts": "2026-09-29T07:44:02Z",
@@ -28968,6 +29160,11 @@
      "stage": "UPDATED",
      "hypothesis": "Re-registered for the single source revision (1e16d6e3 + default-off flags) per the counterpart seat 39530.",
      "successor": "per-view-ce-speed-only-quad-candidate-newhead-20260929"
+    },
+    {
+     "ts": "2026-10-02T05:20:35Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Prior pair-loss candidate (child 33cc175a) D: real 0.255, missing 0.269, wrong 0.263 - REFUTED. Its aux was a two-view pair contrast; MMMU-format letter choice never received a per-view answer-letter gradient. Head 724aa418 adds EMBER_PAIR_LOSS_MODE=per_view_ce (per-view CE over offered ids, contiguous offered set, k-scaled aux, structural red), pinned pair index transfer, early prefetch (p10 70,294.7 on the timing arm). Per-view mode has never run on GPU.",
@@ -28979,11 +29176,12 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Claim aborted before any run per this seat 39531 / the counterpart seat 39530 (Path E requires one source revision); no data; prediction and criterion unchanged, re-registered as successor for the new head.",
    "not_closed": "Re-registered for the single source revision (1e16d6e3 + default-off flags) per the counterpart seat 39530.",
-   "successor": "per-view-ce-speed-only-quad-candidate-newhead-20260929"
+   "successor": "per-view-ce-speed-only-quad-candidate-newhead-20260929",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "switch-interval-1ms-early-arm-quad-candidate-20260929",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -28991,10 +29189,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T08:16:59Z",
-   "last_ts": "2026-09-29T08:49:36Z",
+   "last_ts": "2026-10-02T05:20:34Z",
    "events": [
     {
      "ts": "2026-09-29T08:16:59Z",
@@ -29033,6 +29232,11 @@
      "stage": "UPDATED",
      "hypothesis": "Interval shortening did not move p10 (+17 vs null spread 2760), so the residual gap is not interpreter-lock wait recoverable by switch interval. Successor: start CPU prep of pack n+2 right after step n's optimizer and end-event are enqueued, immediately before the existing synchronize wait (one ordered producer, custody/capacity/startup fallback/final drain unchanged, no model or optimizer math change). Bit-identity vs control on first 64 updates required.",
      "successor": "pack-kick-early-cpu-prep-of-n-plus-2-a-cure-20260929"
+    },
+    {
+     "ts": "2026-10-02T05:20:34Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "The 70.3k early-prefetch arm (head b16421ad) ran without EMBER_SWITCH_INTERVAL_S (the counterpart seat 39481). Prior registry rows are a different context (a1 d4 arm, 2026-09-25): 0.5 ms 56,249 REFUTED; 20 ms 78,133; 20 ms no-segment 80,380; 100 ms attempt aborted. 1 ms has never been run, and never on the quad candidate with pack lookahead and early prefetch. the counterpart seat 39473 bound: 65.4% of the gap is outside the device spans.",
@@ -29044,18 +29248,20 @@
    "verdict": "REFUTED",
    "ruling": "Null spread 2760.2 (73191.7 vs 70431.5); treatment 70448.8 minus control 70431.5 = +17.3, within null spread; frozen criterion: refuted. Receipt timing/switch-pair-receipt.json, head b16421ad.",
    "not_closed": "Interval shortening did not move p10 (+17 vs null spread 2760), so the residual gap is not interpreter-lock wait recoverable by switch interval. Successor: start CPU prep of pack n+2 right after step n's optimizer and end-event are enqueued, immediately before the existing synchronize wait (one ordered producer, custody/capacity/startup fallback/final drain unchanged, no model or optimizer math change). Bit-identity vs control on first 64 updates required.",
-   "successor": "pack-kick-early-cpu-prep-of-n-plus-2-a-cure-20260929"
+   "successor": "pack-kick-early-cpu-prep-of-n-plus-2-a-cure-20260929",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "pack-kick-early-cpu-prep-of-n-plus-2-a-cure-20260929",
-   "stage": "PREDICTED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
-    "PREDICTED"
+    "PREDICTED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T08:49:40Z",
-   "last_ts": "2026-09-29T08:49:46Z",
+   "last_ts": "2026-10-02T05:20:53Z",
    "events": [
     {
      "ts": "2026-09-29T08:49:40Z",
@@ -29073,13 +29279,19 @@
      "refuted_if": "Matched pair on the early-arm head plus the pack-kick change at N=1200, null pair (control vs control) first. REFUTED if treatment-minus-control complete_update p10 is within the null pair's p10 spread or negative, or if first-64-update loss/param digests are not bit-identical to control. SUPPORTED as a cure only if treatment p10 > 80,000 AND governed-hour B aggregate >= 86.36k. Prediction: treatment p10 72-79k, P(>80k) about 0.3.",
      "supported_if": "treatment p10 > 80,000 and B aggregate >= 86.36k, digests bit-identical",
      "instrument": "complete_update_quantiles.py on both custodies; wall-vs-thread_time and post_return p99 discriminator"
+    },
+    {
+     "ts": "2026-10-02T05:20:53Z",
+     "stage": "CLOSED",
+     "because": "Superseded (this seat 44669 item 3): its criterion required bit-identical first-64 digests, and the bit-identity row pack-kick-digest-off-bit-identity-64-20260929 RULED REFUTED showed the baseline is not run-to-run deterministic (null control differs 1.61e-2). Successor to be authored with a null-band criterion on the governed complete-update p10."
     }
    ],
    "observation": "Switch-interval pair refuted (+17 vs null spread 2760). Feasibility (mail 39471): optimizer_and_sync wait p50 9.73/p90 12.82 ms vs next_pack prep p50 12-14/p90 17.5-19.6 ms; early arm interval p50 49.49/p90 56.07, p10 70,294.7.",
    "explanation": "Pack n+2 CPU prep currently starts after the step's synchronize, so its 12-14 ms lands on the critical path whenever the producer has not finished; the 9.7 ms optimizer-and-sync wait is host-idle time that could hide it. Starting prep right after optimizer/end-event enqueue overlaps it with device work, shrinking the outside-span gap.",
    "criterion": "Matched pair on the early-arm head plus the pack-kick change at N=1200, null pair (control vs control) first. REFUTED if treatment-minus-control complete_update p10 is within the null pair's p10 spread or negative, or if first-64-update loss/param digests are not bit-identical to control. SUPPORTED as a cure only if treatment p10 > 80,000 AND governed-hour B aggregate >= 86.36k. Prediction: treatment p10 72-79k, P(>80k) about 0.3.",
    "criterion_supported_if": "treatment p10 > 80,000 and B aggregate >= 86.36k, digests bit-identical",
-   "instrument": "complete_update_quantiles.py on both custodies; wall-vs-thread_time and post_return p99 discriminator"
+   "instrument": "complete_update_quantiles.py on both custodies; wall-vs-thread_time and post_return p99 discriminator",
+   "closing": "Superseded (this seat 44669 item 3): its criterion required bit-identical first-64 digests, and the bit-identity row pack-kick-digest-off-bit-identity-64-20260929 RULED REFUTED showed the baseline is not run-to-run deterministic (null control differs 1.61e-2). Successor to be authored with a null-band criterion on the governed complete-update p10."
   },
   {
    "id": "switch-interval-20ms-early-arm-1e16d6e3-20260929",
@@ -29258,7 +29470,7 @@
   },
   {
    "id": "per-view-ce-speed-only-quad-candidate-flags-on-20260929",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -29266,10 +29478,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T10:49:05Z",
-   "last_ts": "2026-09-29T14:00:41Z",
+   "last_ts": "2026-10-02T05:20:35Z",
    "events": [
     {
      "ts": "2026-09-29T10:49:05Z",
@@ -29309,6 +29522,11 @@
      "stage": "UPDATED",
      "hypothesis": "Not closed: per-view CE as an objective under a CORRECTED optimizer. The shadow leg (SUPPORTED, 257 updates from this ON child) measured 95.5% of params unchanged per update and v decay rounded away on 99.98% of moving entries; actual cumulative displacement is 0.44x the FP32 shadow. So this refutation tested the objective through an optimizer that drops most of its updates, and does not refute the objective itself.",
      "successor": "optimizer-precision-cure-moves-visual-decisions-20260929"
+    },
+    {
+     "ts": "2026-10-02T05:20:35Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Complete candidate treatment declared per this seat 39595 / the counterpart seat 39594: per-view CE quad candidate at head 21d2ee01 with EMBER_PACK_KICK=1 and EMBER_HOUR_DIGEST_OFF=1 in the frozen dispatch environment (plan bytes unchanged, flag-agnostic shared plan). Same parent, plan, seed as the aborted OFF registration; OFF cannot licence an ON hour. Bit identity of ON vs OFF is refuted as frozen and is not part of this criterion; first ON rows are the runtime evidence for the flags-ON path.",
@@ -29320,25 +29538,33 @@
    "verdict": "REFUTED",
    "ruling": "Frozen: REFUTED if real <= 0.2857 OR (real - max(missing, wrong)) <= one item SE, on the protected 847 under the unchanged instrument. Observed real 211/847 = 0.2491 <= 0.2857; missing 0.2680 and wrong 0.2692 both exceed real, so real - max = -0.020 < SE. Both clauses fire. Prediction (real 0.27-0.33) missed low. Template/env keep-fact closed (scorer set the frozen template before import).",
    "not_closed": "Not closed: per-view CE as an objective under a CORRECTED optimizer. The shadow leg (SUPPORTED, 257 updates from this ON child) measured 95.5% of params unchanged per update and v decay rounded away on 99.98% of moving entries; actual cumulative displacement is 0.44x the FP32 shadow. So this refutation tested the objective through an optimizer that drops most of its updates, and does not refute the objective itself.",
-   "successor": "optimizer-precision-cure-moves-visual-decisions-20260929"
+   "successor": "optimizer-precision-cure-moves-visual-decisions-20260929",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "scorer-grouping-freeze-20260929",
-   "stage": "OBSERVED",
+   "stage": "CLOSED",
    "stages_seen": [
-    "OBSERVED"
+    "OBSERVED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T11:50:54Z",
-   "last_ts": "2026-09-29T11:50:54Z",
+   "last_ts": "2026-10-02T05:19:05Z",
    "events": [
     {
      "ts": "2026-09-29T11:50:54Z",
      "stage": "OBSERVED",
      "observation": "FROZEN before any 2048/4096/8192 or control scoring: scorer sha256 f9dc220b00e76bdfff889f6184fc31873f33e139595c393e1ffc121a8a2f362c; grouping identity sha256 3285cc792cbcd790f7784f144d9f3cbae5032db2cfa2bb349b2ddd610b19265d (from the ON 16384 receipt bindings). Receipt seat record: scorer-grouping-freeze-39660.json",
      "receipt": "seat record: scorer-grouping-freeze-39660.json"
+    },
+    {
+     "ts": "2026-10-02T05:19:05Z",
+     "stage": "CLOSED",
+     "because": "Absorbed: a freeze record (scorer f9dc220b, grouping 3285cc79, receipt seat record: scorer-grouping-freeze-39660.json) consumed by the rn-arm-2048 and sr-arm-2048 rows, both RULED; no hypothesis was attached."
     }
    ],
-   "observation": "FROZEN before any 2048/4096/8192 or control scoring: scorer sha256 f9dc220b00e76bdfff889f6184fc31873f33e139595c393e1ffc121a8a2f362c; grouping identity sha256 3285cc792cbcd790f7784f144d9f3cbae5032db2cfa2bb349b2ddd610b19265d (from the ON 16384 receipt bindings). Receipt seat record: scorer-grouping-freeze-39660.json"
+   "observation": "FROZEN before any 2048/4096/8192 or control scoring: scorer sha256 f9dc220b00e76bdfff889f6184fc31873f33e139595c393e1ffc121a8a2f362c; grouping identity sha256 3285cc792cbcd790f7784f144d9f3cbae5032db2cfa2bb349b2ddd610b19265d (from the ON 16384 receipt bindings). Receipt seat record: scorer-grouping-freeze-39660.json",
+   "closing": "Absorbed: a freeze record (scorer f9dc220b, grouping 3285cc79, receipt seat record: scorer-grouping-freeze-39660.json) consumed by the rn-arm-2048 and sr-arm-2048 rows, both RULED; no hypothesis was attached."
   },
   {
    "id": "optimizer-shadow-bf16-moment-and-update-loss-20260929",
@@ -29590,7 +29816,7 @@
   },
   {
    "id": "sr-adamw-complete-step-timing-47-tensors-20260929",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -29598,10 +29824,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-29T15:41:48Z",
-   "last_ts": "2026-09-29T15:51:58Z",
+   "last_ts": "2026-10-02T05:20:35Z",
    "events": [
     {
      "ts": "2026-09-29T15:41:48Z",
@@ -29642,6 +29869,11 @@
      "ts": "2026-09-29T15:51:58Z",
      "stage": "UPDATED",
      "hypothesis": "Not closed: a multi-tensor single-launch SR kernel with a device-cached hyper tensor; the refutation is of the 47-launch per-tensor structure, not of SR. Its successor must be bit-identical to the per-tensor SR under a fixed key, and SR-off must match stock RN."
+    },
+    {
+     "ts": "2026-10-02T05:20:35Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "a build seat 39847: SR AdamW kernel authored (baseline fused arithmetic to FP32 registers, SR only at the p/m/v storage quantizer); reds reported green, receipt file owed (39845). The RN/SR pair and S5 need SR in both qualifying arms, so its per-update cost enters gates A and B directly.",
@@ -29654,7 +29886,8 @@
    ],
    "verdict": "REFUTED",
    "ruling": "Frozen criterion: REFUTED if the SR-on median exceeds current fused by more than 2.0 ms/call, OR the SR-off median differs from current fused by more than 0.3 ms. Observed: SR-on +2.311 ms median (+2.647 p90); SR-off +2.204 ms. Both clauses trip. The memory clause is unscorable (the peak field was contaminated by the prior arm); the clean peak-above-own-allocated reading is 512 B. SR-on minus SR-off is +0.106 ms, so the cost is launch structure (47 launches plus a per-call hyper-tensor build), not rounding. Harness idle gate relaxed 10->40% mid-window; not verdict-affecting.",
-   "not_closed": "Not closed: a multi-tensor single-launch SR kernel with a device-cached hyper tensor; the refutation is of the 47-launch per-tensor structure, not of SR. Its successor must be bit-identical to the per-tensor SR under a fixed key, and SR-off must match stock RN."
+   "not_closed": "Not closed: a multi-tensor single-launch SR kernel with a device-cached hyper tensor; the refutation is of the 47-launch per-tensor structure, not of SR. Its successor must be bit-identical to the per-tensor SR under a fixed key, and SR-off must match stock RN.",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "sr-arm-2048-updates-from-on-child-stochastic-rounding-20260929",
@@ -30141,7 +30374,7 @@
   },
   {
    "id": "issue2119-sequence-segment-A2-20260929-v3",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -30149,10 +30382,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T04:00:58Z",
-   "last_ts": "2026-09-30T05:40:04Z",
+   "last_ts": "2026-10-02T05:20:36Z",
    "events": [
     {
      "ts": "2026-09-30T04:00:58Z",
@@ -30194,6 +30428,11 @@
      "stage": "UPDATED",
      "hypothesis": "not_closed: the count interval was mis-set from a cold probe; the throughput of the full model at depth 8 is now measured, and R2 step prediction uses 0.144 s/update, not 0.52",
      "because": "R2 step prediction uses 0.144 s/update; R2 parent is ccf2229c"
+    },
+    {
+     "ts": "2026-10-02T05:20:36Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Frozen #2119 successor sequence step A2 (3a91bc3f + Amendment-1 freeze 4 a18b284c), FULL MODEL (ARM_NO_TEMPLATE=1; EMBER_SKIP_KEEP, _FFN, _EXPERT absent in the worker), continuation hour from the selected pointer (103619Z child, manifest 9a1bed51, global step 409652), run from tree 53364ff5 (852c6db5 + lineage-only blobs, byte-identical to 360f6804), 5,656 s wall, EMBER_ROWS_TILE/EMBER_FP8_GROUPED absent, ARM_ADHOC_WINDOW/ARM_PROBE_ONLY absent. Supersedes -v2 (closed unclaimed: its 17,000-26,000 interval came from a 0.1608 s pair-loss control step; the full-model adhoc probe measured 0.52 s/update at 2 updates).",
@@ -30206,7 +30445,8 @@
    ],
    "verdict": "REFUTED",
    "ruling": "Refuted on the clause \"measured_updates outside 5,000-12,000\": the run made 24,946 updates. Every other clause held: worker completed rc 0, owned.json completed, worker-terminal completed, measured_updates >= 1,024, hour ran to completion, valid child ccf2229c with lineage parent 9a1bed51 and step_delta 24,947, pointer advanced by CAS. The refutation is in the prediction (0.52 s/update came from a cold 2-update probe; actual about 0.144 s/update), not the run. Head advances to ccf2229c per the one-lineage contract. Ruled by this seat 40865.",
-   "not_closed": "not_closed: the count interval was mis-set from a cold probe; the throughput of the full model at depth 8 is now measured, and R2 step prediction uses 0.144 s/update, not 0.52"
+   "not_closed": "not_closed: the count interval was mis-set from a cold probe; the throughput of the full model at depth 8 is now measured, and R2 step prediction uses 0.144 s/update, not 0.52",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-sequence-segment-D2-20260929",
@@ -30718,7 +30958,7 @@
   },
   {
    "id": "issue2119-d0-admission-probe-20260930-attempt2",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -30726,10 +30966,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T15:27:42Z",
-   "last_ts": "2026-10-01T20:11:28Z",
+   "last_ts": "2026-10-02T05:20:42Z",
    "events": [
     {
      "ts": "2026-09-30T15:27:42Z",
@@ -30773,6 +31014,11 @@
      "hypothesis": "SUPPORTED admission probe on merged source 2d0ce2fa from the R3 child; the successor was the governed hour A on S4 (issue2119-a-hour-s4-20260930), which ran and advanced the lineage. Not closed by this row: nothing (the probe answered only admissibility, which hour A then consumed).",
      "successor": "issue2119-a-hour-s4-20260930",
      "because": "hour A was dispatched on this ADMIT; a refusal would have blocked the lineage segment"
+    },
+    {
+     "ts": "2026-10-02T05:20:42Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Attempt 2 of D0 (this seat 41392, S4 reserve 3,400 = 2 x 1,700): can hour A be admitted on the merged #2312 source 2d0ce2fa from R3's child f4831d3b at cursor shard 364 offset 1258656 (checkpoint-probe-v1)? Attempt 1 (custody cia-probe-a1-five-attn-stage-d4-20260930T152508Z) died in resource_census.",
@@ -30786,7 +31032,8 @@
    "verdict": "SUPPORTED",
    "ruling": "verdict.json ADMIT: rc 0 with result reference (measurement-6f7724e6, result sha 57a981bd); pointer sha after == aa6c5e6f; R3 manifest after == f4831d3b; source_commit 2d0ce2fa; purpose DIAGNOSTIC; occupancy 774 s <= 1,760 s. Attempt 1 charged 27 s + 60 s.",
    "not_closed": "SUPPORTED admission probe on merged source 2d0ce2fa from the R3 child; the successor was the governed hour A on S4 (issue2119-a-hour-s4-20260930), which ran and advanced the lineage. Not closed by this row: nothing (the probe answered only admissibility, which hour A then consumed).",
-   "successor": "issue2119-a-hour-s4-20260930"
+   "successor": "issue2119-a-hour-s4-20260930",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-a-hour-s4-20260930",
@@ -30852,7 +31099,7 @@
   },
   {
    "id": "issue2119-d-child-eval-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -30860,10 +31107,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T17:19:22Z",
-   "last_ts": "2026-09-30T17:59:59Z",
+   "last_ts": "2026-10-02T05:20:36Z",
    "events": [
     {
      "ts": "2026-09-30T17:19:22Z",
@@ -30906,6 +31154,11 @@
      "stage": "UPDATED",
      "hypothesis": "source identity is present in hour-binding.json; a successor criterion must name emitted fields.",
      "because": "D1 declaration already names emitted fields; S4 D outcome CONTINUE (NLL wall 892.9 s, finished 2026-09-30T17:34:20Z)"
+    },
+    {
+     "ts": "2026-10-02T05:20:36Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "S4 row D (declaration sha f03e9061ab8a4cfd86ffe20cc2951d6fa4d986e097cd654dc94cc4c699aca3c0): DIAGNOSTIC evaluation of A's child 36eb0f8a on source 2d0ce2fa: held-out text/caption NLL (child_nll_v9) and protected MMMU real/missing/wrong n=847. No training, no head move.",
@@ -30918,11 +31171,12 @@
    ],
    "verdict": "REFUTED",
    "ruling": "frozen clause 'source_commit is 2d0ce2fa in every receipt' fails literally: no NLL or MMMU receipt emits a source_commit field (source-commit-clause.json); declaration defect of this seat's, not a model finding. Every other clause held: NLL complete and bound to 36eb0f8a, three MMMU n=847 bound, conditions proven (missing 847/847 imageless, wrong shift 423, 767/847 differ), pointer e834ebde equal before/after; hour-binding source_head_sha = 2d0ce2fa in all three. Observed value: text NLL 1.9052; caption 1.3703; real-missing 1.04 SE.",
-   "not_closed": "source identity is present in hour-binding.json; a successor criterion must name emitted fields."
+   "not_closed": "source identity is present in hour-binding.json; a successor criterion must name emitted fields.",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-d1-admission-probe-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -30930,10 +31184,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T18:01:51Z",
-   "last_ts": "2026-09-30T18:06:25Z",
+   "last_ts": "2026-10-02T05:20:36Z",
    "events": [
     {
      "ts": "2026-09-30T18:01:51Z",
@@ -30977,6 +31232,11 @@
      "hypothesis": "cured by operator_extension 8,224 s (ledger row read back); attempt 2 registered as issue2119-d1-admission-probe-20260930-attempt2",
      "successor": "issue2119-d1-admission-probe-20260930-attempt2",
      "because": "allowance headroom restored; retry lawful"
+    },
+    {
+     "ts": "2026-10-02T05:20:36Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "S4 row D1 (declaration sha 97fcd548c1bb40fe099439fc128cbcc5280f89212e378a00c87cf66bd37aa357): DIAGNOSTIC admission probe of R's governed hour from A's child 36eb0f8a at A's cursor_after on source 2d0ce2fa. Uncredited, no head move. D outcome CONTINUE: NLL receipt started 2026-09-30T17:19:27Z finished_utc 2026-09-30T17:34:20Z, wall 892.9 s <= 1,500 s.",
@@ -30990,11 +31250,12 @@
    "verdict": "REFUTED",
    "ruling": "REFUSE(diagnostic allowance exhausted (occupancy) for lineage bf20f050...: 11,312 reserved + 5,656 > 14,400 cap; pre-run refusal, no probe ran, 26 s charged). Pointer e834ebde and A child manifest unchanged. this seat 41612 ruled attempt 1 REFUSE; attempt 2 lawful under the same declaration.",
    "not_closed": "cured by operator_extension 8,224 s (ledger row read back); attempt 2 registered as issue2119-d1-admission-probe-20260930-attempt2",
-   "successor": "issue2119-d1-admission-probe-20260930-attempt2"
+   "successor": "issue2119-d1-admission-probe-20260930-attempt2",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-d1-admission-probe-20260930-attempt2",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31002,10 +31263,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T18:05:29Z",
-   "last_ts": "2026-09-30T18:21:09Z",
+   "last_ts": "2026-10-02T05:20:37Z",
    "events": [
     {
      "ts": "2026-09-30T18:05:29Z",
@@ -31048,6 +31310,11 @@
      "stage": "UPDATED",
      "hypothesis": "R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on 2d0ce2fa).",
      "because": "R unblocked"
+    },
+    {
+     "ts": "2026-10-02T05:20:37Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "D1 attempt 2 (this seat 41612/41615), same declaration sha 97fcd548c1bb40fe099439fc128cbcc5280f89212e378a00c87cf66bd37aa357. Attempt 1 (issue2119-d1-admission-probe-20260930) REFUSED pre-run at 26 s: reserve_diagnostic_dispatch occupancy allowance exhausted (11,312+5,656>14,400). Cured by one operator_extension row 8,224 s approved by this seat for the operator (ledger ts 1790791508.82; occupancy 11,312 -> 3,088). Same source 2d0ce2fa, parent 36eb0f8a, pointer e834ebde.",
@@ -31060,11 +31327,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "ADMIT: all six clauses read from emitted fields: probe terminal records completed rc0 cleanup-verified, dispatcher rc 0; parent_manifest_sha256 = 36eb0f8a...; source_commit = 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15 in hour-result.json and prediction.json identity; input_binding.cursor_start = {382, 2521248} = A cursor_after; pointer e834ebde equal after, A child manifest equal after; result reference hour-result.json sha256 5b06c4470c066135476f02305eff62a78e4a397f8c5777c5a7151f12332cd73d. Occupancy 809 s (descriptive prediction 1,600 [1,300,1,760] MISSED low; no timing claim).",
-   "not_closed": "R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on 2d0ce2fa)."
+   "not_closed": "R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on 2d0ce2fa).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-r-hour-s4-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31072,10 +31340,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T18:25:45Z",
-   "last_ts": "2026-09-30T19:49:07Z",
+   "last_ts": "2026-10-02T05:20:37Z",
    "events": [
     {
      "ts": "2026-09-30T18:25:45Z",
@@ -31118,6 +31387,11 @@
      "stage": "UPDATED",
      "hypothesis": "R published child 198f60cb at step 534,516, cursor shard 401 offset 345,248; next: health (NLL/MMMU on R child), next-parent choice, upload R child to the mirror, fresh-text tranche deadline (shortfall 25,332,465 positions).",
      "because": "lineage head advanced to R child"
+    },
+    {
+     "ts": "2026-10-02T05:20:37Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "S4 row R (this seat 41623): fresh-process governed hour from A's child 36eb0f8a (step 509,283, cursor shard 382 offset 2,521,248) on unchanged source 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15, full model, governed-hour-v1, REUSING D1 result 5b06c4470c066135476f02305eff62a78e4a397f8c5777c5a7151f12332cd73d. Pointer before e834ebde. Formula wall_R_enforced = min(forecast_R+300,7200) = 4,990.94 s, forecast_R 4,690.94 = W_A 4,688.69 + max(0,P_A-P_R3 = 399.04-396.79 = 2.26) + max(0,T_A-T_R3 <0 = 0); dated 2026-09-30T18:2xZ. Runner admits only the default 5,656 or (5,656,7,200], so the hour runs at the default 5,656 (higher than the formula).",
@@ -31130,11 +31404,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Governed success record as A: measured_updates 25,232 (>=1,024), pre_checkpoint_wall 3,600.09 s (>=3,600), owned completed rc 0 cleanup verified, worker-terminal completed, rows_sha256 b989453b...; parent_manifest_sha256 = 36eb0f8a; first row cursor_before {382,2521248} = A cursor_after, child data_cursor step 534,516 (509,283 + 25,233 applied), shard 401 record 345,248; D1 result 5b06c447 reused (PROBE_REUSED); P4: first 64 measured rows finite, mean 1.7448 vs A's last 64 1.8616, diff -0.117, within 0.25; retained applied targets 103,354,368 increase; pointer CAS to child 198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a (selected-continuation-head sha 0d9e4c88... read, lineage key = 198f60cb; preparer no-parent selection not separately run); all 8 tail-stamp phases in order; segment 4,783.05 s launch-to-complete < 5,656 enforced wall, no wall kill. Wall calibration: formula 4,990.94, actual 4,783.05.",
-   "not_closed": "R published child 198f60cb at step 534,516, cursor shard 401 offset 345,248; next: health (NLL/MMMU on R child), next-parent choice, upload R child to the mirror, fresh-text tranche deadline (shortfall 25,332,465 positions)."
+   "not_closed": "R published child 198f60cb at step 534,516, cursor shard 401 offset 345,248; next: health (NLL/MMMU on R child), next-parent choice, upload R child to the mirror, fresh-text tranche deadline (shortfall 25,332,465 positions).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-r-eval-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31142,10 +31417,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T19:55:14Z",
-   "last_ts": "2026-09-30T20:33:15Z",
+   "last_ts": "2026-10-02T05:20:38Z",
    "events": [
     {
      "ts": "2026-09-30T19:55:14Z",
@@ -31188,6 +31464,11 @@
      "stage": "UPDATED",
      "hypothesis": "R child 198f60cb evaluated SUPPORTED; text NLL improved 1.905->1.866 and caption 1.370->1.324 vs A child; MMMU at chance band, no image use signal (real-missing 0.004).",
      "because": "next leg unchanged: next hour needs its own probe, then Ash gradient-omission leg"
+    },
+    {
+     "ts": "2026-10-02T05:20:38Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "R child 198f60cb (step 534,516) evaluated D-style: NLL v9 + MMMU real/missing/wrong n=847; declaration sha256 d087fb143d29de87b47fc33a3e4d256c70a66bb0725c7012b3466bcf7aea093d; pointer sha256 before 78d9e4c88f0a7672c7950c6ab1dbb39fce258c6356466ac3485f97b0a432d938; source 2d0ce2fa; DIAGNOSTIC",
@@ -31200,11 +31481,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Every frozen clause evidenced from emitted fields in verdict.json: manifest 198f60cb on all four receipts, n=847 each, image_condition recorded real/missing/wrong, wrong shift 423, hour-binding source_head_sha 2d0ce2fa, pointer unchanged. Text NLL 1.866 in [1.85,2.02], caption 1.324 in [1.28,1.44], MMMU 0.274/0.270/0.280 in intervals, real-missing 0.004 within 1 SE, NLL wall 928 s in [700,1100].",
-   "not_closed": "R child 198f60cb evaluated SUPPORTED; text NLL improved 1.905->1.866 and caption 1.370->1.324 vs A child; MMMU at chance band, no image use signal (real-missing 0.004)."
+   "not_closed": "R child 198f60cb evaluated SUPPORTED; text NLL improved 1.905->1.866 and caption 1.370->1.324 vs A child; MMMU at chance band, no image use signal (real-missing 0.004).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-d2-probe-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31212,10 +31494,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T20:34:25Z",
-   "last_ts": "2026-09-30T20:50:31Z",
+   "last_ts": "2026-10-02T05:20:38Z",
    "events": [
     {
      "ts": "2026-09-30T20:34:25Z",
@@ -31258,6 +31541,11 @@
      "stage": "UPDATED",
      "hypothesis": "D2 admitted R child for H2; probe occupancy 893 s not 1,600 s, so the fold-the-probe ceiling is ~893/5,656 = 15.8% of cycle wall (not 28%).",
      "because": "fold-the-probe ceiling revised from <=28% to ~16% of cycle wall"
+    },
+    {
+     "ts": "2026-10-02T05:20:38Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "D2 admission probe on R child 198f60cb (step 534,516, cursor 401/345248) on source 2d0ce2fa for H2; declaration sha256 76d88918af420646a97d5ef592ca5c61eeb42447fef91c9f16b9ad23b5bb9014; pointer 78d9e4c88f0a7672c7950c6ab1dbb39fce258c6356466ac3485f97b0a432d938; DIAGNOSTIC, uncredited; this seat 41797; D1 probe 180627Z not reusable (validate_probe_inputs: data)",
@@ -31270,11 +31558,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Every frozen clause evidenced: verdict.json ADMIT; parent 198f60cb, source_commit 2d0ce2fa, cursor_start {401,345248}, purpose DIAGNOSTIC, pointer sha unchanged 78d9e4c8, R child manifest unchanged, occupancy 893 s <= 1,760. The registered occupancy interval [1300,1760] MISSED low (893 s): probe ran 44% faster than D1-based calibration.",
-   "not_closed": "D2 admitted R child for H2; probe occupancy 893 s not 1,600 s, so the fold-the-probe ceiling is ~893/5,656 = 15.8% of cycle wall (not 28%)."
+   "not_closed": "D2 admitted R child for H2; probe occupancy 893 s not 1,600 s, so the fold-the-probe ceiling is ~893/5,656 = 15.8% of cycle wall (not 28%).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h2-hour-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31282,10 +31571,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T20:54:52Z",
-   "last_ts": "2026-09-30T22:33:13Z",
+   "last_ts": "2026-10-02T05:20:38Z",
    "events": [
     {
      "ts": "2026-09-30T20:54:52Z",
@@ -31329,6 +31619,11 @@
      "hypothesis": "H2 held: applied 104.2M, head advanced to d157f2df. Successor H3: same config from the H2 child on repeat-ledger e4; data identity changed so a fresh probe precedes the hour.",
      "successor": "issue2119-h3-hour-20260930",
      "because": "Probe reuse is impossible across a data-identity change (ledger e4, cursor 419); H3 needs probe+hour in one window and a B: reclaim of the spent D2 probe payload."
+    },
+    {
+     "ts": "2026-10-02T05:20:38Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Governed CONTINUE_TRAINING hour H2 from R child 198f60cb (step 534,516, cursor 401/345248) on source 2d0ce2fa, reusing D2 probe 203431Z (ADMIT, result sha bd4ef1a2...); declaration sha256 50d1ef5dac16840514290a78d02e5a0fe59516787060ddd3480e99b8f13be814; pointer before 78d9e4c88f0a7672c7950c6ab1dbb39fce258c6356466ac3485f97b0a432d938; prep-only PASS (custody T205255Z): input span token_end 2,078,246,912 <= stream 2,078,753,040; this seat 41707/41833",
@@ -31342,11 +31637,12 @@
    "verdict": "SUPPORTED",
    "ruling": "All frozen criterion clauses met (complete result, child d157f2df, parent 198f60cb, positions 104,247,296 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, pointer advanced 78d9e4c8->d157f2df). Disclosed 21:03-21:08Z check clean; residual: edits present 21:03-21:08Z, no mid-hour load evidence.",
    "not_closed": "H2 held: applied 104.2M, head advanced to d157f2df. Successor H3: same config from the H2 child on repeat-ledger e4; data identity changed so a fresh probe precedes the hour.",
-   "successor": "issue2119-h3-hour-20260930"
+   "successor": "issue2119-h3-hour-20260930",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h3-hour-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31354,10 +31650,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T22:33:20Z",
-   "last_ts": "2026-09-30T22:36:59Z",
+   "last_ts": "2026-10-02T05:20:39Z",
    "events": [
     {
      "ts": "2026-09-30T22:33:20Z",
@@ -31401,6 +31698,11 @@
      "hypothesis": "Superseded by issue2119-h3b-hour-20260930 (same hypothesis, prediction, declaration); the chain claims through its own window open.",
      "successor": "issue2119-h3b-hour-20260930",
      "because": "No run happened; only the claim sequencing changes."
+    },
+    {
+     "ts": "2026-10-02T05:20:39Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Governed CONTINUE_TRAINING hour H3 from H2 child d157f2df (cursor 419/3,033,248) on source 2d0ce2fa with repeat-ledger e4 sha 1e4a748f (pass 3, REPEATS); a fresh 2-update probe on the same parent/cursor/e4 precedes the hour in the same chain and window because the data identity changed; declaration sha 1cebbc2a38021e7a9430f2d84edd73e7ef14d290c8c13237563b4d6490ab1c19; pointer before f859775d5d07eb14228b5ec8f2fce676afdab8bf9c366cd6ec886c3055c12539; (k) H2 text-cursor delta 78,185,472 text positions.",
@@ -31414,11 +31716,12 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Process error, not a result: the chain's own window-open performs the claim, and my manual claim left the row RUNNING so the window refused; no probe or hour ran (observed 0 = nothing executed). Re-registered as issue2119-h3b-hour-20260930 with the identical declaration and prediction.",
    "not_closed": "Superseded by issue2119-h3b-hour-20260930 (same hypothesis, prediction, declaration); the chain claims through its own window open.",
-   "successor": "issue2119-h3b-hour-20260930"
+   "successor": "issue2119-h3b-hour-20260930",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h3b-hour-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31426,10 +31729,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-09-30T22:36:59Z",
-   "last_ts": "2026-10-01T00:21:25Z",
+   "last_ts": "2026-10-02T05:20:39Z",
    "events": [
     {
      "ts": "2026-09-30T22:36:59Z",
@@ -31473,6 +31777,11 @@
      "hypothesis": "H3b SUPPORTED (applied 105181184 tokens, guard met). Successor: H4 chained from H3 child 242357b6, fresh probe+hour, same e4 identity.",
      "successor": "issue2119-h4-hour-20260930",
      "because": "ruling confirmed the planned H4 chain; no route/ceiling change"
+    },
+    {
+     "ts": "2026-10-02T05:20:39Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Same as issue2119-h3-hour-20260930 (declaration sha 1cebbc2a, e4 sha 1e4a748f confirmed by the counterpart seat 41955, parent d157f2df cursor 419/3,033,248, pointer f859775d); fresh probe+hour in one chain; predecessor never ran (claim-sequencing error).",
@@ -31486,11 +31795,12 @@
    "verdict": "SUPPORTED",
    "ruling": "All frozen clauses met: complete hour-result, parent d157f2df, child 242357b6, applied_positions 105,181,184 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced f859775d->7ae8b66e naming the new child; fresh probe admitted first. Text delta 78,885,888 = 0.75 x applied, pass 3 REPEATS.",
    "not_closed": "H3b SUPPORTED (applied 105181184 tokens, guard met). Successor: H4 chained from H3 child 242357b6, fresh probe+hour, same e4 identity.",
-   "successor": "issue2119-h4-hour-20260930"
+   "successor": "issue2119-h4-hour-20260930",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h4-hour-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31498,10 +31808,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T00:39:58Z",
-   "last_ts": "2026-10-01T02:33:22Z",
+   "last_ts": "2026-10-02T05:20:39Z",
    "events": [
     {
      "ts": "2026-10-01T00:39:58Z",
@@ -31545,6 +31856,11 @@
      "hypothesis": "No hour ran (floor refusal after the probe). Re-registered as issue2119-h4b-hour-20260930: same declaration (sha 6dd7adb0), same prediction, reusing the finished probe b5be3dc9; claim happens through the chain's own window open.",
      "successor": "issue2119-h4b-hour-20260930",
      "because": "only claim sequencing and probe reuse change"
+    },
+    {
+     "ts": "2026-10-02T05:20:39Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "H4: chain from H3b child 242357b6 (cursor 438/2,227,360 abs 1,832,658,944), pointer 7ae8b66e\u2026031c3a, same source 2d0ce2fa, e4 ledger/mixture unchanged; fresh probe+hour in one chain (cursor differs from the H3b probe, now reclaimed). Declaration sha 6dd7adb0\u2026. Text is a REPEAT (pass 3).",
@@ -31558,11 +31874,12 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "No hour ran, so no applied_positions was produced: the free-space floor refused after the probe (planned budget gap, fixed by the 284 GiB chain-start floor and probe reuse). Neither support nor refutation.",
    "not_closed": "No hour ran (floor refusal after the probe). Re-registered as issue2119-h4b-hour-20260930: same declaration (sha 6dd7adb0), same prediction, reusing the finished probe b5be3dc9; claim happens through the chain's own window open.",
-   "successor": "issue2119-h4b-hour-20260930"
+   "successor": "issue2119-h4b-hour-20260930",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h4b-hour-20260930",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31570,10 +31887,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T02:33:23Z",
-   "last_ts": "2026-10-01T04:01:21Z",
+   "last_ts": "2026-10-02T05:20:40Z",
    "events": [
     {
      "ts": "2026-10-01T02:33:23Z",
@@ -31617,6 +31935,11 @@
      "hypothesis": "The fourth training hour is SUPPORTED: 105,275,392 positions applied, new child d7c34b42 published and pointer advanced. Successor: the fifth hour, chained from this child, with a fresh warm-up check, same data identity; gated on disk space.",
      "successor": "issue2119-h5-hour-20261001",
      "because": "ruling confirmed the planned chain; no route or ceiling change"
+    },
+    {
+     "ts": "2026-10-02T05:20:40Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Same as issue2119-h4-hour-20260930 (declaration sha 6dd7adb0, parent 242357b6 cursor 438/2,227,360, pointer 7ae8b66e\u2026031c3a, e4 ledger); the earlier attempt ran only the probe leg then refused at the free-space floor; this attempt reuses that probe (result sha b5be3dc9) under standing reuse policy, guard proven by deliberate red.",
@@ -31630,11 +31953,12 @@
    "verdict": "SUPPORTED",
    "ruling": "All frozen clauses met: complete hour-result, parent 242357b6, child d7c34b42, applied_positions 105,275,392 in [96M,109M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced 7ae8b66e->3c41b3693 naming the new child; text delta 78,956,544 = 0.75 x applied, pass 3 REPEATS.",
    "not_closed": "The fourth training hour is SUPPORTED: 105,275,392 positions applied, new child d7c34b42 published and pointer advanced. Successor: the fifth hour, chained from this child, with a fresh warm-up check, same data identity; gated on disk space.",
-   "successor": "issue2119-h5-hour-20261001"
+   "successor": "issue2119-h5-hour-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h4-eval-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31642,10 +31966,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T04:03:44Z",
-   "last_ts": "2026-10-01T05:20:07Z",
+   "last_ts": "2026-10-02T05:20:40Z",
    "events": [
     {
      "ts": "2026-10-01T04:03:44Z",
@@ -31689,6 +32014,11 @@
      "hypothesis": "fourth-hour child text NLL 2.1728 (+0.355 vs third hour); image real-minus-missing +0.017",
      "successor": "issue2119-trend-h3-20261001",
      "because": "fifth hour held pending fresh text and recording patch"
+    },
+    {
+     "ts": "2026-10-02T05:20:40Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Fourth-hour child d7c34b42 (step 611,348) evaluated like the reference child: NLL v9 + MMMU real/missing/wrong n=847; declaration sha256 dbbfef55ada86458bcccab191f1ff5ae790fe1fd1812169788767bdd6514317c; pointer sha256 before 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; source 2d0ce2fa; DIAGNOSTIC",
@@ -31702,11 +32032,12 @@
    "verdict": "SUPPORTED",
    "ruling": "Frozen criterion (receipt integrity) held: verdict.json SUPPORTED; NLL receipt complete, bound to d7c34b42, text targets 2,097,152; three MMMU receipts n=847 bound to d7c34b42, missing 847/847 imageless, wrong shift 423 (767/847 differ); pointer 3c41b369 equal before/after; source 2d0ce2fa. PREDICTION MISSED: text NLL observed 2.1728 vs predicted 1.80 [1.72,1.90] (reference 1.8664; +0.3064, 86% of documents worse); caption 1.2853 vs 1.30 [1.22,1.40] inside. MMMU real 0.286 (bar 0.2857, 242/847 = 0.2857 exactly), missing 0.269, wrong 0.299; real-minus-wrong -0.013. Descriptive, no retained credit.",
    "not_closed": "fourth-hour child text NLL 2.1728 (+0.355 vs third hour); image real-minus-missing +0.017",
-   "successor": "issue2119-trend-h3-20261001"
+   "successor": "issue2119-trend-h3-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-trend-h3-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31714,10 +32045,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T04:31:28Z",
-   "last_ts": "2026-10-01T05:20:07Z",
+   "last_ts": "2026-10-02T05:20:41Z",
    "events": [
     {
      "ts": "2026-10-01T04:31:28Z",
@@ -31761,6 +32093,11 @@
      "hypothesis": "third-hour child text NLL 1.8181 vs registered 2.05; integrity held",
      "successor": "issue2119-range-gap-20261001",
      "because": "nonmonotone series; fourth hour jump needs range discriminator"
+    },
+    {
+     "ts": "2026-10-02T05:20:41Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Held-out text NLL of the third-hour child 242357b6, same instrument as the reference and fourth-hour evaluations; declaration sha256 48992c0dee39e68e2e5ecc3450944056e92907a0a2c4b8b25a7a6f2c7dc02261; pointer sha256 before 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; source 2d0ce2fa; DIAGNOSTIC. Why: the fourth-hour child text NLL measured 2.1728 against 1.866 for the reference child (prediction 1.80 [1.72,1.90] missed).",
@@ -31774,11 +32111,12 @@
    "verdict": "SUPPORTED",
    "ruling": "Frozen criterion (receipt integrity) held: NLL receipt complete_failures empty, text targets 2,097,152, bound to 242357b6, pointer unchanged. PREDICTION MISSED LOW: text NLL 1.8181 vs predicted 2.05 [1.85,2.25] (below the interval); caption 1.3015. Third-hour child is better than the reference child 1.8664 and far better than the fourth-hour child 2.1728: text NLL is not monotone across hours.",
    "not_closed": "third-hour child text NLL 1.8181 vs registered 2.05; integrity held",
-   "successor": "issue2119-range-gap-20261001"
+   "successor": "issue2119-range-gap-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-trend-h2-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -31786,10 +32124,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T04:31:29Z",
-   "last_ts": "2026-10-01T05:20:06Z",
+   "last_ts": "2026-10-02T05:20:40Z",
    "events": [
     {
      "ts": "2026-10-01T04:31:29Z",
@@ -31833,6 +32172,11 @@
      "hypothesis": "CORRECTION: RULED row says REFUTED in error; frozen criterion is integrity-only and all clauses held, so the correct verdict is SUPPORTED(integrity). Second-hour child text NLL 1.7967 (caption 1.3160); registered expectation 1.95 [1.80,2.10] missed low. Text NLL by hour: ref 1.8664, second 1.7967, third 1.8181, fourth 2.1728: the jump is isolated to the fourth hour.",
      "successor": "issue2119-range-gap-20261001",
      "because": "range discriminator already planned per this seat 42441(a)"
+    },
+    {
+     "ts": "2026-10-02T05:20:40Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Held-out text NLL of the second-hour child d157f2df, same instrument as the reference and fourth-hour evaluations; declaration sha256 48992c0dee39e68e2e5ecc3450944056e92907a0a2c4b8b25a7a6f2c7dc02261; pointer sha256 before 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; source 2d0ce2fa; DIAGNOSTIC. Why: the fourth-hour child text NLL measured 2.1728 against 1.866 for the reference child (prediction 1.80 [1.72,1.90] missed).",
@@ -31846,7 +32190,8 @@
    "verdict": "REFUTED",
    "ruling": "observed 1.7967 is below the registered interval [1.80,2.10] around 1.95; text NLL fell from reference 1.8664 to 1.7967, so no early regression",
    "not_closed": "CORRECTION: RULED row says REFUTED in error; frozen criterion is integrity-only and all clauses held, so the correct verdict is SUPPORTED(integrity). Second-hour child text NLL 1.7967 (caption 1.3160); registered expectation 1.95 [1.80,2.10] missed low. Text NLL by hour: ref 1.8664, second 1.7967, third 1.8181, fourth 2.1728: the jump is isolated to the fourth hour.",
-   "successor": "issue2119-range-gap-20261001"
+   "successor": "issue2119-range-gap-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-range-gap-20261001",
@@ -32178,7 +32523,7 @@
   },
   {
    "id": "issue2119-range2-S3-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -32186,10 +32531,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T06:01:04Z",
-   "last_ts": "2026-10-01T06:17:45Z",
+   "last_ts": "2026-10-02T05:20:41Z",
    "events": [
     {
      "ts": "2026-10-01T06:01:04Z",
@@ -32232,6 +32578,11 @@
      "stage": "UPDATED",
      "hypothesis": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).",
      "because": "range difficulty confirmed; held-out attribution still open"
+    },
+    {
+     "ts": "2026-10-02T05:20:41Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Arm S3 of the successor range discriminator (other arm issue2119-range2-S4-20261001); both registered before either reads data. The first pair's gap +0.3252 mixed difficulty with exposure (third-hour child trained on the first range). The second-hour child trained on neither range.",
@@ -32244,11 +32595,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Joint criterion from both receipts: gap = 1.8218500 - 1.5777117 = +0.244138 > 0.10 (SUPPORTED); integrity: completion_failures empty both, manifest d157f2df, text.targets 524288 both, finite, scorer 53011c8d same as first pair, pointer 3c41b369 equal. Scope: text half is TRAINING-RANGE loss (receipt claim label 'held-out' is wrong for it); caption half held-out and identical. Expected +0.10 [-0.10,+0.35]: inside the interval, above the point.",
-   "not_closed": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b)."
+   "not_closed": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-range2-S4-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -32256,10 +32608,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T06:01:05Z",
-   "last_ts": "2026-10-01T06:17:45Z",
+   "last_ts": "2026-10-02T05:20:41Z",
    "events": [
     {
      "ts": "2026-10-01T06:01:05Z",
@@ -32302,6 +32655,11 @@
      "stage": "UPDATED",
      "hypothesis": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).",
      "because": "range difficulty confirmed; held-out attribution still open"
+    },
+    {
+     "ts": "2026-10-02T05:20:41Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Arm S4 of the successor range discriminator (other arm issue2119-range2-S3-20261001); both registered before either reads data. The first pair's gap +0.3252 mixed difficulty with exposure (third-hour child trained on the first range). The second-hour child trained on neither range.",
@@ -32314,11 +32672,12 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Joint criterion from both receipts: gap = 1.8218500 - 1.5777117 = +0.244138 > 0.10 (SUPPORTED); integrity: completion_failures empty both, manifest d157f2df, text.targets 524288 both, finite, scorer 53011c8d same as first pair, pointer 3c41b369 equal. Scope: text half is TRAINING-RANGE loss (receipt claim label 'held-out' is wrong for it); caption half held-out and identical. Expected +0.10 [-0.10,+0.35]: inside the interval, above the point.",
-   "not_closed": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b)."
+   "not_closed": "Matched-exposure gap +0.2441 (second-hour child, trained on neither range) vs +0.3252 for the third-hour child: the second range is harder for a model that has seen neither (supported), and recent exposure to the first range accounts for about 0.081 of the earlier gap. Conditional on these two child models; these are training-range losses, not held-out. Does not by itself link to the 0.355 held-out jump. Fifth hour still held for fresh text and patch (b).",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-stopswitch-red-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -32326,10 +32685,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T06:32:47Z",
-   "last_ts": "2026-10-01T07:24:16Z",
+   "last_ts": "2026-10-02T05:20:42Z",
    "events": [
     {
      "ts": "2026-10-01T06:32:47Z",
@@ -32373,6 +32733,11 @@
      "hypothesis": "The first run was refused by the continuity ledger (diagnostic allowance exhausted) before any row; the stop-at path was not exercised. Successor reruns the same frozen criterion with the lineage's real readiness blocker named through the identity's own field.",
      "successor": "issue2119-stopswitch-red2-20261001",
      "because": "the rerun carries the readiness blocker and the barred N=5 red stays the first leg before the speed pair"
+    },
+    {
+     "ts": "2026-10-02T05:20:42Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "The stop-at switch (EMBER_LEARNING_STOP_AT) has only source and CPU evidence; no device run has shown it ends a twin early and writes its terminal receipt. the counterpart seat's review (42527) did not qualify the device behavior.",
@@ -32386,7 +32751,8 @@
    "verdict": "INCONCLUSIVE",
    "ruling": "Frozen criterion: any of rows.jsonl measured-row count != 4; terminal-state.json absent or stop_at != 5; completion_failures/refusal; pointer sha256 after != 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce; non-finite loss in any row. Observed: worker refused at the continuity ledger (diagnostic allowance exhausted, postponement) before any row; the stop-at path was not exercised; 0 measured rows; pointer equal before and after. Not REFUTED because the instrument never ran.",
    "not_closed": "The first run was refused by the continuity ledger (diagnostic allowance exhausted) before any row; the stop-at path was not exercised. Successor reruns the same frozen criterion with the lineage's real readiness blocker named through the identity's own field.",
-   "successor": "issue2119-stopswitch-red2-20261001"
+   "successor": "issue2119-stopswitch-red2-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-stopswitch-red2-20261001",
@@ -32550,16 +32916,17 @@
   },
   {
    "id": "issue1945-stem-probe-20261001",
-   "stage": "MEASURED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "MEASURED"
+    "MEASURED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T09:49:45Z",
-   "last_ts": "2026-10-01T10:06:26Z",
+   "last_ts": "2026-10-02T05:18:50Z",
    "events": [
     {
      "ts": "2026-10-01T09:49:45Z",
@@ -32590,6 +32957,11 @@
      "stage": "MEASURED",
      "receipt": "<host-local path>",
      "note": "Arm A produced NO result: worker exited rc=1 at launch (27 s) in reserve_diagnostic_dispatch, training_continuity_ledger.py:308: ValueError diagnostic allowance exhausted (occupancy) for lineage bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b; a readiness blocker is required to renew it. No training ran; zero rows."
+    },
+    {
+     "ts": "2026-10-02T05:18:50Z",
+     "stage": "CLOSED",
+     "because": "Arm produced no result (worker rc=1 at launch, zero rows); the question was answered by issue1945-stem-probe-r3-20261001. Closed without a measurement; not a verdict on the hypothesis."
     }
    ],
    "observation": "Does keeping 79 instead of 58 tail tokens per answer-scoped caption (7 pairs per document, same rows, same parent) change image-dependent caption loss and held-out MMMU real/missing/wrong, over full learning-comparison-v1 arms (16,384 updates)? Observation leg, not a cure. Parent fourth-hour child pointer sha 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce, step S=611,348, first consumed row 280,620; carrier da91b549d3212de10c668804d84576123e3e268f.",
@@ -32599,20 +32971,22 @@
    "instrument": "learning-comparison-v1 snapshots 2048/4096/8192/16384; caption NLL real/wrong; MMMU n=847 real/missing/wrong paired bootstrap 10000 seed 0; four arms; carrier da91b549; parent S=611348 first row 280620",
    "receipts": [
     "<host-local path>"
-   ]
+   ],
+   "closing": "Arm produced no result (worker rc=1 at launch, zero rows); the question was answered by issue1945-stem-probe-r3-20261001. Closed without a measurement; not a verdict on the hypothesis."
   },
   {
    "id": "issue1945-stem-probe-r2-20261001",
-   "stage": "MEASURED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "MEASURED"
+    "MEASURED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T10:07:03Z",
-   "last_ts": "2026-10-01T10:09:13Z",
+   "last_ts": "2026-10-02T05:18:50Z",
    "events": [
     {
      "ts": "2026-10-01T10:07:03Z",
@@ -32643,6 +33017,11 @@
      "stage": "MEASURED",
      "receipt": "<host-local path>",
      "note": "Arm A (rerun, with ruled readiness blocker) produced NO result: diagnostic reservation passed, worker pid 48300 started 10:07:56Z, exited rc=1 at 10:08:16Z (20 s, peak commit 3.7 GB), stderr.log and stdout.log empty, no worker-terminal.json, no rows."
+    },
+    {
+     "ts": "2026-10-02T05:18:50Z",
+     "stage": "CLOSED",
+     "because": "Arm produced no result (worker rc=1 at launch, zero rows); the question was answered by issue1945-stem-probe-r3-20261001. Closed without a measurement; not a verdict on the hypothesis."
     }
    ],
    "observation": "SUCCESSOR of issue1945-stem-probe-20261001 (no-result measurement: arm A exited rc=1 at launch in 27 s, diagnostic allowance exhausted, receipt <host-local path>). Same question: does keeping 79 instead of 58 tail tokens per answer-scoped caption (7 pairs per document, same rows, same parent) change image-dependent caption loss and held-out MMMU real/missing/wrong over full learning-comparison-v1 arms? Parent pointer sha 3c41b3693fba8e59efbcebc19f352bc0a88bb986d4dfa9d53a15051a677b8bce, S=611,348, first row 280,620; carrier da91b549d3212de10c668804d84576123e3e268f. Launched with the ruled readiness blocker (this seat 42814).",
@@ -32652,7 +33031,8 @@
    "instrument": "learning-comparison-v1 snapshots 2048/4096/8192/16384; caption NLL real/wrong; MMMU n=847 real/missing/wrong paired bootstrap 10000 seed 0; four arms; carrier da91b549; parent S=611348 first row 280620",
    "receipts": [
     "<host-local path>"
-   ]
+   ],
+   "closing": "Arm produced no result (worker rc=1 at launch, zero rows); the question was answered by issue1945-stem-probe-r3-20261001. Closed without a measurement; not a verdict on the hypothesis."
   },
   {
    "id": "issue1945-stem-probe-r3-20261001",
@@ -32733,7 +33113,7 @@
   },
   {
    "id": "issue2119-h5-hour-20261001",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -32741,10 +33121,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-01T22:53:34Z",
-   "last_ts": "2026-10-02T00:45:29Z",
+   "last_ts": "2026-10-02T05:20:43Z",
    "events": [
     {
      "ts": "2026-10-01T22:53:34Z",
@@ -32787,6 +33168,11 @@
      "hypothesis": "Not closed: the hour's p10 and held-out loss are not part of this row; held-out NLL is the successor row.",
      "successor": "issue2119-h5-heldout-nll-20261001",
      "because": "interval criterion only; sixth-hour decision remains the separate 43990 conditional"
+    },
+    {
+     "ts": "2026-10-02T05:20:43Z",
+     "stage": "CLOSED",
+     "because": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
     }
    ],
    "observation": "Fifth lineage hour H5 (this seat 43593/43595/43908): fresh-process governed CONTINUE_TRAINING hour from the H4 child d7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec on merged 2d0ce2fa, full model, mixture identity and e4 ledger unchanged from H4, start cursor 457/1,492,128, fresh probe plus hour in one window, default runner wall 5,656 (intrinsic minimum 3,600). Declaration seat record: issue2119-h5-declaration-20261001.md sha fdf9869d. Launcher chain_segment_H5b.sh sha 7a233ce2 (preparer pin bee81f5d, this seat ruling 43905); a seat PASS 43906.",
@@ -32800,7 +33186,8 @@
    "verdict": "SUPPORTED",
    "ruling": "applied 101,781,504 inside the frozen [96M,109M]; criterion was applied-positions interval only",
    "not_closed": "Not closed: the hour's p10 and held-out loss are not part of this row; held-out NLL is the successor row.",
-   "successor": "issue2119-h5-heldout-nll-20261001"
+   "successor": "issue2119-h5-heldout-nll-20261001",
+   "closing": "Cycle complete (UPDATED); closed in the loop stall drain, this seat 44662/44669 (receipt mail 44668); the row's own ruling and update stand in its history."
   },
   {
    "id": "issue2119-h6-answer-weight-100-20261001",
@@ -33038,16 +33425,18 @@
   },
   {
    "id": "issue2119-h6-lineage-unchanged-20261001-r2",
-   "stage": "MEASURED",
+   "stage": "UPDATED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
-    "MEASURED"
+    "MEASURED",
+    "RULED",
+    "UPDATED"
    ],
    "first_ts": "2026-10-02T02:39:21Z",
-   "last_ts": "2026-10-02T04:56:49Z",
+   "last_ts": "2026-10-02T05:42:25Z",
    "events": [
     {
      "ts": "2026-10-02T02:39:21Z",
@@ -33077,6 +33466,19 @@
      "ts": "2026-10-02T04:56:49Z",
      "stage": "MEASURED",
      "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T05:42:10Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Observed (predicted quantity = text held-out delta vs the fifth child): -0.0052977; caption delta +0.0130771; p10 21,571.78. Frozen criterion: refuted if text outside [-0.30,+0.10] OR caption outside [-0.08,+0.04] OR p10 outside [19,500,23,500]; all three inside. Compare receipt compare-H6-H5.json sha 4bf76bc6 VALID, pack digest 099ad8b7 equal to the fifth child at 64 hex, 512/512 packs, 2,097,152 targets both sides; occurrence bound read beside it per 44646 (sixth hour zero collisions). Lineage unchanged on the sixth hour. Beside the verdict: text gain is 10x under the -0.05 expectation and caption moved the wrong way for the first time; the next prediction must use these."
+    },
+    {
+     "ts": "2026-10-02T05:42:25Z",
+     "stage": "UPDATED",
+     "hypothesis": "Sixth hour kept the lineage inside every band, so the seventh hour dispatches from child cf3124c9 on the unchanged plan. Not closed by this ruling: (1) text learning per 100M physical positions fell from +0.38 (fifth hour) to +0.005 (sixth), a 70x drop on the same held-out set; (2) caption held-out loss rose +0.013, the first non-improvement in the lineage; (3) whether both are the data order (the sixth hour's shard window) or saturation of the fixed held-out pack set is unmeasured. The seventh-hour row predicts text and caption deltas from these two points, not from the fifth hour alone, with an explicit interval that would be refuted by a second caption rise.",
+     "successor": "issue2119-h7-lineage-unchanged-20261002",
+     "because": "The dispatch decision (seventh hour, same plan, same parent chain) is unchanged; the prediction model for the next row changes, which is a forecast change, not a route change."
     }
    ],
    "observation": "Sixth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H5 child f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219. Successor of issue2119-h6-lineage-unchanged-20261001, whose interval was the envelope of every observed delta and could not refute (a seat 44441, this seat 44443).",
@@ -33086,18 +33488,25 @@
    "instrument": "child_nll_v11.py a5057eab via an H6 scoring chain pinned to the H6 child, same frozen held-out plan, full 512-pack digests equal; throughput from the hour's hour-result.json",
    "receipts": [
     "<host-local path>"
-   ]
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Observed (predicted quantity = text held-out delta vs the fifth child): -0.0052977; caption delta +0.0130771; p10 21,571.78. Frozen criterion: refuted if text outside [-0.30,+0.10] OR caption outside [-0.08,+0.04] OR p10 outside [19,500,23,500]; all three inside. Compare receipt compare-H6-H5.json sha 4bf76bc6 VALID, pack digest 099ad8b7 equal to the fifth child at 64 hex, 512/512 packs, 2,097,152 targets both sides; occurrence bound read beside it per 44646 (sixth hour zero collisions). Lineage unchanged on the sixth hour. Beside the verdict: text gain is 10x under the -0.05 expectation and caption moved the wrong way for the first time; the next prediction must use these.",
+   "not_closed": "Sixth hour kept the lineage inside every band, so the seventh hour dispatches from child cf3124c9 on the unchanged plan. Not closed by this ruling: (1) text learning per 100M physical positions fell from +0.38 (fifth hour) to +0.005 (sixth), a 70x drop on the same held-out set; (2) caption held-out loss rose +0.013, the first non-improvement in the lineage; (3) whether both are the data order (the sixth hour's shard window) or saturation of the fixed held-out pack set is unmeasured. The seventh-hour row predicts text and caption deltas from these two points, not from the fifth hour alone, with an explicit interval that would be refuted by a second caption rise.",
+   "successor": "issue2119-h7-lineage-unchanged-20261002"
   },
   {
    "id": "issue2119-h6-heldout-nll-20261002",
-   "stage": "PREDICTED",
+   "stage": "RULED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
-    "PREDICTED"
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED"
    ],
    "first_ts": "2026-10-02T05:03:52Z",
-   "last_ts": "2026-10-02T05:03:52Z",
+   "last_ts": "2026-10-02T05:41:29Z",
    "events": [
     {
      "ts": "2026-10-02T05:03:52Z",
@@ -33116,13 +33525,225 @@
      "refuted_if": "the scoring leg refuses, crashes, closes without nll-H6-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the fifth child's: the deltas would not be comparable and the -r2 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on -r2; no delta is read from a non-comparable pair",
      "supported_if": "512 packs scored, digest equal to the fifth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H6-eval.json written",
      "instrument": "chain_segment_H6_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H6_H5_compare_v1.py"
+    },
+    {
+     "ts": "2026-10-02T05:24:29Z",
+     "stage": "RUNNING",
+     "note": "H6 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T05:41:11Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H6-eval.json"
+    },
+    {
+     "ts": "2026-10-02T05:41:29Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Criterion: refuted if the leg refuses/crashes/closes without nll-H6-eval.json/scores fewer than 512 packs/digest differs from the fifth child's. Observed: rc 0, 512 packs, pack-content digest 099ad8b7ef112eb8091bc7a8e45aaf7c65c175caeabc112a79021e8a20155297 equal to H5's at full 64 hex (compare-H6-H5.json 4bf76bc6...: status VALID), receipt seat record: nll-H6-eval.json 4470291527b9a53b209d30222cd67919fac6dd4d6fe0b26f0c33b18b44f79b17, pointer byte-equal before/after."
     }
    ],
    "observation": "The sixth lineage hour finished 04:56:49Z (24,838 updates, 101,740,544 positions, p10 21,571.8 positions/s, child cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09 on head bb272f0d). Its row issue2119-h6-lineage-unchanged-20261001-r2 needs the held-out text and caption deltas against the fifth child (held-out text mean 1.7861296088522067, caption 1.2621297509511926, 512 packs, pack-content digest 099ad8b7...5297).",
    "explanation": "The fifth-child scores came from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the sixth child give a comparable pair only if the pack-content digest and pack count are identical to the fifth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
    "criterion": "the scoring leg refuses, crashes, closes without nll-H6-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the fifth child's: the deltas would not be comparable and the -r2 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on -r2; no delta is read from a non-comparable pair",
    "criterion_supported_if": "512 packs scored, digest equal to the fifth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H6-eval.json written",
-   "instrument": "chain_segment_H6_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H6_H5_compare_v1.py"
+   "instrument": "chain_segment_H6_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H6_H5_compare_v1.py",
+   "receipts": [
+    "seat record: nll-H6-eval.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Criterion: refuted if the leg refuses/crashes/closes without nll-H6-eval.json/scores fewer than 512 packs/digest differs from the fifth child's. Observed: rc 0, 512 packs, pack-content digest 099ad8b7ef112eb8091bc7a8e45aaf7c65c175caeabc112a79021e8a20155297 equal to H5's at full 64 hex (compare-H6-H5.json 4bf76bc6...: status VALID), receipt seat record: nll-H6-eval.json 4470291527b9a53b209d30222cd67919fac6dd4d6fe0b26f0c33b18b44f79b17, pointer byte-equal before/after."
+  },
+  {
+   "id": "issue2119-h7-lineage-unchanged-20261002",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-02T05:49:34Z",
+   "last_ts": "2026-10-02T08:05:20Z",
+   "events": [
+    {
+     "ts": "2026-10-02T05:49:34Z",
+     "stage": "OBSERVED",
+     "observation": "Seventh lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H6 child cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09, head bb272f0d, start cursor 493/3138720. The sixth hour's row -r2 is RULED SUPPORTED (text -0.0053, caption +0.0131). The hour crosses the pass-4 start of the e4 ledger (2,078,753,040): ~19% of its text positions are pass 3, ~81% pass 4.",
+     "receipt": "seat record: compare-H6-H5.json"
+    },
+    {
+     "ts": "2026-10-02T05:49:34Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053; per 100M physical positions H5 -0.3799, H6 -0.0052. The fifth was a recovery from the fourth's excursion; the sixth shows the recovered level moving little. Net H2 to H6 is -0.016 (-0.004 per hour), so one more hour is expected near flat (-0.02), best case the mean of the two scored hours (-0.196), with a real chance of regression once pass 4 begins (+0.10 bound). Caption deltas -0.0145, -0.0162, -0.0232, +0.0131: the sixth rose; a second rise of the same size is a trend, not noise, so the former +0.04 upper band is withdrawn and a second rise at or above +0.013 refutes."
+    },
+    {
+     "ts": "2026-10-02T05:49:34Z",
+     "stage": "PREDICTED",
+     "refuted_if": "text delta outside [-0.20,+0.10] OR caption delta (H7 minus H6 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text delta worse than +0.10 -> the eighth hour does not dispatch until a stop-switch review that reads the pass-4 crossing as an input; caption at or above +0.013 -> second consecutive caption rise goes to the stop-switch review; text better than -0.20 -> the forecast model is re-fit and the lineage continues",
+     "supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions (expect 78.8M in [76M,82M])",
+     "instrument": "child_nll_v11.py a5057eab via an H7 scoring chain pinned to the H7 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+    },
+    {
+     "ts": "2026-10-02T05:52:55Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T07:43:13Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T08:04:31Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "frozen criterion: refuted if text delta outside [-0.20,+0.10] OR caption delta at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Observed: text 1.65131-1.78083=-0.12952 inside; caption 1.26472-1.27521=-0.01049 inside; p10 21446.51 inside; applied 101281792 inside. Identical 512-pack digest both sides. No clause fires. Receipts: nll-H7-eval.json 60bfa110..., compare-H7-H6.json e0439776..., hour-result f7e22ca5... (a build seat 44928, a seat 44890)"
+    },
+    {
+     "ts": "2026-10-02T08:05:08Z",
+     "stage": "UPDATED",
+     "hypothesis": "CORRECTION of the rule row observed field: predicted text delta -0.02 in [-0.20,0.10]; observed -0.12952, INSIDE the interval (the 21446.51 I typed is p10, inside its own band). Calibration: interval held, point prediction missed by 6x; the text drop is 24x the sixth-to-fifth step with identical scoring inputs (a seat 44930), so the movement is in the child weights or the scorer. Successor diagnostic, next card gap: rescore the sixth child in one window; an exact reproduction rules out the scorer and leaves the data cursor (shards 493-512 entered this hour) as the candidate mechanism.",
+     "successor": "issue2119-h6-child-rescore-reproduces-20261002: rescoring the sixth child reproduces 1.78083 exactly; refuted if any text or caption mean differs",
+     "because": "no refutation clause fired and the -0.20 re-fit trigger was not crossed; the eighth hour dispatches unchanged"
+    },
+    {
+     "ts": "2026-10-02T08:05:20Z",
+     "stage": "CLOSED",
+     "because": "cycle complete: SUPPORTED, corrections recorded, successor named"
+    }
+   ],
+   "observation": "Seventh lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H6 child cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09, head bb272f0d, start cursor 493/3138720. The sixth hour's row -r2 is RULED SUPPORTED (text -0.0053, caption +0.0131). The hour crosses the pass-4 start of the e4 ledger (2,078,753,040): ~19% of its text positions are pass 3, ~81% pass 4.",
+   "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053; per 100M physical positions H5 -0.3799, H6 -0.0052. The fifth was a recovery from the fourth's excursion; the sixth shows the recovered level moving little. Net H2 to H6 is -0.016 (-0.004 per hour), so one more hour is expected near flat (-0.02), best case the mean of the two scored hours (-0.196), with a real chance of regression once pass 4 begins (+0.10 bound). Caption deltas -0.0145, -0.0162, -0.0232, +0.0131: the sixth rose; a second rise of the same size is a trend, not noise, so the former +0.04 upper band is withdrawn and a second rise at or above +0.013 refutes.",
+   "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H7 minus H6 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text delta worse than +0.10 -> the eighth hour does not dispatch until a stop-switch review that reads the pass-4 crossing as an input; caption at or above +0.013 -> second consecutive caption rise goes to the stop-switch review; text better than -0.20 -> the forecast model is re-fit and the lineage continues",
+   "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21500, applied expect 101.8M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions (expect 78.8M in [76M,82M])",
+   "instrument": "child_nll_v11.py a5057eab via an H7 scoring chain pinned to the H7 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "frozen criterion: refuted if text delta outside [-0.20,+0.10] OR caption delta at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Observed: text 1.65131-1.78083=-0.12952 inside; caption 1.26472-1.27521=-0.01049 inside; p10 21446.51 inside; applied 101281792 inside. Identical 512-pack digest both sides. No clause fires. Receipts: nll-H7-eval.json 60bfa110..., compare-H7-H6.json e0439776..., hour-result f7e22ca5... (a build seat 44928, a seat 44890)",
+   "not_closed": "CORRECTION of the rule row observed field: predicted text delta -0.02 in [-0.20,0.10]; observed -0.12952, INSIDE the interval (the 21446.51 I typed is p10, inside its own band). Calibration: interval held, point prediction missed by 6x; the text drop is 24x the sixth-to-fifth step with identical scoring inputs (a seat 44930), so the movement is in the child weights or the scorer. Successor diagnostic, next card gap: rescore the sixth child in one window; an exact reproduction rules out the scorer and leaves the data cursor (shards 493-512 entered this hour) as the candidate mechanism.",
+   "successor": "issue2119-h6-child-rescore-reproduces-20261002: rescoring the sixth child reproduces 1.78083 exactly; refuted if any text or caption mean differs",
+   "closing": "cycle complete: SUPPORTED, corrections recorded, successor named"
+  },
+  {
+   "id": "issue2119-h7-heldout-nll-20261002",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-02T07:44:21Z",
+   "last_ts": "2026-10-02T08:05:20Z",
+   "events": [
+    {
+     "ts": "2026-10-02T07:44:21Z",
+     "stage": "OBSERVED",
+     "observation": "The seventh lineage hour finished 07:43:12Z (24,726 updates, 101,281,792 positions, p10 21,446.5 positions/s as the hour result records it, child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318 on head bb272f0d). Its row needs the held-out text and caption deltas against the sixth child (scored in the same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-02T07:44:22Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The sixth-child scores came from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the seventh child give a comparable pair only if the pack-content digest and pack count are identical to the sixth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not."
+    },
+    {
+     "ts": "2026-10-02T07:44:22Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the scoring leg refuses, crashes, closes without nll-H7-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the sixth child's: the deltas would not be comparable and the H7 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H7 row; no delta is read from a non-comparable pair",
+     "supported_if": "512 packs scored, digest equal to the sixth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H7-eval.json written",
+     "instrument": "chain_segment_H7_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H7_H6_compare_v1.py"
+    },
+    {
+     "ts": "2026-10-02T07:46:13Z",
+     "stage": "RUNNING",
+     "note": "H7 child held-out NLL (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-02T08:02:58Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H7-eval.json"
+    },
+    {
+     "ts": "2026-10-02T08:04:30Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "frozen criterion: refuted if text delta outside [-0.20,+0.10] OR caption delta at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Observed: text 1.65131-1.78083=-0.12952 inside; caption 1.26472-1.27521=-0.01049 inside; p10 21446.51 inside; applied 101281792 inside. Identical 512-pack digest both sides. No clause fires. Receipts: nll-H7-eval.json 60bfa110..., compare-H7-H6.json e0439776..., hour-result f7e22ca5... (a build seat 44928, a seat 44890)"
+    },
+    {
+     "ts": "2026-10-02T08:05:08Z",
+     "stage": "UPDATED",
+     "hypothesis": "CORRECTION of the rule row observed field: this row's predicted quantity is pack count; observed 512 of 512 (in interval). The -0.12952 I typed is the text delta and belongs to the lineage row. Scoring valid: identical digest 099ad8b7..., 2,097,152 targets both sides, a seat check 8 PASS (44930).",
+     "because": "scoring comparable; the verdict rests on the lineage row"
+    },
+    {
+     "ts": "2026-10-02T08:05:20Z",
+     "stage": "CLOSED",
+     "because": "cycle complete: SUPPORTED, corrections recorded, successor named"
+    }
+   ],
+   "observation": "The seventh lineage hour finished 07:43:12Z (24,726 updates, 101,281,792 positions, p10 21,446.5 positions/s as the hour result records it, child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318 on head bb272f0d). Its row needs the held-out text and caption deltas against the sixth child (scored in the same scorer child_nll_v11 a5057eab over the frozen held-out plan, 512 packs).",
+   "explanation": "The sixth-child scores came from the frozen scorer child_nll_v11 (a5057eab) over the frozen held-out plan; the same scorer and plan applied to the seventh child give a comparable pair only if the pack-content digest and pack count are identical to the sixth's. This leg is the measurement, not a hypothesis about training: it either produces the comparable pair or it does not.",
+   "criterion": "the scoring leg refuses, crashes, closes without nll-H7-eval.json, scores fewer than 512 packs, or its pack-content digest differs from the sixth child's: the deltas would not be comparable and the H7 row cannot be ruled on them. Decision consequence: the scoring chain is repaired as a new file and rerun before any verdict on the H7 row; no delta is read from a non-comparable pair",
+   "criterion_supported_if": "512 packs scored, digest equal to the sixth child's, ordered producer index 0..511 accounted (v11 completion check), nll-H7-eval.json written",
+   "instrument": "chain_segment_H7_nll_v1.sh via child_nll_v11.py a5057eab; comparison nll_H7_H6_compare_v1.py",
+   "receipts": [
+    "seat record: nll-H7-eval.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "frozen criterion: refuted if text delta outside [-0.20,+0.10] OR caption delta at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second outside [19500,23500] OR applied_positions outside [96M,109M]. Observed: text 1.65131-1.78083=-0.12952 inside; caption 1.26472-1.27521=-0.01049 inside; p10 21446.51 inside; applied 101281792 inside. Identical 512-pack digest both sides. No clause fires. Receipts: nll-H7-eval.json 60bfa110..., compare-H7-H6.json e0439776..., hour-result f7e22ca5... (a build seat 44928, a seat 44890)",
+   "not_closed": "CORRECTION of the rule row observed field: this row's predicted quantity is pack count; observed 512 of 512 (in interval). The -0.12952 I typed is the text delta and belongs to the lineage row. Scoring valid: identical digest 099ad8b7..., 2,097,152 targets both sides, a seat check 8 PASS (44930).",
+   "closing": "cycle complete: SUPPORTED, corrections recorded, successor named"
+  },
+  {
+   "id": "issue2119-h8-lineage-unchanged-20261002",
+   "stage": "PREDICTED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED"
+   ],
+   "first_ts": "2026-10-02T08:05:15Z",
+   "last_ts": "2026-10-02T08:05:16Z",
+   "events": [
+    {
+     "ts": "2026-10-02T08:05:15Z",
+     "stage": "OBSERVED",
+     "observation": "Eighth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H7 child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318, head bb272f0d, start cursor 512/2748144, sampler-only trainer telemetry (no overlap jobs). The seventh hour's row is RULED SUPPORTED (text -0.1295, caption -0.0105). The whole hour lies in pass 4 of the e4 ledger (start absolute 2,140,221,440): text positions are repeats.",
+     "receipt": "seat record: compare-H7-H6.json"
+    },
+    {
+     "ts": "2026-10-02T08:05:15Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The seventh fell further, partly the fifth-style recovery continuing; the eighth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (the same bar as before)."
+    },
+    {
+     "ts": "2026-10-02T08:05:16Z",
+     "stage": "PREDICTED",
+     "refuted_if": "text delta outside [-0.20,+0.10] OR caption delta (H8 minus H7 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+     "supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21400, applied expect 101.3M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler outcome",
+     "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
+    }
+   ],
+   "observation": "Eighth lineage hour on the unchanged recipe (answer weight 200, mixture e4, a1-v4 image manifest, e4 ledger) from the H7 child f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318, head bb272f0d, start cursor 512/2748144, sampler-only trainer telemetry (no overlap jobs). The seventh hour's row is RULED SUPPORTED (text -0.1295, caption -0.0105). The whole hour lies in pass 4 of the e4 ledger (start absolute 2,140,221,440): text positions are repeats.",
+   "explanation": "Held-out text deltas by hour: H3 +0.0214, H4 +0.3547, H5 -0.3867, H6 -0.0053, H7 -0.1295; caption deltas -0.0145, -0.0162, -0.0232, +0.0131, -0.0105. The seventh fell further, partly the fifth-style recovery continuing; the eighth is expected near flat (-0.02) with a real chance of regression now that every text position is a repeat (+0.10 bound). A caption rise at or above +0.013 refutes (the same bar as before).",
+   "criterion": "text delta outside [-0.20,+0.10] OR caption delta (H8 minus H7 mean image_caption.mean_nll, nats/target) at or above +0.013 or below -0.08 OR complete_step_p10_positions_per_second (loss-target positions/s, original mask) outside [19500,23500] OR applied_positions outside [96M,109M]. Decision consequence: text worse than +0.10 or caption at or above +0.013 -> stop-switch review reading the pass-4 regime as an input; text better than -0.20 -> forecast model re-fit and the lineage continues",
+   "criterion_supported_if": "text delta in [-0.20,+0.10] AND caption delta in [-0.08,+0.013) AND p10 in [19500,23500] loss-target positions/s AND applied_positions in [96M,109M] (text expect -0.02, caption expect -0.005, p10 expect 21400, applied expect 101.3M). Measured, non-gating: sum of rows.jsonl loss_bearing_positions; trainer sampler outcome",
+   "instrument": "child_nll_v11.py a5057eab via an H8 scoring chain pinned to the H8 child, same frozen held-out plan, 512-pack digest equal to 099ad8b7...; throughput and applied_positions from the hour's hour-result.json; loss count by h6_rows_loss_bearing_sum_v1.py 1190be77"
   }
  ],
  "registry": [
