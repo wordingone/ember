@@ -118,40 +118,46 @@ def test_normalizer_policy_mismatch(tmp_path):
 
 # ---- coverage ----
 
-def _counted_index(normalizer, n, keys=("mmmu_records",)):
-    return g1.ProtectedIndex([{"text": f"protected record number {k:04d} body text", "coverage_keys": list(keys)}
-                              for k in range(n)], normalizer)
+def _rec(k, **over):
+    rec = {"member": "mmmu", "record_id": f"r{k:04d}", "role": "question", "field": "text",
+           "text": f"protected record number {k:04d} body text", "media_sha256": f"{k:064x}"}
+    rec.update(over)
+    return rec
+
+
+def _counted_index(normalizer, n, **over):
+    return g1.ProtectedIndex([_rec(k, **over) for k in range(n)], normalizer)
 
 
 def test_complete_claim_with_unresolved_member_refuses(normalizer):
     idx = _counted_index(normalizer, 899)
-    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu_records", g1.check_bundle, {}, index=idx,
-             contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu:records", g1.check_bundle, {}, index=idx,
+             contracts={"coverage_expected": {"mmmu:records": 900}}, claim="COMPLETE")
 
 
 def test_complete_claim_with_full_index_accepted(normalizer):
     idx = _counted_index(normalizer, 900)
-    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu:records": 900}}, claim="COMPLETE")
     assert out["coverage"] == "COMPLETE"
 
 
 def test_incomplete_staging_accepted_and_lists_member(normalizer):
     idx = _counted_index(normalizer, 899)
-    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu_records": 900}}, claim="INCOMPLETE")
-    assert out["coverage"] == "INCOMPLETE" and out["unresolved"] == ["mmmu_records:899!=900"]
+    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu:records": 900}}, claim="INCOMPLETE")
+    assert out["coverage"] == "INCOMPLETE" and out["unresolved"] == ["mmmu:records:899!=900"]
 
 
 def test_digest_equal_but_field_skipped_incomplete(normalizer):
-    idx = _counted_index(normalizer, 900, keys=("records",))
-    assert g1.coverage_status(idx, {"coverage_expected": {"records": 900, "field:explanation": 412}})[0] == "INCOMPLETE"
+    idx = _counted_index(normalizer, 900)
+    assert g1.coverage_status(idx, {"coverage_expected": {"mmmu:records": 900, "mmmu:field:explanation:text": 412}})[0] == "INCOMPLETE"
 
 
 def test_declared_coverage_field_is_not_trusted(normalizer):
     # G1-COVERAGE-BINDING red: an index receipt that DECLARES full coverage but holds 1 record.
     idx = _counted_index(normalizer, 1)
-    idx.coverage_observed = {"mmmu_records": 900}  # a producer-declared field the guard must ignore
-    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu_records", g1.check_bundle, {}, index=idx,
-             contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+    idx.coverage_observed = {"mmmu:records": 900}  # a producer-declared field the guard must ignore
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu:records", g1.check_bundle, {}, index=idx,
+             contracts={"coverage_expected": {"mmmu:records": 900}}, claim="COMPLETE")
 
 
 def test_normalizer_executes_hashed_bytes_not_a_reread(tmp_path, monkeypatch):
@@ -383,3 +389,71 @@ def test_origin_sibling_file_in_same_directory_refuses(tmp_path, monkeypatch):
     sib.write_bytes(Path(sidecar["row_contract_path"]).read_bytes())
     _refuses("ORIGIN_PATH_NOT_ALLOWED:row_contract", g2.verify_origin, _row(["A"], ["a" * 64]),
              dict(sidecar, row_contract_path=str(sib)), _derive)
+
+
+# ---- coverage counts bound identities with content, never caller tags (Vera report ce6fbbf6) ----
+
+FULL = {"mmmu:records": 900, "mmmu:field:question:text": 900, "mmmu:media": 900}
+
+
+def test_bound_full_universe_complete(normalizer):
+    assert g1.coverage_status(_counted_index(normalizer, 900), {"coverage_expected": FULL}) == ("COMPLETE", [])
+
+
+def test_tag_only_contentless_record_cannot_claim_900(normalizer):
+    idx = g1.ProtectedIndex([{"coverage_keys": ["mmmu:records"] * 900}], normalizer)
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE", g1.check_bundle, {}, index=idx, contracts={"coverage_expected": FULL}, claim="COMPLETE")
+
+
+def test_duplicate_identity_counts_once(normalizer):
+    idx = g1.ProtectedIndex([_rec(0)] * 900, normalizer)
+    status, missing = g1.coverage_status(idx, {"coverage_expected": FULL})
+    assert status == "INCOMPLETE" and "mmmu:records:1!=900" in missing
+
+
+@pytest.mark.parametrize("over", [{"text": ""}, {"record_id": ""}, {"role": None}, {"field": ""}, {"member": ""}],
+                         ids=["missing_content", "missing_id", "missing_role", "missing_field", "missing_member"])
+def test_unbound_record_blocks_complete(normalizer, over):
+    recs = [_rec(k) for k in range(900)]
+    recs[7] = _rec(7, **over)
+    status, missing = g1.coverage_status(g1.ProtectedIndex(recs, normalizer), {"coverage_expected": FULL})
+    assert status == "INCOMPLETE" and "unbound_records:1" in missing
+
+
+def test_missing_media_blocks_complete(normalizer):
+    recs = [_rec(k) for k in range(900)]
+    recs[3] = _rec(3, media_sha256=None)
+    status, missing = g1.coverage_status(g1.ProtectedIndex(recs, normalizer), {"coverage_expected": FULL})
+    assert status == "INCOMPLETE" and "mmmu:media:899!=900" in missing
+
+
+def test_incomplete_staging_with_unbound_records_stays_lawful(normalizer):
+    idx = g1.ProtectedIndex([{"coverage_keys": ["mmmu:records"] * 900}], normalizer)
+    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": FULL}, claim="INCOMPLETE")
+    assert out["coverage"] == "INCOMPLETE" and "unbound_records:1" in out["unresolved"]
+
+
+def test_caller_tags_on_a_bound_record_never_add_counts(normalizer):
+    # One fully bound record carrying 899 extra caller tags: tags must not lift the count to 900.
+    idx = g1.ProtectedIndex([_rec(0, coverage_keys=["mmmu:records"] * 899)], normalizer)
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu:records:1!=900", g1.check_bundle, {}, index=idx,
+             contracts={"coverage_expected": {"mmmu:records": 900}}, claim="COMPLETE")
+
+
+def _media_index(normalizer):
+    # mail 48390: one bound question whose protected image is known only by its media digest.
+    rec = _rec(0, text="ordinary protected question text", media_sha256=_sha(b"protected-image-id"))
+    return g1.ProtectedIndex([rec], normalizer)
+
+
+ONE = {"coverage_expected": {"mmmu:records": 1, "mmmu:field:question:text": 1, "mmmu:media": 1}}
+
+
+def test_counted_media_asset_refuses_under_complete(normalizer):
+    idx = _media_index(normalizer)
+    assert g1.coverage_status(idx, ONE) == ("COMPLETE", [])
+    _refuses("PROTECTED_CONTENT_EXACT", g1.check_bundle, {"asset": "protected-image-id"}, index=idx, contracts=ONE, claim="COMPLETE")
+
+
+def test_other_media_asset_accepted_under_complete(normalizer):
+    g1.check_bundle({"asset": "an unrelated public image id"}, index=_media_index(normalizer), contracts=ONE, claim="COMPLETE")

@@ -122,13 +122,41 @@ class ProtectedIndex:
         self.exact: set[str] = set()
         self.normalized: set[str] = set()
         self.windows: set[str] = set()
-        # Coverage is counted from the records this index was actually built from, never copied
-        # from a field a producer declares.
+        # Coverage is counted from bound record identities the index was built from: a record counts
+        # once per identity, only when it carries an id, member, role and field AND real content (text
+        # or a 64-hex raw digest). Caller-supplied tags never count (Vera report ce6fbbf6).
         self.observed: dict[str, int] = {}
+        self.unbound: int = 0
+        seen: set[tuple[str, str, str, str]] = set()
+        seen_records: set[tuple[str, str]] = set()
+        seen_media: set[tuple[str, str]] = set()
         self.n2 = normalizer.n2
         for record in records:
-            for key in record.get("coverage_keys") or ():
-                self.observed[key] = self.observed.get(key, 0) + 1
+            ident = tuple(record.get(k) for k in ("member", "record_id", "role", "field"))
+            text = record.get("text")
+            raw = record.get("raw_sha256")
+            has_content = (isinstance(text, str) and text != "") or (isinstance(raw, str) and HEX64.fullmatch(raw) is not None)
+            if not all(isinstance(v, str) and v for v in ident) or not has_content:
+                self.unbound += 1
+            else:
+                member, record_id, role, field = ident
+                if (member, record_id, role, field) not in seen:
+                    seen.add((member, record_id, role, field))
+                    key = f"{member}:field:{role}:{field}"
+                    self.observed[key] = self.observed.get(key, 0) + 1
+                if (member, record_id) not in seen_records:
+                    seen_records.add((member, record_id))
+                    key = f"{member}:records"
+                    self.observed[key] = self.observed.get(key, 0) + 1
+                media = record.get("media_sha256")
+                if isinstance(media, str) and HEX64.fullmatch(media):
+                    # A counted media digest must be one the matcher refuses: index it, then count
+                    # (mail 48390: counted-but-unindexed media let the protected asset through).
+                    self.exact.add(media)
+                if isinstance(media, str) and HEX64.fullmatch(media) and media in self.exact and (member, media) not in seen_media:
+                    seen_media.add((member, media))
+                    key = f"{member}:media"
+                    self.observed[key] = self.observed.get(key, 0) + 1
             text = record.get("text")
             raw = record.get("raw_sha256")
             if isinstance(raw, str) and HEX64.fullmatch(raw):
@@ -165,6 +193,8 @@ def coverage_status(index: "ProtectedIndex", contracts: dict[str, Any]) -> tuple
     expected = contracts.get("coverage_expected") or {}
     observed = index.observed
     missing = []
+    if index.unbound:
+        missing.append(f"unbound_records:{index.unbound}")
     if not expected:
         missing.append("contracts:coverage_expected_absent")
     for key, want in sorted(expected.items()):
