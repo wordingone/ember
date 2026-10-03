@@ -48,7 +48,7 @@ _RECEIPT_FIELDS = frozenset(
         "license",
     }
 )
-_RECEIPT_OPTIONAL_FIELDS = frozenset({"retry_attempts", "retry_events"})
+_RECEIPT_OPTIONAL_FIELDS = frozenset({"retry_attempts", "retry_events", "synthetic"})
 _FILE_FIELDS = frozenset({"path", "bytes", "sha256"})
 _ALLOWED_LICENSE_PREFIXES = (
     "PD",
@@ -62,15 +62,58 @@ _ALLOWED_LICENSE_PREFIXES = (
 )
 _ALLOWED_DOMAINS = frozenset("ABCDEFGHIJK")
 _PROVENANCE_PREFIX = "human-provenance:"
-_FORBIDDEN_PROVENANCE_MARKERS = (
-    "model-generated",
-    "model generated",
-    "llm-generated",
+_SYNTHETIC_PROVENANCE_PREFIX = "synthetic-provenance:"
+# Model-derived SELECTION (classifier, ranking, filtering) stays forbidden for every row.
+_FORBIDDEN_SELECTION_MARKERS = (
     "classifier",
     "machine-ranked",
     "machine filtered",
+)
+# Model-derived BYTES refuse unless the receipt carries a complete synthetic block (operator
+# rule 2026-10-03: AI-generated or mixed data is admitted only as an existing, published
+# third-party dataset, marked and traceable; nothing we generate ourselves is ever admitted).
+_MODEL_DERIVED_MARKERS = (
+    "model-generated",
+    "model generated",
+    "llm-generated",
     "synthetic",
 )
+_SYNTHETIC_FIELDS = frozenset(
+    {
+        "synthetic",
+        "origin_class",
+        "dataset_id",
+        "dataset_revision",
+        "dataset_provenance_ref",
+        "license_ref",
+        "ai_share",
+        "terms_permit_training",
+        "self_generated",
+    }
+)
+# Known AI origin and unknown origin are separate classes in every count.
+_ORIGIN_CLASSES = frozenset({"known_ai", "mixed", "unknown"})
+
+
+def _synthetic_block_complete(block: object) -> bool:
+    """True only for a fully marked third-party block; partial or self-generated refuses."""
+    if not isinstance(block, dict) or set(block) != _SYNTHETIC_FIELDS:
+        return False
+    share = block["ai_share"]
+    return (
+        block["synthetic"] is True
+        and block["self_generated"] is False
+        and block["terms_permit_training"] is True
+        and block["origin_class"] in _ORIGIN_CLASSES
+        and all(
+            isinstance(block[key], str) and block[key]
+            for key in ("dataset_id", "dataset_revision", "dataset_provenance_ref", "license_ref")
+        )
+        and block["license_ref"].upper() not in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
+        and (share is None if block["origin_class"] == "unknown" else (
+            isinstance(share, (int, float)) and not isinstance(share, bool) and 0 < share <= 1
+        ))
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -214,6 +257,19 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             str(receipt_payload.get(key, ""))
             for key in ("source", "canonical_url", "license_evidence", "notes")
         ).lower()
+        synthetic_block = receipt_payload.get("synthetic")
+        if synthetic_block is None:
+            provenance_ok = (
+                isinstance(notes, str)
+                and notes.startswith(_PROVENANCE_PREFIX)
+                and not any(marker in provenance_text for marker in _MODEL_DERIVED_MARKERS)
+            )
+        else:
+            provenance_ok = (
+                _synthetic_block_complete(synthetic_block)
+                and isinstance(notes, str)
+                and notes.startswith(_SYNTHETIC_PROVENANCE_PREFIX)
+            )
         if (
             receipt_payload.get("source_id") != source_id
             or receipt_payload.get("l3_statement") != L3_STATEMENT
@@ -226,9 +282,8 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             or not isinstance(receipt_payload.get("revision"), (str, type(None)))
             or not isinstance(license_value, str)
             or not license_value
-            or not isinstance(notes, str)
-            or not notes.startswith(_PROVENANCE_PREFIX)
-            or any(marker in provenance_text for marker in _FORBIDDEN_PROVENANCE_MARKERS)
+            or not provenance_ok
+            or any(marker in provenance_text for marker in _FORBIDDEN_SELECTION_MARKERS)
             or normalized_license in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
             or "-NC" in normalized_license
             or "-ND" in normalized_license
