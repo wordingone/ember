@@ -99,11 +99,14 @@ def load_normalizer(path: Path, pin: str = NORMALIZER_SHA256):
         raise ProtectedContentRefusal("NORMALIZER_UNAVAILABLE") from exc
     if _sha(raw) != pin:
         raise ProtectedContentRefusal("NORMALIZER_PIN_MISMATCH")
-    spec = importlib.util.spec_from_file_location("issue1947_bound_normalizer", path)
-    if spec is None or spec.loader is None:
-        raise ProtectedContentRefusal("NORMALIZER_UNAVAILABLE")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Execute the bytes that were hashed, never a second read of the path (a swap between the hash
+    # and an import would otherwise run unreviewed code under a passing pin).
+    module = types.ModuleType("issue1947_bound_normalizer")
+    module.__file__ = str(path)
+    try:
+        exec(compile(raw, str(path), "exec"), module.__dict__)
+    except Exception as exc:  # noqa: BLE001 - any failure of the pinned source is unavailability
+        raise ProtectedContentRefusal("NORMALIZER_UNAVAILABLE") from exc
     if getattr(module, "POLICY_SHA256", None) != POLICY_V2_SHA256:
         raise ProtectedContentRefusal("NORMALIZER_POLICY_MISMATCH")
     n1, n2 = getattr(module, "normalize_n1", None), getattr(module, "normalize_n2", None)
@@ -119,8 +122,13 @@ class ProtectedIndex:
         self.exact: set[str] = set()
         self.normalized: set[str] = set()
         self.windows: set[str] = set()
+        # Coverage is counted from the records this index was actually built from, never copied
+        # from a field a producer declares.
+        self.observed: dict[str, int] = {}
         self.n2 = normalizer.n2
         for record in records:
+            for key in record.get("coverage_keys") or ():
+                self.observed[key] = self.observed.get(key, 0) + 1
             text = record.get("text")
             raw = record.get("raw_sha256")
             if isinstance(raw, str) and HEX64.fullmatch(raw):
@@ -151,10 +159,11 @@ class ProtectedIndex:
         return None
 
 
-def coverage_status(index_receipt: dict[str, Any], contracts: dict[str, Any]) -> tuple[str, list[str]]:
-    """COMPLETE only when every declared record/id/field/media/role count is observed exactly."""
+def coverage_status(index: "ProtectedIndex", contracts: dict[str, Any]) -> tuple[str, list[str]]:
+    """COMPLETE only when every count the raw-pinned contract declares equals the count of records
+    the constructed index actually holds."""
     expected = contracts.get("coverage_expected") or {}
-    observed = index_receipt.get("coverage_observed") or {}
+    observed = index.observed
     missing = []
     if not expected:
         missing.append("contracts:coverage_expected_absent")
@@ -215,12 +224,12 @@ def check_bundle(
     bundle: Any,
     *,
     index: ProtectedIndex,
+    contracts: dict[str, Any],
     claim: str,
-    coverage: tuple[str, list[str]],
     validated_items: set[int] = frozenset(),
     producer_predictions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    status, missing = coverage
+    status, missing = coverage_status(index, contracts)
     if claim == "COMPLETE" and status != "COMPLETE":
         raise ProtectedContentRefusal(f"PROTECTED_UNIVERSE_INCOMPLETE:{missing[0]}")
     if claim not in {"COMPLETE", "INCOMPLETE"}:

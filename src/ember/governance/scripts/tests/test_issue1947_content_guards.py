@@ -118,20 +118,58 @@ def test_normalizer_policy_mismatch(tmp_path):
 
 # ---- coverage ----
 
-def test_complete_claim_with_unresolved_member_refuses(index):
-    cov = g1.coverage_status({"coverage_observed": {"mmmu_records": 899}}, {"coverage_expected": {"mmmu_records": 900}})
-    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu_records", g1.check_bundle, {}, index=index, claim="COMPLETE", coverage=cov)
+def _counted_index(normalizer, n, keys=("mmmu_records",)):
+    return g1.ProtectedIndex([{"text": f"protected record number {k:04d} body text", "coverage_keys": list(keys)}
+                              for k in range(n)], normalizer)
 
 
-def test_incomplete_staging_accepted_and_lists_member(index):
-    cov = g1.coverage_status({"coverage_observed": {"mmmu_records": 899}}, {"coverage_expected": {"mmmu_records": 900}})
-    out = g1.check_bundle({}, index=index, claim="INCOMPLETE", coverage=cov)
+def test_complete_claim_with_unresolved_member_refuses(normalizer):
+    idx = _counted_index(normalizer, 899)
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu_records", g1.check_bundle, {}, index=idx,
+             contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+
+
+def test_complete_claim_with_full_index_accepted(normalizer):
+    idx = _counted_index(normalizer, 900)
+    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+    assert out["coverage"] == "COMPLETE"
+
+
+def test_incomplete_staging_accepted_and_lists_member(normalizer):
+    idx = _counted_index(normalizer, 899)
+    out = g1.check_bundle({}, index=idx, contracts={"coverage_expected": {"mmmu_records": 900}}, claim="INCOMPLETE")
     assert out["coverage"] == "INCOMPLETE" and out["unresolved"] == ["mmmu_records:899!=900"]
 
 
-def test_digest_equal_but_field_skipped_incomplete():
-    cov = g1.coverage_status({"coverage_observed": {"records": 900}}, {"coverage_expected": {"records": 900, "field:explanation": 412}})
-    assert cov[0] == "INCOMPLETE"
+def test_digest_equal_but_field_skipped_incomplete(normalizer):
+    idx = _counted_index(normalizer, 900, keys=("records",))
+    assert g1.coverage_status(idx, {"coverage_expected": {"records": 900, "field:explanation": 412}})[0] == "INCOMPLETE"
+
+
+def test_declared_coverage_field_is_not_trusted(normalizer):
+    # G1-COVERAGE-BINDING red: an index receipt that DECLARES full coverage but holds 1 record.
+    idx = _counted_index(normalizer, 1)
+    idx.coverage_observed = {"mmmu_records": 900}  # a producer-declared field the guard must ignore
+    _refuses("PROTECTED_UNIVERSE_INCOMPLETE:mmmu_records", g1.check_bundle, {}, index=idx,
+             contracts={"coverage_expected": {"mmmu_records": 900}}, claim="COMPLETE")
+
+
+def test_normalizer_executes_hashed_bytes_not_a_reread(tmp_path, monkeypatch):
+    # G1-NORMALIZER-BYTES red: the file is swapped after it was read and hashed. The guard must run
+    # the hashed bytes; a reload from the path would run the swapped source.
+    p, pin = _detector(tmp_path)
+    swapped = FAKE_DETECTOR.replace("casefold()", "upper()")
+    real_read = Path.read_bytes
+
+    def read_then_swap(self):
+        data = real_read(self)
+        if self == p:
+            p.write_text(swapped)
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", read_then_swap)
+    n = g1.load_normalizer(p, pin)
+    assert n.n2("ABC") == "abc"
 
 
 # ---- G1 matching ----
@@ -250,7 +288,7 @@ def _origin_files(tmp_path, monkeypatch, approve: bool):
     c, r = tmp_path / "c.json", tmp_path / "r.json"
     c.write_text(json.dumps(contract))
     r.write_text(json.dumps(receipt))
-    monkeypatch.setattr(g2, "ALLOWED_ORIGIN_DIRS", frozenset({tmp_path.as_posix()}))
+    monkeypatch.setattr(g2, "ALLOWED_ORIGIN_PATHS", frozenset({c.as_posix(), r.as_posix()}))
     if approve:
         monkeypatch.setattr(g2, "APPROVED_ROW_CONTRACTS", frozenset({_sha(c.read_bytes())}))
         monkeypatch.setattr(g2, "APPROVED_PRODUCER_RECEIPTS", frozenset({_sha(r.read_bytes())}))
@@ -280,7 +318,7 @@ def test_origin_approved_contract_forged_receipt_refuses(tmp_path, monkeypatch):
 
 def test_origin_path_outside_allowlist(tmp_path, monkeypatch):
     sidecar, _ = _origin_files(tmp_path, monkeypatch, approve=True)
-    monkeypatch.setattr(g2, "ALLOWED_ORIGIN_DIRS", frozenset())
+    monkeypatch.setattr(g2, "ALLOWED_ORIGIN_PATHS", frozenset())
     _refuses("ORIGIN_PATH_NOT_ALLOWED", g2.verify_origin, _row(["A"], ["a" * 64]), sidecar, _derive)
 
 
@@ -308,3 +346,40 @@ def test_nested_hash_role_refuses(index):
 def test_p2_validated_typed_hash_accepted(index):
     item = _item(gold_item_sha256=HEXGOLD)
     g1.scan({"items": [item]}, index, validated_items={id(item)})
+
+
+# ---- G2 replay/row binding and exact paths (Vera report df6d27bc) ----
+
+def test_replay_pair_agreeing_but_not_the_reviewed_row_refuses():
+    row = _row(["A", "B"], ["a" * 64, "b" * 64], [1.0, 0.0])
+    other = _row(["B", "A"], ["a" * 64, "b" * 64], [0.0, 1.0])["items"]
+    _refuses("REPLAY_NOT_THE_REVIEWED_ROW:R:i0", g2.check_shortcuts, row,
+             replay=(other, list(reversed(other))), model_row=False)
+
+
+def test_duplicate_item_ids_in_row_refuse():
+    row = _row(["A", "B"], ["a" * 64, "b" * 64])
+    row["items"][1]["item_id"] = "i0"
+    _refuses("DUPLICATE_ITEM_ID:R:i0", g2.check_shortcuts, row, replay=None, model_row=False)
+
+
+def test_duplicate_item_ids_in_replay_refuse():
+    row = _row(["A", "B"], ["a" * 64, "b" * 64])
+    dup = [row["items"][0], dict(row["items"][1], item_id="i0")]
+    _refuses("DUPLICATE_ITEM_ID:R:i0", g2.check_shortcuts, row, replay=(row["items"], dup), model_row=False)
+
+
+def test_duplicate_item_ids_in_origin_row_refuse(tmp_path, monkeypatch):
+    sidecar, _ = _origin_files(tmp_path, monkeypatch, approve=True)
+    row = _row(["A", "A"], ["a" * 64, "a" * 64])
+    row["items"][1]["item_id"] = "i0"
+    _refuses("DUPLICATE_ITEM_ID:R:i0", g2.verify_origin, row, sidecar, _derive)
+
+
+def test_origin_sibling_file_in_same_directory_refuses(tmp_path, monkeypatch):
+    # G2-EXACT-PATHS red: an approved-bytes copy beside the approved file is still not an allowed path.
+    sidecar, _ = _origin_files(tmp_path, monkeypatch, approve=True)
+    sib = tmp_path / "c_copy.json"
+    sib.write_bytes(Path(sidecar["row_contract_path"]).read_bytes())
+    _refuses("ORIGIN_PATH_NOT_ALLOWED:row_contract", g2.verify_origin, _row(["A"], ["a" * 64]),
+             dict(sidecar, row_contract_path=str(sib)), _derive)

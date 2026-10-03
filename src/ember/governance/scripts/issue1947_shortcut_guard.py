@@ -27,8 +27,8 @@ APPROVED_ROW_CONTRACTS: frozenset[str] = frozenset()
 APPROVED_PRODUCER_RECEIPTS: frozenset[str] = frozenset()
 PRODUCER_CONTRACTS_SHA256 = "ed99bae67b646f2f9973b70f8f58a9a49cb7b70bef7db3b05dfa8b159da547ec"
 
-# Exact allowlist of directories a sidecar may name. No globs.
-ALLOWED_ORIGIN_DIRS: frozenset[str] = frozenset()
+# Exact allowlist of FILE paths a sidecar may name (posix form). No directories, no globs.
+ALLOWED_ORIGIN_PATHS: frozenset[str] = frozenset()
 
 
 class ShortcutRefusal(ValueError):
@@ -41,7 +41,7 @@ def _sha(raw: bytes) -> str:
 
 def _read_pinned(path_text: str, approved: frozenset[str], label: str) -> bytes:
     path = Path(path_text)
-    if path.parent.as_posix() not in ALLOWED_ORIGIN_DIRS:
+    if path.as_posix() not in ALLOWED_ORIGIN_PATHS:
         raise ShortcutRefusal(f"ORIGIN_PATH_NOT_ALLOWED:{label}")
     try:
         raw = path.read_bytes()
@@ -70,6 +70,7 @@ def verify_origin(
     if contract.get("producer_contracts_sha256") != PRODUCER_CONTRACTS_SHA256:
         raise ShortcutRefusal(f"ORIGIN_PRODUCER_CONTRACT_UNBOUND:{row_id}")
     expected = derive(contract, receipt)
+    _keyed(row["items"], row_id)  # refuses duplicate item ids; a dict would collapse them
     items = {item["item_id"]: item for item in row["items"]}
     if set(expected) != set(items):
         raise ShortcutRefusal(f"ORIGIN_ITEMSET_MISMATCH:{row_id}")
@@ -78,8 +79,13 @@ def verify_origin(
             raise ShortcutRefusal(f"ORIGIN_ITEM_MISMATCH:{row_id}:{item_id}")
 
 
-def _keyed(items: list[dict[str, Any]]) -> dict[str, tuple[Any, Any]]:
-    return {item["item_id"]: (item["prediction"], item["score"]) for item in items}
+def _keyed(items: list[dict[str, Any]], row_id: Any) -> dict[str, tuple[Any, Any, Any]]:
+    keyed: dict[str, tuple[Any, Any, Any]] = {}
+    for item in items:
+        if item["item_id"] in keyed:
+            raise ShortcutRefusal(f"DUPLICATE_ITEM_ID:{row_id}:{item['item_id']}")
+        keyed[item["item_id"]] = (item["gold_item_sha256"], item["prediction"], item["score"])
+    return keyed
 
 
 def check_shortcuts(row: dict[str, Any], *, replay: tuple[list, list] | None, model_row: bool) -> dict[str, Any]:
@@ -88,6 +94,7 @@ def check_shortcuts(row: dict[str, Any], *, replay: tuple[list, list] | None, mo
     flags: dict[str, Any] = {}
 
     # S1: distinct gold digests are compared directly (spec v4 G-F4).
+    reviewed = _keyed(items, row_id)  # refuses duplicate item ids before any comparison
     golds = {item["gold_item_sha256"] for item in items}
     preds = [json.dumps(item["prediction"], sort_keys=True) for item in items]
     if len(items) >= 2 and len(golds) >= 2 and len(set(preds)) == 1:
@@ -98,9 +105,14 @@ def check_shortcuts(row: dict[str, Any], *, replay: tuple[list, list] | None, mo
     if replay is None:
         status = "ORDER_INVARIANCE_UNPROVEN" if model_row else "ORDER_INVARIANCE_NOT_REPLAYED"
     else:
-        original, permuted = (_keyed(r) for r in replay)
-        if set(original) != set(permuted) or set(original) != {item["item_id"] for item in items}:
+        original, permuted = (_keyed(r, row_id) for r in replay)
+        if set(original) != set(reviewed) or set(permuted) != set(reviewed):
             raise ShortcutRefusal(f"REPLAY_ITEMSET_MISMATCH:{row_id}")
+        # The pair must replay the REVIEWED row: a pair that agrees with itself but not with the
+        # row under review proves nothing about that row.
+        for item_id in sorted(reviewed):
+            if original[item_id] != reviewed[item_id]:
+                raise ShortcutRefusal(f"REPLAY_NOT_THE_REVIEWED_ROW:{row_id}:{item_id}")
         for item_id in sorted(original):
             if original[item_id] != permuted[item_id]:
                 raise ShortcutRefusal(f"ORDER_DEPENDENT_PREDICTION:{row_id}:{item_id}")
