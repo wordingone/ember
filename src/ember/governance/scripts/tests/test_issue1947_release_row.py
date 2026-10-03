@@ -15,6 +15,37 @@ ROOT = Path(__file__).resolve().parents[5]
 SCRIPT = ROOT / "src" / "ember" / "governance" / "scripts" / "issue1947_release_row.py"
 
 
+CHILD_TIMEOUT_SECONDS = 300
+HEADLESS_PYTHON = Path.home() / ".codex" / "headless-python.ps1"
+
+
+def _run(argv, *, capture_output=True, text=True, check=False):
+    """The one child boundary of this file (#1947 T-F1). On Windows the Python child goes through the fixed
+    headless launcher (powershell -File headless-python.ps1 -- <script args>) with CREATE_NO_WINDOW and a
+    hidden STARTUPINFO; both streams are captured; the wait is finite, and on timeout the whole child tree
+    is killed (taskkill /T) and reaped before the test fails with TimeoutExpired."""
+    assert argv[0] == sys.executable and capture_output and not check
+    kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "text": text}
+    if sys.platform == "win32":
+        argv = ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                str(HEADLESS_PYTHON.resolve(strict=True)), "--", *argv[1:]]
+        info = subprocess.STARTUPINFO()
+        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        info.wShowWindow = 0  # SW_HIDE
+        kwargs.update(startupinfo=info, creationflags=subprocess.CREATE_NO_WINDOW)
+    child = subprocess.Popen(argv, **kwargs)
+    try:
+        stdout, stderr = child.communicate(timeout=CHILD_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(child.pid)], capture_output=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW, check=False, timeout=60)
+        child.kill()
+        child.communicate(timeout=60)
+        raise
+    return subprocess.CompletedProcess(argv, child.returncode, stdout, stderr)
+
+
 def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
@@ -25,7 +56,7 @@ def test_refusal_is_named_self_hashed_and_nonzero(tmp_path: Path) -> None:
         "MISSING_CURRENT_PROTECTED_STANDALONE_TEXT_CONTRACT",
         "MISSING_REMAINING_TEXT_ROW_TOTALITY",
     ]
-    completed = subprocess.run(
+    completed = _run(
         [
             sys.executable,
             str(SCRIPT),
@@ -52,7 +83,7 @@ def test_refusal_is_named_self_hashed_and_nonzero(tmp_path: Path) -> None:
 def test_refusal_receipt_is_no_overwrite(tmp_path: Path) -> None:
     receipt = tmp_path / "occupied.json"
     receipt.write_text("owned", encoding="utf-8")
-    completed = subprocess.run(
+    completed = _run(
         [
             sys.executable,
             str(SCRIPT),
@@ -109,7 +140,7 @@ def test_text_adapter_uses_real_bound_inference_row(tmp_path: Path) -> None:
         "totality": {"complete": True},
     })
     result = tmp_path / "row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-text", "--contract", str(contract),
          "--source-receipt", str(source), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -187,7 +218,7 @@ def test_image_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
     contract, connector, paths = _write_image_fixture(tmp_path)
     paths[0].write_bytes(b"corrupted")
     result = tmp_path / "image-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -203,7 +234,7 @@ def test_image_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) ->
     contract, connector, paths = _write_image_fixture(tmp_path)
     paths[0].unlink()
     result = tmp_path / "image-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -225,7 +256,7 @@ def test_image_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
 
     contract, connector, _paths = _write_image_fixture(tmp_path)
     result = tmp_path / "image-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -255,7 +286,7 @@ def test_image_adapter_accepts_widened_v2_contract_256_items(tmp_path: Path) -> 
         tmp_path, count=256, schema_version="ember-protected-image-contract-v2",
     )
     result = tmp_path / "image-row-v2.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -279,7 +310,7 @@ def test_image_adapter_refuses_v2_contract_with_observed_255(tmp_path: Path) -> 
         tmp_path, count=255, schema_version="ember-protected-image-contract-v2",
     )
     result = tmp_path / "image-refusal-v2.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -340,7 +371,7 @@ def test_audio_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
     contract, connector, paths = _write_audio_fixture(tmp_path)
     paths[0].write_bytes(b"corrupted")
     result = tmp_path / "audio-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -356,7 +387,7 @@ def test_audio_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) ->
     contract, connector, paths = _write_audio_fixture(tmp_path)
     paths[0].unlink()
     result = tmp_path / "audio-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -378,7 +409,7 @@ def test_audio_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
 
     contract, connector, _paths = _write_audio_fixture(tmp_path)
     result = tmp_path / "audio-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -487,7 +518,7 @@ def _run_image_text(contract: Path, receipts: list[Path], result: Path) -> subpr
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_image_text_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
@@ -657,7 +688,7 @@ def _run_audio_text(contract: Path, receipts: list[Path], result: Path) -> subpr
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_audio_text_adapter_produces_the_pair_identity_row(tmp_path: Path) -> None:
@@ -836,7 +867,7 @@ def _run_image_audio_text(contract: Path, receipts: list[Path], result: Path) ->
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_image_audio_text_adapter_produces_the_triple_identity_row(tmp_path: Path) -> None:
@@ -1028,7 +1059,7 @@ def _run_reasoning(contract: Path, receipts: list[Path], result: Path) -> subpro
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_reasoning_adapter_produces_the_item_identity_row(tmp_path: Path) -> None:
@@ -1174,7 +1205,7 @@ def test_image_adapter_truncated_real_payload_refuses(tmp_path: Path) -> None:
     raw = paths[3].read_bytes()
     paths[3].write_bytes(raw[:-2])
     result = tmp_path / "image-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -1190,7 +1221,7 @@ def test_audio_adapter_same_size_substitution_refuses(tmp_path: Path) -> None:
     _flip_last_byte(paths[2])
     assert paths[2].stat().st_size == len(raw)
     result = tmp_path / "audio-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
