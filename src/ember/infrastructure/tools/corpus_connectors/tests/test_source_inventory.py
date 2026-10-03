@@ -149,18 +149,30 @@ def test_rejects_foreign_path_and_nondeterministic_rows() -> None:
         "dataset_id": "example-org/example-dataset",
         "dataset_revision": "0123abcd",
         "dataset_provenance_ref": "https://example.invalid/example-dataset#provenance",
+        "dataset_content_sha256": "FETCHED",  # replaced by the fixture's raw digest below
         "license_ref": "https://example.invalid/example-dataset#license",
         "ai_share": 0.4,
         "terms_permit_training": True,
         "self_generated": False,
     }
 
-    def _with_receipt(root: Path, manifest: Path, notes: str, block: object) -> None:
+    def _with_receipt(root: Path, manifest: Path, notes: str, block: object, **overrides: object) -> None:
         receipt = root / "receipts" / "arxiv.json"
         receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
         receipt_payload["notes"] = notes
-        if block is not None:
+        if isinstance(block, dict):
+            if block.get("dataset_content_sha256") == "FETCHED":
+                raw_digest = hashlib.sha256((root / "raw" / "arxiv" / "abstracts.jsonl").read_bytes()).hexdigest()
+                block = {**block, "dataset_content_sha256": raw_digest}
             receipt_payload["synthetic"] = block
+            # A marked row is bound to its own fetch and carries the AI disclosure, not the human L3.
+            receipt_payload["canonical_url"] = f"https://example.invalid/{block.get('dataset_id')}"
+            receipt_payload["revision"] = block.get("dataset_revision")
+            receipt_payload["l3_statement"] = (
+                "AI-generated: "
+                f"{block.get('dataset_id')}@{block.get('dataset_revision')}"
+            )
+        receipt_payload.update(overrides)
         receipt.write_text(json.dumps(receipt_payload, sort_keys=True), encoding="utf-8")
         manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
         manifest_payload["sources"][0]["receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
@@ -209,7 +221,40 @@ def test_rejects_foreign_path_and_nondeterministic_rows() -> None:
             complete_block,
         ),
     )
-    for label, notes, block in refusing_cases:
+    refusing_overrides = (
+        ("marked row keeping the human-only L3 attestation", {"l3_statement": connector_receipt.L3_STATEMENT}),
+        ("fetched revision differs from the dataset revision", {"revision": "other-revision"}),
+        ("fetched URL does not name the dataset", {"canonical_url": "https://example.invalid/elsewhere"}),
+    )
+    for label, overrides in refusing_overrides:
+        with tempfile.TemporaryDirectory(prefix="issue648-source-inventory-") as directory:
+            root = Path(directory)
+            manifest = _fixture(root)
+            _with_receipt(root, manifest, "synthetic-provenance: published rows", complete_block, **overrides)
+            try:
+                load_authorized_source_inventory(manifest_path=manifest, custody_root=root)
+            except ValueError as error:
+                assert "license/source identity" in str(error), label
+            else:
+                raise AssertionError(f"{label} must refuse")
+
+    for label, notes, block in refusing_cases + (
+        (
+            "provenance reference not public https",
+            "synthetic-provenance: published rows",
+            {**complete_block, "dataset_provenance_ref": "file:///local/notes"},
+        ),
+        (
+            "empty source binding",
+            "synthetic-provenance: published rows",
+            {**complete_block, "dataset_id": "", "dataset_provenance_ref": "", "license_ref": ""},
+        ),
+        (
+            "content digest not the fetched bytes",
+            "synthetic-provenance: published rows",
+            {**complete_block, "dataset_content_sha256": "b" * 64},
+        ),
+    ):
         with tempfile.TemporaryDirectory(prefix="issue648-source-inventory-") as directory:
             root = Path(directory)
             manifest = _fixture(root)

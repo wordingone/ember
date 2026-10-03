@@ -245,7 +245,7 @@ def render_prose_gap_plan(plan: ProseGapPlan) -> str:
         "",
         f"1. Current clean prose total: {plan.current_clean_prose_tokens_b:.3f}B planning tokens.",
         f"2. Rule-based target addition: {plan.target_additional_tokens_b:.3f}B planning tokens.",
-        "3. Candidate additions require human provenance, license evidence, and a canonical connector receipt before credit.",
+        "3. Candidate additions require human provenance (or a complete third-party AI-made block), license evidence, and a canonical connector receipt before credit.",
         "4. Domain coverage is recomputed from the routed table before any governed import.",
         "",
         # Model-derived SELECTION stays forbidden. The 2026-10-03 operator rule admits marked third-party AI-made or mixed

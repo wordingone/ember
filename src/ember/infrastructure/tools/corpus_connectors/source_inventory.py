@@ -85,6 +85,7 @@ _SYNTHETIC_FIELDS = frozenset(
         "dataset_id",
         "dataset_revision",
         "dataset_provenance_ref",
+        "dataset_content_sha256",
         "license_ref",
         "ai_share",
         "terms_permit_training",
@@ -113,6 +114,33 @@ def _synthetic_block_complete(block: object) -> bool:
         and (share is None if block["origin_class"] == "unknown" else (
             isinstance(share, (int, float)) and not isinstance(share, bool) and 0 < share <= 1
         ))
+    )
+
+
+# A marked row must not carry the human-only L3 attestation ("no external model authored any
+# token"), which would be false for it. It carries this disclosure instead: the bytes were
+# fetched, not produced by us, and a named published dataset's model authored some of them.
+_AI_L3_PREFIX = "AI-generated: "
+
+
+def _ai_l3_statement(block: dict[str, Any]) -> str:
+    return f"{_AI_L3_PREFIX}{block.get('dataset_id')}@{block.get('dataset_revision')}"
+
+
+def _bound_to_published_source(receipt: dict[str, Any], block: dict[str, Any]) -> bool:
+    """Bind the block to the receipt's own fetch: the fetched URL names the dataset, the fetched
+    revision is the dataset revision, the provenance/licence references are public https, and the
+    declared content digest is well formed (the caller checks it equals the fetched bytes).
+    self_generated=false is a declaration; this binding and the admission review are the check."""
+    canonical_url = receipt.get("canonical_url")
+    return (
+        isinstance(canonical_url, str)
+        and canonical_url.startswith("https://")
+        and str(block["dataset_id"]) in canonical_url
+        and receipt.get("revision") == block["dataset_revision"]
+        and str(block["dataset_provenance_ref"]).startswith("https://")
+        and str(block["license_ref"]).startswith("https://")
+        and _is_sha256(block["dataset_content_sha256"])
     )
 
 
@@ -269,10 +297,17 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
                 _synthetic_block_complete(synthetic_block)
                 and isinstance(notes, str)
                 and notes.startswith(_SYNTHETIC_PROVENANCE_PREFIX)
+                and _bound_to_published_source(receipt_payload, synthetic_block)
+                and synthetic_block["dataset_content_sha256"] == raw_sha
             )
+        expected_l3 = (
+            L3_STATEMENT
+            if synthetic_block is None or not isinstance(synthetic_block, dict)
+            else _ai_l3_statement(synthetic_block)
+        )
         if (
             receipt_payload.get("source_id") != source_id
-            or receipt_payload.get("l3_statement") != L3_STATEMENT
+            or receipt_payload.get("l3_statement") != expected_l3
             or not isinstance(receipt_payload.get("canonical_url"), str)
             or not receipt_payload["canonical_url"]
             or not isinstance(receipt_payload.get("license_evidence"), str)
