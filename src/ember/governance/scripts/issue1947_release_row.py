@@ -33,6 +33,46 @@ def sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+class BoundBytes(bytes):
+    """Custody bytes read but not yet proven: carries the bound byte count, digest and refusal
+    prefix so the caller can prove them AFTER its forbidden-input shape check (that class keeps
+    priority) and BEFORE anything is scored."""
+
+    byte_count: object
+    digest: object
+    refusal: str
+
+
+def bound_bytes(raw: bytes, byte_count: object, digest: object, refusal: str) -> BoundBytes:
+    payload = BoundBytes(raw)
+    payload.byte_count, payload.digest, payload.refusal = byte_count, digest, refusal
+    return payload
+
+
+def verify_bound(*payloads: BoundBytes) -> None:
+    """Prove each payload is the bound object: size, then digest (#1947 L4' finding).
+
+    The receipt's byte count is metadata; only the bytes themselves prove custody. A truncated or
+    substituted payload refuses as <prefix>_TRUNCATED_REFUSED / <prefix>_DIGEST_REFUSED instead of
+    hashing into a wrong prediction that scores 0.0 and silently lowers the row. The frozen
+    contracts require totality (expected == observed, complete), so one refused item refuses the row.
+    """
+
+    for payload in payloads:
+        if len(payload) != payload.byte_count:
+            raise ValueError(payload.refusal.replace("_MISSING_", "_TRUNCATED_", 1))
+        if sha(payload) != payload.digest:
+            raise ValueError(payload.refusal.replace("_MISSING_", "_DIGEST_", 1))
+
+
+def read_bound_bytes(physical: Path, byte_count: object, digest: object, refusal: str) -> bytes:
+    """Read and prove in one step, for adapters with no forbidden-input shape check."""
+
+    payload = bound_bytes(physical.read_bytes(), byte_count, digest, refusal)
+    verify_bound(payload)
+    return payload
+
+
 def load_self_hashed(
     path: Path, schema_version: str | tuple[str, ...]
 ) -> tuple[dict[str, Any], bytes]:
@@ -179,7 +219,7 @@ def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
             raise ValueError(f"IMAGE_PAYLOAD_PATH_ESCAPE_REFUSED:{gold}") from error
         if not physical.is_file():
             raise ValueError(f"IMAGE_PAYLOAD_MISSING_REFUSED:{gold}")
-        prediction = sha(physical.read_bytes())
+        prediction = sha(read_bound_bytes(physical, frozen.get("byte_count"), gold, f"IMAGE_PAYLOAD_MISSING_REFUSED:{gold}"))
         # The release executor's item schema (issue1947_release_execute.validate_row)
         # is exactly {item_id, gold_item_sha256, prediction, score}; the contract's
         # `gold_object_sha256` is the same digest under the image contract's name.
@@ -273,7 +313,7 @@ def adapt_audio(contract_path: Path, source_path: Path) -> dict[str, object]:
             raise ValueError(f"AUDIO_PAYLOAD_PATH_ESCAPE_REFUSED:{gold}") from error
         if not physical.is_file():
             raise ValueError(f"AUDIO_PAYLOAD_MISSING_REFUSED:{gold}")
-        prediction = sha(physical.read_bytes())
+        prediction = sha(read_bound_bytes(physical, frozen.get("byte_count"), gold, f"AUDIO_PAYLOAD_MISSING_REFUSED:{gold}"))
         # Same item schema as adapt_image (issue1947_release_execute.validate_row):
         # {item_id, gold_item_sha256, prediction, score}; the audio contract's
         # `gold_object_sha256` is the same digest under the audio contract's name.
@@ -370,14 +410,14 @@ def _load_bound_sources(
 
 def _image_text_payload(
     by_sha: dict[str, tuple[Path, dict[str, object]]], digest: object, byte_count: object, item_id: object,
-) -> bytes:
+) -> BoundBytes:
     return _bound_payload(by_sha, digest, byte_count, item_id, "IMAGE_TEXT")
 
 
 def _bound_payload(
     by_sha: dict[str, tuple[Path, dict[str, object]]], digest: object, byte_count: object, item_id: object,
     prefix: str,
-) -> bytes:
+) -> BoundBytes:
     entry = by_sha.get(digest) if isinstance(digest, str) else None
     if entry is None:
         raise ValueError(f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
@@ -391,7 +431,7 @@ def _bound_payload(
         raise ValueError(f"{prefix}_PAYLOAD_PATH_ESCAPE_REFUSED:{item_id}:{digest}") from error
     if not physical.is_file():
         raise ValueError(f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
-    return physical.read_bytes()
+    return bound_bytes(physical.read_bytes(), byte_count, digest, f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
 
 
 def adapt_image_text(contract_path: Path, source_paths: list[Path]) -> dict[str, object]:
@@ -429,10 +469,12 @@ def adapt_image_text(contract_path: Path, source_paths: list[Path]) -> dict[str,
         ):
             raise TypeError("IMAGE_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
         buffer = bytearray()
+        bound: list[BoundBytes] = []
         for image in image_objects:
             if not isinstance(image, dict):
                 raise TypeError("IMAGE_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
-            buffer += _image_text_payload(by_sha, image.get("sha256"), image.get("byte_count"), item_id)
+            bound.append(_image_text_payload(by_sha, image.get("sha256"), image.get("byte_count"), item_id))
+            buffer += bound[-1]
         text_raw = _image_text_payload(by_sha, text_object.get("sha256"), text_object.get("byte_count"), item_id)
         # The item-text object may carry only the canonical {id, question, options}
         # payload. Any other member (the answer, an explanation, a prediction) is a
@@ -449,6 +491,7 @@ def adapt_image_text(contract_path: Path, source_paths: list[Path]) -> dict[str,
         ):
             raise ValueError(f"IMAGE_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
         buffer += text_raw
+        verify_bound(*bound, text_raw)
         prediction = sha(bytes(buffer))
         # Same item schema as adapt_image / adapt_audio (issue1947_release_execute.validate_row):
         # {item_id, gold_item_sha256, prediction, score}.
@@ -537,6 +580,7 @@ def adapt_audio_text(contract_path: Path, source_paths: list[Path]) -> dict[str,
             or _audio_text_canonical_bytes(text_payload) != text_raw
         ):
             raise ValueError(f"AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
+        verify_bound(audio_raw, text_raw)
         prediction = sha(audio_raw + text_raw)
         # Same item schema as the other adapters (issue1947_release_execute.validate_row).
         items.append({
@@ -623,6 +667,7 @@ def adapt_image_audio_text(contract_path: Path, source_paths: list[Path]) -> dic
             or _audio_text_canonical_bytes(text_payload) != text_raw
         ):
             raise ValueError(f"IMAGE_AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
+        verify_bound(image_raw, audio_raw, text_raw)
         prediction = sha(image_raw + audio_raw + text_raw)
         items.append({
             "item_id": item_id,
@@ -724,6 +769,7 @@ def adapt_reasoning(contract_path: Path, source_paths: list[Path]) -> dict[str, 
             or _reasoning_canonical_bytes(answer_payload) != answer_raw
         ):
             raise ValueError(f"REASONING_FORBIDDEN_INPUT_REFUSED:answer_shape:{item_id}")
+        verify_bound(text_raw, answer_raw)
         prediction = sha(text_raw + answer_raw)
         # Same item schema as the other adapters (issue1947_release_execute.validate_row).
         items.append({

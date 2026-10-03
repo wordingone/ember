@@ -102,9 +102,16 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None, *, bu
     # and which is invisible in every other field of this receipt.
     matrix_coverage = len(model_rows) / len(results) if results else 0.0
     terminal_eligible = bool(results) and len(model_rows) == len(results)
+    # The overall result needs BOTH: the model cleared its floors (cert_007) AND every matrix row
+    # carries model evidence. The two stay separate fields; only the verdict requires both, so a
+    # 1-of-9 matrix whose single model row passes can no longer read PASS while terminal-ineligible.
     receipt = {
         "schema_version": "ember-issue1947-release-independent-recompute-v1",
-        "result": "PASS" if cert_007 else "FAIL",
+        "result": "PASS" if (cert_007 and terminal_eligible) else "FAIL",
+        "result_basis": (
+            "cert_007 and full matrix model-evidence coverage" if (cert_007 and terminal_eligible)
+            else ("cert_007 unmet" if not cert_007 else "partial matrix model-evidence coverage")
+        ),
         "bundle_raw_sha256": sha(bundle_raw),
         "rows": results,
         "model_evidence_row_count": len(model_rows),

@@ -169,8 +169,11 @@ def test_cert_007_can_pass_on_a_one_row_matrix_and_coverage_is_what_says_so(
 
     assert receipt["cert_007_all_required_rows_pass"] is True
     assert receipt["cert_009_independent_raw_row_recomputation"] is True
-    assert receipt["result"] == "PASS"
-    # ... and yet:
+    # Deliberate red: 1 of N rows carries model evidence and that row passes. The verdict must
+    # refuse; it read PASS here before the overall result required full coverage.
+    assert receipt["result"] == "FAIL"
+    assert receipt["result_basis"] == "partial matrix model-evidence coverage"
+    # ... and the separate fields still say why:
     assert receipt["model_evidence_row_count"] == 1
     assert receipt["matrix_model_evidence_coverage"] == 1 / len(execute.ROWS)
     assert receipt["terminal_eligible_on_matrix_coverage"] is False
@@ -194,6 +197,9 @@ def test_full_model_evidence_coverage_reports_eligible(
     assert receipt["model_evidence_row_count"] == len(execute.ROWS)
     assert receipt["matrix_model_evidence_coverage"] == 1.0
     assert receipt["terminal_eligible_on_matrix_coverage"] is True
+    # Green control for the partial-coverage red: full coverage plus passing rows reads PASS.
+    assert receipt["result"] == "PASS"
+    assert receipt["result_basis"] == "cert_007 and full matrix model-evidence coverage"
 
 
 def test_coverage_is_reported_and_never_folded_into_either_certificate(
