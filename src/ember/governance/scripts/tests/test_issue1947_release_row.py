@@ -6,11 +6,44 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+
+import pytest
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPT = ROOT / "src" / "ember" / "governance" / "scripts" / "issue1947_release_row.py"
+
+
+CHILD_TIMEOUT_SECONDS = 300
+HEADLESS_PYTHON = Path.home() / ".codex" / "headless-python.ps1"
+
+
+def _run(argv, *, capture_output=True, text=True, check=False):
+    """The one child boundary of this file (#1947 T-F1). On Windows the Python child goes through the fixed
+    headless launcher (powershell -File headless-python.ps1 -- <script args>) with CREATE_NO_WINDOW and a
+    hidden STARTUPINFO; both streams are captured; the wait is finite, and on timeout the whole child tree
+    is killed (taskkill /T) and reaped before the test fails with TimeoutExpired."""
+    assert argv[0] == sys.executable and capture_output and not check
+    kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "text": text}
+    if sys.platform == "win32":
+        argv = ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                str(HEADLESS_PYTHON.resolve(strict=True)), "--", *argv[1:]]
+        info = subprocess.STARTUPINFO()
+        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        info.wShowWindow = 0  # SW_HIDE
+        kwargs.update(startupinfo=info, creationflags=subprocess.CREATE_NO_WINDOW)
+    child = subprocess.Popen(argv, **kwargs)
+    try:
+        stdout, stderr = child.communicate(timeout=CHILD_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(child.pid)], capture_output=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW, check=False, timeout=60)
+        child.kill()
+        child.communicate(timeout=60)
+        raise
+    return subprocess.CompletedProcess(argv, child.returncode, stdout, stderr)
 
 
 def _canonical(value: object) -> bytes:
@@ -23,7 +56,7 @@ def test_refusal_is_named_self_hashed_and_nonzero(tmp_path: Path) -> None:
         "MISSING_CURRENT_PROTECTED_STANDALONE_TEXT_CONTRACT",
         "MISSING_REMAINING_TEXT_ROW_TOTALITY",
     ]
-    completed = subprocess.run(
+    completed = _run(
         [
             sys.executable,
             str(SCRIPT),
@@ -50,7 +83,7 @@ def test_refusal_is_named_self_hashed_and_nonzero(tmp_path: Path) -> None:
 def test_refusal_receipt_is_no_overwrite(tmp_path: Path) -> None:
     receipt = tmp_path / "occupied.json"
     receipt.write_text("owned", encoding="utf-8")
-    completed = subprocess.run(
+    completed = _run(
         [
             sys.executable,
             str(SCRIPT),
@@ -107,7 +140,7 @@ def test_text_adapter_uses_real_bound_inference_row(tmp_path: Path) -> None:
         "totality": {"complete": True},
     })
     result = tmp_path / "row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-text", "--contract", str(contract),
          "--source-receipt", str(source), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -179,32 +212,29 @@ def _write_image_fixture(
     return contract, connector, physical_paths
 
 
-def test_image_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+def test_image_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
+    """#1947 L4': a payload whose size differs from the bound byte count refuses the row; it is never scored 0.0."""
+
     contract, connector, paths = _write_image_fixture(tmp_path)
     paths[0].write_bytes(b"corrupted")
     result = tmp_path / "image-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
     )
-    assert completed.returncode == 0
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert row["result"] == "IMAGE_HELDOUT_ROW_PRODUCED"
-    assert row["row_id"] == "E-MATRIX-IMAGE"
-    assert row["task_class"] == "adapter_totality"
-    assert row["score"] == 63 / 64
-    assert sum(item["score"] == 0.0 for item in row["items"]) == 1
-    body = dict(row)
-    claimed = body.pop("self_sha256")
-    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("IMAGE_PAYLOAD_TRUNCATED_REFUSED:")
 
 
 def test_image_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) -> None:
     contract, connector, paths = _write_image_fixture(tmp_path)
     paths[0].unlink()
     result = tmp_path / "image-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -226,7 +256,7 @@ def test_image_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
 
     contract, connector, _paths = _write_image_fixture(tmp_path)
     result = tmp_path / "image-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -256,7 +286,7 @@ def test_image_adapter_accepts_widened_v2_contract_256_items(tmp_path: Path) -> 
         tmp_path, count=256, schema_version="ember-protected-image-contract-v2",
     )
     result = tmp_path / "image-row-v2.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -280,7 +310,7 @@ def test_image_adapter_refuses_v2_contract_with_observed_255(tmp_path: Path) -> 
         tmp_path, count=255, schema_version="ember-protected-image-contract-v2",
     )
     result = tmp_path / "image-refusal-v2.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -335,32 +365,29 @@ def _write_audio_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
     return contract, connector, physical_paths
 
 
-def test_audio_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+def test_audio_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
+    """#1947 L4': a payload whose size differs from the bound byte count refuses the row; it is never scored 0.0."""
+
     contract, connector, paths = _write_audio_fixture(tmp_path)
     paths[0].write_bytes(b"corrupted")
     result = tmp_path / "audio-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
     )
-    assert completed.returncode == 0
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert row["result"] == "AUDIO_HELDOUT_ROW_PRODUCED"
-    assert row["row_id"] == "E-MATRIX-AUDIO"
-    assert row["task_class"] == "adapter_totality"
-    assert row["score"] == 63 / 64
-    assert sum(item["score"] == 0.0 for item in row["items"]) == 1
-    body = dict(row)
-    claimed = body.pop("self_sha256")
-    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("AUDIO_PAYLOAD_TRUNCATED_REFUSED:")
 
 
 def test_audio_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) -> None:
     contract, connector, paths = _write_audio_fixture(tmp_path)
     paths[0].unlink()
     result = tmp_path / "audio-refusal.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -382,7 +409,7 @@ def test_audio_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
 
     contract, connector, _paths = _write_audio_fixture(tmp_path)
     result = tmp_path / "audio-row.json"
-    completed = subprocess.run(
+    completed = _run(
         [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
          "--source-receipt", str(connector), "--result", str(result)],
         capture_output=True, text=True, check=False,
@@ -491,27 +518,22 @@ def _run_image_text(contract: Path, receipts: list[Path], result: Path) -> subpr
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
-def test_image_text_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+def test_image_text_adapter_truncated_payload_refuses(tmp_path: Path) -> None:
+    """#1947 L4': a size-changed image payload refuses the row; it is never scored 0.0."""
+
     contract, receipts, physical = _write_image_text_fixture(tmp_path)
     corrupted = hashlib.sha256(b"png-5").hexdigest()
     physical[corrupted].write_bytes(b"corrupted")
     result = tmp_path / "row.json"
     completed = _run_image_text(contract, receipts, result)
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert row["result"] == "IMAGE_TEXT_HELDOUT_ROW_PRODUCED"
-    assert row["row_id"] == "E-MATRIX-IMAGE-TEXT"
-    assert row["task_class"] == "adapter_totality"
-    assert len(row["items"]) == IMAGE_TEXT_ITEMS
-    assert row["score"] == (IMAGE_TEXT_ITEMS - 1) / IMAGE_TEXT_ITEMS
-    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == ["validation_Fixture_5"]
-    assert len(row["connector_receipt_raw_sha256s"]) == 3
-    body = dict(row)
-    claimed = body.pop("self_sha256")
-    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("IMAGE_TEXT_PAYLOAD_TRUNCATED_REFUSED:validation_Fixture_5:")
 
 
 def test_image_text_adapter_missing_payload_and_missing_receipt_refuse(tmp_path: Path) -> None:
@@ -666,7 +688,7 @@ def _run_audio_text(contract: Path, receipts: list[Path], result: Path) -> subpr
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_audio_text_adapter_produces_the_pair_identity_row(tmp_path: Path) -> None:
@@ -688,7 +710,9 @@ def test_audio_text_adapter_produces_the_pair_identity_row(tmp_path: Path) -> No
     ).hexdigest()
 
 
-def test_audio_text_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+def test_audio_text_adapter_substituted_payload_refuses(tmp_path: Path) -> None:
+    """#1947 L4': same byte count, different bytes refuses the row on the digest; it is never scored 0.0."""
+
     contract, receipts, physical = _write_audio_text_fixture(tmp_path)
     contract_body = json.loads(contract.read_text(encoding="utf-8"))
     victim = contract_body["frozen_items"][7]
@@ -699,10 +723,11 @@ def test_audio_text_adapter_planted_corruption_scores_below_one(tmp_path: Path) 
     text_path.write_bytes(corrupted)
     result = tmp_path / "row.json"
     completed = _run_audio_text(contract, receipts, result)
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert abs(row["score"] - (AUDIO_TEXT_ITEMS - 1) / AUDIO_TEXT_ITEMS) < 1e-12
-    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == [victim["item_id"]]
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("AUDIO_TEXT_PAYLOAD_DIGEST_REFUSED:")
 
 
 def test_audio_text_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
@@ -842,7 +867,7 @@ def _run_image_audio_text(contract: Path, receipts: list[Path], result: Path) ->
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_image_audio_text_adapter_produces_the_triple_identity_row(tmp_path: Path) -> None:
@@ -864,7 +889,9 @@ def test_image_audio_text_adapter_produces_the_triple_identity_row(tmp_path: Pat
     ).hexdigest()
 
 
-def test_image_audio_text_adapter_planted_image_corruption_scores_below_one(tmp_path: Path) -> None:
+def test_image_audio_text_adapter_substituted_image_refuses(tmp_path: Path) -> None:
+    """#1947 L4': same byte count, different bytes refuses the row on the digest; it is never scored 0.0."""
+
     contract, receipts, physical = _write_image_audio_text_fixture(tmp_path)
     contract_body = json.loads(contract.read_text(encoding="utf-8"))
     victim = contract_body["frozen_items"][9]
@@ -875,10 +902,11 @@ def test_image_audio_text_adapter_planted_image_corruption_scores_below_one(tmp_
     image_path.write_bytes(corrupted)
     result = tmp_path / "row.json"
     completed = _run_image_audio_text(contract, receipts, result)
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert abs(row["score"] - (AUDIO_TEXT_ITEMS - 1) / AUDIO_TEXT_ITEMS) < 1e-12
-    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == [victim["item_id"]]
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("IMAGE_AUDIO_TEXT_PAYLOAD_DIGEST_REFUSED:")
 
 
 def test_image_audio_text_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
@@ -1031,7 +1059,7 @@ def _run_reasoning(contract: Path, receipts: list[Path], result: Path) -> subpro
     for receipt in receipts:
         command += ["--source-receipt", str(receipt)]
     command += ["--result", str(result)]
-    return subprocess.run(command, capture_output=True, text=True, check=False)
+    return _run(command, capture_output=True, text=True, check=False)
 
 
 def test_reasoning_adapter_produces_the_item_identity_row(tmp_path: Path) -> None:
@@ -1053,7 +1081,9 @@ def test_reasoning_adapter_produces_the_item_identity_row(tmp_path: Path) -> Non
     ).hexdigest()
 
 
-def test_reasoning_adapter_planted_answer_corruption_scores_846_of_847(tmp_path: Path) -> None:
+def test_reasoning_adapter_substituted_answer_refuses(tmp_path: Path) -> None:
+    """#1947 L4': same byte count, different answer bytes refuses the row on the digest; it is never scored 0.0."""
+
     contract, receipts, physical = _write_reasoning_fixture(tmp_path)
     contract_body = json.loads(contract.read_text(encoding="utf-8"))
     victim = contract_body["frozen_items"][11]
@@ -1064,10 +1094,11 @@ def test_reasoning_adapter_planted_answer_corruption_scores_846_of_847(tmp_path:
     answer_path.write_bytes(corrupted)
     result = tmp_path / "row.json"
     completed = _run_reasoning(contract, receipts, result)
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    row = json.loads(result.read_text(encoding="utf-8"))
-    assert abs(row["score"] - (REASONING_ITEMS - 1) / REASONING_ITEMS) < 1e-12
-    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == [victim["item_id"]]
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith("REASONING_PAYLOAD_DIGEST_REFUSED:")
 
 
 def test_reasoning_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
@@ -1147,3 +1178,99 @@ def test_reasoning_adapter_row_satisfies_the_release_executor_item_schema(tmp_pa
     spec.loader.exec_module(executor)
     validated = executor.validate_row(row, "E-MATRIX-REASONING")
     assert validated is row
+
+
+# ---------------------------------------------------------------------------------------------
+# #1947 L4' deliberate reds: a custody payload is proven (size, then digest) before anything
+# scores it. Each refusal class has its own red; none of them may produce a row.
+# ---------------------------------------------------------------------------------------------
+
+def _flip_last_byte(path: Path) -> None:
+    raw = path.read_bytes()
+    path.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0x01]))
+
+
+def _assert_refused(completed: subprocess.CompletedProcess, result: Path, reason: str) -> None:
+    assert completed.returncode == 78, completed.stdout + completed.stderr
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"].endswith("_REFUSED")
+    assert "items" not in refusal and "score" not in refusal
+    assert refusal["reason"].startswith(reason), refusal["reason"]
+
+
+def test_image_adapter_truncated_real_payload_refuses(tmp_path: Path) -> None:
+    """Red: the bound image's own bytes with the tail cut off (a real truncation, not a rewrite)."""
+
+    contract, connector, paths = _write_image_fixture(tmp_path)
+    raw = paths[3].read_bytes()
+    paths[3].write_bytes(raw[:-2])
+    result = tmp_path / "image-refusal.json"
+    completed = _run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    _assert_refused(completed, result, f"IMAGE_PAYLOAD_TRUNCATED_REFUSED:{hashlib.sha256(raw).hexdigest()}")
+
+
+def test_audio_adapter_same_size_substitution_refuses(tmp_path: Path) -> None:
+    """Red: same byte count, one bit changed; the size check passes, the digest check must refuse."""
+
+    contract, connector, paths = _write_audio_fixture(tmp_path)
+    raw = paths[2].read_bytes()
+    _flip_last_byte(paths[2])
+    assert paths[2].stat().st_size == len(raw)
+    result = tmp_path / "audio-refusal.json"
+    completed = _run(
+        [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    _assert_refused(completed, result, f"AUDIO_PAYLOAD_DIGEST_REFUSED:{hashlib.sha256(raw).hexdigest()}")
+
+
+def _victim_image_text(body: dict) -> dict:
+    return body["frozen_items"][3]["image_objects"][0]
+
+
+def _victim_audio_text(body: dict) -> dict:
+    return body["frozen_items"][4]["audio_object"]
+
+
+def _victim_image_audio_text(body: dict) -> dict:
+    return body["frozen_items"][5]["audio_object"]
+
+
+def _victim_reasoning(body: dict) -> dict:
+    return body["frozen_items"][6]["answer_object"]
+
+
+@pytest.mark.parametrize(
+    ("write", "run", "victim", "prefix", "shape_safe"),
+    [
+        (_write_image_text_fixture, _run_image_text, _victim_image_text, "IMAGE_TEXT", False),
+        (_write_audio_text_fixture, _run_audio_text, _victim_audio_text, "AUDIO_TEXT", False),
+        (_write_image_audio_text_fixture, _run_image_audio_text, _victim_image_audio_text, "IMAGE_AUDIO_TEXT", False),
+        (_write_reasoning_fixture, _run_reasoning, _victim_reasoning, "REASONING", True),
+    ],
+    ids=["image_text", "audio_text", "image_audio_text", "reasoning"],
+)
+def test_bound_payload_same_size_substitution_refuses(tmp_path: Path, write, run, victim, prefix, shape_safe) -> None:
+    """Red, one per adapter fed by _bound_payload: a same-size substitution of a bound object
+    refuses on the digest after the forbidden-input shape check, never scores 0.0."""
+
+    contract, receipts, physical = write(tmp_path)
+    body = json.loads(contract.read_text(encoding="utf-8"))
+    obj = victim(body)
+    path = physical[obj["sha256"]]
+    if shape_safe:
+        # the answer object is shape-checked: substitute a well-formed answer of the same size
+        item = body["frozen_items"][6]
+        substitute = _reasoning_answer_canonical(item["item_id"], "E")
+        assert len(substitute) == obj["byte_count"]
+        path.write_bytes(substitute)
+    else:
+        _flip_last_byte(path)
+    assert path.stat().st_size == obj["byte_count"]
+    result = tmp_path / "refusal.json"
+    _assert_refused(run(contract, receipts, result), result, f"{prefix}_PAYLOAD_DIGEST_REFUSED:")
