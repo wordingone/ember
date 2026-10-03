@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from src.ember.infrastructure.tools.corpus_connectors.receipt import (
     L3_STATEMENT,
@@ -106,10 +107,8 @@ def _synthetic_block_complete(block: object) -> bool:
         and block["self_generated"] is False
         and block["terms_permit_training"] is True
         and block["origin_class"] in _ORIGIN_CLASSES
-        and all(
-            isinstance(block[key], str) and block[key]
-            for key in ("dataset_id", "dataset_revision", "dataset_provenance_ref", "license_ref")
-        )
+        and all(_is_token(block[key]) for key in ("dataset_id", "dataset_revision"))
+        and all(_is_public_https(block[key]) for key in ("dataset_provenance_ref", "license_ref"))
         and block["license_ref"].upper() not in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
         and (share is None if block["origin_class"] == "unknown" else (
             isinstance(share, (int, float)) and not isinstance(share, bool) and 0 < share <= 1
@@ -134,13 +133,34 @@ def _bound_to_published_source(receipt: dict[str, Any], block: dict[str, Any]) -
     self_generated=false is a declaration; this binding and the admission review are the check."""
     canonical_url = receipt.get("canonical_url")
     return (
-        isinstance(canonical_url, str)
-        and canonical_url.startswith("https://")
-        and str(block["dataset_id"]) in canonical_url
+        _is_public_https(canonical_url)
+        and _is_token(block["dataset_id"])
+        and block["dataset_id"] in canonical_url
         and receipt.get("revision") == block["dataset_revision"]
-        and str(block["dataset_provenance_ref"]).startswith("https://")
-        and str(block["license_ref"]).startswith("https://")
+        and _is_public_https(block["dataset_provenance_ref"])
+        and _is_public_https(block["license_ref"])
         and _is_sha256(block["dataset_content_sha256"])
+    )
+
+
+def _is_token(value: object) -> bool:
+    """A non-empty identifier with no whitespace anywhere (a blank or padded id names nothing)."""
+    return isinstance(value, str) and bool(value) and not any(c.isspace() for c in value)
+
+
+def _is_public_https(value: object) -> bool:
+    """An https URL with a real dotted host, no credentials and no whitespace."""
+    if not isinstance(value, str) or not value or any(c.isspace() for c in value):
+        return False
+    parsed = urlsplit(value)
+    host = parsed.hostname or ""
+    return (
+        parsed.scheme == "https"
+        and "." in host
+        and not host.startswith(".")
+        and not host.endswith(".")
+        and parsed.username is None
+        and parsed.password is None
     )
 
 

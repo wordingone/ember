@@ -250,6 +250,27 @@ def test_rejects_foreign_path_and_nondeterministic_rows() -> None:
             {**complete_block, "dataset_id": "", "dataset_provenance_ref": "", "license_ref": ""},
         ),
         (
+            "whitespace identities and hostless https references",
+            "synthetic-provenance: published rows",
+            {
+                **complete_block,
+                "dataset_id": " ",
+                "dataset_revision": " ",
+                "dataset_provenance_ref": "https://",
+                "license_ref": "https://",
+            },
+        ),
+        (
+            "padded dataset id",
+            "synthetic-provenance: published rows",
+            {**complete_block, "dataset_id": "example-org/example-dataset "},
+        ),
+        (
+            "licence reference without a dotted host",
+            "synthetic-provenance: published rows",
+            {**complete_block, "license_ref": "https://localhost/terms"},
+        ),
+        (
             "content digest not the fetched bytes",
             "synthetic-provenance: published rows",
             {**complete_block, "dataset_content_sha256": "b" * 64},
