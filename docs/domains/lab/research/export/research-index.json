@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-04T04:53:23Z",
- "generated_at": "2026-10-04T04:53:24Z",
+ "source_events_through": "2026-10-04T19:09:42Z",
+ "generated_at": "2026-10-04T19:09:43Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,19 +89,19 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 2878227,
-   "mtime_utc": "2026-10-04T04:53:23Z",
-   "records_in_source": 3930,
+   "bytes": 2933435,
+   "mtime_utc": "2026-10-04T19:09:42Z",
+   "records_in_source": 4011,
    "unparseable_records": 0,
-   "hypotheses": 494,
-   "included": 3930,
+   "hypotheses": 503,
+   "included": 4011,
    "omitted_fields": {
     "ceiling": {
-     "occurrences": 27,
+     "occurrences": 28,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 60,
+     "occurrences": 73,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
@@ -109,51 +109,51 @@
      "reason": "not on the publication allowlist"
     },
     "expect": {
-     "occurrences": 93,
+     "occurrences": 102,
      "reason": "not on the publication allowlist"
     },
     "gate": {
-     "occurrences": 94,
+     "occurrences": 103,
      "reason": "not on the publication allowlist"
     },
     "gate_state": {
-     "occurrences": 74,
+     "occurrences": 83,
      "reason": "not on the publication allowlist"
     },
     "interval": {
-     "occurrences": 93,
+     "occurrences": 102,
      "reason": "not on the publication allowlist"
     },
     "interval_held": {
-     "occurrences": 72,
+     "occurrences": 81,
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 728,
+     "occurrences": 809,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 728,
+     "occurrences": 809,
      "reason": "not on the publication allowlist"
     },
     "observed": {
-     "occurrences": 74,
+     "occurrences": 83,
      "reason": "not on the publication allowlist"
     },
     "quantity": {
-     "occurrences": 93,
+     "occurrences": 102,
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 728,
+     "occurrences": 809,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 728,
+     "occurrences": 809,
      "reason": "not on the publication allowlist"
     },
     "voi": {
-     "occurrences": 23,
+     "occurrences": 24,
      "reason": "not on the publication allowlist"
     }
    }
@@ -239,10 +239,10 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 40,
-   "absolute_local_paths_normalized": 826,
+   "absolute_local_paths_normalized": 846,
    "operator_name_occurrences_replaced": 1,
-   "seat_name_occurrences_replaced": 968,
-   "seat_record_paths_rewritten": 1574,
+   "seat_name_occurrences_replaced": 1005,
+   "seat_record_paths_rewritten": 1592,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
@@ -283,8 +283,8 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-04T04:53:23Z",
-    "hypotheses": 385,
+    "ended": "2026-10-04T19:09:42Z",
+    "hypotheses": 394,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -36041,17 +36041,19 @@
   },
   {
    "id": "issue2119-h14-e5-repeat-lineage-20261003",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-03T07:41:27Z",
-   "last_ts": "2026-10-04T00:43:54Z",
+   "last_ts": "2026-10-04T05:10:08Z",
    "events": [
     {
      "ts": "2026-10-03T07:41:27Z",
@@ -36087,6 +36089,17 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen refuted_if (verbatim): p10 below 35700 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 40,839.912740088854, 51,017 measured updates, 208,969,728 applied positions, inside [35,700, 43,600]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child 6d2ce84c872531b4 lineage.parent_manifest_sha256 = a124554a190a20a9 (the twelfth child). this seat 51161."
+    },
+    {
+     "ts": "2026-10-04T05:10:02Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+     "because": "next leg changed from another e5 repeat hour to a fresh-text hour (H18 text exhaustion)"
+    },
+    {
+     "ts": "2026-10-04T05:10:08Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor is the fresh-text H19 lineage hour"
     }
    ],
    "observation": "Fourteenth lineage hour on the layer template (attention keep 0,6,12,18,23, FFN keep 11, expert keep 23), same head bb272f0d, same frozen plan, same geometry and share, from the retained twelfth child a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80 (start cursor 639/2630384, text start position 2672780288, cap 131072 measured updates). The text ledger is the repeat-extended e5 (afada535961ea11bf90d23fed0eed77d4913df5417e2de039085737858e05d3d): the pinned e4 ledger plus one repeat pass of already-admitted base text, fresh tokens 0, zero fresh-token credit. The twelfth hour on the same route measured p10 39449.10442917045 loss-bearing target positions/s (nearest-rank p10 over complete steps, whole measured window) over 202539008 applied positions. Sampler v7 under the measured pre-launch gate.",
@@ -36098,7 +36111,9 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen refuted_if (verbatim): p10 below 35700 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 40,839.912740088854, 51,017 measured updates, 208,969,728 applied positions, inside [35,700, 43,600]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child 6d2ce84c872531b4 lineage.parent_manifest_sha256 = a124554a190a20a9 (the twelfth child). this seat 51161."
+   "ruling": "Frozen refuted_if (verbatim): p10 below 35700 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 40,839.912740088854, 51,017 measured updates, 208,969,728 applied positions, inside [35,700, 43,600]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child 6d2ce84c872531b4 lineage.parent_manifest_sha256 = a124554a190a20a9 (the twelfth child). this seat 51161.",
+   "not_closed": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+   "closing": "cycle complete; successor is the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h15-e5-repeat-lineage-20261003",
@@ -36304,17 +36319,19 @@
   },
   {
    "id": "issue2119-h16r-e5-repeat-lineage-20261003",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-03T17:33:39Z",
-   "last_ts": "2026-10-04T00:43:54Z",
+   "last_ts": "2026-10-04T05:10:08Z",
    "events": [
     {
      "ts": "2026-10-03T17:33:39Z",
@@ -36350,6 +36367,17 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen refuted_if (verbatim): p10 below 36930 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 39,881.274294610805, 50,337 measured updates, 206,184,448 applied positions, inside [36,930, 45,120]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child e75f36fee48e5fb0 lineage.parent_manifest_sha256 = decf9893581381b8 (the H15 child). this seat 51161."
+    },
+    {
+     "ts": "2026-10-04T05:10:02Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+     "because": "next leg changed from another e5 repeat hour to a fresh-text hour (H18 text exhaustion)"
+    },
+    {
+     "ts": "2026-10-04T05:10:08Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor is the fresh-text H19 lineage hour"
     }
    ],
    "observation": "Repeat of the sixteenth lineage hour (the first attempt ended on its 6,033 s wall 18 s before the reference step and published nothing; declared wall now 6,600 s, this seat 49398) on the layer template (attention keep 0,6,12,18,23, FFN keep 11, expert keep 23), same head bb272f0d, same frozen plan, same geometry and share, from the H15 child decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205 (start cursor 714/3973440, text start position 2985359360, cap 131072 measured updates). The text ledger is the repeat-extended e5 (afada535961ea11bf90d23fed0eed77d4913df5417e2de039085737858e05d3d): the pinned e4 ledger plus one repeat pass of already-admitted base text, fresh tokens 0, zero fresh-token credit. The fifteenth hour on the same route measured p10 40759.02948533747 loss-bearing target positions/s (nearest-rank p10 over complete steps, whole measured window) over 207802368 applied positions. Sampler v7 under the measured pre-launch gate.",
@@ -36361,21 +36389,25 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen refuted_if (verbatim): p10 below 36930 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 39,881.274294610805, 50,337 measured updates, 206,184,448 applied positions, inside [36,930, 45,120]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child e75f36fee48e5fb0 lineage.parent_manifest_sha256 = decf9893581381b8 (the H15 child). this seat 51161."
+   "ruling": "Frozen refuted_if (verbatim): p10 below 36930 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 39,881.274294610805, 50,337 measured updates, 206,184,448 applied positions, inside [36,930, 45,120]; hour-result.json complete, worker-terminal completed, cleanup verified; parent link confirmed: child e75f36fee48e5fb0 lineage.parent_manifest_sha256 = decf9893581381b8 (the H15 child). this seat 51161.",
+   "not_closed": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+   "closing": "cycle complete; successor is the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h15-heldout-nll-20261003",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-03T20:23:47Z",
-   "last_ts": "2026-10-04T00:43:54Z",
+   "last_ts": "2026-10-04T05:10:08Z",
    "events": [
     {
      "ts": "2026-10-03T20:23:47Z",
@@ -36412,6 +36444,17 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen refuted_if (verbatim): text is not below 2.103274566550681 (the H14 child under the template, receipt seat record: nll-H14-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside || Observed: text 2.067126021021977 is below the 2.103274566550681 bar and inside [1.853, 2.123]; 512 of 512 packs, digest 099ad8b7ef112eb8 matches, scorer finished, pointer byte-equal; caption 1.5833501814792854 carries no hypothesis. this seat 51166."
+    },
+    {
+     "ts": "2026-10-04T05:10:02Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+     "because": "next leg changed from another e5 repeat hour to a fresh-text hour (H18 text exhaustion)"
+    },
+    {
+     "ts": "2026-10-04T05:10:08Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor is the fresh-text H19 lineage hour"
     }
    ],
    "observation": "The H14 child under the template forward scored text 2.103274566550681 and caption 1.6064579152281548 on the frozen held-out set (512 packs). The H15 hour's own hour-result.json records 50732 updates and 207802368 applied positions, child decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205 on head bb272f0d. Whether the H15 child keeps improving held-out loss is not yet measured.",
@@ -36423,7 +36466,9 @@
     "seat record: nll-H15-eval.json"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen refuted_if (verbatim): text is not below 2.103274566550681 (the H14 child under the template, receipt seat record: nll-H14-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside || Observed: text 2.067126021021977 is below the 2.103274566550681 bar and inside [1.853, 2.123]; 512 of 512 packs, digest 099ad8b7ef112eb8 matches, scorer finished, pointer byte-equal; caption 1.5833501814792854 carries no hypothesis. this seat 51166."
+   "ruling": "Frozen refuted_if (verbatim): text is not below 2.103274566550681 (the H14 child under the template, receipt seat record: nll-H14-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside || Observed: text 2.067126021021977 is below the 2.103274566550681 bar and inside [1.853, 2.123]; 512 of 512 packs, digest 099ad8b7ef112eb8 matches, scorer finished, pointer byte-equal; caption 1.5833501814792854 carries no hypothesis. this seat 51166.",
+   "not_closed": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+   "closing": "cycle complete; successor is the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h16-heldout-nll-20261003",
@@ -36496,7 +36541,7 @@
   },
   {
    "id": "issue2119-h16-protected-image-20261003",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -36504,10 +36549,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-03T20:55:08Z",
-   "last_ts": "2026-10-04T00:43:55Z",
+   "last_ts": "2026-10-04T05:10:03Z",
    "events": [
     {
      "ts": "2026-10-03T20:55:08Z",
@@ -36550,6 +36596,11 @@
      "stage": "UPDATED",
      "hypothesis": "Open after this reading: the gate D cure is still unproven on lineage children; the next D leg needs a predicted treatment, not another baseline.",
      "because": "this seat 51166: the next D leg is a predicted treatment, not a baseline repeat; lineage children show no image dependence on the protected test."
+    },
+    {
+     "ts": "2026-10-04T05:10:03Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor rides the fresh-text H19 lineage hour"
     }
    ],
    "observation": "Held-out scores for the sixteenth child under its template: text 2.0484948118028115, caption 1.605464633827785. The twelfth child's protected multiple-choice image test read real 0.276, missing 0.26, wrong 0.263 (847 items each); the real-minus-missing gap was +0.016, about one item standard error of 0.0153. The same capability number has not been measured on the sixteenth child.",
@@ -36562,21 +36613,24 @@
    ],
    "verdict": "SUPPORTED",
    "ruling": "Frozen refuted_if (verbatim): the gate D binding env is absent or unsourced, the evaluator does not record the executed image condition, fewer than the full 847-item set is scored in any condition, the pointer changes during the run, or the real-image accuracy lies outside [0.22, 0.31]. Decision consequence: a failure of the first four is repaired as a new file and rerun before any reading; a value outside the interval is reported as measured with real, missing and wrong side by side || Observed: real 0.269 inside [0.22, 0.31]; 847 items in each of real/missing/wrong, conditions recorded, pointer unchanged (sha 1801a72a before = after). Gate D UNMET (0.269 is below the 0.2857 floor); real minus missing is -0.007 and real minus wrong is +0.005, both within one item standard error, so this child shows no image dependence. Do not record as a gate D move. this seat 51166.",
-   "not_closed": "Open after this reading: the gate D cure is still unproven on lineage children; the next D leg needs a predicted treatment, not another baseline."
+   "not_closed": "Open after this reading: the gate D cure is still unproven on lineage children; the next D leg needs a predicted treatment, not another baseline.",
+   "closing": "cycle complete; successor rides the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h17-e5-lineage-20261003",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-03T21:58:49Z",
-   "last_ts": "2026-10-04T00:43:53Z",
+   "last_ts": "2026-10-04T05:10:08Z",
    "events": [
     {
      "ts": "2026-10-03T21:58:49Z",
@@ -36612,6 +36666,17 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen refuted_if (verbatim): p10 below 36130 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 41,535.02028143162 loss-bearing target positions/s over 51,562 measured updates, 211,202,048 applied positions; hour-result.json (sha256 2cfe4d4edd4953d554ea6d9ef26a9f07194dd65f70e6c7d866a322fc75e0924d) complete, worker-terminal completed, owned.json cleanup verified rc 0, window CLOSED 2026-10-04T00:40:41Z A1_HOUR_DONE, no load or restore refusal; floor 36,130 not crossed; child manifest eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4 with parent e75f36fe; pointer names it. Clauses did not fire (this seat 51373)."
+    },
+    {
+     "ts": "2026-10-04T05:10:01Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+     "because": "next leg changed from another e5 repeat hour to a fresh-text hour (H18 text exhaustion)"
+    },
+    {
+     "ts": "2026-10-04T05:10:08Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor is the fresh-text H19 lineage hour"
     }
    ],
    "observation": "Seventeenth lineage hour on the layer template (attention keep 0,6,12,18,23, FFN keep 11, expert keep 23), head bb272f0d, from the sixteenth-hour child e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e (published; tokens_seen 4,141,924,352, global step 1,011,212), start cursor 751/3422528, text start position 3,139,997,696, cap 105,659 measured updates, declared wall 6,700 s (this seat 50779; margin 389.2 s over the sixteenth hour's 6,310.8 s), fresh probe in the same window (this seat 50766). Provenance: training_signal_provenance includes_ai_generated; PD12M caption targets 75.8 per update (1.85% of applied positions); lineage total since genesis update 0: 93,050,651 of 4,141,924,352 applied positions (2.25%); a disclosure, not a human-only claim; text documents unclassified.",
@@ -36623,11 +36688,13 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen refuted_if (verbatim): p10 below 36130 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 41,535.02028143162 loss-bearing target positions/s over 51,562 measured updates, 211,202,048 applied positions; hour-result.json (sha256 2cfe4d4edd4953d554ea6d9ef26a9f07194dd65f70e6c7d866a322fc75e0924d) complete, worker-terminal completed, owned.json cleanup verified rc 0, window CLOSED 2026-10-04T00:40:41Z A1_HOUR_DONE, no load or restore refusal; floor 36,130 not crossed; child manifest eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4 with parent e75f36fe; pointer names it. Clauses did not fire (this seat 51373)."
+   "ruling": "Frozen refuted_if (verbatim): p10 below 36130 loss-bearing target positions/s OR no complete hour-result.json OR a load refusal or restore refusal in the hour. A refusal stops the run; full compute is dispatched by no seat; this seat takes it to the operator. || Observed: p10 41,535.02028143162 loss-bearing target positions/s over 51,562 measured updates, 211,202,048 applied positions; hour-result.json (sha256 2cfe4d4edd4953d554ea6d9ef26a9f07194dd65f70e6c7d866a322fc75e0924d) complete, worker-terminal completed, owned.json cleanup verified rc 0, window CLOSED 2026-10-04T00:40:41Z A1_HOUR_DONE, no load or restore refusal; floor 36,130 not crossed; child manifest eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4 with parent e75f36fe; pointer names it. Clauses did not fire (this seat 51373).",
+   "not_closed": "Successor: the fresh-text lineage hour (H19, Wikipedia files 0,2,3,4 plus file5 extension) once a seat passes no-overlap and margin. The e5 repeat route is exhausted (H18 refused on text exhaustion), so the next lineage hour needs fresh admitted text; that hour gets its own predict row before claim.",
+   "closing": "cycle complete; successor is the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h17-heldout-nll-20261003",
-   "stage": "UPDATED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
@@ -36635,10 +36702,11 @@
     "RUNNING",
     "MEASURED",
     "RULED",
-    "UPDATED"
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-04T00:47:34Z",
-   "last_ts": "2026-10-04T01:13:01Z",
+   "last_ts": "2026-10-04T05:10:03Z",
    "events": [
     {
      "ts": "2026-10-04T00:47:34Z",
@@ -36681,6 +36749,11 @@
      "stage": "UPDATED",
      "hypothesis": "Held-out text rose +0.0798 against the H16 child (2.1283 vs 2.0485) while the caption held (1.6018 vs 1.6055). This is the first text regression on the lineage, and it does not close whether the cause is the repeat pass, the template route or noise. No cause probe is owed now. H18 text line is reported against the H17 child 2.1283; a stop rule is frozen in the H18 predict text: if the H18 child held-out text is at or above 2.1283, no further repeat-pass text hour runs.",
      "because": "this seat 51497: REFUTED; H18 proceeds with the frozen stop rule on text."
+    },
+    {
+     "ts": "2026-10-04T05:10:03Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor rides the fresh-text H19 lineage hour"
     }
    ],
    "observation": "The H16 child under the template forward scored text 2.0484948118028115 and caption 1.605464633827785 on the frozen held-out set (512 packs). The H17 hour's own hour-result.json records 51562 updates and 211202048 applied positions, child eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4 on head bb272f0d. Whether the H17 child keeps improving held-out loss is not yet measured.",
@@ -36693,7 +36766,8 @@
    ],
    "verdict": "REFUTED",
    "ruling": "Frozen refuted_if (verbatim): text is not below 2.0484948118028115 (the H16 child under the template, receipt seat record: nll-H16-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside || Observed: held-out text mean NLL 2.128328142716782 over 512 of 512 packs (digest 099ad8b7ef112eb8), above the interval top 2.068 and not below 2.0484948118028115 (H16 child); nll-H17-eval.json sha256 acb0c3069900729f166cc1194584cd03be41e45bd4e769d55f33b1efe717f906; caption 1.6018022907836198. this seat 51497.",
-   "not_closed": "Held-out text rose +0.0798 against the H16 child (2.1283 vs 2.0485) while the caption held (1.6018 vs 1.6055). This is the first text regression on the lineage, and it does not close whether the cause is the repeat pass, the template route or noise. No cause probe is owed now. H18 text line is reported against the H17 child 2.1283; a stop rule is frozen in the H18 predict text: if the H18 child held-out text is at or above 2.1283, no further repeat-pass text hour runs."
+   "not_closed": "Held-out text rose +0.0798 against the H16 child (2.1283 vs 2.0485) while the caption held (1.6018 vs 1.6055). This is the first text regression on the lineage, and it does not close whether the cause is the repeat pass, the template route or noise. No cause probe is owed now. H18 text line is reported against the H17 child 2.1283; a stop rule is frozen in the H18 predict text: if the H18 child held-out text is at or above 2.1283, no further repeat-pass text hour runs.",
+   "closing": "cycle complete; successor rides the fresh-text H19 lineage hour"
   },
   {
    "id": "issue2119-h18-e5-lineage-20261003",
@@ -36828,6 +36902,689 @@
    "ruling": "Prediction calibrated: binding sourced, condition recorded per run, 847 items in each of real/missing/wrong, pointer byte-equal, real-image accuracy 0.292 inside [0.22, 0.31]. Capability criterion ember-3b-image-capability-v1 result: FAILED (mmmu-score.json), claim_status NON_ADMISSIBLE_RAW_PREDICTIONS; real 0.292 is above 0.2857 by less than one SE (0.0156) so not gate D met. Real minus missing +0.010 and real minus wrong +0.012, both under one SE: image dependence NOT established. Instrument defect: the wrong-image shift 423 leaves 80 of 847 documents identical to real (wrong control 767-effective); numerators 247/239/237 are implied by rounded scores, the receipts hold no correct flag. Next image run: a derangement with zero fixed points, correct flags and paired discordant counts. Receipt seat record: verdict.json.",
    "not_closed": "Plain reading: the seventeenth child scored 0.292 with the real image, 0.282 with no image and 0.28 with a swapped image on 847 items. The gaps are under one standard error, so the test does not show the model uses the image. The swapped-image control left 80 of 847 items unchanged, so it was a weaker control than intended; the next run fixes that.",
    "closing": "Measurement cycle complete: prediction ruled SUPPORTED (calibrated), capability criterion FAILED, image dependence not established; successor is the next image run with a zero-fixed-point derangement."
+  },
+  {
+   "id": "issue2119-h19-fresh-text-lineage-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T05:10:23Z",
+   "last_ts": "2026-10-04T16:09:34Z",
+   "events": [
+    {
+     "ts": "2026-10-04T05:10:23Z",
+     "stage": "OBSERVED",
+     "observation": "H18 refused on text exhaustion after e5 repeats; 272.5M fresh Wikipedia tokens (files 0,2,3,4) were produced and chain on e5 row 830; the cap tool passes at 88,702 but is data-bound at margin 1.204x (<1.25), and the e5 no-overlap proof is pending (a seat REFUSE R1/R2). Question: does one lineage hour on fresh text continue the head with held-out loss inside its band and no load or restore refusal?",
+     "receipt": "seat record: cap-fresh-272500199.json"
+    },
+    {
+     "ts": "2026-10-04T06:00:06Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "H18 NOTE (carried from the observation, which predates it and cannot be amended): the H18 hour stopped by declared data capacity at update 54,096 with no child. Its measured phase read 2,643.46 s at 20.464 updates per second (H17: 14.323, +42.9 percent; figures as ordered by this seat from the H18 hour report, the per-row receipt <host-local path> has 54,097 rows), mean loss-bearing target positions per second 68,712 against the frozen band [36,130, 46,000]; cause unknown, no hour-result p10 exists. That is REFUTED-upward-on-mean, NOT ruled. MECHANISM for H19: the parent is the unchanged H17 child (held-out text 2.128328142716782, the first regression after 2.0484948118028115 at the sixteenth child). The H17 regression followed a fifth repeat pass over the same admitted text; H19 replaces the repeat pass with 283,000,615 tokens of never-seen admitted Wikipedia text (five source files, per-file catalog objects, cursor at merged-ledger shard 830 offset 0), same arm, geometry, template and image-text source. Removing repeated exposure should return held-out text loss toward the sixteenth-child level; throughput is set by arm and geometry, so the unexplained H18 rate is carried as an open question, not as a prediction input."
+    },
+    {
+     "ts": "2026-10-04T06:00:06Z",
+     "stage": "PREDICTED",
+     "refuted_if": "no complete hour-result.json, or a load or restore refusal in the hour, or the pointer changes without an admitted child, or hour p10 below 36,130 loss-bearing target positions per second, or the child's held-out text mean NLL lies outside [2.03, 2.15], or protected MMMU real-image accuracy lies outside [0.25, 0.33] (847 items). Throughput above the frozen band's top (46,000) is reported as measured with the H18 mean (68,712, cause unknown) beside it and is not by itself a refutation. Decision consequence: text at or above 2.128328142716782 means fresh admitted text did not cure the regression and the mixture goes to the counterpart seat and this seat; text below 2.128328142716782 means the fresh-text line continues",
+     "supported_if": "complete hour-result.json, restore clean, held-out text mean NLL within [2.03, 2.15] and below 2.128328142716782, hour p10 at or above 36,130, protected MMMU within [0.25, 0.33] for real with missing and wrong each within [0.24, 0.32] (seventeenth child read real 0.292, missing 0.282, wrong 0.28)",
+     "instrument": "chain_segment_H19_v1.sh (derived from chain_segment_H18_v1.sh, window through gpu_window.sh) via dispatch_a1_hour_v3.sh; held-out text by the frozen NLL evaluator that wrote nll-H17-eval.json; MMMU by run_gate_d_single_open_holder_v1.py with h6_mmmu_verdict_v1.py (frozen)"
+    },
+    {
+     "ts": "2026-10-04T06:44:38Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T09:10:10Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-04T12:11:14Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "Frozen clause: the child's held-out text mean NLL must lie in [2.03, 2.15]; observed 3.2904762445250526 (nll-H19-eval.json b5601737, child f71a419e) is outside and above 2.128328142716782, which the criterion says means fresh admitted text did not cure the regression and the mixture goes to the counterpart seat and this seat (done: H20 mixed-ratio packet). Other clauses held: complete hour-result.json 3e4eb9e8, restored_state_matches true, hour p10 61,733.1 >= 36,130, MMMU real 0.263 inside [0.25, 0.33]; the pointer changed with a consumer-accepted child and was later reverted by this seat's ruling, so that clause is not triggered. Older-text loss rose while fresh fell (episode scoring: older_early 2.563 to 4.443, fresh 7.197 to 4.961): forgetting, ruled by this seat."
+    },
+    {
+     "ts": "2026-10-04T15:09:40Z",
+     "stage": "UPDATED",
+     "hypothesis": "successor is issue2119-h20-mixed-ratio-lineage-20261004 (8:1 older:fresh mix from the 17th child); not_closed: other mix ratios, other fresh sources",
+     "because": "successor is the H20 mixed-ratio hour"
+    },
+    {
+     "ts": "2026-10-04T16:09:34Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor named in update"
+    }
+   ],
+   "observation": "H18 refused on text exhaustion after e5 repeats; 272.5M fresh Wikipedia tokens (files 0,2,3,4) were produced and chain on e5 row 830; the cap tool passes at 88,702 but is data-bound at margin 1.204x (<1.25), and the e5 no-overlap proof is pending (a seat REFUSE R1/R2). Question: does one lineage hour on fresh text continue the head with held-out loss inside its band and no load or restore refusal?",
+   "explanation": "H18 NOTE (carried from the observation, which predates it and cannot be amended): the H18 hour stopped by declared data capacity at update 54,096 with no child. Its measured phase read 2,643.46 s at 20.464 updates per second (H17: 14.323, +42.9 percent; figures as ordered by this seat from the H18 hour report, the per-row receipt <host-local path> has 54,097 rows), mean loss-bearing target positions per second 68,712 against the frozen band [36,130, 46,000]; cause unknown, no hour-result p10 exists. That is REFUTED-upward-on-mean, NOT ruled. MECHANISM for H19: the parent is the unchanged H17 child (held-out text 2.128328142716782, the first regression after 2.0484948118028115 at the sixteenth child). The H17 regression followed a fifth repeat pass over the same admitted text; H19 replaces the repeat pass with 283,000,615 tokens of never-seen admitted Wikipedia text (five source files, per-file catalog objects, cursor at merged-ledger shard 830 offset 0), same arm, geometry, template and image-text source. Removing repeated exposure should return held-out text loss toward the sixteenth-child level; throughput is set by arm and geometry, so the unexplained H18 rate is carried as an open question, not as a prediction input.",
+   "criterion": "no complete hour-result.json, or a load or restore refusal in the hour, or the pointer changes without an admitted child, or hour p10 below 36,130 loss-bearing target positions per second, or the child's held-out text mean NLL lies outside [2.03, 2.15], or protected MMMU real-image accuracy lies outside [0.25, 0.33] (847 items). Throughput above the frozen band's top (46,000) is reported as measured with the H18 mean (68,712, cause unknown) beside it and is not by itself a refutation. Decision consequence: text at or above 2.128328142716782 means fresh admitted text did not cure the regression and the mixture goes to the counterpart seat and this seat; text below 2.128328142716782 means the fresh-text line continues",
+   "criterion_supported_if": "complete hour-result.json, restore clean, held-out text mean NLL within [2.03, 2.15] and below 2.128328142716782, hour p10 at or above 36,130, protected MMMU within [0.25, 0.33] for real with missing and wrong each within [0.24, 0.32] (seventeenth child read real 0.292, missing 0.282, wrong 0.28)",
+   "instrument": "chain_segment_H19_v1.sh (derived from chain_segment_H18_v1.sh, window through gpu_window.sh) via dispatch_a1_hour_v3.sh; held-out text by the frozen NLL evaluator that wrote nll-H17-eval.json; MMMU by run_gate_d_single_open_holder_v1.py with h6_mmmu_verdict_v1.py (frozen)",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "Frozen clause: the child's held-out text mean NLL must lie in [2.03, 2.15]; observed 3.2904762445250526 (nll-H19-eval.json b5601737, child f71a419e) is outside and above 2.128328142716782, which the criterion says means fresh admitted text did not cure the regression and the mixture goes to the counterpart seat and this seat (done: H20 mixed-ratio packet). Other clauses held: complete hour-result.json 3e4eb9e8, restored_state_matches true, hour p10 61,733.1 >= 36,130, MMMU real 0.263 inside [0.25, 0.33]; the pointer changed with a consumer-accepted child and was later reverted by this seat's ruling, so that clause is not triggered. Older-text loss rose while fresh fell (episode scoring: older_early 2.563 to 4.443, fresh 7.197 to 4.961): forgetting, ruled by this seat.",
+   "not_closed": "successor is issue2119-h20-mixed-ratio-lineage-20261004 (8:1 older:fresh mix from the 17th child); not_closed: other mix ratios, other fresh sources",
+   "closing": "cycle complete; successor named in update"
+  },
+  {
+   "id": "issue2119-h19-protected-image-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T09:30:18Z",
+   "last_ts": "2026-10-04T16:09:34Z",
+   "events": [
+    {
+     "ts": "2026-10-04T09:30:18Z",
+     "stage": "OBSERVED",
+     "observation": "The nineteenth hour trained 72081 measured updates and published a child (it is the lineage head). Its text input started at the seventeenth child's cursor: about 75 percent of the 221.4 million text tokens came from the older admitted text not yet read, 25 percent from the fresh admitted text (the hour ran the parent's cursor, not the specified fresh start; this seat ruled it a lineage hour only). The seventeenth child's protected multiple-choice image test read real 0.292, missing 0.282, wrong 0.28 (847 items each), gate D unmet and no image dependence within one item standard error. The same measurement has not been taken on the nineteenth child.",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-04T09:30:19Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "The protected image test runs the frozen gate D evaluator over the full 847-item set under three conditions on the nineteenth child under its own trained template: real image, missing image, wrong image. It is the lineage's capability number for the hourly report and the image controls for the head, not a #1945 attempt and not a cure test. The evaluator records the executed condition per run, so a condition that did not execute cannot be scored as one. The prediction is carried from the seventeenth child's reading because two more hours of the same recipe are not expected to move a signal that sat inside the noise."
+    },
+    {
+     "ts": "2026-10-04T09:30:19Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the gate D binding env is absent or unsourced, the evaluator does not record the executed image condition, fewer than the full 847-item set is scored in any condition, the pointer changes during the run, or the real-image accuracy lies outside [0.25, 0.33]. Decision consequence: a failure of the first four is repaired as a new file and rerun before any reading; a value outside the interval is reported as measured with real, missing and wrong side by side",
+     "supported_if": "binding sourced, condition recorded per run, 847 items in each of real/missing/wrong, pointer byte-equal, and real-image accuracy within [0.25, 0.33]",
+     "instrument": "chain_segment_H19_mmmu_v1.sh (derived from chain_segment_H17_mmmu_v1.sh, window opened through gpu_window.sh) via run_gate_d_single_open_holder_v1.py; verdict h6_mmmu_verdict_v1.py (frozen)"
+    },
+    {
+     "ts": "2026-10-04T09:30:51Z",
+     "stage": "RUNNING",
+     "note": "H19 child protected image test real/missing/wrong, baseline uncapped",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T10:05:14Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: verdict.json",
+     "note": "run 2026-10-04T09:30:51Z to 2026-10-04T10:05:10Z, verdict VALID, pointer byte-equal"
+    },
+    {
+     "ts": "2026-10-04T12:11:15Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Frozen clause: refuted if gate D env absent, executed condition not recorded, fewer than 847 items in any condition, pointer changed during the run, or real accuracy outside [0.25, 0.33]. Observed (verdict.json d4dde6b7, VALID): real 0.263, missing 0.259, wrong 0.259, 847 items each, each condition recorded as executed, pointer sha before = after (c26b58e0). Side by side as the criterion requires: real minus missing +0.004, real minus wrong +0.004, inside the noise as predicted."
+    },
+    {
+     "ts": "2026-10-04T15:09:41Z",
+     "stage": "UPDATED",
+     "hypothesis": "successor is issue2119-h20-mixed-ratio-lineage-20261004 (8:1 older:fresh mix from the 17th child); not_closed: other mix ratios, other fresh sources",
+     "because": "successor is the H20 mixed-ratio hour"
+    },
+    {
+     "ts": "2026-10-04T16:09:34Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor named in update"
+    }
+   ],
+   "observation": "The nineteenth hour trained 72081 measured updates and published a child (it is the lineage head). Its text input started at the seventeenth child's cursor: about 75 percent of the 221.4 million text tokens came from the older admitted text not yet read, 25 percent from the fresh admitted text (the hour ran the parent's cursor, not the specified fresh start; this seat ruled it a lineage hour only). The seventeenth child's protected multiple-choice image test read real 0.292, missing 0.282, wrong 0.28 (847 items each), gate D unmet and no image dependence within one item standard error. The same measurement has not been taken on the nineteenth child.",
+   "explanation": "The protected image test runs the frozen gate D evaluator over the full 847-item set under three conditions on the nineteenth child under its own trained template: real image, missing image, wrong image. It is the lineage's capability number for the hourly report and the image controls for the head, not a #1945 attempt and not a cure test. The evaluator records the executed condition per run, so a condition that did not execute cannot be scored as one. The prediction is carried from the seventeenth child's reading because two more hours of the same recipe are not expected to move a signal that sat inside the noise.",
+   "criterion": "the gate D binding env is absent or unsourced, the evaluator does not record the executed image condition, fewer than the full 847-item set is scored in any condition, the pointer changes during the run, or the real-image accuracy lies outside [0.25, 0.33]. Decision consequence: a failure of the first four is repaired as a new file and rerun before any reading; a value outside the interval is reported as measured with real, missing and wrong side by side",
+   "criterion_supported_if": "binding sourced, condition recorded per run, 847 items in each of real/missing/wrong, pointer byte-equal, and real-image accuracy within [0.25, 0.33]",
+   "instrument": "chain_segment_H19_mmmu_v1.sh (derived from chain_segment_H17_mmmu_v1.sh, window opened through gpu_window.sh) via run_gate_d_single_open_holder_v1.py; verdict h6_mmmu_verdict_v1.py (frozen)",
+   "receipts": [
+    "seat record: verdict.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Frozen clause: refuted if gate D env absent, executed condition not recorded, fewer than 847 items in any condition, pointer changed during the run, or real accuracy outside [0.25, 0.33]. Observed (verdict.json d4dde6b7, VALID): real 0.263, missing 0.259, wrong 0.259, 847 items each, each condition recorded as executed, pointer sha before = after (c26b58e0). Side by side as the criterion requires: real minus missing +0.004, real minus wrong +0.004, inside the noise as predicted.",
+   "not_closed": "successor is issue2119-h20-mixed-ratio-lineage-20261004 (8:1 older:fresh mix from the 17th child); not_closed: other mix ratios, other fresh sources",
+   "closing": "cycle complete; successor named in update"
+  },
+  {
+   "id": "issue2119-h19-heldout-nll-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T10:07:22Z",
+   "last_ts": "2026-10-04T12:09:53Z",
+   "events": [
+    {
+     "ts": "2026-10-04T10:07:22Z",
+     "stage": "OBSERVED",
+     "observation": "The H17 child under the template forward scored text 2.128328142716782 and caption 1.6018022907836198 on the frozen held-out set (512 packs). The H19 hour's own hour-result.json records 72081 updates and 295247872 applied positions, child f71a419eaf5e52abb187f47a4af64a0bbc4023c197d293e5fe4695b3436037fa on head bb272f0d. Whether the H19 child keeps improving held-out loss is not yet measured.",
+     "receipt": "seat record: nll-H17-eval.json"
+    },
+    {
+     "ts": "2026-10-04T10:07:22Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Held-out loss is read on the same 512 packs and scorer (child_nll_v11 a5057eab) as every earlier child; the pair is comparable only if the pack-content digest (099ad8b7ef112eb8) and pack count are identical. Recent template hours moved text by about -0.06 per hour and caption by about -0.01 per hour; the nineteenth hour read 221.4 million text tokens, about 75 percent from older admitted text not yet read by any lineage hour and 25 percent from fresh admitted text (the hour ran the parent cursor, not the specified fresh start), so the expectation is the same slow improvement and the prediction is not a fresh-text test."
+    },
+    {
+     "ts": "2026-10-04T10:07:23Z",
+     "stage": "PREDICTED",
+     "refuted_if": "text is not below 2.128328142716782 (the H17 child under the template, receipt seat record: nll-H17-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside",
+     "supported_if": "512 packs scored, digest equal, text below 2.128328142716782 under the template forward (expect 2.088, interval 2.028 to 2.148)",
+     "instrument": "child scorer child_nll_v11.py a5057eab via chain_segment_nll_hour_v3.sh (label H19); threshold read from seat record: nll-H17-eval.json with jq; caption field image_caption.mean_nll read by name from the same receipt"
+    },
+    {
+     "ts": "2026-10-04T10:07:32Z",
+     "stage": "RUNNING",
+     "note": "H19 child held-out NLL under the TEMPLATE forward (scorer a5057eab), identical frozen plan",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T10:22:08Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: nll-H19-eval.json",
+     "note": "run 10:07:32Z-10:19:54Z, rc 0, pointer byte-equal, 512 packs digest 099ad8b7ef112eb8, completion_failures empty"
+    },
+    {
+     "ts": "2026-10-04T10:22:08Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "Frozen clause: 'text is not below 2.128328142716782 (the H17 child under the template, receipt seat record: nll-H17-eval.json field text.mean_nll; equal or worse refutes)'. Observed text mean NLL of the H19 child 3.290476 (receipt seat record: nll-H19-eval.json), +1.162148 worse; 512 packs, pack digest 099ad8b7ef112eb8 equal to the parent receipt's, completion_failures empty. Caption 1.412610 vs 1.601802 rides along (better). Ruled per this seat 52959; cause of the rise unexplained, diagnosis ordered."
+    },
+    {
+     "ts": "2026-10-04T12:09:45Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+     "because": "H19 learned fresh text and forgot older text on matched episodes; next leg must test retention."
+    },
+    {
+     "ts": "2026-10-04T12:09:53Z",
+     "stage": "CLOSED",
+     "because": "successor H20 stated in update"
+    }
+   ],
+   "observation": "The H17 child under the template forward scored text 2.128328142716782 and caption 1.6018022907836198 on the frozen held-out set (512 packs). The H19 hour's own hour-result.json records 72081 updates and 295247872 applied positions, child f71a419eaf5e52abb187f47a4af64a0bbc4023c197d293e5fe4695b3436037fa on head bb272f0d. Whether the H19 child keeps improving held-out loss is not yet measured.",
+   "explanation": "Held-out loss is read on the same 512 packs and scorer (child_nll_v11 a5057eab) as every earlier child; the pair is comparable only if the pack-content digest (099ad8b7ef112eb8) and pack count are identical. Recent template hours moved text by about -0.06 per hour and caption by about -0.01 per hour; the nineteenth hour read 221.4 million text tokens, about 75 percent from older admitted text not yet read by any lineage hour and 25 percent from fresh admitted text (the hour ran the parent cursor, not the specified fresh start), so the expectation is the same slow improvement and the prediction is not a fresh-text test.",
+   "criterion": "text is not below 2.128328142716782 (the H17 child under the template, receipt seat record: nll-H17-eval.json field text.mean_nll; equal or worse refutes), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 512 packs, or its pack digest differs from 099ad8b7ef112eb8 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun before any reading; a comparable refuting value is reported as measured with caption alongside",
+   "criterion_supported_if": "512 packs scored, digest equal, text below 2.128328142716782 under the template forward (expect 2.088, interval 2.028 to 2.148)",
+   "instrument": "child scorer child_nll_v11.py a5057eab via chain_segment_nll_hour_v3.sh (label H19); threshold read from seat record: nll-H17-eval.json with jq; caption field image_caption.mean_nll read by name from the same receipt",
+   "receipts": [
+    "seat record: nll-H19-eval.json"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "Frozen clause: 'text is not below 2.128328142716782 (the H17 child under the template, receipt seat record: nll-H17-eval.json field text.mean_nll; equal or worse refutes)'. Observed text mean NLL of the H19 child 3.290476 (receipt seat record: nll-H19-eval.json), +1.162148 worse; 512 packs, pack digest 099ad8b7ef112eb8 equal to the parent receipt's, completion_failures empty. Caption 1.412610 vs 1.601802 rides along (better). Ruled per this seat 52959; cause of the rise unexplained, diagnosis ordered.",
+   "not_closed": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+   "closing": "successor H20 stated in update"
+  },
+  {
+   "id": "issue2119-h17-episode-nll-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T10:45:17Z",
+   "last_ts": "2026-10-04T12:09:53Z",
+   "events": [
+    {
+     "ts": "2026-10-04T10:45:17Z",
+     "stage": "OBSERVED",
+     "observation": "In the nineteenth hour the training loss stepped from about 0.7 to about 6.3 at the first pack that touched shard 830 (fresh text mean 4.4202 over 17,983 updates, first 100 fresh updates 5.4263; older text mean 1.3819 over 54,099 updates). Optimizer, learning rate and data identity were checked and do not move at that step; 64 of 64 fresh documents match their source ids. Whether the 17th child (the hour's parent) already finds fresh Wikipedia text hard, or the hour itself went unstable, is not measured.",
+     "receipt": "seat record: nll-H19-eval.json"
+    },
+    {
+     "ts": "2026-10-04T10:45:18Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Two readings (this seat 52995): (H) hard distribution plus prior memorization of repeated older text, so the parent sits near 4 or above on fresh text; (I) training instability, so the parent scores fresh text well below the hour's 4.4. The parent model is scored on four sets of 64 document-start episodes of 1,024 tokens through the production reader and the same forward and mask as every held-out score: fresh (the seed-1945 documents), older repeated text (documents), older repeated text inside one giant object, older early-shard text. Only the fresh arm carries the frozen clause. Prior: the first 100 fresh updates ran after 54,099 updates on older text and read 5.4263, the whole region 4.4202; the parent has not trained on fresh text, so I expect between them; probability the fresh mean is below 3.5 is about 0.10."
+    },
+    {
+     "ts": "2026-10-04T10:45:18Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the fresh-arm mean is below 3.5 (supports instability (I), this seat's frozen clause 52995), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 16 packs in any arm, or the pack digest or plan sha differs from the planned one. Decision consequence: below 3.5 the H19 loss rise is attributed to training behaviour and the fresh text stays usable; a failed leg is repaired as a new file and rerun",
+     "supported_if": "all four arms of 16 packs scored, plan sha 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248, and the fresh-arm mean is at or above 3.5 (hard distribution (H)); expect 4.923, interval 3.920 to 5.926. The older arms are reported beside it, never ruled",
+     "instrument": "child scorer child_nll_v12_episodes.py (v11 front matter, episode-plan section) via chain_segment_episode_nll_v1.sh; thresholds from rows-projection.tsv with awk, 3.5 from this seat 52995"
+    },
+    {
+     "ts": "2026-10-04T10:47:31Z",
+     "stage": "RUNNING",
+     "note": "H17 child fresh-vs-older episode NLL under the TEMPLATE forward (scorer v12, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248)",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T10:56:59Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: episode-nll-H17.json",
+     "note": "4 arms x 64 episodes scored, all finite; fresh 7.1969, older_repeat_pass5 2.3660, older_repeat_giant_object 1.0697, older_early_shards 2.5632"
+    },
+    {
+     "ts": "2026-10-04T10:57:18Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Refutation criterion (fresh mean below 3.5, or leg failure, fewer than 16 packs per arm, digest/plan mismatch) was not met: 16 packs per arm scored, plan sha 9a6fd054 as planned, fresh mean 7.197 (64 episodes, 65,536 targets, every episode at least 3.53) is at or above 3.5, so this seat's frozen clause reads hard distribution (H), not instability (I). Older arms: repeat pass5 2.366, giant object 1.070, early shards 2.563; receipt sha af4059309359904 9a... see episode-nll-H17.json. The point forecast was wrong in size: expect 4.923, interval 3.920-5.926, observed 7.197 above the interval. Ruling on the wider question is this seat's."
+    },
+    {
+     "ts": "2026-10-04T12:09:46Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+     "because": "H19 learned fresh text and forgot older text on matched episodes; next leg must test retention."
+    },
+    {
+     "ts": "2026-10-04T12:09:53Z",
+     "stage": "CLOSED",
+     "because": "successor H20 stated in update"
+    }
+   ],
+   "observation": "In the nineteenth hour the training loss stepped from about 0.7 to about 6.3 at the first pack that touched shard 830 (fresh text mean 4.4202 over 17,983 updates, first 100 fresh updates 5.4263; older text mean 1.3819 over 54,099 updates). Optimizer, learning rate and data identity were checked and do not move at that step; 64 of 64 fresh documents match their source ids. Whether the 17th child (the hour's parent) already finds fresh Wikipedia text hard, or the hour itself went unstable, is not measured.",
+   "explanation": "Two readings (this seat 52995): (H) hard distribution plus prior memorization of repeated older text, so the parent sits near 4 or above on fresh text; (I) training instability, so the parent scores fresh text well below the hour's 4.4. The parent model is scored on four sets of 64 document-start episodes of 1,024 tokens through the production reader and the same forward and mask as every held-out score: fresh (the seed-1945 documents), older repeated text (documents), older repeated text inside one giant object, older early-shard text. Only the fresh arm carries the frozen clause. Prior: the first 100 fresh updates ran after 54,099 updates on older text and read 5.4263, the whole region 4.4202; the parent has not trained on fresh text, so I expect between them; probability the fresh mean is below 3.5 is about 0.10.",
+   "criterion": "the fresh-arm mean is below 3.5 (supports instability (I), this seat's frozen clause 52995), or the scoring leg refuses, crashes, closes without its result file, scores fewer than 16 packs in any arm, or the pack digest or plan sha differs from the planned one. Decision consequence: below 3.5 the H19 loss rise is attributed to training behaviour and the fresh text stays usable; a failed leg is repaired as a new file and rerun",
+   "criterion_supported_if": "all four arms of 16 packs scored, plan sha 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248, and the fresh-arm mean is at or above 3.5 (hard distribution (H)); expect 4.923, interval 3.920 to 5.926. The older arms are reported beside it, never ruled",
+   "instrument": "child scorer child_nll_v12_episodes.py (v11 front matter, episode-plan section) via chain_segment_episode_nll_v1.sh; thresholds from rows-projection.tsv with awk, 3.5 from this seat 52995",
+   "receipts": [
+    "seat record: episode-nll-H17.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Refutation criterion (fresh mean below 3.5, or leg failure, fewer than 16 packs per arm, digest/plan mismatch) was not met: 16 packs per arm scored, plan sha 9a6fd054 as planned, fresh mean 7.197 (64 episodes, 65,536 targets, every episode at least 3.53) is at or above 3.5, so this seat's frozen clause reads hard distribution (H), not instability (I). Older arms: repeat pass5 2.366, giant object 1.070, early shards 2.563; receipt sha af4059309359904 9a... see episode-nll-H17.json. The point forecast was wrong in size: expect 4.923, interval 3.920-5.926, observed 7.197 above the interval. Ruling on the wider question is this seat's.",
+   "not_closed": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+   "closing": "successor H20 stated in update"
+  },
+  {
+   "id": "issue2119-h19-episode-nll-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T11:02:40Z",
+   "last_ts": "2026-10-04T12:09:53Z",
+   "events": [
+    {
+     "ts": "2026-10-04T11:02:40Z",
+     "stage": "OBSERVED",
+     "observation": "The 17th child scored 7.196879416704178 on fresh Wikipedia document starts, 2.563157856464386 on older early-shard text, 2.365961544215679 on repeated older text and 1.069719910621643 inside the giant object (64 episodes each, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248). The nineteenth hour trained on that fresh text for 17,983 updates (last 1,000 updates mean 4.5167, mid-document) and on older text (mean 1.3856 over its first 1,000 updates, 1.0488 over its last 1,000), yet held-out text rose 2.128 to 3.290. Which of learning fresh text and forgetting older text the hour did, on the same episodes, is not measured.",
+     "receipt": "seat record: episode-nll-H17.json"
+    },
+    {
+     "ts": "2026-10-04T11:02:40Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "this seat 53060 frozen clause: fresh-arm mean on f71a419e at least 1.0 nat below 7.196879416704178 = the hour learned fresh text; older_early_shards arm at least 0.5 nat above 2.563157856464386 = it forgot older text. Mechanism reading: constant learning rate 1e-3 without clipping made a hard switch from memorised repeats to unseen text; the hour's training loss on fresh text fell to about 4.5167, so I expect the fresh arm to fall a lot, and older early shards (5 passes seen before, none in the hour) to rise as capacity moved. Probabilities: fresh clause about 0.95, older clause about 0.6."
+    },
+    {
+     "ts": "2026-10-04T11:02:40Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the fresh-arm mean is not at least 1.0 below 7.196879416704178 (the hour did not learn fresh text), or the leg refuses, crashes, closes without its result file, scores fewer than 4 arms x 64 finite episodes, or its pack digest differs from 50e1f4a7 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun",
+     "supported_if": "all four arms of 64 finite episodes scored, pack digest 50e1f4a7, fresh mean at least 1.0 below 7.196879416704178 (expect 4.92, interval 3.9 to 5.8); the older_early_shards arm is reported against its own clause (at least 0.5 above 2.563157856464386, expect 3.26, interval 2.6 to 4.2) and ruled beside it; the other two older arms reported, never ruled",
+     "instrument": "child scorer child_nll_v12_episodes.py (sha de4d2931) via chain_segment_episode_nll_h19_v1.sh; parent means from the H17 episode receipt with jq, hour means from rows-projection.tsv with awk, clause from this seat 53060"
+    },
+    {
+     "ts": "2026-10-04T11:03:26Z",
+     "stage": "RUNNING",
+     "note": "H19 child fresh-vs-older episode NLL under the TEMPLATE forward (scorer v12, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248)",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T11:13:03Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: episode-nll-H19.json",
+     "note": "H19 child f71a419e on the same 4x64 episodes: fresh 4.9606, older_early 4.4425, older_repeat_pass5 4.0519, giant object 1.3836; all 4 arms 64/64 finite, pack digest 50e1f4a7 equal to the 17th child's, plan 9a6fd054, pointer equal before/after"
+    },
+    {
+     "ts": "2026-10-04T11:13:03Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Both frozen clauses hold on 4x64 finite episodes with the same pack digest: fresh 4.9606 is 2.236 below 7.1969 (needs 1.0), and older_early_shards 4.4425 is 1.879 above 2.5632 (needs 0.5). Prediction: fresh expect 4.92 inside 3.9 to 5.8 (hit); older_early expect 3.26 outside 2.6 to 4.2, forgetting was larger than predicted (miss, calibration row). Other older arms rose too: pass5 2.366 to 4.052, giant object 1.070 to 1.384."
+    },
+    {
+     "ts": "2026-10-04T12:09:46Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+     "because": "H19 learned fresh text and forgot older text on matched episodes; next leg must test retention."
+    },
+    {
+     "ts": "2026-10-04T12:09:53Z",
+     "stage": "CLOSED",
+     "because": "successor H20 stated in update"
+    }
+   ],
+   "observation": "The 17th child scored 7.196879416704178 on fresh Wikipedia document starts, 2.563157856464386 on older early-shard text, 2.365961544215679 on repeated older text and 1.069719910621643 inside the giant object (64 episodes each, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248). The nineteenth hour trained on that fresh text for 17,983 updates (last 1,000 updates mean 4.5167, mid-document) and on older text (mean 1.3856 over its first 1,000 updates, 1.0488 over its last 1,000), yet held-out text rose 2.128 to 3.290. Which of learning fresh text and forgetting older text the hour did, on the same episodes, is not measured.",
+   "explanation": "this seat 53060 frozen clause: fresh-arm mean on f71a419e at least 1.0 nat below 7.196879416704178 = the hour learned fresh text; older_early_shards arm at least 0.5 nat above 2.563157856464386 = it forgot older text. Mechanism reading: constant learning rate 1e-3 without clipping made a hard switch from memorised repeats to unseen text; the hour's training loss on fresh text fell to about 4.5167, so I expect the fresh arm to fall a lot, and older early shards (5 passes seen before, none in the hour) to rise as capacity moved. Probabilities: fresh clause about 0.95, older clause about 0.6.",
+   "criterion": "the fresh-arm mean is not at least 1.0 below 7.196879416704178 (the hour did not learn fresh text), or the leg refuses, crashes, closes without its result file, scores fewer than 4 arms x 64 finite episodes, or its pack digest differs from 50e1f4a7 (the pair is not comparable). Decision consequence: a non-comparable pair is repaired as a new file and rerun",
+   "criterion_supported_if": "all four arms of 64 finite episodes scored, pack digest 50e1f4a7, fresh mean at least 1.0 below 7.196879416704178 (expect 4.92, interval 3.9 to 5.8); the older_early_shards arm is reported against its own clause (at least 0.5 above 2.563157856464386, expect 3.26, interval 2.6 to 4.2) and ruled beside it; the other two older arms reported, never ruled",
+   "instrument": "child scorer child_nll_v12_episodes.py (sha de4d2931) via chain_segment_episode_nll_h19_v1.sh; parent means from the H17 episode receipt with jq, hour means from rows-projection.tsv with awk, clause from this seat 53060",
+   "receipts": [
+    "seat record: episode-nll-H19.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Both frozen clauses hold on 4x64 finite episodes with the same pack digest: fresh 4.9606 is 2.236 below 7.1969 (needs 1.0), and older_early_shards 4.4425 is 1.879 above 2.5632 (needs 0.5). Prediction: fresh expect 4.92 inside 3.9 to 5.8 (hit); older_early expect 3.26 outside 2.6 to 4.2, forgetting was larger than predicted (miss, calibration row). Other older arms rose too: pass5 2.366 to 4.052, giant object 1.070 to 1.384.",
+   "not_closed": "Successor: H20 mixed hour (8 older : 1 fresh, hard cap 85,000 updates, packet v3 the counterpart seat F1-F3 PASS), testing whether interleaving older text keeps older_early at or below 3.063 while fresh drops at least 1.0 below 7.197. Not closed: the cause of the 7.2 fresh parent loss; short-article density is an unproven candidate.",
+   "closing": "successor H20 stated in update"
+  },
+  {
+   "id": "issue2119-h20-mixed-ratio-lineage-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T12:43:21Z",
+   "last_ts": "2026-10-04T16:09:35Z",
+   "events": [
+    {
+     "ts": "2026-10-04T12:43:21Z",
+     "stage": "OBSERVED",
+     "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The nineteenth hour trained on fresh text only for 17,983 updates after 54,099 older-repeat updates and the same two arms read fresh 4.9606 and older early 4.4425: it learned fresh text and forgot older text. Whether an 8 older : 1 fresh interleave (about 10 percent fresh) keeps older text while still learning fresh text, from the 17th child at constant 1e-3 without clipping, is not measured.",
+     "receipt": "seat record: h20-prediction-20261004.txt"
+    },
+    {
+     "ts": "2026-10-04T12:43:21Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading: the fresh-only H19 hour gave older text no gradient and a hard switch to unseen text at constant learning rate 1e-3 with no clipping; interleaving 8 older shards to 1 fresh shard keeps older text in the gradient (first-pass 54,100 older updates, then 10,923 second-pass at the expected stop) while 7,058 fresh updates reach the fresh arm. Scenario arithmetic (uncalibrated, no probability): older_early rises by about 0.3 to 0.74 nat (2.86 to 3.30); the retention threshold 3.063157856464386 lies inside that range, so the outcome is not predictable from the packet. Packet v3 sha 2ecf4587 (the counterpart seat PASS 53225)."
+    },
+    {
+     "ts": "2026-10-04T12:43:22Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the H20 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status (hour ended by the 85,000 cap before 3,600 s), never a verdict. No outcome advances the head",
+     "supported_if": "valid same-plan score of the H20 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast about 4.9, interval 4.4 to 5.6; older_early forecast about 3.08, range 2.86 to 3.30; pass5 about 2.9; giant about 1.2). A PASS is a research result; this seat rules the head",
+     "instrument": "chain_segment_H20_v1.sh (derived from chain_segment_H19_v1.sh, window through gpu_window.sh) via h20_dispatch_v1.sh; child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930"
+    },
+    {
+     "ts": "2026-10-04T12:44:40Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T15:07:48Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-04T15:31:21Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "frozen criterion: PASS needs fresh <= 6.197 AND older_early <= 3.063; observed fresh 5.1907 (passes), older_early 3.3312 > 3.0632 -> RETENTION_FAIL; head stays the 17th child"
+    },
+    {
+     "ts": "2026-10-04T16:09:34Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor issue2119-h21-ratio16-lineage-20261004: 16:1 older:fresh from the 17th child, same cap/hour/LR, same frozen clause. Not closed: lower LR on fresh rows; per-row loss weighting; replay of older early shards specifically.",
+     "because": "RETENTION_FAIL at 8:1 (older_early 3.3312 > 3.0632) with fresh passing"
+    },
+    {
+     "ts": "2026-10-04T16:09:35Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor named in update"
+    }
+   ],
+   "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The nineteenth hour trained on fresh text only for 17,983 updates after 54,099 older-repeat updates and the same two arms read fresh 4.9606 and older early 4.4425: it learned fresh text and forgot older text. Whether an 8 older : 1 fresh interleave (about 10 percent fresh) keeps older text while still learning fresh text, from the 17th child at constant 1e-3 without clipping, is not measured.",
+   "explanation": "Mechanism reading: the fresh-only H19 hour gave older text no gradient and a hard switch to unseen text at constant learning rate 1e-3 with no clipping; interleaving 8 older shards to 1 fresh shard keeps older text in the gradient (first-pass 54,100 older updates, then 10,923 second-pass at the expected stop) while 7,058 fresh updates reach the fresh arm. Scenario arithmetic (uncalibrated, no probability): older_early rises by about 0.3 to 0.74 nat (2.86 to 3.30); the retention threshold 3.063157856464386 lies inside that range, so the outcome is not predictable from the packet. Packet v3 sha 2ecf4587 (the counterpart seat PASS 53225).",
+   "criterion": "the H20 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status (hour ended by the 85,000 cap before 3,600 s), never a verdict. No outcome advances the head",
+   "criterion_supported_if": "valid same-plan score of the H20 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast about 4.9, interval 4.4 to 5.6; older_early forecast about 3.08, range 2.86 to 3.30; pass5 about 2.9; giant about 1.2). A PASS is a research result; this seat rules the head",
+   "instrument": "chain_segment_H20_v1.sh (derived from chain_segment_H19_v1.sh, window through gpu_window.sh) via h20_dispatch_v1.sh; child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "frozen criterion: PASS needs fresh <= 6.197 AND older_early <= 3.063; observed fresh 5.1907 (passes), older_early 3.3312 > 3.0632 -> RETENTION_FAIL; head stays the 17th child",
+   "not_closed": "Successor issue2119-h21-ratio16-lineage-20261004: 16:1 older:fresh from the 17th child, same cap/hour/LR, same frozen clause. Not closed: lower LR on fresh rows; per-row loss weighting; replay of older early shards specifically.",
+   "closing": "cycle complete; successor named in update"
+  },
+  {
+   "id": "issue2119-h20-episode-nll-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T15:11:04Z",
+   "last_ts": "2026-10-04T16:09:35Z",
+   "events": [
+    {
+     "ts": "2026-10-04T15:11:04Z",
+     "stage": "OBSERVED",
+     "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The nineteenth hour trained on fresh text only for 17,983 updates after 54,099 older-repeat updates and the same two arms read fresh 4.9606 and older early 4.4425: it learned fresh text and forgot older text. Whether an 8 older : 1 fresh interleave (about 10 percent fresh) keeps older text while still learning fresh text, from the 17th child at constant 1e-3 without clipping, is not measured.",
+     "receipt": "seat record: h20-prediction-20261004.txt"
+    },
+    {
+     "ts": "2026-10-04T15:11:04Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading: the fresh-only H19 hour gave older text no gradient and a hard switch to unseen text at constant learning rate 1e-3 with no clipping; interleaving 8 older shards to 1 fresh shard keeps older text in the gradient (first-pass 54,100 older updates, then 10,923 second-pass at the expected stop) while 7,058 fresh updates reach the fresh arm. Scenario arithmetic (uncalibrated, no probability): older_early rises by about 0.3 to 0.74 nat (2.86 to 3.30); the retention threshold 3.063157856464386 lies inside that range, so the outcome is not predictable from the packet. Packet v3 sha 2ecf4587 (the counterpart seat PASS 53225)."
+    },
+    {
+     "ts": "2026-10-04T15:11:05Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the H20 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status (hour ended by the 85,000 cap before 3,600 s), never a verdict. No outcome advances the head",
+     "supported_if": "valid same-plan score of the H20 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast about 4.9, interval 4.4 to 5.6; older_early forecast about 3.08, range 2.86 to 3.30; pass5 about 2.9; giant about 1.2). A PASS is a research result; this seat rules the head",
+     "instrument": "chain_segment_episode_nll_h20_v1.sh (derived from chain_segment_episode_nll_h19_v1.sh by derive_episode_chain_h20.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930"
+    },
+    {
+     "ts": "2026-10-04T15:20:09Z",
+     "stage": "RUNNING",
+     "note": "H20 child fresh-vs-older episode NLL under the TEMPLATE forward (scorer v12, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248)",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T15:45:52Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: episode-nll-H20.json",
+     "note": "H20 child 72211062 scored on plan 9a6fd054, scorer v12, 4x64 finite; fresh 5.190701216459274, older_early 3.3312475979328156; receipt sha256 c8422b8e; chain rc=0 15:20:08Z-15:30:09Z, pointer before=after"
+    },
+    {
+     "ts": "2026-10-04T15:45:52Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "Frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails on a valid score: fresh 5.190701216459274 passes, older_early 3.3312475979328156 exceeds the threshold by 0.268 nat (RETENTION_FAIL), receipt episode-nll-H20.json c8422b8e; this seat 53537 and 53562"
+    },
+    {
+     "ts": "2026-10-04T16:09:34Z",
+     "stage": "UPDATED",
+     "hypothesis": "Successor scoring is the H21 child on plan 9a6fd054, scorer v12, same frozen bars.",
+     "because": "score ruled REFUTED, same verdict as the hour"
+    },
+    {
+     "ts": "2026-10-04T16:09:35Z",
+     "stage": "CLOSED",
+     "because": "cycle complete; successor named in update"
+    }
+   ],
+   "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The nineteenth hour trained on fresh text only for 17,983 updates after 54,099 older-repeat updates and the same two arms read fresh 4.9606 and older early 4.4425: it learned fresh text and forgot older text. Whether an 8 older : 1 fresh interleave (about 10 percent fresh) keeps older text while still learning fresh text, from the 17th child at constant 1e-3 without clipping, is not measured.",
+   "explanation": "Mechanism reading: the fresh-only H19 hour gave older text no gradient and a hard switch to unseen text at constant learning rate 1e-3 with no clipping; interleaving 8 older shards to 1 fresh shard keeps older text in the gradient (first-pass 54,100 older updates, then 10,923 second-pass at the expected stop) while 7,058 fresh updates reach the fresh arm. Scenario arithmetic (uncalibrated, no probability): older_early rises by about 0.3 to 0.74 nat (2.86 to 3.30); the retention threshold 3.063157856464386 lies inside that range, so the outcome is not predictable from the packet. Packet v3 sha 2ecf4587 (the counterpart seat PASS 53225).",
+   "criterion": "the H20 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status (hour ended by the 85,000 cap before 3,600 s), never a verdict. No outcome advances the head",
+   "criterion_supported_if": "valid same-plan score of the H20 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast about 4.9, interval 4.4 to 5.6; older_early forecast about 3.08, range 2.86 to 3.30; pass5 about 2.9; giant about 1.2). A PASS is a research result; this seat rules the head",
+   "instrument": "chain_segment_episode_nll_h20_v1.sh (derived from chain_segment_episode_nll_h19_v1.sh by derive_episode_chain_h20.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930",
+   "receipts": [
+    "seat record: episode-nll-H20.json"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "Frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails on a valid score: fresh 5.190701216459274 passes, older_early 3.3312475979328156 exceeds the threshold by 0.268 nat (RETENTION_FAIL), receipt episode-nll-H20.json c8422b8e; this seat 53537 and 53562",
+   "not_closed": "Successor scoring is the H21 child on plan 9a6fd054, scorer v12, same frozen bars.",
+   "closing": "cycle complete; successor named in update"
+  },
+  {
+   "id": "issue2119-h21-ratio16-lineage-20261004",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-04T15:37:41Z",
+   "last_ts": "2026-10-04T19:09:42Z",
+   "events": [
+    {
+     "ts": "2026-10-04T15:37:41Z",
+     "stage": "OBSERVED",
+     "observation": "The 20th hour (8 older : 1 fresh interleave from the 17th child, constant 1e-3, no clipping, 73,100 updates) scored fresh 5.190701216459274 and older early-shard text 3.3312475979328156 on plan 9a6fd054 with scorer v12 (parent fresh 7.196879416704178, older early 2.563157856464386). Fresh learning was real (gain about 2.0 nat) and retention failed: older early rose about 0.77 nat against an allowed 0.5, ruled REFUTED (RETENTION_FAIL). Whether a smaller fresh share (16 older : 1 fresh, about 3,700 fresh updates against 7,058) keeps older early within 0.5 nat while fresh still gains 1.0 nat is not measured.",
+     "receipt": "seat record: h21-prediction-20261004.txt"
+    },
+    {
+     "ts": "2026-10-04T15:37:42Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading: the older-text rise tracks the number of fresh-text gradient updates at constant learning rate 1e-3 without clipping. A 16:1 interleave cuts fresh updates to about 0.53 of the 20th hour's; if forgetting scales with fresh updates and fresh gain is concave in them, the rise falls to about 0.41 nat (inside the 0.5 allowance) while fresh gain stays near 1.5 nat (above the 1.0 requirement). Scenario arithmetic (uncalibrated): the retention threshold 3.063157856464386 lies inside the older_early interval 2.80 to 3.20, so the outcome is not predictable from the packet."
+    },
+    {
+     "ts": "2026-10-04T15:37:42Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the H21 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status, never a verdict. No outcome advances the head",
+     "supported_if": "valid same-plan score of the H21 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast 5.70, interval 5.20 to 6.20; older_early forecast 3.00, interval 2.80 to 3.20). A PASS is a research result; this seat rules the head",
+     "instrument": "chain_segment_H21_v1.sh (derived from chain_segment_H20_v1.sh, window through gpu_window.sh) via h21_dispatch_v1.sh; child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930; H20 reference episode-nll-H20.json c8422b8e"
+    },
+    {
+     "ts": "2026-10-04T16:19:08Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T18:42:35Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-04T19:03:38Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "this seat 53963: frozen clause refutes if fresh mean > 6.196879416704178 OR older_early_shards mean > 3.063157856464386; H21 child 6e0017e8 scored fresh 6.23729795217514 (above by 0.04042), older_early 2.539796955883503 (retention held); RETENTION PASSED, FRESH FAILED. Prediction older_early 3.00 [2.80,3.20] missed low; fresh 5.70 [5.20,6.20] missed high. Not closed: the ratio between 16:1 (fresh 0.04 over its band) and 8:1 (H20 retention fail). Head stays 161e9b2b; child kept as lineage evidence. Receipt episode-nll-H21.json d7fc5905"
+    },
+    {
+     "ts": "2026-10-04T19:03:54Z",
+     "stage": "UPDATED",
+     "hypothesis": "NOT CLOSED: the fresh-to-older ratio between 16:1 and 8:1 at constant lr 1e-3. 16:1 held retention (older_early 2.5398 vs parent 2.5632) but missed the fresh gain by 0.04 nat (fresh 6.2373, needs <= 6.1969); 8:1 (H20) gained fresh 2.0 nat but failed retention (older_early +0.768). Head stays 161e9b2b; the H21 child 6e0017e8 is kept as lineage evidence. No successor hour is registered; the files 6-10 admission slot comes first.",
+     "because": "head stays at 161e9b2b (no advance on a refuted clause); next leg is the protected files 6-10 admission, not a lineage hour"
+    },
+    {
+     "ts": "2026-10-04T19:09:42Z",
+     "stage": "CLOSED",
+     "because": "ruled REFUTED and updated; successor is the post-admission lineage hour"
+    }
+   ],
+   "observation": "The 20th hour (8 older : 1 fresh interleave from the 17th child, constant 1e-3, no clipping, 73,100 updates) scored fresh 5.190701216459274 and older early-shard text 3.3312475979328156 on plan 9a6fd054 with scorer v12 (parent fresh 7.196879416704178, older early 2.563157856464386). Fresh learning was real (gain about 2.0 nat) and retention failed: older early rose about 0.77 nat against an allowed 0.5, ruled REFUTED (RETENTION_FAIL). Whether a smaller fresh share (16 older : 1 fresh, about 3,700 fresh updates against 7,058) keeps older early within 0.5 nat while fresh still gains 1.0 nat is not measured.",
+   "explanation": "Mechanism reading: the older-text rise tracks the number of fresh-text gradient updates at constant learning rate 1e-3 without clipping. A 16:1 interleave cuts fresh updates to about 0.53 of the 20th hour's; if forgetting scales with fresh updates and fresh gain is concave in them, the rise falls to about 0.41 nat (inside the 0.5 allowance) while fresh gain stays near 1.5 nat (above the 1.0 requirement). Scenario arithmetic (uncalibrated): the retention threshold 3.063157856464386 lies inside the older_early interval 2.80 to 3.20, so the outcome is not predictable from the packet.",
+   "criterion": "the H21 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong; CAP_STOP is a leg status, never a verdict. No outcome advances the head",
+   "criterion_supported_if": "valid same-plan score of the H21 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast 5.70, interval 5.20 to 6.20; older_early forecast 3.00, interval 2.80 to 3.20). A PASS is a research result; this seat rules the head",
+   "instrument": "chain_segment_H21_v1.sh (derived from chain_segment_H20_v1.sh, window through gpu_window.sh) via h21_dispatch_v1.sh; child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930; H20 reference episode-nll-H20.json c8422b8e",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "this seat 53963: frozen clause refutes if fresh mean > 6.196879416704178 OR older_early_shards mean > 3.063157856464386; H21 child 6e0017e8 scored fresh 6.23729795217514 (above by 0.04042), older_early 2.539796955883503 (retention held); RETENTION PASSED, FRESH FAILED. Prediction older_early 3.00 [2.80,3.20] missed low; fresh 5.70 [5.20,6.20] missed high. Not closed: the ratio between 16:1 (fresh 0.04 over its band) and 8:1 (H20 retention fail). Head stays 161e9b2b; child kept as lineage evidence. Receipt episode-nll-H21.json d7fc5905",
+   "not_closed": "NOT CLOSED: the fresh-to-older ratio between 16:1 and 8:1 at constant lr 1e-3. 16:1 held retention (older_early 2.5398 vs parent 2.5632) but missed the fresh gain by 0.04 nat (fresh 6.2373, needs <= 6.1969); 8:1 (H20) gained fresh 2.0 nat but failed retention (older_early +0.768). Head stays 161e9b2b; the H21 child 6e0017e8 is kept as lineage evidence. No successor hour is registered; the files 6-10 admission slot comes first.",
+   "closing": "ruled REFUTED and updated; successor is the post-admission lineage hour"
+  },
+  {
+   "id": "issue2119-h21-episode-nll-20261004",
+   "stage": "UPDATED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED"
+   ],
+   "first_ts": "2026-10-04T18:51:58Z",
+   "last_ts": "2026-10-04T19:09:42Z",
+   "events": [
+    {
+     "ts": "2026-10-04T18:51:58Z",
+     "stage": "OBSERVED",
+     "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The twenty-first hour trained 78,400 updates from the 17th child on a 16 older : 1 fresh interleave (hour result e22e80d4, child 6e0017e8, training custody PASS per a seat). Whether 16:1 keeps older text within 0.5 nat of the parent while fresh text still gains 1.0 nat or more is not measured.",
+     "receipt": "seat record: h21-prediction-20261004.txt"
+    },
+    {
+     "ts": "2026-10-04T18:51:58Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading from the registered training row: the older-text rise tracks the number of fresh-text gradient updates at constant learning rate 1e-3 without clipping; 16:1 cuts fresh updates to about 0.53 of the 20th hour's. The retention threshold 3.063157856464386 lies inside the older_early interval 2.80 to 3.20, so the outcome is not predictable from the packet."
+    },
+    {
+     "ts": "2026-10-04T18:51:58Z",
+     "stage": "PREDICTED",
+     "refuted_if": "the H21 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong. No outcome advances the head",
+     "supported_if": "valid same-plan score of the H21 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast 5.70, interval 5.20 to 6.20; older_early forecast 3.00, interval 2.80 to 3.20). A PASS is a research result; this seat rules the head",
+     "instrument": "chain_segment_episode_nll_h21_v1.sh (derived from chain_segment_episode_nll_h20_v1.sh by derive_episode_chain_h21.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930"
+    },
+    {
+     "ts": "2026-10-04T18:52:26Z",
+     "stage": "RUNNING",
+     "note": "H21 child fresh-vs-older episode NLL under the TEMPLATE forward (scorer v12, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248)",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-04T19:02:26Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: episode-nll-H21.json",
+     "note": "run 18:52:26Z-19:01:48Z, 4 arms x 64 episodes, pack digest 50e1f4a7, pointer byte-equal 161e9b2b; fresh 6.237298 older_early 2.539797 vs frozen clause fresh<=6.196879 older_early<=3.063158 (no ruling by me)"
+    },
+    {
+     "ts": "2026-10-04T19:03:38Z",
+     "stage": "RULED",
+     "verdict": "REFUTED",
+     "because": "this seat 53963: frozen clause refutes if fresh mean > 6.196879416704178 OR older_early_shards mean > 3.063157856464386; H21 child 6e0017e8 scored fresh 6.23729795217514 (above by 0.04042), older_early 2.539796955883503 (retention held); RETENTION PASSED, FRESH FAILED. Prediction older_early 3.00 [2.80,3.20] missed low; fresh 5.70 [5.20,6.20] missed high. Not closed: the ratio between 16:1 (fresh 0.04 over its band) and 8:1 (H20 retention fail). Head stays 161e9b2b; child kept as lineage evidence. Receipt episode-nll-H21.json d7fc5905"
+    },
+    {
+     "ts": "2026-10-04T19:09:42Z",
+     "stage": "UPDATED",
+     "hypothesis": "Not closed: ratios between 16:1 and 8:1; fresh-text admission (files 6-10) as the fresh-score lever. Successor: next lineage hour after admission.",
+     "because": "H21 REFUTED on fresh 6.237 vs 6.197; older early 2.540 far under 3.063"
+    }
+   ],
+   "observation": "The 17th child scored fresh 7.196879416704178, older early-shard text 2.563157856464386, repeated older text 2.365961544215679 and giant-object 1.069719910621643 (4 arms x 64 episodes, plan 9a6fd054, scorer v12). The twenty-first hour trained 78,400 updates from the 17th child on a 16 older : 1 fresh interleave (hour result e22e80d4, child 6e0017e8, training custody PASS per a seat). Whether 16:1 keeps older text within 0.5 nat of the parent while fresh text still gains 1.0 nat or more is not measured.",
+   "explanation": "Mechanism reading from the registered training row: the older-text rise tracks the number of fresh-text gradient updates at constant learning rate 1e-3 without clipping; 16:1 cuts fresh updates to about 0.53 of the 20th hour's. The retention threshold 3.063157856464386 lies inside the older_early interval 2.80 to 3.20, so the outcome is not predictable from the packet.",
+   "criterion": "the H21 child scored on the same plan has fresh mean above 6.196879416704178 (fresh improvement under 1.0 nat from the parent 7.196879416704178) OR older_early_shards mean above 3.063157856464386 (increase over the parent 2.563157856464386 above 0.5 nat); i.e. the frozen clause fresh <= 6.196879416704178 AND older_early <= 3.063157856464386 fails. Dispositions: PASS / RETENTION_FAIL / FRESH_FAIL / BOTH_FAIL on a valid score; INVALID (no release) if the identity, plan, pack digest 50e1f4a7, scorer, child binding or 4 x 64 finite output is wrong. No outcome advances the head",
+   "criterion_supported_if": "valid same-plan score of the H21 child with fresh <= 6.196879416704178 and older_early <= 3.063157856464386 (fresh forecast 5.70, interval 5.20 to 6.20; older_early forecast 3.00, interval 2.80 to 3.20). A PASS is a research result; this seat rules the head",
+   "instrument": "chain_segment_episode_nll_h21_v1.sh (derived from chain_segment_episode_nll_h20_v1.sh by derive_episode_chain_h21.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on the bound plan; baselines from episode-nll-H17.json af405930",
+   "receipts": [
+    "seat record: episode-nll-H21.json"
+   ],
+   "verdict": "REFUTED",
+   "ruling": "this seat 53963: frozen clause refutes if fresh mean > 6.196879416704178 OR older_early_shards mean > 3.063157856464386; H21 child 6e0017e8 scored fresh 6.23729795217514 (above by 0.04042), older_early 2.539796955883503 (retention held); RETENTION PASSED, FRESH FAILED. Prediction older_early 3.00 [2.80,3.20] missed low; fresh 5.70 [5.20,6.20] missed high. Not closed: the ratio between 16:1 (fresh 0.04 over its band) and 8:1 (H20 retention fail). Head stays 161e9b2b; child kept as lineage evidence. Receipt episode-nll-H21.json d7fc5905",
+   "not_closed": "Not closed: ratios between 16:1 and 8:1; fresh-text admission (files 6-10) as the fresh-score lever. Successor: next lineage hour after admission."
   }
  ],
  "registry": [
