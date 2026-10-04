@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from src.ember.infrastructure.tools.corpus_connectors.receipt import (
     L3_STATEMENT,
@@ -48,7 +49,7 @@ _RECEIPT_FIELDS = frozenset(
         "license",
     }
 )
-_RECEIPT_OPTIONAL_FIELDS = frozenset({"retry_attempts", "retry_events"})
+_RECEIPT_OPTIONAL_FIELDS = frozenset({"retry_attempts", "retry_events", "synthetic"})
 _FILE_FIELDS = frozenset({"path", "bytes", "sha256"})
 _ALLOWED_LICENSE_PREFIXES = (
     "PD",
@@ -62,15 +63,105 @@ _ALLOWED_LICENSE_PREFIXES = (
 )
 _ALLOWED_DOMAINS = frozenset("ABCDEFGHIJK")
 _PROVENANCE_PREFIX = "human-provenance:"
-_FORBIDDEN_PROVENANCE_MARKERS = (
-    "model-generated",
-    "model generated",
-    "llm-generated",
+_SYNTHETIC_PROVENANCE_PREFIX = "synthetic-provenance:"
+# Model-derived SELECTION (classifier, ranking, filtering) stays forbidden for every row.
+_FORBIDDEN_SELECTION_MARKERS = (
     "classifier",
     "machine-ranked",
     "machine filtered",
+)
+# Model-derived BYTES refuse unless the receipt carries a complete synthetic block (operator
+# rule 2026-10-03: AI-generated or mixed data is admitted only as an existing, published
+# third-party dataset, marked and traceable; nothing we generate ourselves is ever admitted).
+_MODEL_DERIVED_MARKERS = (
+    "model-generated",
+    "model generated",
+    "llm-generated",
     "synthetic",
 )
+_SYNTHETIC_FIELDS = frozenset(
+    {
+        "synthetic",
+        "origin_class",
+        "dataset_id",
+        "dataset_revision",
+        "dataset_provenance_ref",
+        "dataset_content_sha256",
+        "license_ref",
+        "ai_share",
+        "terms_permit_training",
+        "self_generated",
+    }
+)
+# Known AI origin and unknown origin are separate classes in every count.
+_ORIGIN_CLASSES = frozenset({"known_ai", "mixed", "unknown"})
+
+
+def _synthetic_block_complete(block: object) -> bool:
+    """True only for a fully marked third-party block; partial or self-generated refuses."""
+    if not isinstance(block, dict) or set(block) != _SYNTHETIC_FIELDS:
+        return False
+    share = block["ai_share"]
+    return (
+        block["synthetic"] is True
+        and block["self_generated"] is False
+        and block["terms_permit_training"] is True
+        and block["origin_class"] in _ORIGIN_CLASSES
+        and all(_is_token(block[key]) for key in ("dataset_id", "dataset_revision"))
+        and all(_is_public_https(block[key]) for key in ("dataset_provenance_ref", "license_ref"))
+        and block["license_ref"].upper() not in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
+        and (share is None if block["origin_class"] == "unknown" else (
+            isinstance(share, (int, float)) and not isinstance(share, bool) and 0 < share <= 1
+        ))
+    )
+
+
+# A marked row must not carry the human-only L3 attestation ("no external model authored any
+# token"), which would be false for it. It carries this disclosure instead: the bytes were
+# fetched, not produced by us, and a named published dataset's model authored some of them.
+_AI_L3_PREFIX = "AI-generated: "
+
+
+def _ai_l3_statement(block: dict[str, Any]) -> str:
+    return f"{_AI_L3_PREFIX}{block.get('dataset_id')}@{block.get('dataset_revision')}"
+
+
+def _bound_to_published_source(receipt: dict[str, Any], block: dict[str, Any]) -> bool:
+    """Bind the block to the receipt's own fetch: the fetched URL names the dataset, the fetched
+    revision is the dataset revision, the provenance/licence references are public https, and the
+    declared content digest is well formed (the caller checks it equals the fetched bytes).
+    self_generated=false is a declaration; this binding and the admission review are the check."""
+    canonical_url = receipt.get("canonical_url")
+    return (
+        _is_public_https(canonical_url)
+        and _is_token(block["dataset_id"])
+        and block["dataset_id"] in canonical_url
+        and receipt.get("revision") == block["dataset_revision"]
+        and _is_public_https(block["dataset_provenance_ref"])
+        and _is_public_https(block["license_ref"])
+        and _is_sha256(block["dataset_content_sha256"])
+    )
+
+
+def _is_token(value: object) -> bool:
+    """A non-empty identifier with no whitespace anywhere (a blank or padded id names nothing)."""
+    return isinstance(value, str) and bool(value) and not any(c.isspace() for c in value)
+
+
+def _is_public_https(value: object) -> bool:
+    """An https URL with a real dotted host, no credentials and no whitespace."""
+    if not isinstance(value, str) or not value or any(c.isspace() for c in value):
+        return False
+    parsed = urlsplit(value)
+    host = parsed.hostname or ""
+    return (
+        parsed.scheme == "https"
+        and "." in host
+        and not host.startswith(".")
+        and not host.endswith(".")
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -214,9 +305,29 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             str(receipt_payload.get(key, ""))
             for key in ("source", "canonical_url", "license_evidence", "notes")
         ).lower()
+        synthetic_block = receipt_payload.get("synthetic")
+        if synthetic_block is None:
+            provenance_ok = (
+                isinstance(notes, str)
+                and notes.startswith(_PROVENANCE_PREFIX)
+                and not any(marker in provenance_text for marker in _MODEL_DERIVED_MARKERS)
+            )
+        else:
+            provenance_ok = (
+                _synthetic_block_complete(synthetic_block)
+                and isinstance(notes, str)
+                and notes.startswith(_SYNTHETIC_PROVENANCE_PREFIX)
+                and _bound_to_published_source(receipt_payload, synthetic_block)
+                and synthetic_block["dataset_content_sha256"] == raw_sha
+            )
+        expected_l3 = (
+            L3_STATEMENT
+            if synthetic_block is None or not isinstance(synthetic_block, dict)
+            else _ai_l3_statement(synthetic_block)
+        )
         if (
             receipt_payload.get("source_id") != source_id
-            or receipt_payload.get("l3_statement") != L3_STATEMENT
+            or receipt_payload.get("l3_statement") != expected_l3
             or not isinstance(receipt_payload.get("canonical_url"), str)
             or not receipt_payload["canonical_url"]
             or not isinstance(receipt_payload.get("license_evidence"), str)
@@ -226,9 +337,8 @@ def load_authorized_source_inventory(*, manifest_path: Path, custody_root: Path)
             or not isinstance(receipt_payload.get("revision"), (str, type(None)))
             or not isinstance(license_value, str)
             or not license_value
-            or not isinstance(notes, str)
-            or not notes.startswith(_PROVENANCE_PREFIX)
-            or any(marker in provenance_text for marker in _FORBIDDEN_PROVENANCE_MARKERS)
+            or not provenance_ok
+            or any(marker in provenance_text for marker in _FORBIDDEN_SELECTION_MARKERS)
             or normalized_license in {"UNSPECIFIED", "UNVERIFIED", "UNKNOWN"}
             or "-NC" in normalized_license
             or "-ND" in normalized_license
