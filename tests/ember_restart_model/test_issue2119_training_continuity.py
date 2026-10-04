@@ -616,6 +616,91 @@ class SelectedContinuationHeadAdvanceTests(unittest.TestCase):
         self.assertNotEqual(first_published_at, second_published_at)
 
 
+def _run_hour_source() -> str:
+    """Source text of cia_hour.run_hour (from its def to the next top-level def)."""
+    text = (MODULE_DIR / 'cia_hour.py').read_text(encoding='utf-8')
+    start = text.index('\ndef run_hour(')
+    end = text.find('\ndef ', start + 1)
+    return text[start:end if end != -1 else len(text)]
+
+
+def _hour_moves_selected_head(source: str) -> bool:
+    """True when the hour source can move the SELECTED head (an advance or seed call)."""
+    return ('advance_selected_continuation_head(' in source
+            or 'seed_selected_continuation_head(' in source)
+
+
+class CandidateContinuationHeadTests(unittest.TestCase):
+    """Operator ruling (mail 53920): an hour's own publish writes a CANDIDATE pointer only and never moves the
+    selected head (the H20 and H21 hours each did, before their frozen score)."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+        self._helper = SelectedContinuationHeadAdvanceTests('test_stale_parent_promotion_refuses_and_leaves_pointer_untouched')
+        self._helper.root = self.root
+        self._helper.receipts_root = self.receipts_root
+
+    def _publish(self, name, parent):
+        c = self._helper._published_checkpoint(name)
+        cand = head_pointer.publish_candidate_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c['published_checkpoint_root'],
+            hour_result_path=c['hour_result_path'], hour_result_sha256=c['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=parent, now=1000.0)
+        return c, cand
+
+    def test_candidate_publish_never_creates_or_moves_the_selected_head(self):
+        c1 = self._helper._published_checkpoint('hour-selected')
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=500.0)
+        selected_before = head_pointer.pointer_path(self.receipts_root).read_bytes()
+        c2, cand = self._publish('hour-candidate', c1['manifest_sha256'])
+        self.assertEqual(head_pointer.pointer_path(self.receipts_root).read_bytes(), selected_before)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+        loaded = head_pointer.load_candidate_continuation_head(head_pointer.candidate_path(self.receipts_root))
+        self.assertEqual(loaded, cand)
+        self.assertEqual(loaded['candidate_checkpoint_manifest_sha256'], c2['manifest_sha256'])
+        self.assertEqual(loaded['parent_checkpoint_manifest_sha256'], c1['manifest_sha256'])
+
+    def test_candidate_publish_with_no_selected_head_leaves_it_absent(self):
+        self._publish('hour-first', head_pointer.GENESIS_SENTINEL)
+        self.assertFalse(head_pointer.pointer_path(self.receipts_root).exists())
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), head_pointer.GENESIS_SENTINEL)
+
+    def test_candidate_file_is_never_readable_as_a_selected_head(self):
+        self._publish('hour-cross', head_pointer.GENESIS_SENTINEL)
+        with self.assertRaises(ValueError):
+            head_pointer.load_selected_continuation_head(head_pointer.candidate_path(self.receipts_root))
+
+    def test_refused_candidate_publish_writes_nothing(self):
+        c = self._helper._published_checkpoint('hour-bad')
+        with self.assertRaisesRegex(ValueError, 'hour_result_sha256 must be a sha256 hex string'):
+            head_pointer.publish_candidate_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c['published_checkpoint_root'],
+                hour_result_path=c['hour_result_path'], hour_result_sha256='short',
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1.0)
+        self.assertFalse(head_pointer.candidate_path(self.receipts_root).exists())
+        self.assertEqual(list(self.receipts_root.glob('.*.tmp')) if self.receipts_root.is_dir() else [], [])
+
+    def test_run_hour_source_cannot_move_the_selected_head(self):
+        source = _run_hour_source()
+        self.assertFalse(_hour_moves_selected_head(source))
+        self.assertIn('publish_candidate_continuation_head(', source)
+
+    def test_deliberate_red_an_hour_that_advances_the_selected_head_is_caught(self):
+        """The class check is load-bearing: restoring the old advance call into run_hour's source is detected."""
+        regressed = _run_hour_source().replace('publish_candidate_continuation_head(', 'advance_selected_continuation_head(')
+        self.assertTrue(_hour_moves_selected_head(regressed))
+
+
 class SelectedContinuationHeadSeedTests(unittest.TestCase):
     """Issue #2119 section 5 REDO (operator catch, 2026-09-28): seed_selected_continuation_head,
     the one-time bootstrap for a live lineage that already has trained history predating this
