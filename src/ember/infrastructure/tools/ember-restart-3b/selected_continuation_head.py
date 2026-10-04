@@ -46,6 +46,15 @@ from typing import Any
 
 SCHEMA = 'ember-selected-continuation-head-v1'
 POINTER_FILENAME = 'selected-continuation-head.json'
+# An hour's own publish writes ONLY this file (operator ruling, mail 53920, after H20 and H21 each moved the selected
+# head before its frozen score): the selected head moves only through advance_selected_continuation_head,
+# called by the operator-ruled promotion step, never from inside an hour.
+CANDIDATE_SCHEMA = 'ember-candidate-continuation-head-v1'
+CANDIDATE_FILENAME = 'candidate-continuation-head.json'
+_CANDIDATE_FIELDS = {
+    'schema', 'candidate_checkpoint_manifest_sha256', 'parent_checkpoint_manifest_sha256',
+    'hour_result_path', 'hour_result_sha256', 'published_at',
+}
 # Matches update_current_subject.py's and training_continuity_ledger.py's own GENESIS_SENTINEL
 # convention: no checkpoint has ever advanced this pointer.
 GENESIS_SENTINEL = 'GENESIS'
@@ -182,6 +191,60 @@ def advance_selected_continuation_head(
     return candidate
 
 
+def candidate_path(receipts_root: Path) -> Path:
+    return Path(receipts_root) / CANDIDATE_FILENAME
+
+
+def load_candidate_continuation_head(path: Path) -> dict[str, Any]:
+    """Closed-schema read of the candidate pointer; the selected-head loader never accepts it
+    (different schema and field set), so a candidate can never be read as a selected head."""
+    payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(payload, dict) or set(payload) != _CANDIDATE_FIELDS:
+        raise ValueError('candidate continuation head fields are not closed')
+    if payload.get('schema') != CANDIDATE_SCHEMA:
+        raise ValueError(f'candidate continuation head schema must be {CANDIDATE_SCHEMA!r}')
+    for key in ('candidate_checkpoint_manifest_sha256', 'hour_result_sha256'):
+        if not isinstance(payload.get(key), str) or len(payload[key]) != 64:
+            raise ValueError(f'candidate continuation head {key} must be a sha256 hex string')
+    parent = payload.get('parent_checkpoint_manifest_sha256')
+    if not isinstance(parent, str) or not (parent == GENESIS_SENTINEL or len(parent) == 64):
+        raise ValueError('candidate continuation head parent must be a sha256 hex string or GENESIS')
+    if not isinstance(payload.get('hour_result_path'), str) or not payload['hour_result_path']:
+        raise ValueError('candidate continuation head hour_result_path must be non-empty')
+    if not isinstance(payload.get('published_at'), (int, float)) or isinstance(payload.get('published_at'), bool):
+        raise ValueError('candidate continuation head published_at must be numeric')
+    return payload
+
+
+def publish_candidate_continuation_head(
+    *, repo_root: Path, receipts_root: Path, published_checkpoint_root: Path,
+    hour_result_path: Path, hour_result_sha256: str,
+    expected_parent_checkpoint_manifest_sha256: str, now: float | None = None,
+) -> dict[str, Any]:
+    """After VERIFIED PUBLICATION, record the hour's child as a CANDIDATE only. Never reads or
+    writes selected-continuation-head.json: the selected head is moved solely by
+    advance_selected_continuation_head under an operator ruling on the frozen score.
+
+    Mechanism 1 (re-derive the digest from the published checkpoint's bytes) and mechanism 3
+    (staged, round-trip-validated, atomic replace) are the same as the advance path. There is no
+    compare-and-swap against the candidate file: a newer hour overwrites an older candidate, and
+    the declared parent is recorded so the promotion step can CAS against the selected head."""
+    repo_root = Path(repo_root)
+    receipts_root = Path(receipts_root)
+    checkpoint_artifacts, durable_io = _import_siblings(repo_root)
+    receipt = checkpoint_artifacts.published_checkpoint_receipt(Path(published_checkpoint_root))
+    candidate = {
+        'schema': CANDIDATE_SCHEMA,
+        'candidate_checkpoint_manifest_sha256': receipt['checkpoint_manifest_sha256'],
+        'parent_checkpoint_manifest_sha256': expected_parent_checkpoint_manifest_sha256,
+        'hour_result_path': str(hour_result_path),
+        'hour_result_sha256': hour_result_sha256,
+        'published_at': time.time() if now is None else now,
+    }
+    _write_pointer_atomically(candidate_path(receipts_root), candidate, durable_io, loader=load_candidate_continuation_head)
+    return candidate
+
+
 def seed_selected_continuation_head(
     *, repo_root: Path, receipts_root: Path, published_checkpoint_root: Path,
     hour_result_path: Path, hour_result_sha256: str, reason: str, now: float | None = None,
@@ -238,7 +301,7 @@ def seed_selected_continuation_head(
     return candidate
 
 
-def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], durable_io) -> None:
+def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], durable_io, loader=None) -> None:
     """Mechanism 3, shared by advance and seed: pre-write round-trip validation, then the one
     disk mutation. The temp file sits beside the target (same directory, same volume) so
     atomic_replace_durable's MoveFileExW/os.replace boundary is the only concurrency primitive in
@@ -252,7 +315,7 @@ def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], dura
             handle.flush()
             os.fsync(handle.fileno())
         # Raises and leaves the target untouched if the candidate would fail validation.
-        load_selected_continuation_head(staged_path)
+        (loader or load_selected_continuation_head)(staged_path)
         durable_io.atomic_replace_durable(staged_path, target_path)
     finally:
         try:

@@ -1016,14 +1016,15 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         claim='Checkpoint probe only' if probe else 'A1 learning comparison: training and snapshots only; learning, '
               'evaluation and throughput are scored separately' if learning else 'Observed hour and checkpoint mechanics; remaining qualification gates are separate'))
     runner.tail_stamp(custody, 'hour_result')
-    # Issue #2119 section 5: "the retained descendant becomes the actual next continuation
-    # source" -- advance the durable selected-continuation-head pointer, atomically, after this
-    # verified publication (the trained-child checkpoint above has already reopened and had its
-    # digest re-derived from disk by checkpoint_publisher; this call re-derives it a second time,
-    # independently, inside advance_selected_continuation_head itself, matching update_current_
-    # subject.py's own "never trust the caller" discipline for mechanism 1).
+    # Issue #2119 section 5, amended (operator ruling, mail 53920, after the H20 and H21 hours each moved the selected
+    # head before their frozen score): the hour records its child as a CANDIDATE only
+    # (candidate-continuation-head.json). The selected-continuation-head.json pointer is moved solely
+    # by advance_selected_continuation_head in the operator-ruled promotion step, never from here.
+    # The 'pointer_cas' tail stamp keeps its name and position: it now marks the candidate publish.
+    # The trained-child checkpoint above has already reopened and had its digest re-derived from disk
+    # by checkpoint_publisher; publish_candidate_continuation_head re-derives it a second time.
     #
-    # Scope, deliberately narrow: only a governed CONTINUE_TRAINING hour advances the pointer.
+    # Scope, deliberately narrow: only a governed CONTINUE_TRAINING hour publishes a candidate.
     # probe (a ~2-measured-update sanity check, claim='Checkpoint probe only') and learning (an
     # A1 comparison, claim='...learning, evaluation and throughput are scored separately') both
     # publish a real trained-child through this same function but neither is the lineage's
@@ -1037,7 +1038,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         import training_continuity_ledger
         expected_parent = (chain['manifest_sha256'] if chain is not None
                            else selected_continuation_head.GENESIS_SENTINEL)
-        selected_continuation_head.advance_selected_continuation_head(
+        selected_continuation_head.publish_candidate_continuation_head(
             repo_root=runner.ROOT,
             receipts_root=training_continuity_ledger.ledger_root(custody.parent),
             published_checkpoint_root=custody / 'trained-child',
