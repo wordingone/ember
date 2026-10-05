@@ -1250,3 +1250,184 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
 
     fs::remove_dir_all(root).unwrap();
 }
+
+// #1581 S8 (receipt identity/producing authority) and A6 (concurrent read, killed import child) lifecycle tests.
+
+fn empty_catalog_export() -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "schema_version": "ember-data-catalog-manifest-v1",
+        "records": [],
+        "edges": []
+    }))
+    .unwrap()
+}
+
+fn first_receipt_mut(manifest: &mut serde_json::Value) -> &mut serde_json::Value {
+    manifest["records"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|record| record["kind"] == "receipt")
+        .unwrap()
+}
+
+// S8: identity-less, foreign-identity and producing-authority receipts refuse with no partial catalog state.
+#[test]
+fn receipt_identity_and_producing_authority_refuse_without_partial_catalog_state() {
+    for case in [
+        "identity_less_empty_id",
+        "identity_not_own_digest",
+        "producing_authority_absent",
+        "producing_authority_unknown",
+        "producing_authority_empty",
+    ] {
+        let root = temp_root(&format!("catalog-s8-{case}"));
+        let db = root.join("ember-lab.sqlite3");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&complete_manifest_bytes()).unwrap();
+        let receipt = first_receipt_mut(&mut manifest);
+        match case {
+            "identity_less_empty_id" => receipt["id"] = json!(""),
+            "identity_not_own_digest" => receipt["id"] = json!(format!("sha256:{}", "7".repeat(64))),
+            "producing_authority_absent" => {
+                receipt.as_object_mut().unwrap().remove("producing_authority");
+            }
+            "producing_authority_unknown" => receipt["producing_authority"] = json!("borrowed_reference"),
+            "producing_authority_empty" => receipt["producing_authority"] = json!(""),
+            _ => unreachable!(),
+        }
+        let daemon = Daemon::open(&db).unwrap();
+        let error = daemon
+            .import_data_catalog_manifest(&serde_json::to_vec(&manifest).unwrap())
+            .unwrap_err();
+        assert!(
+            matches!(error, EmberLabError::InvalidDataCatalog { .. }),
+            "S8 case {case} was admitted: {error:?}"
+        );
+        assert_eq!(
+            daemon.export_data_catalog_manifest().unwrap(),
+            empty_catalog_export(),
+            "S8 case {case} committed partial catalog state"
+        );
+        drop(daemon);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+// A6: a reader on a second connection during an import sees the empty or the complete catalog, never a partial one.
+#[test]
+fn concurrent_reader_sees_empty_or_complete_catalog_never_partial() {
+    // The daemon holds an exclusive writer lock, so a concurrent reader is the read-only status path
+    // (read_data_catalog_status opens SQLite read-only), the same path the status CLI uses.
+    let root = temp_root("catalog-a6-concurrent-read");
+    let db = root.join("ember-lab.sqlite3");
+    let writer = Daemon::open(&db).unwrap();
+    let empty_status = ember_lab::read_data_catalog_status(&db).unwrap();
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let reader = {
+        let db = db.clone();
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            let mut seen = Vec::<serde_json::Value>::new();
+            let mut reads = 0u64;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) || reads == 0 {
+                let status = ember_lab::read_data_catalog_status(&db).unwrap();
+                if !seen.contains(&status) {
+                    seen.push(status);
+                }
+                reads += 1;
+            }
+            (reads, seen)
+        })
+    };
+    writer.import_data_catalog_manifest(&complete_manifest_bytes()).unwrap();
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let (reads, seen) = reader.join().expect("reader thread panicked");
+    let complete_status = ember_lab::read_data_catalog_status(&db).unwrap();
+    assert_ne!(empty_status, complete_status, "status must distinguish an empty from a complete catalog");
+    assert!(reads > 0);
+    for status in &seen {
+        assert!(
+            *status == empty_status || *status == complete_status,
+            "reader observed a partial catalog in {reads} reads: {status}"
+        );
+    }
+    drop(writer);
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn cli_import(db: &Path, manifest: &Path, receipt: &Path, export: &Path) -> std::process::Command {
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_ember-lab"));
+    command.args([
+        "data-catalog-import",
+        "--db",
+        db.to_str().unwrap(),
+        "--manifest",
+        manifest.to_str().unwrap(),
+        "--receipt",
+        receipt.to_str().unwrap(),
+        "--export",
+        export.to_str().unwrap(),
+        "--source-commit",
+        "1234567890abcdef1234567890abcdef12345678",
+    ]);
+    command
+}
+
+// A6: a real child process killed mid-import leaves the catalog empty or complete; reopen works; the import is
+// retryable. Orphan rule: a receipt or export file on disk without the committed import is an orphan, and it must
+// not survive (the retry must succeed, never refuse forever on a preexisting receipt).
+#[test]
+fn killed_import_child_leaves_catalog_whole_reopenable_retryable_and_orphan_free() {
+    let manifest_bytes = complete_manifest_bytes();
+    let complete_export = {
+        let other = temp_root("catalog-a6-kill-reference");
+        let d = Daemon::open(&other.join("ember-lab.sqlite3")).unwrap();
+        d.import_data_catalog_manifest(&manifest_bytes).unwrap();
+        let bytes = d.export_data_catalog_manifest().unwrap();
+        drop(d);
+        fs::remove_dir_all(other).unwrap();
+        bytes
+    };
+    // kill points spread across the child's life; the earliest land before the transaction, later ones inside or after
+    for delay_ms in [0u64, 2, 5, 10, 20, 40, 80] {
+        let root = temp_root(&format!("catalog-a6-kill-{delay_ms}"));
+        let db = root.join("ember-lab.sqlite3");
+        let manifest = root.join("manifest.json");
+        let receipt = root.join("receipt.json");
+        let export = root.join("export.json");
+        fs::write(&manifest, &manifest_bytes).unwrap();
+        drop(Daemon::open(&db).unwrap());
+        let mut child = cli_import(&db, &manifest, &receipt, &export).spawn().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        let _ = child.kill(); // may already have exited; either outcome is a valid sample
+        let _ = child.wait();
+
+        let reopened = Daemon::open(&db).expect("catalog must reopen after a killed import");
+        let seen = reopened.export_data_catalog_manifest().unwrap();
+        let committed = seen == complete_export;
+        assert!(committed || seen == empty_catalog_export(), "kill at {delay_ms} ms left a partial catalog");
+        drop(reopened);
+
+        // retry with the same paths: must end committed, whatever the kill left behind
+        let retry = cli_import(&db, &manifest, &receipt, &export).output().unwrap();
+        let after = Daemon::open(&db).unwrap();
+        assert_eq!(
+            after.export_data_catalog_manifest().unwrap(),
+            complete_export,
+            "kill at {delay_ms} ms: retry did not reach the committed catalog (retry rc {:?}, stderr {})",
+            retry.status.code(),
+            String::from_utf8_lossy(&retry.stderr)
+        );
+        if !committed {
+            assert!(
+                retry.status.success(),
+                "kill at {delay_ms} ms left an orphan that blocks the retry: {}",
+                String::from_utf8_lossy(&retry.stderr)
+            );
+        }
+        assert!(receipt.exists() && export.exists(), "kill at {delay_ms} ms: no receipt/export after a committed retry");
+        drop(after);
+        fs::remove_dir_all(root).unwrap();
+    }
+}

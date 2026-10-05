@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command as ProcessCommand, Stdio};
@@ -3056,27 +3056,31 @@ fn import_data_catalog_with_receipt(
     export: &Path,
     source_commit: &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
-    let mut receipt_file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(receipt)?;
-    let mut export_file = match OpenOptions::new().write(true).create_new(true).open(export) {
-        Ok(file) => file,
-        Err(error) => {
-            drop(receipt_file);
-            let _ = std::fs::remove_file(receipt);
-            return Err(error.into());
+    // A committed receipt or export is never overwritten.
+    for path in [receipt, export] {
+        if path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} already exists", path.display()),
+            )
+            .into());
         }
-    };
+    }
+    // The writer lock serializes importers, so the fixed `.uncommitted` sidecars belong to this process.
+    // A killed import leaves only sidecars (never the final names), and the retry truncates and reuses them.
+    let daemon = Daemon::open(db)?;
+    let receipt_pending = uncommitted_sidecar(receipt);
+    let export_pending = uncommitted_sidecar(export);
     let attempt = (|| -> Result<Value, Box<dyn std::error::Error>> {
         let input_bytes = std::fs::read(manifest)?;
         let input_manifest_raw_sha256 = format!("{:x}", Sha256::digest(&input_bytes));
-        let daemon = Daemon::open(db)?;
         let outcome = daemon.import_data_catalog_manifest(&input_bytes)?;
         let canonical_export = daemon.export_data_catalog_manifest()?;
+        let mut export_file = File::create(&export_pending)?;
         export_file.write_all(&canonical_export)?;
         export_file.sync_all()?;
-        let canonical_export_sha256 = hash_file(export)?;
+        drop(export_file);
+        let canonical_export_sha256 = hash_file(&export_pending)?;
         let binary_sha256 = hash_file(&std::env::current_exe()?)?;
         let mut payload = json!({
             "schema_version": "ember-data-catalog-import-receipt-v1",
@@ -3095,17 +3099,26 @@ fn import_data_catalog_with_receipt(
             .as_object_mut()
             .expect("catalog import receipt is an object")
             .insert("self_sha256".into(), Value::String(self_sha256));
+        let mut receipt_file = File::create(&receipt_pending)?;
         receipt_file.write_all(&serde_json::to_vec_pretty(&payload)?)?;
         receipt_file.sync_all()?;
+        drop(receipt_file);
+        // Publish by hard link (fails if the final name exists): export first, receipt last, so a receipt
+        // on disk always means a complete import.
+        std::fs::hard_link(&export_pending, export)?;
+        std::fs::hard_link(&receipt_pending, receipt)?;
         Ok(payload)
     })();
-    if attempt.is_err() {
-        drop(receipt_file);
-        drop(export_file);
-        let _ = std::fs::remove_file(receipt);
-        let _ = std::fs::remove_file(export);
-    }
+    let _ = std::fs::remove_file(&receipt_pending);
+    let _ = std::fs::remove_file(&export_pending);
+    drop(daemon);
     attempt
+}
+
+fn uncommitted_sidecar(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".uncommitted");
+    path.with_file_name(name)
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
