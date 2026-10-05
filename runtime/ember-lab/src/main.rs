@@ -3058,6 +3058,35 @@ fn import_data_catalog_with_receipt(
 ) -> Result<Value, Box<dyn std::error::Error>> {
     // A committed receipt is never overwritten. An existing export is accepted only if it is byte-equal to this
     // import's canonical export (a run killed between the two publish links); any other export refuses below.
+    // The receipt, the export and their `.uncommitted` sidecars must be four distinct files, and none of them the
+    // manifest or the database; an alias would let one publish step overwrite or stand in for another.
+    let outputs = [
+        receipt.to_path_buf(),
+        export.to_path_buf(),
+        uncommitted_sidecar(receipt),
+        uncommitted_sidecar(export),
+        manifest.to_path_buf(),
+        db.to_path_buf(),
+    ];
+    let keys = outputs
+        .iter()
+        .map(|path| path_identity(path))
+        .collect::<Result<Vec<_>, _>>()?;
+    for i in 0..keys.len() {
+        for j in (i + 1)..keys.len() {
+            if keys[i] == keys[j] {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "{} and {} name the same file",
+                        outputs[i].display(),
+                        outputs[j].display()
+                    ),
+                )
+                .into());
+            }
+        }
+    }
     if receipt.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -3068,6 +3097,19 @@ fn import_data_catalog_with_receipt(
     // The writer lock serializes importers, so the fixed `.uncommitted` sidecars belong to this process.
     // A killed import leaves only sidecars (never the final names), and the retry truncates and reuses them.
     let daemon = Daemon::open(db)?;
+    // Refuse before any catalog mutation: an existing export can only be a prior run of this import that was killed
+    // between the publish links, and that run's import is already committed, so the export equals the catalog's
+    // current canonical export. Anything else is someone else's file.
+    if export.exists() && std::fs::read(export)? != daemon.export_data_catalog_manifest()? {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "{} already exists and is not this catalog's current export",
+                export.display()
+            ),
+        )
+        .into());
+    }
     let receipt_pending = uncommitted_sidecar(receipt);
     let export_pending = uncommitted_sidecar(export);
     let attempt = (|| -> Result<Value, Box<dyn std::error::Error>> {
@@ -3136,6 +3178,21 @@ fn test_pause_point(var: &str) {
         let _ = std::fs::write(&marker, b"paused");
         std::thread::sleep(std::time::Duration::from_secs(120));
     }
+}
+
+// A comparable identity for a path that may not exist yet: the canonical parent directory plus the file name,
+// case-folded on Windows where file names are case-insensitive.
+fn path_identity(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let absolute = std::path::absolute(path)?;
+    let parent = absolute.parent().unwrap_or(Path::new("."));
+    let parent = std::fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
+    let name = absolute.file_name().unwrap_or_default();
+    let identity = parent.join(name).to_string_lossy().into_owned();
+    Ok(if cfg!(windows) {
+        identity.to_lowercase()
+    } else {
+        identity
+    })
 }
 
 fn uncommitted_sidecar(path: &Path) -> PathBuf {

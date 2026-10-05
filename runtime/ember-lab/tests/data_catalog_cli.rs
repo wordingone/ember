@@ -462,3 +462,104 @@ fn invalid_manifest_removes_reserved_receipt_without_reporting_pass() {
     assert!(!receipt.exists());
     assert!(!export.exists());
 }
+
+// The receipt, the export and their `.uncommitted` sidecars must be distinct files: an alias would let one
+// publish step stand in for another and leave a final receipt from a failed publication.
+fn aliased_outputs_refuse(receipt_name: &str, export_name: &str) {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join(receipt_name);
+    let export = root.join(export_name);
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
+            "--source-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "aliased outputs must refuse");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("name the same file"),
+        "refusal must name the alias: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!receipt.exists(), "an aliased import left a final receipt");
+    assert!(!export.exists(), "an aliased import left a final export");
+    assert!(!db.exists(), "an aliased import touched the catalog");
+}
+
+#[test]
+fn receipt_and_export_naming_the_same_file_refuse_before_any_write() {
+    aliased_outputs_refuse("common.json", "common.json");
+}
+
+#[test]
+fn receipt_naming_the_export_sidecar_refuses_before_any_write() {
+    aliased_outputs_refuse("export.json.uncommitted", "export.json");
+}
+
+// Equivalent spellings of one path still collide: a relative receipt against an absolute export, `./` and `..`
+// segments, mixed slashes and (on Windows, where names are case-insensitive) different case.
+#[test]
+fn equivalent_spellings_of_one_output_refuse_before_any_write() {
+    let root = sandbox();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+    let absolute_export = root.join("common.json");
+    let mut spellings = vec![
+        "./common.json".to_string(),
+        "sub/../common.json".to_string(),
+    ];
+    if cfg!(windows) {
+        // Backslash separators and case-insensitive names are Windows path semantics.
+        spellings.push(r"sub\..\common.json".to_string());
+        spellings.push("COMMON.json".to_string());
+    }
+    for receipt in spellings {
+        let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+            .current_dir(&root)
+            .args([
+                "data-catalog-import",
+                "--db",
+                db.to_str().unwrap(),
+                "--manifest",
+                manifest.to_str().unwrap(),
+                "--receipt",
+                &receipt,
+                "--export",
+                absolute_export.to_str().unwrap(),
+                "--source-commit",
+                "1234567890abcdef1234567890abcdef12345678",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "{receipt} aliases the export and must refuse"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("name the same file"),
+            "{receipt}: refusal must name the alias: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !absolute_export.exists(),
+            "{receipt}: a final receipt or export was left"
+        );
+        assert!(!db.exists(), "{receipt}: the catalog was touched");
+    }
+}
