@@ -1288,11 +1288,18 @@ fn receipt_identity_and_producing_authority_refuse_without_partial_catalog_state
         let receipt = first_receipt_mut(&mut manifest);
         match case {
             "identity_less_empty_id" => receipt["id"] = json!(""),
-            "identity_not_own_digest" => receipt["id"] = json!(format!("sha256:{}", "7".repeat(64))),
-            "producing_authority_absent" => {
-                receipt.as_object_mut().unwrap().remove("producing_authority");
+            "identity_not_own_digest" => {
+                receipt["id"] = json!(format!("sha256:{}", "7".repeat(64)))
             }
-            "producing_authority_unknown" => receipt["producing_authority"] = json!("borrowed_reference"),
+            "producing_authority_absent" => {
+                receipt
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("producing_authority");
+            }
+            "producing_authority_unknown" => {
+                receipt["producing_authority"] = json!("borrowed_reference")
+            }
             "producing_authority_empty" => receipt["producing_authority"] = json!(""),
             _ => unreachable!(),
         }
@@ -1340,11 +1347,16 @@ fn concurrent_reader_sees_empty_or_complete_catalog_never_partial() {
             (reads, seen)
         })
     };
-    writer.import_data_catalog_manifest(&complete_manifest_bytes()).unwrap();
+    writer
+        .import_data_catalog_manifest(&complete_manifest_bytes())
+        .unwrap();
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let (reads, seen) = reader.join().expect("reader thread panicked");
     let complete_status = ember_lab::read_data_catalog_status(&db).unwrap();
-    assert_ne!(empty_status, complete_status, "status must distinguish an empty from a complete catalog");
+    assert_ne!(
+        empty_status, complete_status,
+        "status must distinguish an empty from a complete catalog"
+    );
     assert!(reads > 0);
     for status in &seen {
         assert!(
@@ -1398,7 +1410,9 @@ fn killed_import_child_leaves_catalog_whole_reopenable_retryable_and_orphan_free
         let export = root.join("export.json");
         fs::write(&manifest, &manifest_bytes).unwrap();
         drop(Daemon::open(&db).unwrap());
-        let mut child = cli_import(&db, &manifest, &receipt, &export).spawn().unwrap();
+        let mut child = cli_import(&db, &manifest, &receipt, &export)
+            .spawn()
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(delay_ms));
         let _ = child.kill(); // may already have exited; either outcome is a valid sample
         let _ = child.wait();
@@ -1406,11 +1420,16 @@ fn killed_import_child_leaves_catalog_whole_reopenable_retryable_and_orphan_free
         let reopened = Daemon::open(&db).expect("catalog must reopen after a killed import");
         let seen = reopened.export_data_catalog_manifest().unwrap();
         let committed = seen == complete_export;
-        assert!(committed || seen == empty_catalog_export(), "kill at {delay_ms} ms left a partial catalog");
+        assert!(
+            committed || seen == empty_catalog_export(),
+            "kill at {delay_ms} ms left a partial catalog"
+        );
         drop(reopened);
 
         // retry with the same paths: must end committed, whatever the kill left behind
-        let retry = cli_import(&db, &manifest, &receipt, &export).output().unwrap();
+        let retry = cli_import(&db, &manifest, &receipt, &export)
+            .output()
+            .unwrap();
         let after = Daemon::open(&db).unwrap();
         assert_eq!(
             after.export_data_catalog_manifest().unwrap(),
@@ -1426,7 +1445,10 @@ fn killed_import_child_leaves_catalog_whole_reopenable_retryable_and_orphan_free
                 String::from_utf8_lossy(&retry.stderr)
             );
         }
-        assert!(receipt.exists() && export.exists(), "kill at {delay_ms} ms: no receipt/export after a committed retry");
+        assert!(
+            receipt.exists() && export.exists(),
+            "kill at {delay_ms} ms: no receipt/export after a committed retry"
+        );
         drop(after);
         fs::remove_dir_all(root).unwrap();
     }
