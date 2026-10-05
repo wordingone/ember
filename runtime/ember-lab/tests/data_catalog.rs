@@ -1453,3 +1453,178 @@ fn killed_import_child_leaves_catalog_whole_reopenable_retryable_and_orphan_free
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+// A6/S8, deterministic: the child pauses after the catalog transaction and before publication; it is killed exactly
+// there. An incomplete import must leave neither a final receipt nor a final export, and the retry must publish both.
+#[test]
+fn import_killed_after_commit_before_publish_leaves_no_final_receipt_or_export() {
+    let manifest_bytes = complete_manifest_bytes();
+    let root = temp_root("catalog-a6-kill-at-publish");
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
+    let marker = root.join("paused.marker");
+    fs::write(&manifest, &manifest_bytes).unwrap();
+    drop(Daemon::open(&db).unwrap());
+
+    let mut child = cli_import(&db, &manifest, &receipt, &export)
+        .env("EMBER_LAB_TEST_PAUSE_AFTER_IMPORT", &marker)
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !marker.exists() {
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("import exited ({status:?}) before reaching the pause point");
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "pause point not reached in 60 s"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    child.kill().expect("kill the paused import");
+    let status = child.wait().expect("wait for the killed import");
+    assert!(
+        !status.success(),
+        "the killed import must not report success: {status:?}"
+    );
+
+    assert!(
+        !receipt.exists(),
+        "an incomplete import left a final receipt ({} bytes)",
+        fs::metadata(&receipt).map(|m| m.len()).unwrap_or(0)
+    );
+    assert!(!export.exists(), "an incomplete import left a final export");
+
+    let retry = cli_import(&db, &manifest, &receipt, &export)
+        .output()
+        .unwrap();
+    assert!(
+        retry.status.success(),
+        "retry after the kill must succeed: {}",
+        String::from_utf8_lossy(&retry.stderr)
+    );
+    assert!(
+        receipt.exists() && export.exists(),
+        "retry did not publish receipt and export"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+// Spawn the import paused at `var`; return the killed child's exit status once it is killed at that point.
+fn kill_import_at(
+    var: &str,
+    root: &Path,
+    db: &Path,
+    manifest: &Path,
+    receipt: &Path,
+    export: &Path,
+) -> std::process::ExitStatus {
+    let marker = root.join(format!("{var}.marker"));
+    let mut child = cli_import(db, manifest, receipt, export)
+        .env(var, &marker)
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !marker.exists() {
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("import exited ({status:?}) before reaching {var}");
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{var} not reached in 60 s"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    child.kill().expect("kill the paused import");
+    let status = child.wait().expect("wait for the killed import");
+    assert!(
+        !status.success(),
+        "the killed import must not report success: {status:?}"
+    );
+    status
+}
+
+// A6/S8, deterministic: killed between the export link and the receipt link. The final export exists without a
+// receipt; the same-path retry recognises its own byte-equal export and publishes the receipt.
+#[test]
+fn import_killed_between_publish_links_is_finished_by_the_retry() {
+    let root = temp_root("catalog-a6-kill-between-links");
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
+    fs::write(&manifest, complete_manifest_bytes()).unwrap();
+    drop(Daemon::open(&db).unwrap());
+
+    let status = kill_import_at(
+        "EMBER_LAB_TEST_PAUSE_BETWEEN_LINKS",
+        &root,
+        &db,
+        &manifest,
+        &receipt,
+        &export,
+    );
+    let listing: Vec<String> = fs::read_dir(&root)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    eprintln!("killed between links: status {status:?}; files {listing:?}");
+    assert!(export.exists(), "the export link ran before the kill");
+    assert!(
+        !receipt.exists(),
+        "no receipt may exist before the receipt link"
+    );
+    let committed = Daemon::open(&db)
+        .unwrap()
+        .export_data_catalog_manifest()
+        .unwrap();
+    assert_eq!(
+        fs::read(&export).unwrap(),
+        committed,
+        "the published export is the committed catalog"
+    );
+
+    let retry = cli_import(&db, &manifest, &receipt, &export)
+        .output()
+        .unwrap();
+    assert!(
+        retry.status.success(),
+        "retry must finish publication: {}",
+        String::from_utf8_lossy(&retry.stderr)
+    );
+    assert!(receipt.exists(), "retry published the receipt");
+    assert_eq!(
+        fs::read(&export).unwrap(),
+        committed,
+        "retry left the export unchanged"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+// Red for the restart path: a pre-existing export that is NOT this import's export still refuses, untouched, and no
+// receipt is written.
+#[test]
+fn mismatched_preexisting_export_refuses_and_is_not_overwritten() {
+    let root = temp_root("catalog-a6-foreign-export");
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
+    fs::write(&manifest, complete_manifest_bytes()).unwrap();
+    fs::write(&export, b"not this import's export").unwrap();
+    drop(Daemon::open(&db).unwrap());
+
+    let run = cli_import(&db, &manifest, &receipt, &export)
+        .output()
+        .unwrap();
+    assert!(!run.status.success(), "a foreign export must refuse");
+    assert_eq!(
+        fs::read(&export).unwrap(),
+        b"not this import's export",
+        "the foreign export was overwritten"
+    );
+    assert!(!receipt.exists(), "a refused import wrote a receipt");
+    fs::remove_dir_all(root).unwrap();
+}

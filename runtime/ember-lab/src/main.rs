@@ -3056,15 +3056,14 @@ fn import_data_catalog_with_receipt(
     export: &Path,
     source_commit: &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
-    // A committed receipt or export is never overwritten.
-    for path in [receipt, export] {
-        if path.exists() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                format!("{} already exists", path.display()),
-            )
-            .into());
-        }
+    // A committed receipt is never overwritten. An existing export is accepted only if it is byte-equal to this
+    // import's canonical export (a run killed between the two publish links); any other export refuses below.
+    if receipt.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("{} already exists", receipt.display()),
+        )
+        .into());
     }
     // The writer lock serializes importers, so the fixed `.uncommitted` sidecars belong to this process.
     // A killed import leaves only sidecars (never the final names), and the retry truncates and reuses them.
@@ -3075,6 +3074,7 @@ fn import_data_catalog_with_receipt(
         let input_bytes = std::fs::read(manifest)?;
         let input_manifest_raw_sha256 = format!("{:x}", Sha256::digest(&input_bytes));
         let outcome = daemon.import_data_catalog_manifest(&input_bytes)?;
+        test_pause_point("EMBER_LAB_TEST_PAUSE_AFTER_IMPORT");
         let canonical_export = daemon.export_data_catalog_manifest()?;
         let mut export_file = File::create(&export_pending)?;
         export_file.write_all(&canonical_export)?;
@@ -3105,7 +3105,21 @@ fn import_data_catalog_with_receipt(
         drop(receipt_file);
         // Publish by hard link (fails if the final name exists): export first, receipt last, so a receipt
         // on disk always means a complete import.
-        std::fs::hard_link(&export_pending, export)?;
+        if export.exists() {
+            if std::fs::read(export)? != canonical_export {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    format!(
+                        "{} already exists and differs from this import's export",
+                        export.display()
+                    ),
+                )
+                .into());
+            }
+        } else {
+            std::fs::hard_link(&export_pending, export)?;
+        }
+        test_pause_point("EMBER_LAB_TEST_PAUSE_BETWEEN_LINKS");
         std::fs::hard_link(&receipt_pending, receipt)?;
         Ok(payload)
     })();
@@ -3113,6 +3127,15 @@ fn import_data_catalog_with_receipt(
     let _ = std::fs::remove_file(&export_pending);
     drop(daemon);
     attempt
+}
+
+// Test-only synchronization point: when the named variable is set, write a marker at that path and wait (bounded),
+// so a test can kill the import at an exact point. Inert when the variable is unset.
+fn test_pause_point(var: &str) {
+    if let Some(marker) = std::env::var_os(var) {
+        let _ = std::fs::write(&marker, b"paused");
+        std::thread::sleep(std::time::Duration::from_secs(120));
+    }
 }
 
 fn uncommitted_sidecar(path: &Path) -> PathBuf {
