@@ -10,6 +10,22 @@ mechanism_erasure=forbidden
 
 # Continuity
 
+## Dated training and checkpoint status
+
+**Training status, owner-reported at 2026-10-06 11:19 AM Los Angeles time:** H31 dispatch was reported at 11:06:33 AM and the GPU-window marker at 11:07:33 AM. PID 59084 is a probe, not verified hour-worker identity; actual worker identity is pending, and the declared serving tenant had not started. The selected parent remains H30 child `27b1d03b`; no H31 candidate is reported selected. The training ledger is reported at 1,072 rows, SHA256 `78299134a972edfb7f79148222f6bc5345b0c686f170fafbf7c237213fa91f0a`, including 51 rows of already-admitted repeated text. This extension adds no new admission or fresh-data credit. These are the facts held in the review seat's 11:23 cover; the private H31 binding supplement is owner-reported by path and short hash only, not independently readable from this public checkout.
+
+**H30 score and pointer, owner-reported:** the score ended at 2026-10-06T16:54:44Z (09:54:44 AM Los Angeles); the owner reports mean NLL in nats per scored positive-loss target, with 65,536 scored targets per arm and 64 episodes per arm. The reported fresh score is 4.8277712762355804 and the owner-reported D is 0.0146518349647526. The score object is a private receipt, SHA256 `efb44cba142a42a97c0fb4fa714e65315818e96d1b3dc30da9496bc78b089c05`. The review seat's current cover is a private receipt (74,398 B, SHA256 `10600f6b2a50b4305c8e90ab2af3ac32134c9adc72f360e1b53ae068a0b474a9`) binds the score end and result under `H30`. Its owner causal readout is a private receipt (5,509 B, SHA256 `f45fefa3f69bf6f372133c73fd406d8665f9dec273b9a31322c4d71b65ae4e33`); final binding is a private receipt (3,982 B, SHA256 `2d8a6d01ed4993a51d65594ec8f9f14dc0222766647dacd554d95a32d329db1a`). The supplied readout passes arithmetic against its frozen band; row 9 remains owed, fresh-admission credit is none, and positive-loss-target efficiency is unknown. These are owner evidence, not root runtime verification.
+
+**H29 result, separate from checkpoint acceptance:** the owner reports 72,525 measured updates and 297,066,496 applied positions including warmup. The H29 score ended at 2026-10-06T13:15:11Z (06:15:11 AM Los Angeles). The owner-bound score object is a private receipt, SHA256 `1320ed7928c0430264f33d225935de353ff1aa896bbb19370e054d46e94521db`; its readout is a private receipt (6,334 B, SHA256 `3722523ea34f76bfdb52dcbbec184b8371fee6720625e2d267e612c3c2e3c784`). That owner readout binds plan SHA256 `9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248` and scorer SHA256 `de4d29315e614c1d24cfdace29cd6a4620421722a8bbe7f7aca2e3ae6def2f55`, and labels the schedule-level result `SUPPORTED` against its frozen engineering band. The public checkout does not contain H29's score object or a bound H29 scored-population denominator, so this page does not restate its raw score values or claim they can be reproduced here. H29 acceptance remains `REFUSED` and its selected pointer remained unchanged. The owner readout supports retaining fresh-side exposure for this recipe; it is not an isolated per-example mechanism, a loss-target efficiency claim, statistical significance, checkpoint promotion, or admission. The engineering band is not a confidence interval, and this is a single comparison with 435 fewer measured updates.
+
+**Receipt and manifest snapshots:** the generated board block is scoped to the newest receipt under its chosen `--data-root`; it does not establish live status outside that tree. The `state-as-of: 2026-08-01` current-subject block is generated from `manifests/ember-current-subject-v1.json`. Its step 2 / token offset 2,048 and 3,839,161,856 allocated/served parameters describe that manifest snapshot, not the live H31 position or a current CIA measurement. The manifest records `CHECKPOINT_CANDIDATE_NOT_ADMITTED`, capability credit `none`, and sufficient pretraining `false`; those fields are specific to that snapshot.
+
+The held current cover does not bind the separate 3.083B CIA figure to an exact owner receipt, so this patch does not present it as current. The 3B minimum and >27B destination are future goal thresholds, not current CIA or served-model measurements. Preserve the existing history, full 200B scope, and authority / fallback interfaces; do not edit the generated blocks by hand.
+
+### Try or reproduce
+
+For receipt-stamped board status, inspect the receipt named by the generated block, then run `python src/ember/governance/scripts/gen_readme_status.py --data-root <receipt tree> --check` against the same data root when execution is permitted. This checks only the selected receipt tree and manifest snapshot; it cannot reproduce the owner-reported H31, H30, or H29 facts. Those facts are identified above only by SHA256; their score objects and readouts are private receipts and are not part of this public checkout. A public reader must label those statements owner-reported; no live training score or checkpoint admission can be reproduced from this checkout alone.
+
 ## Resume order
 
 1. Read docs/authority/INVARIANT.md and verify its SHA256 against docs/domains/governance/authority/GOAL.md.
@@ -128,7 +144,7 @@ unchanged by it.
 - Historical predecessor: `af954c22fb8fb7a0dc640bfd2e0ab97e8e4cde989607372fc45c3db7878699a4` at `1024` tokens (`historical_step1_predecessor`).
 <!-- CURRENT-SUBJECT-END -->
 
-No admissible Ember model currently exists. Historical sub-3B checkpoints,
+The generated subject block above is a manifest-stamped snapshot; its disposition and parameter counts do not establish current admission or capability. The available owner cover reports later H30/H31 score and pointer activity but no admission credit. Historical sub-3B checkpoints,
 Llama-style cbase work, the separate multimodal prototype, the borrowed CLI
 backend, memory/loop prototypes, benchmark machinery, and owned-stack research
 remain distinct artifacts until later goals connect and prove them.

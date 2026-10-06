@@ -10,11 +10,11 @@ mechanism_erasure=forbidden
 
 <a id="ember.claim.identity"></a>
 <a id="ember.claim.problem"></a>
-Ember is a complete local foundation-intelligence project: a clean-genesis model-creation
-primitive, a continuously improving organism, the ember-cli operator body, and a general local AI
-laboratory. It addresses the problem of creating and operating owned foundation intelligence on a
-one consumer GPU while making every learned, executed, and evaluated claim traceable to
-public evidence. Borrowed learned or evaluative signals do not enter the target lineage.
+Ember is a project to build an AI model from scratch on one home computer with one consumer graphics
+card, and to run it locally. No borrowed model weights, teacher models or judge models are used:
+every model weight is learned here, and every claim about what the model can do must point to public evidence
+anyone can check. The project also includes `ember-cli`, the command-line tool used to run and
+watch the training, and a lab for running experiments.
 
 <a id="ember.claim.maturity"></a>
 <a id="ember.claim.target"></a>
@@ -30,11 +30,15 @@ one into another.
   foundation-model creation primitive, continuously improving organism, `ember-cli` operator body,
   and general local AI laboratory.
 - It addresses creating and operating owned local foundation intelligence on one consumer GPU.
-  Claims require verified public experience and receipts; borrowed learned or evaluative signals
-  are excluded from the target lineage.
-- `EMBER-01` is certified but grants no model-training or capability credit. `EMBER-02` is active,
-  and no current checkpoint is an admitted Ember model. The target is an approximately 30–35B
-  sparse unified text-image-audio decoder with native reasoning and structured-tool use.
+  Claims require verified public experience and receipts; borrowed weights, teacher models and
+  judge models are excluded from the target lineage. One dated data exception is described under
+  [Current truth and roadmap](#current-truth-and-roadmap).
+- `EMBER-01` is certified and grants no model-training or capability credit. `EMBER-02` is the active goal.
+  This public checkout does not establish an admitted checkpoint. Its minimum network is 3,000,000,000
+  total parameters and its destination exceeds 27,000,000,000; these are goal thresholds, not current
+  measurements. Read [CONTINUITY](docs/domains/governance/authority/CONTINUITY.md) for dated owner-
+  reported training and score status, selected-pointer evidence, and receipt-stamped snapshots. A score
+  or pointer advance does not establish checkpoint admission or capability.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
 - Inspection starts at this root README and the [canonical start page](docs/domains/governance/guides/START-HERE.md).
@@ -131,9 +135,17 @@ public replay set.
 <a id="ember.claim.mutable-state-owner"></a>
 Exact mutable state lives in
 [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). This README links to that owner and
-does not duplicate its rapidly changing identities. Public milestone contracts and certificates
-live under the [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
+does not duplicate its rapidly changing identities. That page separates owner-reported live status
+from generated receipt- and manifest-stamped snapshots. To reproduce a board block, inspect its named
+receipt and use `python src/ember/governance/scripts/gen_readme_status.py --check` with the same `--data-root`; that checks only that receipt
+tree. Public milestone contracts and certificates live under the
+[roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
+
+Dated data exception ([operator override, 2026-10-03](docs/authority/operator-override-20261003.md)):
+checked, existing third-party AI-generated or mixed datasets may be admitted, marked and counted
+separately. Borrowed weights, teacher models and judge models stay excluded. This checkout does not
+claim any such data has been consumed.
 
 ## Documentation routes
 
