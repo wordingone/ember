@@ -1136,6 +1136,15 @@ def load_ledger_module():
     return module
 
 
+def load_eligibility_module():
+    path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/retention_eligibility.py'
+    spec = importlib.util.spec_from_file_location('cia_retention_eligibility', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
 def load_purpose_module():
     path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py'
     spec = importlib.util.spec_from_file_location('cia_training_job_purpose', path)
@@ -1192,6 +1201,9 @@ def prepare_execution(prediction):
     if 'checkpoint_probe' in identity and not hour:
         raise ValueError('checkpoint probe reference requires the explicit hour identity')
     validate_training_job_purpose(identity, hour=hour)
+    if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
+        # Issue #2119 rows 5/14: the eligibility rule is frozen in the identity (and so in the prediction digest) before launch.
+        load_eligibility_module().validate_identity_rule(identity)
     validate_trajectory_resources(identity)
     if hour:
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
@@ -2788,13 +2800,14 @@ def launch(args, dispatch):
         tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
     succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
-        # Reuses the exact success predicate this function already returns on -- no second,
-        # independent notion of "eligible" is introduced here.
+        # Issue #2119 rows 5/14: launch success is only a prerequisite. Eligibility is the adjudicator's verdict from the
+        # rule frozen in the identity and the arm results in this custody; with no arm results it is False, never True by default.
         ledger_module = load_ledger_module()
+        eligible = load_eligibility_module().adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)
         ledger_module.record_retention_experiment_outcome(
             path=ledger_module.ledger_path(parent),
             lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
-            run_id=run_id, eligible_descendant_published=succeeded,
+            run_id=run_id, eligible_descendant_published=eligible,
             elapsed_seconds=int(time.time() - dispatch_started))
     return 0 if succeeded else 1
 
