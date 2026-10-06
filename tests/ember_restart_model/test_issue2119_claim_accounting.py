@@ -156,5 +156,103 @@ class BindingAndHonestyTests(unittest.TestCase):
         self.assertNotEqual(report['eligible_unique_total'], 0)
 
 
+class MissingEvidenceIsNeverDeterminedTests(unittest.TestCase):
+    """Kai 62008 R1-R3: absent evidence is UNDETERMINED, never a known exclusion, a genesis or a unit; and an unknown-coverage
+    segment makes every later first occurrence unresolved."""
+
+    def undetermined(self, report):
+        self.assertEqual((report['status'], report['eligible_unique_total'], report['bucket_counts']), ('UNDETERMINED', None, None))
+
+    def test_r1_missing_publication_or_advancement_flags_are_undetermined_not_excluded(self):
+        for field in ('published', 'advanced_head'):
+            seg = segment('s1', None, [target('A')])
+            del seg[field]
+            report = run([seg], 's1')
+            self.undetermined(report)
+            self.assertTrue(any(field in note for note in report['missing_evidence']), field)
+            seg[field] = 'yes'   # not a boolean either
+            self.undetermined(run([seg], 's1'))
+
+    def test_r1_an_absent_loss_mask_is_undetermined_and_a_later_positive_replay_cannot_mint_credit(self):
+        unknown = target('A')
+        del unknown['positive_loss']
+        report = run([segment('s1', None, [unknown]), segment('s2', 's1', [target('A')])], 's2')
+        self.undetermined(report)
+        self.assertEqual(report['proved_true_unique']['count'], 0)
+        self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [0, 0])
+
+    def test_r1_a_known_false_loss_mask_is_still_masked_input_not_unresolved(self):
+        report = run([segment('s1', None, [target('A', loss=False)]), segment('s2', 's1', [target('A')])], 's2')
+        self.assertEqual((report['status'], report['eligible_unique_total']), ('DETERMINED', 1))
+
+    def test_r2_an_absent_parent_link_is_not_a_genesis(self):
+        seg = segment('s2', None, [target('B')])
+        del seg['parent_segment_id']
+        report = run([seg], 's2')
+        self.undetermined(report)
+        self.assertTrue(any('parent_segment_id is absent' in note for note in report['missing_evidence']))
+        self.assertEqual(run([segment('s2', None, [target('B')])], 's2')['eligible_unique_total'], 1)   # an explicit null is a genesis
+
+    def test_r2_an_absent_budget_unit_is_undetermined(self):
+        for unit in (None, '', '  '):
+            report = run([segment('s1', None, [target('A')], unit=unit)], 's1')
+            self.undetermined(report)
+            self.assertTrue(any('budget_unit_id' in note for note in report['missing_evidence']), repr(unit))
+        seg = segment('s1', None, [target('A')])
+        del seg['budget_unit_id']
+        self.undetermined(run([seg], 's1'))
+
+    def test_r3_an_earlier_unknown_coverage_segment_leaves_later_first_occurrences_unresolved(self):
+        unknown_first = segment('s1', None, None, missing=['text loss masks'])
+        later = segment('s2', 's1', [target('A'), target('B')])
+        report = run([unknown_first, later], 's2')
+        self.undetermined(report)
+        self.assertEqual(report['proved_true_unique']['count'], 0)
+        self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [None, None])
+        self.assertEqual(report['unresolved_after_coverage_gap'], [['A', 'text', 0], ['B', 'text', 0]])
+
+    def test_r3_coverage_known_before_the_gap_keeps_its_proved_credit_under_its_own_name(self):
+        report = run([segment('s1', None, [target('A')]), segment('s2', 's1', None, missing=['masks']),
+                      segment('s3', 's2', [target('A'), target('B')])], 's3')
+        self.undetermined(report)
+        self.assertEqual(report['proved_true_unique'], {'count': 1, 'buckets': {HUMAN: 1, AI: 0, MIXED: 0, UNKNOWN: 0}, 'complete': False})
+        self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [1, None, None])
+
+    def test_r4_condition_evidence_must_be_the_boolean_true_or_the_string_true(self):
+        for unsupported in (1, 1.0, 'true', 'yes', [], {}, 'TRUE '):
+            report = run([segment('s1', None, [target('A', rights_provenance_ok=unsupported)])], 's1')
+            self.undetermined(report)
+            self.assertTrue(any('rights_provenance_ok' in note for note in report['missing_evidence']), repr(unsupported))
+        self.assertEqual(run([segment('s1', None, [target('A', rights_provenance_ok='TRUE')])], 's1')['eligible_unique_total'], 1)
+        self.assertEqual(run([segment('s1', None, [target('A', protected_clear='FALSE')])], 's1')['eligible_unique_total'], 0)
+
+    def test_r4_the_origin_bucket_must_be_one_of_the_four_names(self):
+        for bad in ('human', 1, True, ['HUMAN_SOURCE_EVIDENCED']):
+            t = target('A')
+            t['origin_bucket'] = bad
+            self.undetermined(run([segment('s1', None, [t])], 's1'))
+
+    def test_deliberate_red_treating_absent_evidence_as_a_known_exclusion_gives_a_determined_zero(self):
+        def pre_repair_counter(segments):   # absent mask -> "masked input"; absent flag -> "excluded"; absent parent -> genesis
+            seen, total = set(), 0
+            for seg in segments:
+                if seg.get('published') is not True or seg.get('advanced_head') is not True:
+                    continue
+                for t in seg['targets']:
+                    if t.get('positive_loss') is not True or tuple(t['key']) in seen:
+                        continue
+                    seen.add(tuple(t['key']))
+                    total += 1
+            return ('DETERMINED', total)
+
+        unknown = target('A')
+        del unknown['positive_loss']
+        segments = [segment('s1', None, [unknown]), segment('s2', 's1', [target('A')])]
+        self.assertEqual(pre_repair_counter(segments), ('DETERMINED', 1))   # the defect: a replay mints fresh credit after an unknown original
+        report = run(segments, 's2')
+        self.undetermined(report)                                          # the repaired accounting: UNDETERMINED, no credit
+        self.assertEqual(report['proved_true_unique']['count'], 0)
+
+
 if __name__ == '__main__':
     unittest.main()
