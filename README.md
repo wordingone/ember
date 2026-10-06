@@ -139,7 +139,7 @@ Exact mutable state lives in
 [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). This README links to that owner and
 does not duplicate its rapidly changing identities. That page separates owner-reported live status
 from generated receipt- and manifest-stamped snapshots. To reproduce a board block, inspect its named
-receipt and use `gen_readme_status.py --check` with the same `--data-root`; that checks only that receipt
+receipt and use `python src/ember/governance/scripts/gen_readme_status.py --check` with the same `--data-root`; that checks only that receipt
 tree. Public milestone contracts and certificates live under the
 [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
