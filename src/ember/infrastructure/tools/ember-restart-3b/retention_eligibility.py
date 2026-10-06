@@ -97,13 +97,29 @@ def _arm(arm: Any, label: str) -> Mapping[str, Any]:
         raise EligibilityRefusal(f'the {label} arm result is missing')
     if not isinstance(arm.get('published'), bool):
         raise EligibilityRefusal(f'the {label} arm result needs a boolean published')
+    if arm['published']:
+        # a published arm needs complete typed bindings before it can ever be eligible: nothing defaults to eligible
+        if arm.get('measurement_set_class') == 'protected':
+            raise EligibilityRefusal(f'the {label} arm was measured on the protected set; selection on it is refused')
+        if arm.get('measurement_set_class') != 'developmental':
+            raise EligibilityRefusal(f'the {label} arm needs measurement_set_class "developmental" (missing or unknown class)')
+        if not _is_sha256(arm.get('child_manifest_sha256')):
+            raise EligibilityRefusal(f'the {label} arm is published but carries no valid child_manifest_sha256')
+        if not _is_sha256(arm.get('parent_manifest_sha256')):
+            raise EligibilityRefusal(f'the {label} arm is published but carries no valid parent_manifest_sha256')
+        positions = arm.get('applied_positions')
+        if not isinstance(positions, int) or isinstance(positions, bool) or positions < 0:
+            raise EligibilityRefusal(f'the {label} arm applied_positions must be a nonnegative integer')
     return arm
 
 
 def adjudicate(rule: Mapping[str, Any], control: Any, treatment: Any, *, expected_rule_sha256: str | None = None) -> dict[str, Any]:
     """Deterministic verdict from the numbers; raises EligibilityRefusal where the record cannot support one."""
-    if expected_rule_sha256 is not None and expected_rule_sha256 != rule.get('rule_sha256'):
-        raise EligibilityRefusal('the rule digest differs from the one recorded at launch (the rule was edited after launch)')
+    if expected_rule_sha256 is not None:
+        if not _is_sha256(expected_rule_sha256):
+            raise EligibilityRefusal('the rule digest recorded at launch is not a sha256')
+        if expected_rule_sha256 != rule.get('rule_sha256'):
+            raise EligibilityRefusal('the rule digest differs from the one recorded at launch (the rule was edited after launch)')
     control, treatment = _arm(control, 'control'), _arm(treatment, 'treatment')
     if control.get('arm_id') != rule['control_arm_id'] or treatment.get('arm_id') != rule['treatment_arm_id']:
         raise EligibilityRefusal('the arm results do not carry the rule\'s control and treatment arm ids')
@@ -144,6 +160,20 @@ def adjudicate(rule: Mapping[str, Any], control: Any, treatment: Any, *, expecte
             'retained_applied_positions': retained, 'reason': reason, 'rule_sha256': rule['rule_sha256']}
 
 
+def write_arm_results(identity: Mapping[str, Any], *, control: Any, treatment: Any, custody: Path) -> Path:
+    """The single-sourced writer for `arm-results.json`: the producer (the orchestration that has both arms' published
+    checkpoints and developmental measurements) calls this before the runner's outcome seam. It binds the identity's own
+    rule digest, and refuses to write a record the adjudicator would refuse, so a malformed record is caught at the producer."""
+    rule = validate_identity_rule(identity)
+    adjudicate(rule, control, treatment, expected_rule_sha256=rule['rule_sha256'])   # raises EligibilityRefusal on a bad record
+    path = Path(custody) / ARM_RESULTS_FILENAME
+    if path.exists():
+        raise EligibilityRefusal('arm-results.json already exists in this custody (never overwritten)')
+    path.write_text(json.dumps({'rule_sha256': rule['rule_sha256'], 'control': control, 'treatment': treatment},
+                               indent=2, sort_keys=True), encoding='utf-8')
+    return path
+
+
 def adjudicated_eligible_descendant(identity: Mapping[str, Any], *, run_succeeded: bool, custody: Path) -> bool:
     """The runner's caller for `record_retention_experiment_outcome(eligible_descendant_published=...)`.
     False when the run failed, when no arm results exist, or when adjudication refuses (the refusal is written beside them);
@@ -159,10 +189,12 @@ def adjudicated_eligible_descendant(identity: Mapping[str, Any], *, run_succeede
         arms = json.loads(arms_path.read_text(encoding='utf-8'))
         if not isinstance(arms, dict) or set(arms) != {'rule_sha256', 'control', 'treatment'}:
             raise EligibilityRefusal('arm-results.json must hold exactly rule_sha256, control and treatment')
-        # arms['rule_sha256'] is the digest the arm producer recorded at launch; it must be the identity's rule
+        # arms['rule_sha256'] is the digest the arm producer recorded at launch; it must be present, well-formed and the identity's
+        if not _is_sha256(arms['rule_sha256']):
+            raise EligibilityRefusal('arm-results.json carries no valid launch rule digest')
         verdict = adjudicate(rule, arms['control'], arms['treatment'], expected_rule_sha256=arms['rule_sha256'])
-    except (EligibilityRefusal, json.JSONDecodeError) as exc:
-        (custody / REFUSAL_FILENAME).write_text(json.dumps({'refused': str(exc)}, indent=2, sort_keys=True), encoding='utf-8')
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:   # EligibilityRefusal and JSONDecodeError are ValueErrors
+        (custody / REFUSAL_FILENAME).write_text(json.dumps({'refused': f'{type(exc).__name__}: {exc}'}, indent=2, sort_keys=True), encoding='utf-8')
         return False
     (custody / 'eligibility-verdict.json').write_text(json.dumps(verdict, indent=2, sort_keys=True), encoding='utf-8')
     return verdict['eligible_arm'] is not None

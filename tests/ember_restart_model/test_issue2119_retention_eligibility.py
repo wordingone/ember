@@ -16,6 +16,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -177,7 +178,194 @@ class RunnerWiringTests(unittest.TestCase):
         source = (MODULE_DIR / 'cia_step_runner.py').read_text(encoding='utf-8')
         self.assertIn('load_eligibility_module().validate_identity_rule(identity)', source)
         self.assertIn('adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)', source)
+        self.assertIn('record_retention_outcome(identity, succeeded=succeeded, custody=custody, parent=parent', source)
         self.assertNotIn('eligible_descendant_published=succeeded', source)
+
+
+class NegativeBindingTests(unittest.TestCase):
+    """Kai 61972 R1/R2 and Jude 61974: missing or malformed bindings are never eligible; nothing defaults to eligible."""
+
+    def setUp(self):
+        self.rule = elig.parse_rule(rule_text())
+        self.control = arm('control', loss=2.00, child=CONTROL_CHILD)
+
+    def _treatment(self, **override):
+        base = arm('treatment', loss=1.5, child=TREATMENT_CHILD)
+        base.update(override)
+        return base
+
+    def test_a_published_arm_with_a_null_missing_or_malformed_child_digest_refuses(self):
+        for child in (None, '', 'xyz', 'A' * 64, 123):
+            with self.assertRaisesRegex(elig.EligibilityRefusal, 'child_manifest_sha256', msg=repr(child)):
+                elig.adjudicate(self.rule, self.control, self._treatment(child_manifest_sha256=child))
+        missing = self._treatment()
+        del missing['child_manifest_sha256']
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'child_manifest_sha256'):
+            elig.adjudicate(self.rule, self.control, missing)
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'child_manifest_sha256'):   # the control fallback needs its own binding
+            elig.adjudicate(self.rule, arm('control', loss=2.0, child=None), self._treatment())
+
+    def test_a_published_arm_with_a_missing_or_unknown_measurement_class_refuses(self):
+        for set_class in (None, 'heldout', ''):
+            with self.assertRaisesRegex(elig.EligibilityRefusal, 'measurement_set_class', msg=repr(set_class)):
+                elig.adjudicate(self.rule, self.control, self._treatment(measurement_set_class=set_class))
+        missing = self._treatment()
+        del missing['measurement_set_class']
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'measurement_set_class'):
+            elig.adjudicate(self.rule, self.control, missing)
+
+    def test_a_published_arm_with_a_missing_parent_digest_refuses(self):
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'parent_manifest_sha256'):
+            elig.adjudicate(self.rule, self.control, self._treatment(parent_manifest_sha256=None))
+
+    def test_applied_positions_must_be_a_nonnegative_integer(self):
+        for bad in (True, 1.5, '1000', None, -1):
+            with self.assertRaisesRegex(elig.EligibilityRefusal, 'applied_positions', msg=repr(bad)):
+                elig.adjudicate(self.rule, self.control, self._treatment(applied_positions=bad))
+        missing = self._treatment()
+        del missing['applied_positions']
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'applied_positions'):
+            elig.adjudicate(self.rule, self.control, missing)
+
+    def test_an_unpublished_arm_is_still_judged_without_binding_fields(self):
+        verdict = elig.adjudicate(self.rule, self.control, arm('treatment', published=False, loss=None))
+        self.assertEqual(verdict['verdict'], elig.CONTROL_ELIGIBLE)   # the legitimate control fallback is preserved
+
+    def test_a_null_or_malformed_launch_rule_digest_refuses_in_the_adjudicator_and_the_caller(self):
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'not a sha256'):
+            elig.adjudicate(self.rule, self.control, self._treatment(), expected_rule_sha256='nothex')
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        custody = Path(tmp.name)
+        identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}}
+        for digest in (None, '', 'nothex'):
+            (custody / elig.ARM_RESULTS_FILENAME).write_text(json.dumps(
+                {'rule_sha256': digest, 'control': self.control, 'treatment': self._treatment()}), encoding='utf-8')
+            self.assertFalse(elig.adjudicated_eligible_descendant(identity, run_succeeded=True, custody=custody), repr(digest))
+            self.assertIn('launch rule digest', json.loads((custody / elig.REFUSAL_FILENAME).read_text())['refused'])
+
+    def test_malformed_arm_results_never_raise_out_of_the_caller(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        custody = Path(tmp.name)
+        identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}}
+        good = {'rule_sha256': self.rule['rule_sha256'], 'control': self.control, 'treatment': self._treatment()}
+        for payload in ({**good, 'treatment': dict(self._treatment(), applied_positions='lots')},
+                        {**good, 'treatment': 'not-an-arm'}, {**good, 'control': None}, [1, 2], 'text', {'rule_sha256': 1}):
+            (custody / elig.ARM_RESULTS_FILENAME).write_text(json.dumps(payload), encoding='utf-8')
+            self.assertFalse(elig.adjudicated_eligible_descendant(identity, run_succeeded=True, custody=custody), repr(payload)[:60])
+
+
+class ArmResultsWriterTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.custody = Path(self._tmp.name)
+        self.identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}}
+
+    def test_a_written_record_round_trips_through_the_runner_caller(self):
+        path = elig.write_arm_results(self.identity, control=arm('control', loss=2.0, child=CONTROL_CHILD),
+                                      treatment=arm('treatment', loss=1.5, child=TREATMENT_CHILD), custody=self.custody)
+        self.assertEqual(path.name, elig.ARM_RESULTS_FILENAME)
+        self.assertTrue(elig.adjudicated_eligible_descendant(self.identity, run_succeeded=True, custody=self.custody))
+
+    def test_the_writer_refuses_a_record_the_adjudicator_would_refuse_and_never_overwrites(self):
+        with self.assertRaises(elig.EligibilityRefusal):
+            elig.write_arm_results(self.identity, control=arm('control', loss=2.0, child=CONTROL_CHILD),
+                                   treatment=arm('treatment', loss=1.5, child=None), custody=self.custody)
+        self.assertFalse((self.custody / elig.ARM_RESULTS_FILENAME).exists())
+        good = dict(control=arm('control', loss=2.0, child=CONTROL_CHILD), treatment=arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        elig.write_arm_results(self.identity, custody=self.custody, **good)
+        with self.assertRaisesRegex(elig.EligibilityRefusal, 'already exists'):
+            elig.write_arm_results(self.identity, custody=self.custody, **good)
+
+
+class RunnerOutcomeSeamTests(unittest.TestCase):
+    """The real runner outcome seam (cia_step_runner.record_retention_outcome) records a non-eligible experiment, and still
+    records the outcome, when the arm record is malformed or the adjudicator itself raises."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('bound_eligibility_cia_step_runner', MODULE_DIR / 'cia_step_runner.py')
+        cls.runner = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.runner
+        sys.path.insert(0, str(ROOT / 'src'))
+        spec.loader.exec_module(cls.runner)
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.custody = Path(self._tmp.name)
+        self.identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}}
+        self.rule = elig.parse_rule(rule_text())
+        self.recorded = []
+        recorded = self.recorded
+
+        class Ledger:
+            @staticmethod
+            def ledger_path(parent):
+                return Path(parent) / 'ledger'
+
+            @staticmethod
+            def lineage_checkpoint_manifest_sha256(identity):
+                return START
+
+            @staticmethod
+            def record_retention_experiment_outcome(**kwargs):
+                recorded.append(kwargs)
+
+        self.ledger = Ledger
+        self.patch_ledger = unittest.mock.patch.object(self.runner, 'load_ledger_module', lambda: Ledger)
+        self.patch_ledger.start()
+        self.addCleanup(self.patch_ledger.stop)
+
+    def _write_arms(self, treatment):
+        (self.custody / elig.ARM_RESULTS_FILENAME).write_text(json.dumps({
+            'rule_sha256': self.rule['rule_sha256'], 'control': arm('control', loss=2.0, child=CONTROL_CHILD),
+            'treatment': treatment}), encoding='utf-8')
+
+    def seam(self, *, succeeded=True):
+        return self.runner.record_retention_outcome(self.identity, succeeded=succeeded, custody=self.custody, parent=self.custody,
+                                                    run_id='r1', dispatch_started=0.0)
+
+    def test_a_malformed_applied_positions_records_a_non_eligible_outcome_and_a_refusal(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD, positions='lots'))
+        self.assertFalse(self.seam())
+        self.assertEqual([r['eligible_descendant_published'] for r in self.recorded], [False])
+        self.assertIn('applied_positions', json.loads((self.custody / elig.REFUSAL_FILENAME).read_text())['refused'])
+
+    def test_a_winning_arm_record_is_recorded_eligible(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertTrue(self.seam())
+        self.assertEqual([r['eligible_descendant_published'] for r in self.recorded], [True])
+
+    def test_an_adjudicator_that_raises_still_records_a_non_eligible_outcome(self):
+        class Raising:
+            @staticmethod
+            def adjudicated_eligible_descendant(identity, *, run_succeeded, custody):
+                raise TypeError("int() argument must be a string, a bytes-like object or a real number, not 'NoneType'")
+
+        with unittest.mock.patch.object(self.runner, 'load_eligibility_module', lambda: Raising):
+            self.assertFalse(self.seam())
+            self.assertEqual([r['eligible_descendant_published'] for r in self.recorded], [False])
+            self.assertIn('TypeError', json.loads((self.custody / 'eligibility-refusal.json').read_text())['refused'])
+
+    def test_deliberate_red_the_unguarded_seam_skips_the_outcome_when_the_adjudicator_raises(self):
+        class Raising:
+            @staticmethod
+            def adjudicated_eligible_descendant(identity, *, run_succeeded, custody):
+                raise TypeError('malformed applied_positions')
+
+        def pre_repair_seam():   # the seam as it stood before this repair: no guard around the adjudicator call
+            eligible = Raising.adjudicated_eligible_descendant(self.identity, run_succeeded=True, custody=self.custody)
+            self.ledger.record_retention_experiment_outcome(eligible_descendant_published=eligible)
+
+        with self.assertRaises(TypeError):
+            pre_repair_seam()
+        self.assertEqual(self.recorded, [])   # the outcome was skipped: budget accounting silently lost
+        with unittest.mock.patch.object(self.runner, 'load_eligibility_module', lambda: Raising):
+            self.seam()
+        self.assertEqual(len(self.recorded), 1)   # the repaired seam records it
 
 
 if __name__ == '__main__':

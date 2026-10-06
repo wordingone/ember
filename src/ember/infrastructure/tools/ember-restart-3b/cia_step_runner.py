@@ -2685,6 +2685,29 @@ def worker(binding_path):
         attention_scope.close()
 
 
+def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, dispatch_started):
+    """Issue #2119 rows 5/14: record the experiment outcome in the continuity ledger. Launch success is only a prerequisite:
+    eligibility is the adjudicator's verdict from the rule frozen in the identity and the arm results in this custody. It is
+    False with no arm results, and False when the adjudicator escapes with any error (the refusal is written beside the
+    custody); the ledger outcome is recorded either way, so a malformed arm record can never skip budget accounting."""
+    ledger_module = load_ledger_module()
+    try:
+        eligible = load_eligibility_module().adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)
+    except Exception as error:  # noqa: BLE001 - an escape from the adjudicator is a refusal, never a skipped outcome
+        eligible = False
+        try:
+            (Path(custody) / 'eligibility-refusal.json').write_text(
+                json.dumps({'refused': f'adjudicator raised {type(error).__name__}: {error}'}, sort_keys=True), encoding='utf-8')
+        except OSError:
+            pass
+    ledger_module.record_retention_experiment_outcome(
+        path=ledger_module.ledger_path(parent),
+        lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+        run_id=run_id, eligible_descendant_published=eligible,
+        elapsed_seconds=int(time.time() - dispatch_started))
+    return eligible
+
+
 def launch_succeeded(result, supervisor_failure, custody):
     """A launch succeeded only if the owned process status is 'completed' with returncode 0, verified cleanup and no supervisor
     failure, AND the worker wrote a worker-terminal.json whose status is 'completed'. The first chained hour was killed by its wall
@@ -2800,15 +2823,8 @@ def launch(args, dispatch):
         tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
     succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
-        # Issue #2119 rows 5/14: launch success is only a prerequisite. Eligibility is the adjudicator's verdict from the
-        # rule frozen in the identity and the arm results in this custody; with no arm results it is False, never True by default.
-        ledger_module = load_ledger_module()
-        eligible = load_eligibility_module().adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)
-        ledger_module.record_retention_experiment_outcome(
-            path=ledger_module.ledger_path(parent),
-            lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
-            run_id=run_id, eligible_descendant_published=eligible,
-            elapsed_seconds=int(time.time() - dispatch_started))
+        record_retention_outcome(identity, succeeded=succeeded, custody=custody, parent=parent, run_id=run_id,
+                                 dispatch_started=dispatch_started)
     return 0 if succeeded else 1
 
 
