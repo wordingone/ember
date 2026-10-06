@@ -1,11 +1,11 @@
 {
-  "baselined_row_count": 207,
-  "expires_on": "2026-10-05",
+  "baselined_row_count": 206,
+  "expires_on": "2026-10-13",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
-  "maximum_rows": 207,
-  "minted_on": "2026-09-28",
+  "maximum_rows": 206,
+  "minted_on": "2026-10-06",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
     {
@@ -415,18 +415,6 @@
       "path": "src/ember/governance/scripts/cbase_v0_segment_live.py",
       "status": "UNEVALUABLE",
       "target": "_RUN_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/../ember",
-      "expectation": "repo_root",
-      "expression": "os.path.normpath(os.path.join(ROOT, '..', 'ember'))",
-      "expression_sha256": "dd26bb53517e6b17effd8f4e097fe917e37c978aff1c53d7f7b73d53b87ce092",
-      "justification": "DEFECT, and the one this re-mint's grammar cure was authored to expose. `EMBER_ROOT` derives to `<root>/../ember` -- a directory BESIDE the repository, not inside it -- so the module carries a host-layout assumption about a tree the repository does not contain and cannot vouch for. It was invisible until `os.path.normpath` entered the grammar, because the binding refused to derive at all; admitting normpath is what gave the row the capacity to fail, and it exercised that capacity immediately. Four further sites named the same sibling tree in the same measurement and are MATCH only because their expectation is location-relative rather than repository-root. Cured as its own unit -- deferred-ledger id `ember-root-points-at-a-sibling-tree` -- and left MISMATCH here so the gate keeps watching it.",
-      "line": 53,
-      "path": "src/ember/governance/scripts/check_milestone_reconciliation.py",
-      "status": "MISMATCH",
-      "target": "EMBER_ROOT"
     },
     {
       "error": "call outside closed grammar: os.environ.get",
@@ -2494,6 +2482,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "46c59f03b01eef96a5cb6eb921a0da5a9732f7f2164056a26ee6dd6b9e64cdca",
+  "self_sha256": "2ac9cea5bdc15e75db98f415ce28d524d2a38261644d0528330d927b2ad64fd5",
   "workstream_id": "EMBER-02A"
 }
