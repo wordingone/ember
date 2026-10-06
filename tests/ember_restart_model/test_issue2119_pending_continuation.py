@@ -174,5 +174,27 @@ class PendingContinuationRestoreTests(unittest.TestCase):
         self.assertEqual(cached_read()['status'], 'ready')                              # the cached one still says ready: stale
 
 
+class ChildInvocationRouteTests(unittest.TestCase):
+    """Every non-Ember interpreter child starts through the mandatory headless wrapper on Windows (Kai 61929)."""
+
+    @staticmethod
+    def _through_wrapper(argv) -> bool:
+        return (argv[0].lower().startswith('powershell') and '-File' in argv
+                and any(str(part).replace('\\', '/').endswith('headless-python.ps1') for part in argv)
+                and argv[argv.index('--') + 1] == '-B' and argv[0] != sys.executable)
+
+    @unittest.skipUnless(sys.platform == 'win32', 'the wrapper route is the Windows argv')
+    def test_python_argv_routes_through_the_headless_wrapper_on_windows(self):
+        self.assertTrue(self._through_wrapper(python_argv('-c', 'pass')))
+
+    def test_a_child_started_by_the_helper_runs_the_requested_code_and_returns_its_exit_code(self):
+        done = run_one(python_argv('-c', 'import sys; print("child-ok"); sys.exit(3)'), timeout_s=120)
+        self.assertEqual((done.returncode, done.stdout.strip()), (3, 'child-ok'))
+
+    def test_deliberate_red_the_bare_interpreter_argv_fails_the_wrapper_predicate(self):
+        bare = [sys.executable, '-B', '-c', 'pass']   # what the helper built before this repair
+        self.assertFalse(self._through_wrapper(bare))
+
+
 if __name__ == '__main__':
     unittest.main()

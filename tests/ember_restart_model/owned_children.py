@@ -56,12 +56,25 @@ class GroupOutcome(NamedTuple):
     ready_before_go: list  # names whose ready file the controller had seen when it released the barrier
 
 
+HEADLESS_PYTHON_WRAPPER = os.environ.get('EMBER_HEADLESS_PYTHON_WRAPPER', 'C:/Users/Admin/.codex/headless-python.ps1')
+
+
 def python_argv(*args) -> list:
-    return [sys.executable, '-B', *[str(part) for part in args]]
+    """Windows: every non-Ember interpreter starts through the mandatory headless wrapper (powershell -File
+    headless-python.ps1 -- <args>), which itself starts the interpreter with no window; the owned runner's job object
+    still covers the whole descendant tree. POSIX: the interpreter directly."""
+    tail = ['-B', *[str(part) for part in args]]
+    if os.name == 'nt':
+        return ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', HEADLESS_PYTHON_WRAPPER, '--', *tail]
+    return [sys.executable, *tail]
 
 
 def run_one(argv: Sequence[str], *, timeout_s: float, env=None) -> 'owned_process.OwnedProcessResult':
     """One owned, hidden child to completion. status == 'terminated' means the timeout fired and the tree was killed."""
+    if os.name == 'nt':
+        # the wrapper starts CODEX_PYTHON (default a fixed install); pin it to the interpreter running these tests
+        env = dict(os.environ if env is None else env)
+        env.setdefault('CODEX_PYTHON', sys.executable)
     return owned_process.OwnedProcessRunner().run(list(argv), timeout_s=timeout_s, env=env)
 
 
