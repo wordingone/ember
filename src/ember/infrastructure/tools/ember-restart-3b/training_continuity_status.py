@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+import pending_continuation
 from training_continuity_ledger import (
     GENESIS_SENTINEL,
     diagnostic_occupancy_seconds,
@@ -171,9 +172,13 @@ def training_continuity_status(
     next_identity: Mapping[str, Any] | None = None, next_blocker: str | None = None,
     policy: Mapping[str, Any] | None = None, now: float | None = None,
     lineage_record: Mapping[str, Any] | None = None, gpu_lease: Mapping[str, Any] | None = None,
-    claim_predicate_path: Path | None = None,
+    claim_predicate_path: Path | None = None, pending_receipts_root: Path | None = None,
 ) -> dict[str, Any]:
     """Issue #2119 section 6's status record: composes the functions above for one lineage.
+
+    `pending_receipts_root` (row 15): when given, the next segment or its blocker is read from the durable
+    `next-segment.json` beside the pointer (pending_continuation), for THIS lineage head, and `next_identity`/`next_blocker`
+    must not also be given; a record for another head reads blocked, a corrupt record refuses.
     Selected checkpoint and parent, the lineage-wide retained applied positions (from the ancestry
     walk), claim-budget-eligible positions (UNDEFINED until the frozen predicate exists), last
     learning measurement or pending, GPU owner and purpose, diagnostic occupancy and postponement,
@@ -190,6 +195,11 @@ def training_continuity_status(
         raise ValueError('a lineage ancestry record needs the hour result of the same head')
     lineage_sha = (hour_result['child_manifest_sha256'] if hour_result is not None
                    else GENESIS_SENTINEL)
+    if pending_receipts_root is not None:
+        if next_identity is not None or next_blocker is not None:
+            raise ValueError('the pending record supplies the next segment; do not also pass next_identity or next_blocker')
+        recovered = pending_continuation.read_pending_continuation(pending_receipts_root, current_head_sha256=lineage_sha)
+        next_identity, next_blocker = recovered.get('next_identity'), recovered.get('blocker')
     return {
         'schema': STATUS_SCHEMA,
         'lineage_checkpoint_manifest_sha256': lineage_sha,
