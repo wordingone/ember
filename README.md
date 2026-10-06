@@ -31,10 +31,8 @@ one into another.
   and general local AI laboratory.
 - It addresses creating and operating owned local foundation intelligence on one consumer GPU.
   Claims require verified public experience and receipts; borrowed weights, teacher models and
-  judge models are excluded from the target lineage. Dated exception
-  ([operator override, 2026-10-03](docs/authority/operator-override-20261003.md)): checked, existing
-  third-party AI-generated or mixed datasets may be admitted, marked and counted separately. This
-  checkout does not claim any such data has been consumed.
+  judge models are excluded from the target lineage. One dated data exception is described under
+  [Current truth and roadmap](#current-truth-and-roadmap).
 - `EMBER-01` is certified and grants no model-training or capability credit. `EMBER-02` is the active goal.
   This public checkout does not establish an admitted checkpoint. Its minimum network is 3,000,000,000
   total parameters and its destination exceeds 27,000,000,000; these are goal thresholds, not current
@@ -143,6 +141,11 @@ receipt and use `python src/ember/governance/scripts/gen_readme_status.py --chec
 tree. Public milestone contracts and certificates live under the
 [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
+
+Dated data exception ([operator override, 2026-10-03](docs/authority/operator-override-20261003.md)):
+checked, existing third-party AI-generated or mixed datasets may be admitted, marked and counted
+separately. Borrowed weights, teacher models and judge models stay excluded. This checkout does not
+claim any such data has been consumed.
 
 ## Documentation routes
 
