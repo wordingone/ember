@@ -11,8 +11,8 @@ mechanism_erasure=forbidden
 <a id="ember.claim.identity"></a>
 <a id="ember.claim.problem"></a>
 Ember is a project to build an AI model from scratch on one home computer with one consumer graphics
-card, and to run it locally. Nothing is borrowed from other people's trained models: every model
-weight is learned here, and every claim about what the model can do must point to public evidence
+card, and to run it locally. No borrowed model weights, teacher models or judge models are used:
+every model weight is learned here, and every claim about what the model can do must point to public evidence
 anyone can check. The project also includes `ember-cli`, the command-line tool used to run and
 watch the training, and a lab for running experiments.
 
@@ -30,8 +30,11 @@ one into another.
   foundation-model creation primitive, continuously improving organism, `ember-cli` operator body,
   and general local AI laboratory.
 - It addresses creating and operating owned local foundation intelligence on one consumer GPU.
-  Claims require verified public experience and receipts; borrowed learned or evaluative signals
-  are excluded from the target lineage.
+  Claims require verified public experience and receipts; borrowed weights, teacher models and
+  judge models are excluded from the target lineage. Dated exception
+  ([operator override, 2026-10-03](docs/authority/operator-override-20261003.md)): checked, existing
+  third-party AI-generated or mixed datasets may be admitted, marked and counted separately. This
+  checkout does not claim any such data has been consumed.
 - `EMBER-01` is certified and grants no model-training or capability credit. `EMBER-02` is the active goal.
   This public checkout does not establish an admitted checkpoint. Its minimum network is 3,000,000,000
   total parameters and its destination exceeds 27,000,000,000; these are goal thresholds, not current
