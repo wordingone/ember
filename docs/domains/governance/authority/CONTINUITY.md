@@ -24,7 +24,7 @@ The held current cover does not bind the separate 3.083B CIA figure to an exact 
 
 ### Try or reproduce
 
-For receipt-stamped board status, inspect the receipt named by the generated block, then run `gen_readme_status.py --check` against the same data root when execution is permitted. This checks only the selected receipt tree and manifest snapshot; it cannot reproduce owner-only H31, H30, or H29 facts. The H30 score object and readout are retrievable from the exact owner-cover path/hash above; H29's score object and readout paths/hashes are listed above. Their bytes are private owner evidence and are not part of this public checkout. A public reader must label those statements owner-reported; no live training score or checkpoint admission can be reproduced from this checkout alone.
+For receipt-stamped board status, inspect the receipt named by the generated block, then run `python src/ember/governance/scripts/gen_readme_status.py --data-root <receipt tree> --check` against the same data root when execution is permitted. This checks only the selected receipt tree and manifest snapshot; it cannot reproduce the owner-reported H31, H30, or H29 facts. Those facts are identified above only by SHA256; their score objects and readouts are private receipts and are not part of this public checkout. A public reader must label those statements owner-reported; no live training score or checkpoint admission can be reproduced from this checkout alone.
 
 ## Resume order
 

@@ -10,11 +10,11 @@ mechanism_erasure=forbidden
 
 <a id="ember.claim.identity"></a>
 <a id="ember.claim.problem"></a>
-Ember is a complete local foundation-intelligence project: a clean-genesis model-creation
-primitive, a continuously improving organism, the ember-cli operator body, and a general local AI
-laboratory. It addresses the problem of creating and operating owned foundation intelligence on a
-one consumer GPU while making every learned, executed, and evaluated claim traceable to
-public evidence. Borrowed learned or evaluative signals do not enter the target lineage.
+Ember is a project to build an AI model from scratch on one home computer with one consumer graphics
+card, and to run it locally. Nothing is borrowed from other people's trained models: every model
+weight is learned here, and every claim about what the model can do must point to public evidence
+anyone can check. The project also includes `ember-cli`, the command-line tool used to run and
+watch the training, and a lab for running experiments.
 
 <a id="ember.claim.maturity"></a>
 <a id="ember.claim.target"></a>
