@@ -279,6 +279,25 @@ class ArmResultsWriterTests(unittest.TestCase):
         with self.assertRaisesRegex(elig.EligibilityRefusal, 'already exists'):
             elig.write_arm_results(self.identity, custody=self.custody, **good)
 
+    def test_exclusive_creation_refuses_even_when_an_exists_check_would_have_said_no(self):
+        """Kai 62079: the writer must not rely on exists() then write. A peer that creates the file between a check and the
+        write is simulated by making exists() lie; the exclusive open still refuses and leaves the peer's bytes intact."""
+        peer_bytes = b'{"peer": true}'
+        (self.custody / elig.ARM_RESULTS_FILENAME).write_bytes(peer_bytes)
+        good = dict(control=arm('control', loss=2.0, child=CONTROL_CHILD), treatment=arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        with unittest.mock.patch.object(Path, 'exists', lambda self: False):
+            with self.assertRaisesRegex(elig.EligibilityRefusal, 'already exists'):
+                elig.write_arm_results(self.identity, custody=self.custody, **good)
+        self.assertEqual((self.custody / elig.ARM_RESULTS_FILENAME).read_bytes(), peer_bytes)
+
+    def test_deliberate_red_check_then_write_overwrites_a_peer_that_created_the_file_in_between(self):
+        target = self.custody / elig.ARM_RESULTS_FILENAME
+        target.write_bytes(b'peer')
+        with unittest.mock.patch.object(Path, 'exists', lambda self: False):
+            if not target.exists():   # the pre-repair writer: the check passes, then it writes
+                target.write_text('mine', encoding='utf-8')
+        self.assertEqual(target.read_bytes(), b'mine')   # the peer's record was destroyed
+
 
 class RunnerOutcomeSeamTests(unittest.TestCase):
     """The real runner outcome seam (cia_step_runner.record_retention_outcome) records a non-eligible experiment, and still

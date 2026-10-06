@@ -167,10 +167,12 @@ def write_arm_results(identity: Mapping[str, Any], *, control: Any, treatment: A
     rule = validate_identity_rule(identity)
     adjudicate(rule, control, treatment, expected_rule_sha256=rule['rule_sha256'])   # raises EligibilityRefusal on a bad record
     path = Path(custody) / ARM_RESULTS_FILENAME
-    if path.exists():
-        raise EligibilityRefusal('arm-results.json already exists in this custody (never overwritten)')
-    path.write_text(json.dumps({'rule_sha256': rule['rule_sha256'], 'control': control, 'treatment': treatment},
-                               indent=2, sort_keys=True), encoding='utf-8')
+    payload = json.dumps({'rule_sha256': rule['rule_sha256'], 'control': control, 'treatment': treatment}, indent=2, sort_keys=True)
+    try:
+        with open(path, 'x', encoding='utf-8') as stream:   # exclusive creation: no check-then-write window for another writer
+            stream.write(payload)
+    except FileExistsError as exc:
+        raise EligibilityRefusal('arm-results.json already exists in this custody (never overwritten)') from exc
     return path
 
 
