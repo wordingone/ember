@@ -863,7 +863,18 @@ if args.get('rendezvous_peer'):
         while not peer_file.exists() and time.monotonic() < deadline:
             time.sleep(0.005)
         peer_seen['value'] = peer_file.exists()
-        real_replace(staged, target)
+        # Two unlocked writers released together call MoveFileEx on the same target in the same instant; Windows answers one of
+        # them with WinError 5 (observed 1 of 5 runs, 2026-10-06). That denial is the OS serialising the unlocked race, not a
+        # property of the pointer code, so the test child retries it (bounded) and both writers reach their replace: the lost update.
+        retry_deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                real_replace(staged, target)
+                break
+            except PermissionError:
+                if time.monotonic() > retry_deadline:
+                    raise
+                time.sleep(0.01)
     dio.atomic_replace_durable = _rendezvous_replace
 if mode == 'no_lock':
     hp._pointer_lock = contextlib.contextmanager(lambda target_path, timeout=0: (yield))
@@ -1028,6 +1039,7 @@ class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
         for result in results:
             self.assertEqual(result.status, 'completed', result.stderr)
             self.assertFalse(pid_alive(result.pid), f'pid {result.pid} still alive after the race')
+            self.assertTrue(result.stdout.strip(), f'race child {result.pid} wrote no result line; rc={result.returncode} stderr tail: {result.stderr[-800:]}')
         self.assertEqual(outcome.ready_before_go, ['a', 'b'])
         peers_seen = [json.loads(result.stdout.strip().splitlines()[-1])['peer_seen_at_replace'] for result in results]
         codes = sorted(result.returncode for result in results)
