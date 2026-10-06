@@ -116,7 +116,9 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
     physical = loss_exposure = proved = 0
     buckets_true = {name: 0 for name in BUCKETS}
     undetermined_keys: set[tuple] = set()
-    coverage_gap = False   # an earlier selected segment whose targets/flags are unknown: later "first" occurrences are unproved
+    # An earlier selected segment whose targets/flags are unknown, or an unknown ancestry link below the first supplied
+    # segment: every later "first" occurrence is unproved (it may replay something the unknown part consumed).
+    coverage_gap = bool(missing_links)
     unresolved_after_gap: set[tuple] = set()
     for sid in chain:
         segment = by_id[sid]

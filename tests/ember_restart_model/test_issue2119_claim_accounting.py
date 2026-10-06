@@ -112,6 +112,10 @@ class BindingAndHonestyTests(unittest.TestCase):
         report = run([segment('s2', 's1', [target('B')])], 's2')   # s1 was never supplied
         self.assertEqual((report['status'], report['eligible_unique_total']), ('UNDETERMINED', None))
         self.assertTrue(any("'s1'" in note for note in report['missing_evidence']))
+        # Kai 62062: unknown prior ancestry means no known segment above it can earn proved credit
+        self.assertEqual(report['proved_true_unique']['count'], 0)
+        self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [None])
+        self.assertEqual(report['unresolved_after_coverage_gap'], [['B', 'text', 0]])
 
     def test_a_cyclic_ancestry_is_refused(self):
         with self.assertRaisesRegex(ca.AccountingRefusal, 'cyclic'):
@@ -191,6 +195,9 @@ class MissingEvidenceIsNeverDeterminedTests(unittest.TestCase):
         report = run([seg], 's2')
         self.undetermined(report)
         self.assertTrue(any('parent_segment_id is absent' in note for note in report['missing_evidence']))
+        self.assertEqual(report['proved_true_unique']['count'], 0)                       # the unknown parent may have consumed B
+        self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [None])
+        self.assertEqual(report['unresolved_after_coverage_gap'], [['B', 'text', 0]])
         self.assertEqual(run([segment('s2', None, [target('B')])], 's2')['eligible_unique_total'], 1)   # an explicit null is a genesis
 
     def test_r2_an_absent_budget_unit_is_undetermined(self):
