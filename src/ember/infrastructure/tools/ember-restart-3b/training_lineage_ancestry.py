@@ -19,7 +19,7 @@ is derived twice (cursor and deltas) and both must agree.
 The walk terminates ONLY on the caller's expected genesis. A manifest that has no `lineage.parent_checkpoint`
 is a genesis claim, and it is accepted only when its file-bytes digest equals `expected_genesis_manifest_sha256`:
 a child whose `parent_checkpoint` (or whole `lineage` block) was removed would otherwise read as a fresh genesis
-and the walk would count a truncated lineage as complete (Vera's finding on row 3a; red fixtures in
+and the walk would count a truncated lineage as complete (Vera's finding on genesis ancestry, issue row 4; red fixtures in
 test_training_lineage_ancestry.py).
 
 Stdlib only. Read-only. The caller supplies the head directory (the trained-child directory the selected
