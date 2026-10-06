@@ -29,6 +29,10 @@ import training_continuity_ledger as ledger  # noqa: E402
 import training_continuity_status as status  # noqa: E402
 import selected_continuation_head as head_pointer  # noqa: E402
 
+# Every child interpreter below is an owned, hidden process (owned_children -> owned_process.OwnedProcessRunner).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from owned_children import BARRIER_CHILD_PRELUDE, pid_alive, python_argv, run_group, run_one  # noqa: E402
+
 
 def _load_step_runner():
     spec = importlib.util.spec_from_file_location('cia_step_runner_2119test', MODULE_DIR / 'cia_step_runner.py')
@@ -835,9 +839,10 @@ import selected_continuation_head as hp
 _, dio = hp._import_siblings(Path(args['root']))
 '''
 
-_CHILD_ADVANCE = _CHILD_PRELUDE + '''
+_CHILD_ADVANCE = _CHILD_PRELUDE + BARRIER_CHILD_PRELUDE + '''
 mode = args.get('mode', 'plain')
 real_replace = dio.atomic_replace_durable
+peer_seen = {'value': None}
 if mode == 'die_before_replace':
     dio.atomic_replace_durable = lambda staged, target: os._exit(7)
 elif mode == 'die_after_replace':
@@ -845,16 +850,25 @@ elif mode == 'die_after_replace':
         real_replace(staged, target)
         os._exit(7)
     dio.atomic_replace_durable = _replace_then_die
-if args.get('hold_before_replace'):
-    def _slow_replace(staged, target):
-        time.sleep(args['hold_before_replace'])
+if args.get('rendezvous_peer'):
+    # Controlled interleaving, not a sleep: this writer announces that its compare-and-swap read already passed
+    # (the replace is reached only after the compare), then waits for the PEER to announce the same before it
+    # replaces. Without the lock both announce and both replace: the lost update is certain. With the lock the
+    # peer is still blocked on the lock, never announces, and the wait ends after rendezvous_s.
+    def _rendezvous_replace(staged, target):
+        barrier_dir = Path(args['barrier'])
+        (barrier_dir / ('at-replace-' + args['name'])).write_text('1')
+        peer_file = barrier_dir / ('at-replace-' + args['rendezvous_peer'])
+        deadline = time.monotonic() + args.get('rendezvous_s', 1.5)
+        while not peer_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        peer_seen['value'] = peer_file.exists()
         real_replace(staged, target)
-    dio.atomic_replace_durable = _slow_replace
+    dio.atomic_replace_durable = _rendezvous_replace
 if mode == 'no_lock':
     hp._pointer_lock = contextlib.contextmanager(lambda target_path, timeout=0: (yield))
-barrier = args.get('barrier')
-while barrier and not Path(barrier).exists():
-    time.sleep(0.005)
+if args.get('barrier'):
+    barrier_ready_and_wait(args['barrier'], args['name'], args.get('start_delay', 0.0))
 try:
     hp.advance_selected_continuation_head(
         repo_root=Path(args['root']), receipts_root=Path(args['receipts_root']),
@@ -862,15 +876,20 @@ try:
         hour_result_path=Path(args['hour_result_path']), hour_result_sha256=args['hour_result_sha256'],
         expected_parent_checkpoint_manifest_sha256=args['expected_parent'], now=2000.0)
 except hp.StaleParentError:
+    print(json.dumps({'stale': True, 'peer_seen_at_replace': peer_seen['value']}))
     sys.exit(3)
+print(json.dumps({'stale': False, 'peer_seen_at_replace': peer_seen['value']}))
 '''
 
 _CHILD_HOLD_LOCK = _CHILD_PRELUDE + '''
 with hp._pointer_lock(hp.pointer_path(Path(args['receipts_root']))):
-    print('HELD', flush=True)
+    Path(args['held_marker']).write_text('1')
     if args.get('die_holding'):
         os._exit(0)
-    time.sleep(args['hold_seconds'])
+    release = Path(args['release_marker'])
+    deadline = time.monotonic() + args['hold_seconds']
+    while not release.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
 '''
 
 _CHILD_RESTART_WRITE = _CHILD_PRELUDE + '''
@@ -934,10 +953,15 @@ class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
         return dict(module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root),
                     expected_parent=expected_parent, **checkpoint, **extra)
 
-    def _spawn(self, script, args, **popen):
-        import subprocess
-        return subprocess.Popen([sys.executable, '-B', '-c', script, json.dumps(args)],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **popen)
+    def _argv(self, script, args):
+        return python_argv('-c', script, json.dumps(args))
+
+    def _run_owned(self, script, args, *, timeout_s=60):
+        """One owned, hidden child to completion (never a bare Popen); returns the OwnedProcessResult."""
+        result = run_one(self._argv(script, args), timeout_s=timeout_s)
+        self.assertEqual(result.status, 'completed', result.stderr)
+        self.assertFalse(pid_alive(result.pid), f'pid {result.pid} still alive after completion')
+        return result
 
     def _pointer_bytes(self):
         path = head_pointer.pointer_path(self.receipts_root)
@@ -952,8 +976,7 @@ class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
         c1 = self._first_head()
         before = self._pointer_bytes()
         c2 = self._checkpoint('c2', record_index=2)
-        child = self._spawn(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_before_replace'))
-        child.communicate(timeout=60)
+        child = self._run_owned(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_before_replace'))
         self.assertEqual(child.returncode, 7)
         self.assertEqual(self._pointer_bytes(), before)
         self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
@@ -967,8 +990,7 @@ class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
         before-replace test above is not vacuously true of any kill."""
         c1 = self._first_head()
         c2 = self._checkpoint('c2', record_index=2)
-        child = self._spawn(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_after_replace'))
-        child.communicate(timeout=60)
+        child = self._run_owned(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_after_replace'))
         self.assertEqual(child.returncode, 7)
         self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c2['manifest_sha256'])
 
@@ -983,61 +1005,110 @@ class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
         self.assertEqual(self._pointer_bytes(), before)
         self.assertEqual(list(self.receipts_root.glob('.*.tmp')), [])
 
-    def _race(self, mode, trial):
-        """Two real writers, both declaring the same parent, released together by a barrier file;
-        each holds 0.3 s before its replace so the two compare-and-swap reads overlap."""
+    def _race(self, mode, trial, *, start_delay_b=0.0):
+        """Two real writers, both declaring the same parent. Neither starts its compare-and-swap until the
+        controller has seen BOTH acknowledge readiness (fail-closed in run_group), and each then meets the
+        other at the replace (rendezvous), so the overlap of the two compare reads is proved by the writers'
+        own receipts, not assumed from a delay. start_delay_b skews one writer's startup before it acknowledges."""
         import shutil
+        import tempfile
         shutil.rmtree(self.receipts_root, ignore_errors=True)
         base = self._checkpoint(f'base{trial}', record_index=10 * trial + 1)
         self._advance_in_process(base, head_pointer.GENESIS_SENTINEL)
         a = self._checkpoint(f'a{trial}', record_index=10 * trial + 2)
         b = self._checkpoint(f'b{trial}', record_index=10 * trial + 3)
-        barrier = self.root / f'barrier{trial}'
-        children = [self._spawn(_CHILD_ADVANCE, self._child_args(
-            cp, base['manifest_sha256'], mode=mode, barrier=str(barrier), hold_before_replace=0.3)) for cp in (a, b)]
-        barrier.write_bytes(b'go')
-        for child in children:
-            child.communicate(timeout=120)
-        codes = sorted(child.returncode for child in children)
-        return codes, head_pointer.current_head_sha256(self.receipts_root), (a, b)
+        with tempfile.TemporaryDirectory() as barrier:
+            jobs = []
+            for name, peer, cp, delay in (('a', 'b', a, 0.0), ('b', 'a', b, start_delay_b)):
+                args = self._child_args(cp, base['manifest_sha256'], mode=mode, barrier=barrier, name=name,
+                                        rendezvous_peer=peer, start_delay=delay)
+                jobs.append((name, self._argv(_CHILD_ADVANCE, args)))
+            outcome = run_group(jobs, barrier_dir=barrier, timeout_s=120)
+        results = [outcome.results[name] for name in ('a', 'b')]
+        for result in results:
+            self.assertEqual(result.status, 'completed', result.stderr)
+            self.assertFalse(pid_alive(result.pid), f'pid {result.pid} still alive after the race')
+        self.assertEqual(outcome.ready_before_go, ['a', 'b'])
+        peers_seen = [json.loads(result.stdout.strip().splitlines()[-1])['peer_seen_at_replace'] for result in results]
+        codes = sorted(result.returncode for result in results)
+        return codes, peers_seen, head_pointer.current_head_sha256(self.receipts_root), (a, b)
 
     def test_two_real_writers_from_one_parent_exactly_one_wins(self):
-        for trial in range(8):
-            codes, head, (a, b) = self._race('plain', trial)
+        for trial in range(4):
+            codes, peers_seen, head, (a, b) = self._race('plain', trial)
             self.assertEqual(codes, [0, 3], f'trial {trial}: expected one winner and one StaleParentError, got {codes}')
             self.assertIn(head, (a['manifest_sha256'], b['manifest_sha256']))
+            self.assertIn(False, peers_seen, f'trial {trial}: the lock must keep one writer out of the replace window: {peers_seen}')
+
+    def test_a_skewed_startup_does_not_change_the_locked_outcome(self):
+        """Writer b starts 2 s after writer a. The barrier still waits for b's acknowledgement, so a does not run
+        ahead alone: the locked outcome stays one winner and one stale refusal."""
+        codes, peers_seen, head, (a, b) = self._race('plain', 20, start_delay_b=2.0)
+        self.assertEqual(codes, [0, 3], codes)
+        self.assertIn(head, (a['manifest_sha256'], b['manifest_sha256']))
 
     def test_deliberate_red_without_the_lock_both_writers_win_and_one_overwrites_the_other(self):
-        codes, head, (a, b) = self._race('no_lock', 0)
+        codes, peers_seen, head, (a, b) = self._race('no_lock', 0)
+        self.assertEqual(peers_seen, [True, True])  # both compare reads had passed before either replaced: the overlap is evidence
         self.assertEqual(codes, [0, 0])  # both passed the compare: the lost-update defect the lock cures
+
+    def test_deliberate_red_a_skewed_startup_without_the_lock_still_loses_an_update(self):
+        """The skew that made a sleep-based red depend on timing (b starting after a's replace) cannot occur: the
+        unlocked writers still rendezvous at the replace, so the red holds under the skewed schedule."""
+        codes, peers_seen, head, (a, b) = self._race('no_lock', 21, start_delay_b=2.0)
+        self.assertEqual(peers_seen, [True, True])
+        self.assertEqual(codes, [0, 0])
 
     def test_a_lock_held_by_a_killed_process_is_released_by_the_os(self):
         import time
-        child = self._spawn(_CHILD_HOLD_LOCK, dict(module_dir=str(MODULE_DIR), root=str(ROOT),
-                                                   receipts_root=str(self.receipts_root), die_holding=True))
-        child.communicate(timeout=60)
+        held = self.root / 'held-dead'
+        child = self._run_owned(_CHILD_HOLD_LOCK, dict(module_dir=str(MODULE_DIR), root=str(ROOT),
+                                                       receipts_root=str(self.receipts_root), die_holding=True,
+                                                       held_marker=str(held)))
+        self.assertTrue(held.exists(), 'the child never acquired the lock it was meant to die holding')
         started = time.monotonic()
         self._first_head()
         self.assertLess(time.monotonic() - started, 10.0)
 
     def test_a_live_lock_holder_makes_a_second_writer_time_out_naming_the_lock(self):
-        child = self._spawn(_CHILD_HOLD_LOCK, dict(module_dir=str(MODULE_DIR), root=str(ROOT),
-                                                   receipts_root=str(self.receipts_root), hold_seconds=20))
+        """The holder is an owned, hidden child on its own thread. The controller always writes the release marker
+        and joins the thread before the temporary root goes, so no lock holder outlives the test."""
+        import threading
+        import time
+        held, release = self.root / 'held-live', self.root / 'release-live'
+        outcome = {}
+
+        def hold():
+            outcome['result'] = run_one(self._argv(_CHILD_HOLD_LOCK, dict(
+                module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root), hold_seconds=60,
+                held_marker=str(held), release_marker=str(release))), timeout_s=90)
+
+        holder = threading.Thread(target=hold, name='owned-child-lock-holder', daemon=True)
+        holder.start()
         try:
-            self.assertEqual(child.stdout.readline().strip(), 'HELD')
+            deadline = time.monotonic() + 30
+            while not held.exists() and holder.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(held.exists(), 'the lock holder never acquired the lock')
             target = head_pointer.pointer_path(self.receipts_root)
             with self.assertRaisesRegex(TimeoutError, r'\.lock'):
                 with head_pointer._pointer_lock(target, timeout=0.3):
                     self.fail('acquired a lock another live process holds')
         finally:
-            child.kill()
-            child.communicate(timeout=30)
+            release.write_text('1')
+            holder.join(90)
+        self.assertFalse(holder.is_alive(), 'the lock-holder thread did not finish')
+        result = outcome['result']
+        self.assertEqual((result.status, result.returncode), ('completed', 0), result.stderr)
+        self.assertFalse(pid_alive(result.pid), 'the lock holder is still alive after release')
 
 
 class RestartRecoveryTests(unittest.TestCase):
-    """Issue #2119 section 6, row 15: a fresh interpreter recovers the selected checkpoint and the
+    """Issue #2119 section 6, row 15 (PARTIAL): a fresh interpreter recovers the selected checkpoint and the
     diagnostic budget from disk alone. The status producer holds no in-process state (the
-    ledger test above proves only that the ledger is re-read; this one crosses real processes)."""
+    ledger test above proves only that the ledger is re-read; this one crosses real processes).
+    Not established here: durable pending-continuation restoration, and a stale or corrupt pending-continuation
+    negative. Head and occupancy restoration only."""
 
     def setUp(self):
         import tempfile
@@ -1048,11 +1119,10 @@ class RestartRecoveryTests(unittest.TestCase):
         self.env = dict(os.environ, **{ledger.LEDGER_ROOT_ENV: str(self.root / 'ledger-root')})
 
     def _run(self, script, **args):
-        import subprocess
         payload = dict(module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root), **args)
-        done = subprocess.run([sys.executable, '-B', '-c', script, json.dumps(payload)], capture_output=True,
-                              text=True, timeout=120, env=self.env)
-        self.assertEqual(done.returncode, 0, done.stderr)
+        done = run_one(python_argv('-c', script, json.dumps(payload)), timeout_s=120, env=self.env)
+        self.assertEqual((done.status, done.returncode), ('completed', 0), done.stderr)
+        self.assertFalse(pid_alive(done.pid), f'pid {done.pid} still alive after completion')
         return json.loads(done.stdout.strip().splitlines()[-1])
 
     def _checkpoint(self, name, record_index):
