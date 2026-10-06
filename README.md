@@ -32,9 +32,12 @@ one into another.
 - It addresses creating and operating owned local foundation intelligence on one consumer GPU.
   Claims require verified public experience and receipts; borrowed learned or evaluative signals
   are excluded from the target lineage.
-- `EMBER-01` is certified but grants no model-training or capability credit. `EMBER-02` is active,
-  and no current checkpoint is an admitted Ember model. The target is an approximately 30–35B
-  sparse unified text-image-audio decoder with native reasoning and structured-tool use.
+- `EMBER-01` is certified and grants no model-training or capability credit. `EMBER-02` is the active goal.
+  This public checkout does not establish an admitted checkpoint. Its minimum network is 3,000,000,000
+  total parameters and its destination exceeds 27,000,000,000; these are goal thresholds, not current
+  measurements. Read [CONTINUITY](docs/domains/governance/authority/CONTINUITY.md) for dated owner-
+  reported training and score status, selected-pointer evidence, and receipt-stamped snapshots. A score
+  or pointer advance does not establish checkpoint admission or capability.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
 - Inspection starts at this root README and the [canonical start page](docs/domains/governance/guides/START-HERE.md).
@@ -131,8 +134,11 @@ public replay set.
 <a id="ember.claim.mutable-state-owner"></a>
 Exact mutable state lives in
 [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). This README links to that owner and
-does not duplicate its rapidly changing identities. Public milestone contracts and certificates
-live under the [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
+does not duplicate its rapidly changing identities. That page separates owner-reported live status
+from generated receipt- and manifest-stamped snapshots. To reproduce a board block, inspect its named
+receipt and use `gen_readme_status.py --check` with the same `--data-root`; that checks only that receipt
+tree. Public milestone contracts and certificates live under the
+[roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
 
 ## Documentation routes
