@@ -29,6 +29,7 @@ from training_continuity_ledger import (
     diagnostic_occupancy_seconds,
     ledger_path,
     load_policy,
+    require_authority_reference,
     postponement_seconds,
     read_rows,
 )
@@ -133,6 +134,7 @@ def diagnostic_allowance_status(
     (`training_continuity_ledger.reserve_diagnostic_dispatch`) enforces. Read-only: this never
     appends to the ledger, it only re-derives the same two quantities from the same rows."""
     policy = load_policy() if policy is None else policy
+    require_authority_reference(policy)
     rows = read_rows(ledger_path(custody_parent))
     occupancy = diagnostic_occupancy_seconds(rows, lineage_sha)
     postponement = postponement_seconds(rows, lineage_sha, now=now)

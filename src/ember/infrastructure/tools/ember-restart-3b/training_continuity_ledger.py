@@ -66,13 +66,25 @@ def ledger_root(custody_parent: Path | None = None) -> Path:
         raise ValueError('training continuity ledger root needs the dispatch custody parent '
                          f'or {LEDGER_ROOT_ENV}')
     return Path(custody_parent).resolve().parent
+POLICY_AUTHORITY_REFERENCE = ('approved by the release authority for the operator, 2026-10-03 3:43 PM LA, '
+                              'under the approval-routing rule; recorded in the completion-push ledger')
 DEFAULT_POLICY = {
     'schema': POLICY_SCHEMA,
     'max_diagnostic_occupancy_seconds': 4 * 3600,
     'max_postponement_seconds': 6 * 3600,
     'max_blocker_renewals': 2,
+    'authority_reference': POLICY_AUTHORITY_REFERENCE,
 }
 _RESERVATION_PURPOSES = {'DIAGNOSTIC'}
+
+
+def require_authority_reference(policy: Mapping[str, Any]) -> None:
+    """An approval-bound limit set is usable only if it names the approval it came from. Every consumer
+    of a policy (the file loader, the reservation gate, the status reader) calls this, so an unbound
+    policy passed explicitly is refused exactly like an unbound file."""
+    reference = policy.get('authority_reference')
+    if not isinstance(reference, str) or not reference.strip():
+        raise ValueError('training continuity policy needs a non-empty authority_reference')
 
 
 def default_policy_path() -> Path:
@@ -97,6 +109,7 @@ def load_policy(path: Path | None = None) -> dict[str, Any]:
     for key in required:
         if not isinstance(payload[key], int) or payload[key] < 0:
             raise ValueError(f'training continuity policy {key} must be a nonnegative integer')
+    require_authority_reference(payload)
     return payload
 
 
@@ -332,6 +345,7 @@ def reserve_diagnostic_dispatch(
     if budget_seconds < 0:
         raise ValueError('diagnostic budget_seconds must be nonnegative')
     policy = load_policy() if policy is None else policy
+    require_authority_reference(policy)
     now = time.time() if now is None else now
     rows = read_rows(path)
     occupancy_before = diagnostic_occupancy_seconds(rows, lineage_sha)

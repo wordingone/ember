@@ -144,6 +144,56 @@ class PurposeGateRefusesBeforeSpawnTests(unittest.TestCase):
         self.assertNotIn('DIAGNOSTIC', str(failure.exception))
 
 
+class PolicyAuthorityTests(unittest.TestCase):
+    """issue #2119 row 3a: the limit set is an approved policy, so every consumer refuses a policy that does not name the approval it came from."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.shipped = json.loads(ledger.default_policy_path().read_text(encoding='utf-8'))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, payload):
+        path = self.dir / 'policy.json'
+        path.write_text(json.dumps(payload), encoding='utf-8')
+        return path
+
+    def test_the_shipped_policy_file_names_its_approval_and_matches_the_defaults(self):
+        loaded = ledger.load_policy()
+        self.assertTrue(loaded['authority_reference'].strip())
+        self.assertEqual(loaded, ledger.DEFAULT_POLICY)
+        self.assertEqual(ledger.load_policy(self.dir / 'absent.json'), ledger.DEFAULT_POLICY)
+
+    def test_a_policy_file_without_an_authority_reference_is_refused(self):
+        unbound = {key: value for key, value in self.shipped.items() if key != 'authority_reference'}
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            ledger.load_policy(self._write(unbound))
+
+    def test_an_empty_or_non_string_authority_reference_is_refused(self):
+        for bad in ('', '   ', None, 7, ['approved']):
+            with self.subTest(reference=bad):
+                with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+                    ledger.load_policy(self._write(dict(self.shipped, authority_reference=bad)))
+
+    def test_the_reservation_gate_refuses_an_unbound_policy_before_writing_a_row(self):
+        path = self.dir / 'diagnostic-allowance-ledger.jsonl'
+        unbound = {key: value for key, value in ledger.DEFAULT_POLICY.items() if key != 'authority_reference'}
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            ledger.reserve_diagnostic_dispatch(
+                path=path, lineage_sha='abc', run_id='r1', budget_seconds=60,
+                diagnostic_question='q', non_advancement_reason='n', return_condition='c',
+                policy=unbound, now=1000.0)
+        self.assertEqual(ledger.read_rows(path), [])
+
+    def test_the_status_reader_refuses_an_unbound_policy(self):
+        unbound = dict(ledger.DEFAULT_POLICY, authority_reference='')
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            status.diagnostic_allowance_status(custody_parent=self.dir / 'run-1', lineage_sha='abc', policy=unbound, now=1000.0)
+
+
 class LedgerLineageAndReadBackTests(unittest.TestCase):
     def setUp(self):
         import tempfile
