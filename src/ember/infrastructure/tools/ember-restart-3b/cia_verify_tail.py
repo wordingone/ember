@@ -9,7 +9,8 @@ persisted witness. It trains nothing, publishes nothing, writes no hour result a
 It is a GPU leg: it refuses unless the governed window marker exists (open it with gpu_window.sh open --hypothesis) and unless exactly one CUDA device
 is bound to the UUID the hour's prediction declared. Execution authority is the worker boundary (`authorize`): membership in the measurement run's owned
 numerical job, the explicit live gate, and a shared GPU lock held by this process's ancestor daemon with exactly one active job; a direct invocation
-refuses at the first of those, before any artifact is read. The running file must also be the bytes the prediction pins (the entry is in HOUR_SOURCES).
+refuses at the first of those, before any artifact is read. After the custody is read, `bind_to_dispatch` requires the launch binding to name this owned
+run, the lock path to equal the launch's bound lock, and the lock's daemon to be the canonical daemon binary the launch bound. The running file must also be the bytes the prediction pins (the entry is in HOUR_SOURCES).
 No daemon dispatch path for a tail job exists yet, so until one does this entry refuses everywhere (fail closed).
 Every refusal prints `REFUSE rc2: <why>` and exits 2, before any model is built; a check or restore failure after that prints `FAIL rc3: ...` and exits 3.
 Not exercised under a real window by its test file: the refusal paths and the hand-off to `verify_tail` are tested on CPU; the GPU build is not.
@@ -79,6 +80,28 @@ def authorize(custody: Path, *, runner, resources=None, environ=None, pid=None) 
         current = by_pid[current]['ParentProcessId']
     if current != lock.get('daemon_pid'):
         raise Refused('the shared GPU lock daemon is not an ancestor of this process')
+    return {'lock_path': str(lock_path), 'lock': lock, 'by_pid': by_pid}
+
+
+def bind_to_dispatch(custody: Path, binding: dict, facts: dict, *, runner) -> None:
+    """After the custody is read: the launch binding must name THIS owned run (not another run's consistent files), the lock must be the canonical lock
+    path the launch bound, and the lock's daemon must be the canonical daemon binary the launch bound (verify_worker's identity checks, minus the dead
+    controller)."""
+    launch = binding['launch']
+    run_id = Path(custody).name.removeprefix('measurement-')
+    if launch['run_id'] != run_id:
+        raise Refused('the launch binding names another run than the owned custody')
+    if facts['lock_path'] != launch.get('gpu_lock'):
+        raise Refused('shared GPU lock path differs from the launch binding')
+    try:
+        daemon = runner.daemon_identity()
+    except ValueError as error:
+        raise Refused(f'canonical daemon identity is unavailable: {error}') from error
+    if daemon != binding.get('daemon'):
+        raise Refused('canonical daemon differs from the launch binding')
+    row = facts['by_pid'].get(facts['lock']['daemon_pid'])
+    if row is None or not row.get('ExecutablePath') or not os.path.samefile(row['ExecutablePath'], daemon['path']):
+        raise Refused('the shared GPU lock daemon is not the canonical daemon binary')
 
 
 def pinned_entry_matches(identity: dict, runner) -> None:
@@ -126,8 +149,9 @@ def run(custody: Path, *, window_marker: Path | None = None) -> dict:
     require_window(window_marker)
     import cia_step_runner as runner
     import cia_hour
-    authorize(custody, runner=runner)
+    facts = authorize(custody, runner=runner)
     binding = preflight(custody, window_marker=window_marker)
+    bind_to_dispatch(custody, binding, facts, runner=runner)
     prediction, _ = runner.load_prediction(custody / 'prediction.json', binding['launch']['prediction_sha256'])
     identity = prediction['identity']
     pinned_entry_matches(identity, runner)

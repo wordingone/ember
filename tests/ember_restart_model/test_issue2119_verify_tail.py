@@ -356,6 +356,47 @@ class AuthorityTests(Fixture):
         with self.assertRaisesRegex(cia_verify_tail.Refused, 'not an ancestor'):
             self.authorize()
 
+    def dispatch_fixture(self):
+        exe = self.custody / 'ember-lab.exe'
+        exe.write_bytes(b'daemon')
+        daemon = {'path': str(exe), 'binary_sha256': 'c' * 64, 'source_sha256': 'd' * 64}
+        self.census[0]['ExecutablePath'] = str(exe)           # pid 10 is the lock daemon
+        runner = types.SimpleNamespace(daemon_identity=lambda: dict(daemon))
+        binding = {'launch': {'run_id': 'run42', 'gpu_lock': str(self.lock.resolve())}, 'daemon': dict(daemon)}
+        facts = self.authorize()
+        return runner, binding, facts
+
+    def test_a_launch_binding_for_the_owned_run_with_the_canonical_lock_and_daemon_binds(self):
+        runner, binding, facts = self.dispatch_fixture()
+        cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+
+    def test_an_owned_measurement_a_with_consistent_b_launch_and_prediction_files_is_refused(self):
+        runner, binding, facts = self.dispatch_fixture()
+        binding['launch']['run_id'] = 'runB'                   # B's launch.json and prediction agree with each other, but the owned job is run42
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'names another run'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+
+    def test_a_forged_lock_naming_an_ancestor_that_is_not_the_canonical_daemon_is_refused(self):
+        runner, binding, facts = self.dispatch_fixture()
+        other = self.custody / 'other.exe'
+        other.write_bytes(b'impostor')
+        facts['by_pid'][10]['ExecutablePath'] = str(other)     # an ancestor that wrote the lock, but is not the daemon binary
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not the canonical daemon binary'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+        facts['by_pid'][10].pop('ExecutablePath')
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not the canonical daemon binary'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+
+    def test_a_lock_path_or_daemon_identity_that_differs_from_the_launch_binding_is_refused(self):
+        runner, binding, facts = self.dispatch_fixture()
+        facts['lock_path'] = str(self.custody / 'forged.lock')
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'lock path differs'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+        runner, binding, facts = self.dispatch_fixture()
+        binding['daemon']['binary_sha256'] = 'e' * 64
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'canonical daemon differs'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+
     def test_the_running_entry_must_be_the_source_the_prediction_pins(self):
         runner = types.SimpleNamespace(file_sha256=lambda path: 'f' * 64, checked_sha=lambda value: value)
         with self.assertRaisesRegex(cia_verify_tail.Refused, 'not the source bound'):
