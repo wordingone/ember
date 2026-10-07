@@ -74,6 +74,11 @@ BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
 END_MARKER = "<!-- BOARD-STATUS-END -->"
 SUBJECT_BEGIN_MARKER = "<!-- CURRENT-SUBJECT-BEGIN -->"
 SUBJECT_END_MARKER = "<!-- CURRENT-SUBJECT-END -->"
+CONTINUITY_STATUS_PATH = os.path.join(ROOT, "manifests", "ember-training-continuity-status-v1.json")
+CONTINUITY_BEGIN_MARKER = "<!-- CONTINUITY-STATUS-BEGIN -->"
+CONTINUITY_END_MARKER = "<!-- CONTINUITY-STATUS-END -->"
+CONTINUITY_SNAPSHOT_SCHEMA = "ember-training-continuity-snapshot-v1"
+CONTINUITY_STATUS_SCHEMA = "ember-training-continuity-status-v2"  # training_continuity_status.STATUS_SCHEMA; a test compares the two
 CURRENT_SUBJECT_FIELDS = {
     "active_route",
     "capability_credit",
@@ -514,12 +519,193 @@ def render_current_subject_block(payload):
     )
 
 
+def _closed(value, keys, where):
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise ValueError(f"continuity status {where} keys are not {sorted(keys)}")
+    return value
+
+
+def _nonneg_int(value, where):
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"continuity status {where} must be a nonnegative integer")
+    return value
+
+
+def _digest_or_genesis(value, where):
+    if value == "GENESIS":
+        return value
+    return _closed_hash(value, where)
+
+
+def _text(value, where, *, nullable=False):
+    if value is None and nullable:
+        return value
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"continuity status {where} must be a non-empty string")
+    return value
+
+
+def load_continuity_status(path):
+    """Closed load of the committed continuity snapshot: the training-continuity status dict plus when it was
+    captured and the head it describes. Anything outside the closed key sets, a non-hex digest or a negative
+    count refuses; the loader never repairs."""
+    with open(path, "r", encoding="utf-8") as stream:
+        payload = json.load(stream)
+    _closed(payload, {"schema_version", "captured_at", "head_manifest_sha256", "status"}, "root")
+    if payload["schema_version"] != CONTINUITY_SNAPSHOT_SCHEMA:
+        raise ValueError(f"continuity snapshot schema_version must be {CONTINUITY_SNAPSHOT_SCHEMA}")
+    if not isinstance(payload["captured_at"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", payload["captured_at"]):
+        raise ValueError("continuity snapshot captured_at must be YYYY-MM-DDTHH:MM:SSZ (UTC)")
+    head = _digest_or_genesis(payload["head_manifest_sha256"], "head_manifest_sha256")
+    status = _closed(payload["status"], {
+        "schema", "lineage_checkpoint_manifest_sha256", "lineage", "claim_budget_eligible", "gpu_owner", "checkpoint",
+        "learning_measurement", "purpose", "diagnostic_allowance", "next_segment"}, "status")
+    if status["schema"] != CONTINUITY_STATUS_SCHEMA:
+        raise ValueError(f"continuity status schema must be {CONTINUITY_STATUS_SCHEMA}")
+    if _digest_or_genesis(status["lineage_checkpoint_manifest_sha256"], "lineage_checkpoint_manifest_sha256") != head:
+        raise ValueError("continuity snapshot head differs from the status lineage checkpoint")
+    lineage = status["lineage"]
+    if isinstance(lineage, dict) and "genesis_manifest_sha256" in lineage:
+        _closed(lineage, {"depth", "genesis_manifest_sha256", "retained_applied_positions", "retained_global_steps"}, "lineage")
+        _closed_hash(lineage["genesis_manifest_sha256"], "lineage.genesis_manifest_sha256")
+    else:
+        _closed(lineage, {"depth", "retained_applied_positions", "retained_global_steps"}, "lineage")
+    for name in ("depth", "retained_applied_positions", "retained_global_steps"):
+        _nonneg_int(lineage[name], f"lineage.{name}")
+    claim = status["claim_budget_eligible"]
+    if not isinstance(claim, dict) or claim.get("status") not in {"UNDEFINED", "UNDETERMINED", "MEASURED"}:
+        raise ValueError("continuity status claim_budget_eligible.status must be UNDEFINED, UNDETERMINED or MEASURED")
+    if claim["status"] == "MEASURED":
+        _closed(claim, {"status", "eligible_unique_total"}, "claim_budget_eligible")
+        _nonneg_int(claim["eligible_unique_total"], "claim_budget_eligible.eligible_unique_total")
+    else:
+        _closed(claim, {"status", "missing"}, "claim_budget_eligible")
+        _text(claim["missing"], "claim_budget_eligible.missing")
+    gpu = status["gpu_owner"]
+    if isinstance(gpu, dict) and gpu.get("status") == "held":
+        _closed(gpu, {"status", "owner", "run_id", "training_job_purpose"}, "gpu_owner")
+        for name in ("owner", "run_id", "training_job_purpose"):
+            _text(gpu[name], f"gpu_owner.{name}", nullable=True)
+    else:
+        _closed(gpu, {"status"}, "gpu_owner")
+        if gpu["status"] != "not_reported":
+            raise ValueError("continuity status gpu_owner.status must be held or not_reported")
+    checkpoint = _closed(status["checkpoint"], {"child_manifest_sha256", "parent_manifest_sha256", "last_hour_applied_positions"}, "checkpoint")
+    _digest_or_genesis(checkpoint["child_manifest_sha256"], "checkpoint.child_manifest_sha256")
+    if checkpoint["parent_manifest_sha256"] is not None:
+        _closed_hash(checkpoint["parent_manifest_sha256"], "checkpoint.parent_manifest_sha256")
+    _nonneg_int(checkpoint["last_hour_applied_positions"], "checkpoint.last_hour_applied_positions")
+    measurement = status["learning_measurement"]
+    if isinstance(measurement, dict) and measurement.get("status") == "measured":
+        _closed(measurement, {"status", "measurement"}, "learning_measurement")
+        if not isinstance(measurement["measurement"], dict):
+            raise ValueError("continuity status learning_measurement.measurement must be an object")
+    else:
+        _closed(measurement, {"status"}, "learning_measurement")
+        if measurement["status"] != "pending":
+            raise ValueError("continuity status learning_measurement.status must be measured or pending")
+    purpose = _closed(status["purpose"], {"training_job_purpose", "run_id"}, "purpose")
+    for name in ("training_job_purpose", "run_id"):
+        _text(purpose[name], f"purpose.{name}", nullable=True)
+    allowance = _closed(status["diagnostic_allowance"], {
+        "diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds",
+        "max_postponement_seconds", "at_occupancy_limit", "at_postponement_limit"}, "diagnostic_allowance")
+    for name in ("diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds", "max_postponement_seconds"):
+        if isinstance(allowance[name], bool) or not isinstance(allowance[name], (int, float)) or allowance[name] < 0:
+            raise ValueError(f"continuity status diagnostic_allowance.{name} must be a nonnegative number")
+    for name in ("at_occupancy_limit", "at_postponement_limit"):
+        if not isinstance(allowance[name], bool):
+            raise ValueError(f"continuity status diagnostic_allowance.{name} must be a boolean")
+    nxt = status["next_segment"]
+    if isinstance(nxt, dict) and nxt.get("status") == "blocked":
+        _closed(nxt, {"status", "blocker"}, "next_segment")
+        _text(nxt["blocker"], "next_segment.blocker")
+    else:
+        _closed(nxt, {"status", "training_job_purpose", "run_id"}, "next_segment")
+        if nxt["status"] != "ready":
+            raise ValueError("continuity status next_segment.status must be ready or blocked")
+        for name in ("training_job_purpose", "run_id"):
+            _text(nxt[name], f"next_segment.{name}", nullable=True)
+    return payload
+
+
+def render_continuity_status_block(payload):
+    """The page block for a loaded snapshot. Lineage retained positions come from the ancestry walk
+    (`status.lineage`); the last hour's count is printed on its own line under its own name and is never presented as the
+    lineage total. The block states `captured_at` and the head digest rather than claiming currency."""
+    status = payload["status"]
+    lineage, checkpoint, claim = status["lineage"], status["checkpoint"], status["claim_budget_eligible"]
+    allowance, nxt = status["diagnostic_allowance"], status["next_segment"]
+    if claim["status"] == "MEASURED":
+        claim_line = f"- Claim-budget-eligible unique targets: `{claim['eligible_unique_total']}` (frozen predicate evaluated)."
+    else:
+        claim_line = f"- Claim-budget-eligible unique targets: **{claim['status']}**, no number is shown; missing: {claim['missing']}"
+    measurement = status["learning_measurement"]
+    if measurement["status"] == "measured":
+        measure_line = (f"- Last learning measurement (bound to `{checkpoint['child_manifest_sha256']}`): "
+                        f"`{json.dumps(measurement['measurement'], sort_keys=True, separators=(',', ':'))}`.")
+    else:
+        measure_line = "- Last learning measurement: pending."
+    gpu = status["gpu_owner"]
+    gpu_line = ("- GPU owner: not reported." if gpu["status"] == "not_reported" else
+                f"- GPU owner: `{gpu['owner']}`, run `{gpu['run_id']}`, purpose `{gpu['training_job_purpose']}`.")
+    purpose = status["purpose"]
+    if nxt["status"] == "blocked":
+        next_line = f"- Next segment: blocked: {nxt['blocker']}"
+    else:
+        next_line = f"- Next segment: ready, purpose `{nxt['training_job_purpose']}`, run `{nxt['run_id']}`."
+    return "\n".join([
+        CONTINUITY_BEGIN_MARKER,
+        "<!-- GENERATED by src/ember/governance/scripts/gen_readme_status.py from manifests/ember-training-continuity-status-v1.json -->",
+        f"**Training continuity (snapshot captured `{payload['captured_at']}`, head `{payload['head_manifest_sha256']}`):** "
+        "this block matches the committed snapshot and does not claim to be current.",
+        "",
+        f"- Selected checkpoint: `{checkpoint['child_manifest_sha256']}`; parent: `{checkpoint['parent_manifest_sha256']}`.",
+        f"- Retained applied positions over the whole lineage (ancestry walk, depth `{lineage['depth']}`): "
+        f"`{lineage['retained_applied_positions']}` positions, `{lineage['retained_global_steps']}` steps.",
+        f"- Last hour only: `{checkpoint['last_hour_applied_positions']}` applied positions.",
+        claim_line,
+        measure_line,
+        gpu_line,
+        f"- Current purpose: `{purpose['training_job_purpose']}`, run `{purpose['run_id']}`.",
+        f"- Diagnostic occupancy `{allowance['diagnostic_occupancy_seconds']}` of `{allowance['max_diagnostic_occupancy_seconds']}` s "
+        f"(at limit: `{str(allowance['at_occupancy_limit']).lower()}`); postponement `{allowance['postponement_seconds']}` of "
+        f"`{allowance['max_postponement_seconds']}` s (at limit: `{str(allowance['at_postponement_limit']).lower()}`).",
+        next_line,
+        CONTINUITY_END_MARKER,
+    ])
+
+
 def _replace_marked(text, begin, end, block, surface):
     pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
     matches = pattern.findall(text)
     if len(matches) != 1:
         raise ValueError(f"{surface} must contain exactly one {begin} ... {end} block")
     return pattern.sub(lambda _: block, text, count=1)
+
+
+def apply_continuity_status(continuity_text, snapshot_path):
+    """The page text with its continuity-status block rendered from the committed snapshot. Both halves or neither: a
+    snapshot with no page block, a page block with no snapshot, or an invalid snapshot raises ValueError."""
+    snapshot_present = os.path.isfile(snapshot_path)
+    markers_present = CONTINUITY_BEGIN_MARKER in continuity_text or CONTINUITY_END_MARKER in continuity_text
+    if not snapshot_present and not markers_present:
+        return continuity_text
+    if not snapshot_present:
+        raise ValueError("CONTINUITY.md carries a continuity-status block but the committed snapshot is absent")
+    if not markers_present:
+        raise ValueError("the continuity snapshot exists but CONTINUITY.md has no continuity-status block")
+    try:
+        snapshot = load_continuity_status(snapshot_path)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError(f"continuity snapshot is invalid: {exc}") from exc
+    return _replace_marked(
+        continuity_text,
+        CONTINUITY_BEGIN_MARKER,
+        CONTINUITY_END_MARKER,
+        render_continuity_status_block(snapshot),
+        "docs/domains/governance/authority/CONTINUITY.md",
+    )
 
 
 def subject_surfaces_current(payload, continuity_path):
@@ -568,6 +754,7 @@ def main():
     parser.add_argument("--readme", default=README_PATH, help=argparse.SUPPRESS)
     parser.add_argument("--continuity", default=CONTINUITY_PATH)
     parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
+    parser.add_argument("--continuity-snapshot", default=CONTINUITY_STATUS_PATH)
     parser.add_argument("--branch-inventory", default=BRANCH_INVENTORY_PATH)
     parser.add_argument("--branch-inventory-max-age-days", type=int, default=7)
     parser.add_argument(
@@ -660,6 +847,10 @@ def main():
         subject_block,
         "docs/domains/governance/authority/CONTINUITY.md",
     )
+    try:
+        new_continuity = apply_continuity_status(new_continuity, args.continuity_snapshot)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"gen_readme_status: {exc}") from exc
 
     if new_continuity == continuity:
         print(
