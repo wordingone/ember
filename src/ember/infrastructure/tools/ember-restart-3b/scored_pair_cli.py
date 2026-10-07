@@ -21,13 +21,12 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[4]
-DEFAULT_PROMOTE_CALLER = Path(os.environ['EMBER_PROMOTE_CALLER']) if os.environ.get('EMBER_PROMOTE_CALLER') else None
+DEFAULT_PROMOTE_CALLER = HERE / 'promote_with_pending_v1.py'
 for _path in (HERE, ROOT / 'src'):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
@@ -69,8 +68,6 @@ def main(argv=None, *, runner=None, promote_caller=None, pending=None, sch=None)
         entry_mod.load_frozen_binding(identity, args.entry)      # a foreign entry refuses before the publication is written
         if args.arms is not None and not (args.custody / entry_mod.PUBLICATION_FILENAME).exists():
             entry_mod.write_arm_publication(args.custody, arms=json.loads(args.arms.read_text(encoding='utf-8')))
-        if promote_caller is None and args.promote_caller is None:
-            raise entry_mod.ScoredPairRefusal('no promote caller: pass --promote-caller or set EMBER_PROMOTE_CALLER')
         promote_caller = promote_caller or _load('scored_pair_cli_promote_caller', args.promote_caller)
         pending = pending or _load('scored_pair_cli_pending', args.niko_module_dir / 'pending_continuation.py')
         sch = sch or _load('scored_pair_cli_sch', args.niko_module_dir / 'selected_continuation_head.py')

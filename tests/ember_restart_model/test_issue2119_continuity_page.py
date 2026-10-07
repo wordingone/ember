@@ -47,7 +47,7 @@ def status_dict(*, retained=3000, last_hour=1000, head=H3):
         'lineage_checkpoint_manifest_sha256': head,
         'lineage': status_module.lineage_status(lineage_record),
         'claim_budget_eligible': status_module.claim_budget_eligible_status(None),
-        'gpu_owner': status_module.gpu_owner_status({'owner': 'eli', 'run_id': 'r9', 'training_job_purpose': 'DIAGNOSTIC'}),
+        'gpu_owner': status_module.gpu_owner_status({'owner': 'seat-a', 'run_id': 'r9', 'training_job_purpose': 'DIAGNOSTIC'}),
         'checkpoint': status_module.selected_checkpoint_status(hour_result),
         'learning_measurement': status_module.last_learning_measurement_status(None),
         'purpose': status_module.current_purpose_status({'training_job_purpose': 'DIAGNOSTIC', 'run_id': 'r9'}),

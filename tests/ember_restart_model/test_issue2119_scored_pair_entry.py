@@ -29,14 +29,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_DIR = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'
-NIKO_DIR = Path(os.environ.get('EMBER_NIKO_MODULE_DIR', 'A:/niko-staging/issue2119-dispatch-policy-20261006T2027Z/src/ember/infrastructure/tools/ember-restart-3b'))
-CALLER_DIR = Path(os.environ.get('EMBER_PROMOTE_CALLER_DIR', 'A:/eli-staging/h33-repair-tests'))
-REPO = NIKO_DIR.parents[3]
+REPO = ROOT
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
-for directory in (NIKO_DIR, CALLER_DIR):      # appended: this tree's modules always win a name clash
-    if str(directory) not in sys.path:
-        sys.path.append(str(directory))
 
 import arm_results_producer as producer  # noqa: E402
 import retention_eligibility as elig  # noqa: E402
