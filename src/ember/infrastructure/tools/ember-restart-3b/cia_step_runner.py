@@ -2738,7 +2738,7 @@ def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, di
             pass
     ledger_module.record_retention_experiment_outcome(
         path=ledger_module.ledger_path(parent),
-        lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+        lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity, receipts_root=ledger_module.ledger_root(parent)),
         run_id=run_id, eligible_descendant_published=eligible,
         # review 63986 R1: the occupancy is the run's own execution (dispatch_started to the run-complete instant the launch recorded), never the
         # time the finalizer happened to run; deferred scoring or review delay is not model execution. A caller with no recorded end
@@ -2843,6 +2843,12 @@ def launch(args, dispatch):
     child_env = None
     if hour_mode(identity) and identity['hour']['schema'] == 'governed-hour-v1':
         child_env = layer_child_env(identity, custody)  # refuses a governed hour whose identity declares no layer_template
+    launch_lineage_sha = None
+    if identity.get('training_job_purpose') in ('DIAGNOSTIC', 'RETENTION_ELIGIBLE_EXPERIMENT'):
+        # Issue #2119 row 3b: the lineage key is read ONCE, before any spawn, from the live pointer (refusing when there is none), and reused
+        # by the reservation and by the launch-exception outcome row, so a refusal can never mask the original error after the run started.
+        launch_lineage_sha = load_ledger_module().lineage_checkpoint_manifest_sha256(
+            identity, receipts_root=load_ledger_module().ledger_root(parent))
     if identity.get('training_job_purpose') == 'DIAGNOSTIC':
         # Issue #2119 section 3: reserve the declared budget BEFORE any GPU spawn. The budget is
         # the same wall_seconds limit OwnedProcessRunner already enforces below -- no second,
@@ -2850,7 +2856,7 @@ def launch(args, dispatch):
         ledger_module = load_ledger_module()
         ledger_module.reserve_diagnostic_dispatch(
             path=ledger_module.ledger_path(parent),
-            lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+            lineage_sha=launch_lineage_sha,
             run_id=run_id, budget_seconds=resource_limits(identity)['wall_seconds'],
             diagnostic_question=identity['training_diagnostic_question'],
             non_advancement_reason=identity['training_diagnostic_non_advancement_reason'],
@@ -2903,7 +2909,7 @@ def launch(args, dispatch):
             ledger_module = load_ledger_module()
             ledger_module.record_retention_experiment_outcome(
                 path=ledger_module.ledger_path(parent),
-                lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+                lineage_sha=launch_lineage_sha,
                 run_id=run_id, eligible_descendant_published=False,
                 elapsed_seconds=int(time.time() - dispatch_started))
         raise

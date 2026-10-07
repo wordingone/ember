@@ -335,7 +335,11 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
                 return Path(parent) / 'ledger'
 
             @staticmethod
-            def lineage_checkpoint_manifest_sha256(identity):
+            def ledger_root(parent=None):
+                return Path(parent) / "receipts"
+
+            @staticmethod
+            def lineage_checkpoint_manifest_sha256(identity, *, receipts_root):
                 return START
 
             @staticmethod
@@ -525,7 +529,7 @@ class RealLedgerFinalizerTests(unittest.TestCase):
         return [r for r in self.ledger.read_rows(self.ledger_file) if r.get('row_kind') == 'retention_experiment_outcome']
 
     def test_the_real_ledger_records_one_row_per_lineage_and_run_and_charges_it_once(self):
-        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity)
+        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.ledger.ledger_root(self.custody.parent))
         first = self.ledger.record_retention_experiment_outcome(path=self.ledger_file, lineage_sha=lineage, run_id='r1',
                                                                 eligible_descendant_published=False, elapsed_seconds=500)
         again = self.ledger.record_retention_experiment_outcome(path=self.ledger_file, lineage_sha=lineage, run_id='r1',
@@ -538,7 +542,7 @@ class RealLedgerFinalizerTests(unittest.TestCase):
         self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), lineage), 540)   # a different run still charges
 
     def test_an_interrupted_marker_write_then_a_retry_never_charges_the_occupancy_twice(self):
-        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity)
+        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.ledger.ledger_root(self.custody.parent))
         real_write_new = self.runner._write_new
 
         def fail_the_marker_once(path, value):
