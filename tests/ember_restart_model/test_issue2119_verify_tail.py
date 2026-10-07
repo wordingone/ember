@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import os
 import sys
 import tempfile
 import types
@@ -114,6 +115,18 @@ class WitnessTests(Fixture):
         with self.assertRaises(FileExistsError):
             self.persist()
 
+    def test_a_witness_replaced_between_the_read_and_the_restore_cannot_change_what_the_result_binds(self):
+        self.persist()
+        witness_path = self.custody / cia_hour.TERMINAL_WITNESS
+        original = hashlib.sha256(witness_path.read_bytes()).hexdigest()
+
+        def replace_after_read(*args, **kwargs):
+            witness_path.write_bytes(witness_path.read_bytes() + b' ')     # other bytes, still parseable JSON
+        with fake_modules(), patch.object(cia_hour, 'verify_checkpoint_restore', replace_after_read):
+            result = self.tail()
+        self.assertNotEqual(hashlib.sha256(witness_path.read_bytes()).hexdigest(), original)    # the red bites: the file did change
+        self.assertEqual(result['witness_sha256'], original)                                     # the result binds the bytes that were verified
+
     def test_a_json_round_trip_of_tuples_and_int_keys_still_verifies(self):
         self.persist()
         persisted = json.loads((self.custody / cia_hour.TERMINAL_WITNESS).read_bytes())
@@ -193,7 +206,8 @@ class TailEntryTests(Fixture):
         self.lost.mkdir()
         # a lost hour custody: published child + witness + launch binding + prediction
         write_child(self.lost / 'trained-child')
-        (self.lost / cia_hour.TERMINAL_WITNESS).write_text('{}')
+        cia_hour.write_terminal_witness(FakeRunner, self.lost, {'checkpoint_manifest_sha256': 'b' * 64, 'data_cursor': dict(CURSOR)},
+                                        dict(facts=FACTS, rng_state_sha256=RNG, data_cursor=dict(CURSOR)), {'measured_updates': 8})
         (self.lost / 'launch.json').write_text(json.dumps({'launch': {'prediction_sha256': 'a' * 64, 'run_id': 'r', 'gpu_uuid': 'GPU-x'}}))
         (self.lost / 'prediction.json').write_text('{}')
 
@@ -210,6 +224,31 @@ class TailEntryTests(Fixture):
     def test_it_refuses_a_custody_that_never_wrote_a_witness(self):
         (self.lost / cia_hour.TERMINAL_WITNESS).unlink()
         self.refuses('no terminal witness')
+
+    def test_it_refuses_when_no_window_marker_is_bound_to_the_process(self):
+        with patch.dict(os.environ, clear=False):
+            os.environ.pop(cia_verify_tail.WINDOW_MARKER_ENV, None)
+            with self.assertRaisesRegex(cia_verify_tail.Refused, 'is not set'):
+                cia_verify_tail.run(self.lost)
+
+    def test_it_refuses_a_malformed_witness_before_any_model_is_built(self):
+        (self.lost / cia_hour.TERMINAL_WITNESS).write_text('{}')
+        self.refuses('terminal witness is malformed')
+        (self.lost / cia_hour.TERMINAL_WITNESS).write_text('not json')
+        self.refuses('terminal witness is malformed')
+
+    def test_it_refuses_a_launch_binding_without_run_id_gpu_uuid_or_a_hex_digest(self):
+        for launch in ({'prediction_sha256': 'a' * 64, 'gpu_uuid': 'GPU-x'}, {'prediction_sha256': 'a' * 64, 'run_id': 'r'},
+                       {'prediction_sha256': 'not hex', 'run_id': 'r', 'gpu_uuid': 'GPU-x'}, {'prediction_sha256': 'a' * 64, 'run_id': '', 'gpu_uuid': 'GPU-x'}):
+            (self.lost / 'launch.json').write_text(json.dumps({'launch': launch}))
+            self.refuses('launch.json')
+
+    def test_main_reports_a_check_failure_after_the_boundary_as_rc3_not_a_traceback(self):
+        import io
+        from contextlib import redirect_stdout
+        with patch.object(cia_verify_tail, 'run', side_effect=ValueError('terminal witness describes another child')), redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(cia_verify_tail.main(['--custody', str(self.lost)]), 3)
+        self.assertTrue(out.getvalue().startswith('FAIL rc3: ValueError'))
 
     def test_it_refuses_an_hour_that_has_a_result_or_a_tail_result(self):
         (self.lost / 'hour-result.json').write_text('{}')
@@ -230,8 +269,13 @@ class TailEntryTests(Fixture):
     def test_main_prints_refuse_rc2_and_exits_2_before_building_anything(self):
         import io
         from contextlib import redirect_stdout
-        with patch.object(cia_verify_tail, 'WINDOW_MARKER', self.custody / 'absent-marker'), redirect_stdout(io.StringIO()) as out:
+        built = []
+        with (patch.dict(os.environ, {cia_verify_tail.WINDOW_MARKER_ENV: str(self.custody / 'absent-marker')}),
+              patch.object(cia_hour, 'build_hour_model', lambda **kw: built.append(kw)),
+              redirect_stdout(io.StringIO()) as out):
             self.assertEqual(cia_verify_tail.main(['--custody', str(self.lost)]), 2)
+        self.assertEqual(built, [])           # no model was built; the marker is resolved at call time, so this does not depend on the real B: marker
+        self.assertIn('no governed GPU window', out.getvalue())
         self.assertTrue(out.getvalue().startswith('REFUSE rc2: '))
         with redirect_stdout(io.StringIO()) as out:
             self.assertEqual(cia_verify_tail.main([]), 2)
@@ -243,6 +287,92 @@ class TailEntryTests(Fixture):
                                               custody=self.lost, device=None, compiler=None, applied=None)
         self.assertEqual(result['status'], 'RESTORE_VERIFIED_FROM_WITNESS')
         self.assertEqual(calls, [('R', 'm', 'o', {'i': 1}, {'k': 1}, self.lost)])
+
+
+class AuthorityTests(Fixture):
+    """The worker boundary (review finding): marker plus old files are not execution authority."""
+    def setUp(self):
+        super().setUp()
+        self.run_dir = self.custody / 'measurement-run42'
+        self.run_dir.mkdir()
+        self.lock = self.custody / 'gpu.lock'
+        self.lock.write_text(json.dumps({'daemon_pid': 10, 'side': 'windows', 'active_jobs': 1}))
+        self.environ = {'EMBER_GATE_AUTHORIZED': '1', 'EMBER_GPU_LOCK_PATH': str(self.lock)}
+        self.census = [{'ProcessId': 10, 'ParentProcessId': 1}, {'ProcessId': 20, 'ParentProcessId': 10}, {'ProcessId': 30, 'ParentProcessId': 20}]
+        self.jobs = []
+
+        def require_owned_job(run_id, *, namespace, host_memory_bytes):
+            self.jobs.append((run_id, namespace, host_memory_bytes))
+        self.resources = types.SimpleNamespace(require_owned_job=require_owned_job)
+        self.tail_runner = types.SimpleNamespace(JOB_NAMESPACE='NS', LIMITS={'host_memory_bytes': 7}, process_census=lambda: self.census)
+
+    def authorize(self, **kw):
+        args = dict(runner=self.tail_runner, resources=self.resources, environ=self.environ, pid=30)
+        args.update(kw)
+        return cia_verify_tail.authorize(self.run_dir, **args)
+
+    def test_a_job_member_under_the_lock_daemon_with_the_gate_passes_and_names_the_run(self):
+        self.authorize()
+        self.assertEqual(self.jobs, [('run42', 'NS', 7)])
+
+    def test_a_direct_invocation_refuses_at_the_owned_job_before_any_artifact_is_read(self):
+        import io
+        from contextlib import redirect_stdout
+        empty = self.custody / 'measurement-direct'
+        empty.mkdir()           # no witness, no binding, no prediction: a refusal about the job proves the job check came first
+        with patch.dict(os.environ, {cia_verify_tail.WINDOW_MARKER_ENV: str(self.custody / 'window-marker')}), redirect_stdout(io.StringIO()) as out:
+            (self.custody / 'window-marker').write_text('open')
+            self.assertEqual(cia_verify_tail.main(['--custody', str(empty)]), 2)
+        self.assertIn('REFUSE rc2: not an owned daemon-dispatched job', out.getvalue())
+
+    def test_it_refuses_outside_the_owned_job(self):
+        def refuse(*a, **k):
+            raise ValueError('consumer is not in the bound owned job')
+        self.resources.require_owned_job = refuse
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not an owned daemon-dispatched job'):
+            self.authorize()
+
+    def test_it_refuses_a_custody_that_is_not_a_measurement_run(self):
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not a measurement run'):
+            cia_verify_tail.authorize(self.custody, runner=self.tail_runner, resources=self.resources, environ=self.environ, pid=30)
+        self.assertEqual(self.jobs, [])
+
+    def test_it_refuses_without_the_explicit_live_gate(self):
+        self.environ.pop('EMBER_GATE_AUTHORIZED')
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'live gate'):
+            self.authorize()
+
+    def test_it_refuses_a_missing_or_foreign_gpu_lock(self):
+        self.environ['EMBER_GPU_LOCK_PATH'] = str(self.custody / 'absent.lock')
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'absent or unreadable'):
+            self.authorize()
+        self.environ['EMBER_GPU_LOCK_PATH'] = str(self.lock)
+        self.lock.write_text(json.dumps({'daemon_pid': 10, 'side': 'windows', 'active_jobs': 2}))
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'exactly one active'):
+            self.authorize()
+
+    def test_it_refuses_when_the_lock_daemon_is_not_an_ancestor(self):
+        self.census[1]['ParentProcessId'] = 99          # 30 -> 20 -> 99, never reaches the daemon 10
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not an ancestor'):
+            self.authorize()
+
+    def test_the_running_entry_must_be_the_source_the_prediction_pins(self):
+        runner = types.SimpleNamespace(file_sha256=lambda path: 'f' * 64, checked_sha=lambda value: value)
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not the source bound'):
+            cia_verify_tail.pinned_entry_matches({'source_sha256': {}}, runner)
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'not the source bound'):
+            cia_verify_tail.pinned_entry_matches({'source_sha256': {cia_verify_tail.ENTRY_RELATIVE: 'a' * 64}}, runner)
+        cia_verify_tail.pinned_entry_matches({'source_sha256': {cia_verify_tail.ENTRY_RELATIVE: 'f' * 64}}, runner)
+
+
+class SourcePinTests(unittest.TestCase):
+    def test_the_entry_point_is_in_the_hour_source_pin_and_the_exact_key_set(self):
+        import cia_step_runner as runner
+        self.assertIn(cia_verify_tail.ENTRY_RELATIVE, runner.HOUR_SOURCES)
+        self.assertIn(cia_verify_tail.ENTRY_RELATIVE, runner.allowed_experiment_sources({}))
+        hour = {'hour': {'schema': 'governed-hour-v1', 'arm': 'control', 'minimum_wall_seconds': 3600, 'minimum_measured_steps': 1024}}
+        self.assertIn(cia_verify_tail.ENTRY_RELATIVE, runner.required_sources(hour))
+        self.assertTrue((ROOT / cia_verify_tail.ENTRY_RELATIVE).is_file())
 
 
 class DriftTests(unittest.TestCase):

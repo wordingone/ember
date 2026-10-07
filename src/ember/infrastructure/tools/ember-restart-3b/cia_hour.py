@@ -503,9 +503,12 @@ def write_terminal_witness(runner, custody, child, terminal_state, hour_fields):
 
 
 def read_terminal_witness(runner, custody):
+    """Returns (witness, sha256 of the exact bytes parsed). The bytes are read once; the digest and the parsed record come from that one buffer,
+    so a file replaced after this read cannot change what is verified or what the result binds."""
     path = Path(custody) / TERMINAL_WITNESS
     try:
-        witness = json.loads(path.read_bytes())
+        data = path.read_bytes()
+        witness = json.loads(data)
     except (OSError, ValueError) as error:
         raise ValueError('terminal witness is absent or unreadable: ' + type(error).__name__) from error
     if (not isinstance(witness, dict) or witness.get('schema') != TERMINAL_WITNESS_SCHEMA
@@ -513,7 +516,7 @@ def read_terminal_witness(runner, custody):
             or not isinstance(witness.get('terminal_state'), dict)
             or set(witness['terminal_state']) != {'facts', 'rng_state_sha256', 'data_cursor'}):
         raise ValueError('terminal witness is not the ' + TERMINAL_WITNESS_SCHEMA + ' record')
-    return witness
+    return witness, hashlib.sha256(data).hexdigest()
 
 
 def _json_round_trip(value):
@@ -531,7 +534,7 @@ def verify_tail(runner, model, optimizer, inventory, identity, custody):
     if (custody / VERIFY_TAIL_RESULT).exists():
         raise ValueError('a verify tail result already exists for this hour')
     import checkpoint_artifacts as artifacts
-    witness = read_terminal_witness(runner, custody)
+    witness, witness_sha256 = read_terminal_witness(runner, custody)
     child = artifacts.published_checkpoint_receipt(custody / 'trained-child')
     if child['checkpoint_manifest_sha256'] != witness['child_manifest_sha256']:
         raise ValueError('terminal witness describes another child than the published trained-child')
@@ -541,7 +544,7 @@ def verify_tail(runner, model, optimizer, inventory, identity, custody):
                               before=witness['terminal_state'], normalize=_json_round_trip)
     result = dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
                   child_manifest_sha256=child['checkpoint_manifest_sha256'],
-                  witness_sha256=runner.file_sha256(custody / TERMINAL_WITNESS),
+                  witness_sha256=witness_sha256,
                   restored_state_matches=True, hour_result_written=False, head_advanced=False)
     runner._write_new(custody / VERIFY_TAIL_RESULT, result)
     return result

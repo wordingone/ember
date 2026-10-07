@@ -779,7 +779,7 @@ CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + 
     ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour_energy.py', 'boundary_energy_collector.py'))
+    ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_verify_tail.py'))
 
 
 def allowed_experiment_sources(identity):
