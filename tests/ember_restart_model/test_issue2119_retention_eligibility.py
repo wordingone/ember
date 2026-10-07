@@ -362,7 +362,8 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
 
     def _marker(self, **over):
         marker = {'status': 'run_complete_not_yet_scored', 'succeeded': True, 'run_id': 'r1', 'custody_name': 'measurement-r1',
-                  'dispatch_started': 100.0, 'run_complete_at': 200.0}
+                  'dispatch_started': 100.0, 'run_complete_at': 200.0,
+                  'launch_lineage_checkpoint_manifest_sha256': START}
         marker.update(over)
         return marker
 
@@ -435,6 +436,50 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'identity being finalized'):
             self.finalize()
         self.assertEqual(self.recorded, [])
+
+    def test_row_3b_the_outcome_is_keyed_to_the_launch_key_in_the_marker_never_a_rederived_one(self):
+        """A no-reference identity's key comes from the live pointer at launch. By the time the scoring chain finalizes, the head may have
+        advanced; the outcome must land on the lineage the reservation charged, so the marker carries the launch key and finalize uses it."""
+        launch_key = 'c' * 64
+        self.assertNotEqual(launch_key, START)   # the stub ledger re-derives START: a finalize that re-derived would record START
+        self._mark_complete(launch_lineage_checkpoint_manifest_sha256=launch_key)
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertTrue(self.finalize())
+        self.assertEqual([r['lineage_sha'] for r in self.recorded], [launch_key])
+
+    def test_row_3b_a_marker_without_the_launch_key_refuses_for_a_no_reference_identity(self):
+        marker = self._marker()
+        del marker['launch_lineage_checkpoint_manifest_sha256']
+        (self.custody / 'run-complete.json').write_text(json.dumps(marker), encoding='utf-8')
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        with self.assertRaisesRegex(RuntimeError, 'no launch lineage key'):
+            self.finalize()
+        self.assertEqual(self.recorded, [])
+        self.assertFalse((self.custody / 'retention-outcome-recorded.json').exists())
+
+    def test_row_3b_a_marker_without_the_key_still_finalizes_when_the_identity_carries_a_checkpoint_reference(self):
+        marker = self._marker()
+        del marker['launch_lineage_checkpoint_manifest_sha256']
+        (self.custody / 'run-complete.json').write_text(json.dumps(marker), encoding='utf-8')
+        self.identity['continuation'] = {'source_hour_result_path': 'x', 'source_hour_result_sha256': 'y'}   # keyed by that reference: deterministic
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertTrue(self.finalize())
+        self.assertEqual([r['lineage_sha'] for r in self.recorded], [START])
+
+    def test_row_3b_a_malformed_launch_key_in_the_marker_is_refused_before_any_ledger_mutation(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        for bad in ('xyz', 7, 'A' * 64, 'a' * 63, ''):
+            with self.subTest(key=repr(bad)):
+                (self.custody / 'run-complete.json').write_text(
+                    json.dumps(self._marker(launch_lineage_checkpoint_manifest_sha256=bad)), encoding='utf-8')
+                with self.assertRaisesRegex(RuntimeError, 'launch lineage key is not a 64-hex digest'):
+                    self.finalize()
+                self.assertEqual(self.recorded, [])
+
+    def test_row_3b_the_launch_path_persists_the_key_it_reserved_against_in_the_marker(self):
+        source = (MODULE_DIR / 'cia_step_runner.py').read_text(encoding='utf-8')
+        launch = source[source.index('def launch('):]
+        self.assertIn('LAUNCH_LINEAGE_FIELD: launch_lineage_sha', launch[launch.index("'status': 'run_complete_not_yet_scored'"):])
 
     def test_p1_4_a_truthy_string_succeeded_never_makes_valid_arms_eligible_in_the_adjudicator(self):
         self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
@@ -519,7 +564,8 @@ class RealLedgerFinalizerTests(unittest.TestCase):
         # a FAILED run is never eligible, so the real ledger appends (and charges) one non-eligible outcome row for it
         (self.custody / 'run-complete.json').write_text(json.dumps({
             'status': 'run_complete_not_yet_scored', 'succeeded': False, 'run_id': 'r1', 'custody_name': 'measurement-r1',
-            'dispatch_started': 100.0, 'run_complete_at': 200.0}), encoding='utf-8')
+            'dispatch_started': 100.0, 'run_complete_at': 200.0,
+            'launch_lineage_checkpoint_manifest_sha256': START}), encoding='utf-8')
         self.ledger_file = self.ledger.ledger_path(self.custody.parent)
 
     def finalize(self):
