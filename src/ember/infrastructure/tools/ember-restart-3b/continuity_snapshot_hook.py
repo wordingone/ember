@@ -53,10 +53,20 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
 
 
 def publish_from_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
+    try:
+        return _publish_from_spec(spec)
+    except Exception as error:  # noqa: BLE001 - a wrong-typed spec value must be a FAILED result, never a raise after the head moved
+        return {'status': 'FAILED', 'why': f'{type(error).__name__}: {error}'}
+
+
+def _publish_from_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
     extra = set(spec) - SPEC_FIELDS - SPEC_OPTIONAL
     missing = SPEC_FIELDS - set(spec)
     if extra or missing or ('next' in spec and 'blocker' in spec):
         return {'status': 'FAILED', 'why': f'snapshot spec not closed: missing={sorted(missing)} extra={sorted(extra)}'}
+    for name in ('published_checkpoint_root', 'hour_result_path', 'custody_parent', 'snapshot_path'):
+        if name in spec and (not isinstance(spec[name], str) or not spec[name]):
+            return {'status': 'FAILED', 'why': f'snapshot spec {name} must be a non-empty string; a present value is never replaced by the default'}
     receipts_root = spec.get('receipts_root')
     explicit = spec.get('next') is not None or spec.get('blocker') is not None
     if receipts_root is None and not explicit:
@@ -64,7 +74,7 @@ def publish_from_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
     return publish_snapshot(
         head_directory=Path(spec['published_checkpoint_root']), hour_result_path=Path(spec['hour_result_path']),
         expected_genesis_manifest_sha256=spec['expected_genesis'], custody_parent=Path(spec['custody_parent']),
-        snapshot_path=Path(spec['snapshot_path']) if spec.get('snapshot_path') else None,
+        snapshot_path=Path(spec['snapshot_path']) if 'snapshot_path' in spec else None,
         pending_receipts_root=Path(receipts_root) if receipts_root and not explicit else None,
         next_identity=spec.get('next'), next_blocker=spec.get('blocker'))
 

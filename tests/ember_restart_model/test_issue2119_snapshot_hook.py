@@ -12,6 +12,7 @@ code 8 (head moved, snapshot not written) instead of hiding the failure.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import sys
@@ -93,6 +94,15 @@ class HookTests(Fixture):
         self.hour_result.write_text(json.dumps(other))
         outcome = self.publish()
         self.assertEqual(outcome['status'], 'FAILED')
+        self.assertFalse(self.out.exists())
+
+    def test_publish_from_spec_never_raises_on_a_none_or_wrong_typed_path_value(self):
+        base = {'published_checkpoint_root': str(self.c), 'hour_result_path': str(self.hour_result), 'expected_genesis': self.g_sha,
+                'custody_parent': str(self.custody), 'blocker': 'x', 'snapshot_path': str(self.out)}
+        for field in ('custody_parent', 'published_checkpoint_root', 'hour_result_path', 'snapshot_path', 'expected_genesis'):
+            for bad in (None, 5, ['a']):
+                result = hook.publish_from_spec({**base, field: bad})
+                self.assertEqual(result['status'], 'FAILED', (field, bad))
         self.assertFalse(self.out.exists())
 
     def test_the_hook_never_raises_on_a_missing_head_directory(self):
@@ -183,6 +193,47 @@ class PromoteIntegrationTests(Fixture):
             out, pending, _ = self.run_promote(spec)
             self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'))
             self.assertEqual(pending.calls, [])
+
+    def test_a_snapshot_spec_with_a_non_string_or_malformed_value_refuses_before_any_move(self):
+        # static review finding: custody_parent=None passed the key-only check and reached Path(None) after the move
+        for field, bad in (('custody_parent', None), ('custody_parent', ''), ('custody_parent', 5), ('expected_genesis', None),
+                           ('expected_genesis', 'not-hex'), ('expected_genesis', 'F' * 64), ('snapshot_path', 7), ('snapshot_path', '')):
+            out, pending, rows = self.run_promote(self.spec(**{field: bad}))
+            self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (field, bad))
+            self.assertEqual((pending.calls, rows), ([], []), (field, bad))
+
+    def test_a_writer_that_raises_after_the_move_still_records_the_outcome_and_is_code_8(self):
+        def raising_writer(spec):
+            raise TypeError('expected str, bytes or os.PathLike object, not NoneType')
+        out, pending, rows = self.run_promote(self.spec(), writer=raising_writer)
+        self.assertEqual((out['code'], out['status']), (8, 'PROMOTED_SNAPSHOT_FAILED'))
+        self.assertEqual(out['snapshot']['status'], 'FAILED')
+        self.assertIn('TypeError', out['snapshot']['why'])
+        self.assertEqual(out['head'], self.c_sha)
+        self.assertEqual(len(pending.calls), 1)
+        self.assertEqual([row['kind'] for row in rows][-2:], ['promote_outcome', 'snapshot_outcome'])
+
+    def test_the_chain_promote_to_hook_to_file_to_the_page_renderer(self):
+        # the smallest real-consumer chain: promote's boundary calls the real hook, the hook writes the file, the page renderer reads that file
+        renderer_path = ROOT / 'src/ember/governance/scripts/gen_readme_status.py'
+        sys.path.insert(0, str(renderer_path.parent))
+        try:
+            spec = importlib.util.spec_from_file_location('chain_gen_readme_status', renderer_path)
+            renderer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(renderer)
+        finally:
+            sys.path.remove(str(renderer_path.parent))
+        if not hasattr(renderer, 'apply_continuity_status'):
+            self.skipTest('the page renderer (#2339) is not in this tree yet; the chain runs once it merges')
+        out, _, rows = self.run_promote(self.spec())
+        self.assertEqual((out['code'], out['snapshot']['status']), (0, 'WRITTEN'))
+        page_text = 'before\n' + renderer.CONTINUITY_BEGIN_MARKER + '\nold\n' + renderer.CONTINUITY_END_MARKER + '\nafter\n'
+        rendered = renderer.apply_continuity_status(page_text, str(self.out))
+        self.assertIn(self.c_sha, rendered)
+        self.assertIn('`150` positions', rendered)
+        self.assertNotIn('\nold\n', rendered)
+        self.assertEqual(renderer.apply_continuity_status(rendered, str(self.out)), rendered)     # idempotent: the page is current
+        self.assertEqual(rows[-1]['kind'], 'snapshot_outcome')
 
     def test_a_snapshot_key_without_a_writer_refuses_before_any_move(self):
         out, pending, _ = self.run_promote(self.spec(), writer=None)

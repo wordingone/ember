@@ -29,6 +29,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -60,6 +61,11 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
         shot = spec['snapshot']
         if snapshot is None or not isinstance(shot, dict) or set(shot) - {'expected_genesis', 'custody_parent', 'snapshot_path'} or not {'expected_genesis', 'custody_parent'} <= set(shot):
             return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
+        # Values, not just keys: a None or non-string path would raise inside the writer after the head moved.
+        if (not isinstance(shot['expected_genesis'], str) or not re.fullmatch(r'[0-9a-f]{64}', shot['expected_genesis'])
+                or not isinstance(shot['custody_parent'], str) or not shot['custody_parent']
+                or ('snapshot_path' in shot and (not isinstance(shot['snapshot_path'], str) or not shot['snapshot_path']))):
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec values must be a 64-hex expected_genesis and non-empty string custody_parent / snapshot_path; refused before the move'}
     if not callable(getattr(pending, 'advance_and_record_pending', None)):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'pending_continuation has no advance_and_record_pending (tree lacks e0450bb3)'}
     rr = Path(spec['receipts_root'])
@@ -127,7 +133,10 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
             shot_spec['next'] = spec['next']
         else:
             shot_spec['blocker'] = spec['blocker']
-        out['snapshot'] = snapshot(shot_spec)
+        try:
+            out['snapshot'] = snapshot(shot_spec)
+        except Exception as error:  # noqa: BLE001 - the head already moved: a raising writer must still reach the outcome row and code 8
+            out['snapshot'] = {'status': 'FAILED', 'why': f'{type(error).__name__}: {error}'}
         row(kind='snapshot_outcome', **out['snapshot'])
         if out['snapshot']['status'] != 'WRITTEN':
             out.update(code=8, status='PROMOTED_SNAPSHOT_FAILED')
