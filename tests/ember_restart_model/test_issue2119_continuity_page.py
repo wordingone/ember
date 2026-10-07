@@ -142,6 +142,28 @@ class LoaderTests(Base):
         with self.assertRaisesRegex(ValueError, 'non-finite'):
             page.load_continuity_status(path)
 
+    def test_ordinary_overflow_literals_refuse_in_the_measurement_and_the_allowance(self):
+        # 1e999 is plain JSON, not a NaN/Infinity token: json.load turns it into float('inf') without calling parse_constant,
+        # so without parse_float the measurement block would render Infinity
+        for literal in ('1e999', '-1e999', '1E+400'):
+            measured = snapshot_dict()
+            measured['status']['learning_measurement'] = {'status': 'measured', 'measurement': {'nll': 'PLACEHOLDER'}}
+            path = self.dir / 'measured-overflow.json'
+            path.write_text(json.dumps(measured).replace('"PLACEHOLDER"', literal), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'non-finite'):
+                page.load_continuity_status(path)
+            text = json.dumps(snapshot_dict()).replace('"diagnostic_occupancy_seconds": 600', f'"diagnostic_occupancy_seconds": {literal}')
+            self.assertIn(literal, text)
+            path.write_text(text, encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'non-finite'):
+                page.load_continuity_status(path)
+        # control: a large but finite literal still loads
+        finite = snapshot_dict()
+        finite['status']['learning_measurement'] = {'status': 'measured', 'measurement': {'nll': 'PLACEHOLDER'}}
+        path = self.dir / 'measured-finite.json'
+        path.write_text(json.dumps(finite).replace('"PLACEHOLDER"', '1e300'), encoding='utf-8')
+        self.assertEqual(page.load_continuity_status(path)['status']['learning_measurement']['measurement']['nll'], 1e300)
+
     def test_a_malformed_captured_at_or_schema_refuses(self):
         for field, value in (('captured_at', 'yesterday'), ('schema_version', 'x')):
             snap = snapshot_dict()
