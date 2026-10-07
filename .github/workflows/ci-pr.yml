@@ -113,6 +113,14 @@ jobs:
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Run HF custody canary regressions
         run: python -B -m pytest -q tests/test_hf_custody_sync.py tests/test_remint_hashes.py
+      - name: Execute the #2119 continuity, lineage ancestry, head-pointer and claim-status suites (owned, bounded)
+        # Each command runs on its own line under set -e, so one failing suite fails the step; a timeout is exit 124.
+        run: |
+          set -euo pipefail
+          python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 600 -- python -B -m pytest -q -p no:cacheprovider tests/ember_restart_model/test_issue2119_training_continuity.py
+          python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 300 -- python -B -m pytest -q -p no:cacheprovider tests/ember_restart_model/test_training_lineage_ancestry.py
+          python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 300 -- python -B -m pytest -q -p no:cacheprovider tests/ember_restart_model/test_issue2119_pointer_conditional_update.py
+          python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 300 -- python -B -m pytest -q -p no:cacheprovider tests/ember_restart_model/test_issue2119_claim_status_caller.py
       - name: Verify evergreen front-door references
         run: python -B src/ember/governance/scripts/check_docs_freshness.py --front-door
       - name: Verify generated continuity status
