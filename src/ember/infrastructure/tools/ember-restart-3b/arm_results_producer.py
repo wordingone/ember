@@ -56,7 +56,7 @@ def build_arm(arm_id: str, *, published: bool, parent_manifest_sha256: str | Non
 
 SCORED_RECEIPT_SCHEMAS = frozenset({'ember-2119-child-episode-nll-v1', 'ember-2119-child-nll-v1'})
 MEASUREMENT_CLASSES = frozenset({'developmental', 'protected'})
-# Mandatory frozen bindings (Kai 63986 R2, Leo 63996): population (episode plan + shard ledger), mixture, run (the arm's checkpoint receipt and the
+# Mandatory frozen bindings (review 63986 R2, ruling 63996): population (episode plan + shard ledger), mixture, run (the arm's checkpoint receipt and the
 # frozen declaration) and source (scorer + tokenizer). A caller that omits any of them, or gives a non-digest, is refused; nothing defaults.
 MANDATORY_BINDING_KEYS = ('episode_plan_sha256', 'shard_ledger_sha256', 'mixture_identity_sha256', 'frozen_declaration_sha256',
                           'checkpoint_receipt_sha256', 'scorer_sha256', 'tokenizer_sha256')

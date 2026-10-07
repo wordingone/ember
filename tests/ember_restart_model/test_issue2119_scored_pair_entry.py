@@ -1,4 +1,4 @@
-"""Issue #2119 (Kai 63986 R2, Leo 63996; repaired after Kai 64088/64090): the INTEGRATED chain through the real entry point, in the REAL ORDER.
+"""Issue #2119 (review 63986 R2, ruling 63996; repaired after review 64088/64090): the INTEGRATED chain through the real entry point, in the REAL ORDER.
 
     1. freeze the PRELAUNCH entry, put its digest in the identity            (no receipt exists yet; asserted)
     2. (the run) score both arms, then the scoring chain writes arm-publication.json (digests derived from the files)
@@ -9,6 +9,9 @@ Nothing in the chain is mocked except the one lineage derivation (pinned to the 
 cases, a single raise injected into the finalizer or the promotion. The refusal cases assert the whole write set: no arm-results.json, no ledger
 row, no outcome marker, and the selected-head pointer byte-identical.
 """
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import contextlib
@@ -175,7 +178,7 @@ class ScoredPairChainTests(unittest.TestCase):
         self.assertEqual(self.ptr_sha(), self.pointer_before)
         self.assertEqual(sch.current_head_sha256(self.rr), self.start['manifest'])
 
-    # ---- the real order (Kai 64088) ----
+    # ---- the real order (review 64088) ----
     def test_the_identity_digest_is_frozen_before_any_scored_receipt_exists(self):
         path = self.freeze_entry()
         self.assertFalse(self.scored_dir.exists())                 # no receipt, no checkpoint receipt, nothing the run produces
@@ -236,7 +239,7 @@ class ScoredPairChainTests(unittest.TestCase):
         self.assertEqual([r['occupancy_seconds'] for r in self.outcome_rows()], [100])    # R1 through the whole chain: run duration, not finalize time
         self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), self.start['manifest']), 100)
 
-    # ---- a ruling that arrives later (Kai 64090) ----
+    # ---- a ruling that arrives later (review 64090) ----
     def test_a_delayed_ruling_reuses_the_completed_outcome_and_promotes_without_deleting_the_marker(self):
         self.real_order()
         first = self.run_chain(ruling=None)
@@ -369,7 +372,7 @@ class ScoredPairChainTests(unittest.TestCase):
         names = set(inspect.signature(entry_mod.finalize_scored_pair).parameters)
         self.assertEqual(names, {'identity', 'entry_path', 'custody', 'parent', 'runner', 'promote_fn', 'ruling'})
 
-    # ---- the launch identity freezes the entry digest (Leo 64046: emission ships in this successor) ----
+    # ---- the launch identity freezes the entry digest (ruling 64046: emission ships in this successor) ----
     def test_a_retention_identity_must_freeze_the_scored_pair_digest_and_no_other_purpose_may_carry_it(self):
         ok = {'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT', 'scored_pair_binding_sha256': 'a' * 64}
         self.runner.validate_scored_pair_binding(ok)
@@ -390,7 +393,7 @@ class ScoredPairChainTests(unittest.TestCase):
         self.assertIn("'scored_pair_binding_sha256'", source)
         self.assertEqual(entry_mod.IDENTITY_DIGEST_FIELD, 'scored_pair_binding_sha256')
 
-    # ---- the actual scorer caller (Kai 64093) ----
+    # ---- the actual scorer caller (review 64093) ----
     def cli(self, *extra, entry=None):
         identity_file = self.root / 'identity.json'
         identity_file.write_text(json.dumps({'identity': self.identity}), encoding='utf-8')

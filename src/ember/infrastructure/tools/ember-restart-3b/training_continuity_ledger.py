@@ -367,7 +367,7 @@ def record_retention_experiment_outcome(
     A no-op (returns None, appends nothing) when the experiment DID publish -- that case is
     tracked by update_current_subject.py's own lineage advance, not by this ledger.
 
-    Idempotent by (lineage, run_id) (Kai 63367 P1-3): under the ledger's OS lock, a second call for the same run finds the row it
+    Idempotent by (lineage, run_id) (review 63367 P1-3): under the ledger's OS lock, a second call for the same run finds the row it
     already appended and returns it without appending, so a retry after a failed marker write never charges the occupancy twice
     and two competing callers cannot both append."""
     if eligible_descendant_published:
@@ -378,7 +378,7 @@ def record_retention_experiment_outcome(
         'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT',
         'lineage_checkpoint_manifest_sha256': lineage_sha,
         'eligible_descendant_published': False, 'occupancy_seconds': int(elapsed_seconds),
-        # delay between run completion and this finalization (scoring/review wait): its own field, never added to occupancy (Kai 63986 R1)
+        # delay between run completion and this finalization (scoring/review wait): its own field, never added to occupancy (review 63986 R1)
         'finalization_delay_seconds': max(int(finalization_delay_seconds), 0),
     }
     path = Path(path)

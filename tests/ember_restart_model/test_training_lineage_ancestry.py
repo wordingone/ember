@@ -174,7 +174,7 @@ class LineageWalkTests(unittest.TestCase):
 
 
 class GenesisIdentityTests(unittest.TestCase):
-    """The walk ends only on the expected genesis (Vera, genesis ancestry, issue row 4)."""
+    """The walk ends only on the expected genesis (review, genesis ancestry, issue row 4)."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

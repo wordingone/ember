@@ -112,7 +112,7 @@ class BindingAndHonestyTests(unittest.TestCase):
         report = run([segment('s2', 's1', [target('B')])], 's2')   # s1 was never supplied
         self.assertEqual((report['status'], report['eligible_unique_total']), ('UNDETERMINED', None))
         self.assertTrue(any("'s1'" in note for note in report['missing_evidence']))
-        # Kai 62062: unknown prior ancestry means no known segment above it can earn proved credit
+        # review 62062: unknown prior ancestry means no known segment above it can earn proved credit
         self.assertEqual(report['proved_true_unique']['count'], 0)
         self.assertEqual([row['eligible_increment'] for row in report['per_segment']], [None])
         self.assertEqual(report['unresolved_after_coverage_gap'], [['B', 'text', 0]])
@@ -161,7 +161,7 @@ class BindingAndHonestyTests(unittest.TestCase):
 
 
 class MissingEvidenceIsNeverDeterminedTests(unittest.TestCase):
-    """Kai 62008 R1-R3: absent evidence is UNDETERMINED, never a known exclusion, a genesis or a unit; and an unknown-coverage
+    """review 62008 R1-R3: absent evidence is UNDETERMINED, never a known exclusion, a genesis or a unit; and an unknown-coverage
     segment makes every later first occurrence unresolved."""
 
     def undetermined(self, report):
@@ -262,7 +262,7 @@ class MissingEvidenceIsNeverDeterminedTests(unittest.TestCase):
 
 
 class ExposureAndPhysicalTotalsAreKnownOrNullTests(unittest.TestCase):
-    """Kai 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. Otherwise it is None and the known
+    """review 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. Otherwise it is None and the known
     part is an explicitly incomplete subtotal; an already-seen target with an unknown mask never leaves the status determined; a
     missing position count is unknown (never int(x or 0)) and a non-integer one is refused."""
 

@@ -4054,7 +4054,7 @@ class TrainingJobPurposeTests(_ResumeBundleMixin, unittest.TestCase):
     def test_retention_eligible_experiment_needs_a_sha256_scored_pair_binding(
         self,
     ) -> None:
-        """Kai 63986 R2 / Leo 64046: the frozen scored-pair entry digest rides
+        """review 63986 R2 / ruling 64046: the frozen scored-pair entry digest rides
         the run spec; absent or not a lowercase sha256 refuses."""
 
         module = load_module()

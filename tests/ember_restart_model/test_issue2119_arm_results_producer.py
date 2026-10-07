@@ -139,7 +139,7 @@ class ArmResultsProducerTests(unittest.TestCase):
         producer.produce_arm_results(identity(), custody=self.custody, control=control, treatment=treatment)
         self.assertFalse(elig.adjudicated_eligible_descendant(identity(), run_succeeded=False, custody=self.custody))
 
-    # Kai 63367 P1-1: the producer binds the scored receipt to the declared arm from the receipt itself (no caller labels).
+    # review 63367 P1-1: the producer binds the scored receipt to the declared arm from the receipt itself (no caller labels).
     def test_repair1_a_receipt_scored_on_another_checkpoint_is_refused_for_this_arm(self):
         control_receipt = self.receipt('c.json', 2.00, child=CONTROL_CHILD)
         with self.assertRaisesRegex(producer.ArmProducerRefusal, 'not the declared child'):
@@ -176,7 +176,7 @@ class ArmResultsProducerTests(unittest.TestCase):
         with self.assertRaisesRegex(producer.ArmProducerRefusal, 'trusted measurement class'):
             self.arm('treatment', protected, TREATMENT_CHILD, required=protected_required, classes={DECL: 'developmental'})   # unknown declaration
 
-    def test_r2_the_bindings_are_mandatory_and_never_default(self):   # Kai 63986 R2: population, mixture, run, source
+    def test_r2_the_bindings_are_mandatory_and_never_default(self):   # review 63986 R2: population, mixture, run, source
         receipt = self.receipt('t.json', 1.90, child=TREATMENT_CHILD)
         for key in producer.MANDATORY_BINDING_KEYS:
             with self.subTest(missing=key):

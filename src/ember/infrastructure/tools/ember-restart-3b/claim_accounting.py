@@ -1,6 +1,6 @@
 """Issue #2119 row 7: claim-eligible advancement accounting, bound to the approved claim-budget predicate.
 
-Binds `claim-budget-eligible-target-predicate-20261003.json` (sha256 PREDICATE_SHA256, approved by Leo 51279; issue comment 5975159177).
+Binds `claim-budget-eligible-target-predicate-20261003.json` (sha256 PREDICATE_SHA256, approved by ruling 51279; issue comment 5975159177).
 Three quantities stay separate and are never substituted for one another:
 
 * physical applied positions (a counter of the input/decoder positions; NOT the unit),
@@ -14,7 +14,7 @@ its condition evidence (any FALSE -> FALSE; any missing/unknown -> UNDETERMINED;
 A replay never mints fresh credit, including after a FALSE or UNDETERMINED original. When any original occurrence, identity,
 loss mask, provenance or ancestry link is missing, `eligible_unique_total` and the bucket counts are None (NOT zero, NOT the
 physical positions), with the missing evidence named; `proved_true_unique` is reported under its own name with complete=False.
-The same rule holds for the two other totals (Kai 64227 S2/S3): `applied_loss_target_exposure` and `physical_positions` are numbers only
+The same rule holds for the two other totals (review 64227 S2/S3): `applied_loss_target_exposure` and `physical_positions` are numbers only
 when every contributing piece of evidence is known (ancestry links, per-segment target coverage, every loss mask including those of
 already-seen targets, every `applied_positions`); otherwise they are None and the known part is reported as an explicitly incomplete
 `*_known_subtotal`. An absent `applied_positions` is unknown, never zero; a present one that is not a nonnegative integer is refused.
@@ -128,7 +128,7 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
     first_seen: dict[tuple, dict[str, Any]] = {}      # key -> original first positive-loss occurrence
     per_segment: list[dict[str, Any]] = []
     physical = loss_exposure = proved = 0
-    # Kai 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. An unknown ancestry link, an
+    # review 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. An unknown ancestry link, an
     # unknown-coverage segment, an absent loss mask (even on an already-seen target) or an absent position count makes the total
     # None; the known part is reported separately as an explicitly incomplete subtotal.
     exposure_complete = not missing_links
@@ -193,7 +193,7 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
                     missing.append(f'{sid} {list(key)}: positive-loss mask absent')
                 else:
                     # an already-seen target with an unknown mask: it may be one more loss occurrence, so exposure is unknown, and
-                    # the segment is never reported as determined (Kai 64227 S2)
+                    # the segment is never reported as determined (review 64227 S2)
                     open_here = True
                     missing.append(f'{sid} {list(key)}: positive-loss mask absent on an already-seen target (loss exposure unknown)')
                 continue

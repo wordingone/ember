@@ -186,7 +186,7 @@ TRAINING_JOB_PURPOSES = {
 TRAINING_EXPERIMENT_RUN_SPEC_KEYS = {
     "training_experiment_protocol",
     "training_experiment_continuation_rule",
-    # Kai 63986 R2 / Leo 64046: sha256 of the frozen scored-pair binding entry (population, mixture, run, source, promotion target);
+    # review 63986 R2 / ruling 64046: sha256 of the frozen scored-pair binding entry (population, mixture, run, source, promotion target);
     # it rides into the launch identity, and scored_pair_entry.finalize_scored_pair refuses an entry that does not hash to it.
     "scored_pair_binding_sha256",
 }

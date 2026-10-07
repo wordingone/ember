@@ -175,7 +175,7 @@ class PendingContinuationRestoreTests(unittest.TestCase):
 
 
 class ChildInvocationRouteTests(unittest.TestCase):
-    """Every non-Ember interpreter child starts through the mandatory headless wrapper on Windows (Kai 61929)."""
+    """Every non-Ember interpreter child starts through the mandatory headless wrapper on Windows (review 61929)."""
 
     @staticmethod
     def _through_wrapper(argv) -> bool:

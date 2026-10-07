@@ -1181,7 +1181,7 @@ def validate_training_job_purpose(identity, *, hour):
 
 
 def validate_scored_pair_binding(identity):
-    """Kai 63986 R2 / Leo 64046: the scored-pair frozen-binding entry (population, mixture, run, source, promotion target) is pinned in a
+    """review 63986 R2 / ruling 64046: the scored-pair frozen-binding entry (population, mixture, run, source, promotion target) is pinned in a
     RETENTION_ELIGIBLE_EXPERIMENT identity, and so in the prediction digest, before launch; `scored_pair_entry.finalize_scored_pair` refuses any
     entry whose bytes do not hash to it. Any other purpose carries no such field."""
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
@@ -2740,7 +2740,7 @@ def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, di
         path=ledger_module.ledger_path(parent),
         lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
         run_id=run_id, eligible_descendant_published=eligible,
-        # Kai 63986 R1: the occupancy is the run's own execution (dispatch_started to the run-complete instant the launch recorded), never the
+        # review 63986 R1: the occupancy is the run's own execution (dispatch_started to the run-complete instant the launch recorded), never the
         # time the finalizer happened to run; deferred scoring or review delay is not model execution. A caller with no recorded end
         # (the launch exception path, which records at the end of the run) falls back to now.
         elapsed_seconds=int((time.time() if run_complete_at is None else run_complete_at) - dispatch_started),
@@ -2753,7 +2753,7 @@ OUTCOME_RECORDED_FILENAME = 'retention-outcome-recorded.json'
 
 
 def finalize_retention_outcome(identity, *, custody, parent):
-    """The ONLY writer of the retention outcome (Leo 63035), called by the scoring chain after both arms are scored and
+    """The ONLY writer of the retention outcome (ruling 63035), called by the scoring chain after both arms are scored and
     `arm_results_producer.produce_arm_results` wrote arm-results.json. Refuses (outcome stays ABSENT, so the next segment refuses on the
     missing outcome) when the run-complete marker is absent, when arm-results.json is absent (no producer ran), or when this custody's
     outcome was already recorded. Reads `succeeded`, `run_id` and `dispatch_started` from the launch's marker, never from the caller."""
@@ -2762,11 +2762,11 @@ def finalize_retention_outcome(identity, *, custody, parent):
         marker = json.loads((custody / RUN_COMPLETE_FILENAME).read_bytes())
     except (OSError, ValueError) as error:
         raise RuntimeError(f'no run-complete marker in {custody}: {error}') from error
-    _validate_run_complete_marker(marker, identity, custody)   # Kai 63367 P1-4: every field checked BEFORE any ledger mutation
+    _validate_run_complete_marker(marker, identity, custody)   # review 63367 P1-4: every field checked BEFORE any ledger mutation
     if not (custody / load_eligibility_module().ARM_RESULTS_FILENAME).is_file():
         raise RuntimeError('arm-results.json is absent: the producer has not run, so the retention outcome is NOT recorded')
     ledger_module = load_ledger_module()
-    # Kai 63367 P1-3: serialize competing finalizers and make the outcome idempotent across the ledger/marker boundary. The OS lock covers
+    # review 63367 P1-3: serialize competing finalizers and make the outcome idempotent across the ledger/marker boundary. The OS lock covers
     # check-record-mark; the ledger itself records one outcome row per (lineage, run_id), so a retry after a failed marker write finds the
     # row already present and never charges the occupancy twice; the marker (exclusive create) is the last durable step.
     with ledger_module.exclusive_lock(custody / OUTCOME_RECORDED_FILENAME):
@@ -2784,7 +2784,7 @@ def _finite_number(value):
 
 
 def _validate_run_complete_marker(marker, identity, custody):
-    """Reject a malformed or foreign run-complete marker before eligibility or ledger accounting (Kai 63367 P1-4). `succeeded` must be an exact
+    """Reject a malformed or foreign run-complete marker before eligibility or ledger accounting (review 63367 P1-4). `succeeded` must be an exact
     bool (a truthy string such as 'false' is refused), `run_id` the nonempty id this custody and this identity carry, `custody_name` this
     custody's directory name, and the timestamps finite and ordered (0 < dispatch_started <= run_complete_at)."""
     if not isinstance(marker, dict) or marker.get('status') != 'run_complete_not_yet_scored':
@@ -2919,7 +2919,7 @@ def launch(args, dispatch):
         tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
     succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
-        # Leo 63035: the retention outcome has exactly ONE writer, the scoring chain (finalize_retention_outcome), after the arm
+        # ruling 63035: the retention outcome has exactly ONE writer, the scoring chain (finalize_retention_outcome), after the arm
         # producer has written arm-results.json. Nothing is scored yet here, so launch only marks the run complete-and-unscored.
         _write_new(custody / RUN_COMPLETE_FILENAME, {'status': 'run_complete_not_yet_scored', 'succeeded': succeeded,
                                                      'run_id': run_id, 'custody_name': custody.name, 'dispatch_started': dispatch_started,

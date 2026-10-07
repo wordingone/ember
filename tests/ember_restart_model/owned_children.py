@@ -56,7 +56,7 @@ class GroupOutcome(NamedTuple):
     ready_before_go: list  # names whose ready file the controller had seen when it released the barrier
 
 
-HEADLESS_PYTHON_WRAPPER = os.environ.get('EMBER_HEADLESS_PYTHON_WRAPPER', 'C:/Users/Admin/.codex/headless-python.ps1')
+HEADLESS_PYTHON_WRAPPER = os.environ.get('EMBER_HEADLESS_PYTHON_WRAPPER') or os.path.join(os.path.expanduser('~'), '.codex', 'headless-python.ps1')
 
 
 def python_argv(*args) -> list:

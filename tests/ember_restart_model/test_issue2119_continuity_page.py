@@ -7,7 +7,7 @@ as the retained total); a snapshot whose head is not the live head is reported s
 or not at all.
 """
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 

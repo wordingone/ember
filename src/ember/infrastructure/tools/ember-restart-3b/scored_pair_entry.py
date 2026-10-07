@@ -1,4 +1,4 @@
-"""Issue #2119 (Kai 63986 R2, Leo 63996; causal repair after Kai 64088): the ONE entry from a scored pair to the pending-aware promotion.
+"""Issue #2119 (review 63986 R2, ruling 63996; causal repair after review 64088): the ONE entry from a scored pair to the pending-aware promotion.
 
     PRELAUNCH frozen entry (digest in the run identity)  +  POST-RUN arm-publication.json (written by the scoring chain)
         -> arm_results_producer -> runner.finalize_retention_outcome -> promote_with_pending (pending-aware head move)
@@ -189,7 +189,7 @@ def finalize_scored_pair(identity: Mapping[str, Any], *, entry_path: Path, custo
     marker_path = custody / runner.OUTCOME_RECORDED_FILENAME
     verdict_path = custody / 'eligibility-verdict.json'
     if marker_path.is_file():
-        # Kai 64090: a first call with no ruling, or a crash after finalization and before promotion, leaves the one-writer outcome marker. A later
+        # review 64090: a first call with no ruling, or a crash after finalization and before promotion, leaves the one-writer outcome marker. A later
         # call validates and REUSES that completed outcome (never deletes the marker, never finalizes twice): it must be this run's, a real bool,
         # and agree with the arm results rebuilt above and the adjudicator's verdict file.
         try:

@@ -181,7 +181,7 @@ class RunnerWiringTests(unittest.TestCase):
         source = (MODULE_DIR / 'cia_step_runner.py').read_text(encoding='utf-8')
         self.assertIn('load_eligibility_module().validate_identity_rule(identity)', source)
         self.assertIn('adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)', source)
-        # Leo 63035: launch() no longer records the outcome; the scoring chain's finalize_retention_outcome is the only writer.
+        # ruling 63035: launch() no longer records the outcome; the scoring chain's finalize_retention_outcome is the only writer.
         self.assertIn('record_retention_outcome(identity, succeeded=marker[\'succeeded\'], custody=custody, parent=parent', source)
         self.assertIn("'status': 'run_complete_not_yet_scored'", source)
         self.assertEqual(source.count('= record_retention_outcome(identity'), 1)   # one call site (finalize): no second writer in launch()
@@ -189,7 +189,7 @@ class RunnerWiringTests(unittest.TestCase):
 
 
 class NegativeBindingTests(unittest.TestCase):
-    """Kai 61972 R1/R2 and Jude 61974: missing or malformed bindings are never eligible; nothing defaults to eligible."""
+    """review 61972 R1/R2 and check 61974: missing or malformed bindings are never eligible; nothing defaults to eligible."""
 
     def setUp(self):
         self.rule = elig.parse_rule(rule_text())
@@ -286,7 +286,7 @@ class ArmResultsWriterTests(unittest.TestCase):
             elig.write_arm_results(self.identity, custody=self.custody, **good)
 
     def test_exclusive_creation_refuses_even_when_an_exists_check_would_have_said_no(self):
-        """Kai 62079: the writer must not rely on exists() then write. A peer that creates the file between a check and the
+        """review 62079: the writer must not rely on exists() then write. A peer that creates the file between a check and the
         write is simulated by making exists() lie; the exclusive open still refuses and leaves the peer's bytes intact."""
         peer_bytes = b'{"peer": true}'
         (self.custody / elig.ARM_RESULTS_FILENAME).write_bytes(peer_bytes)
@@ -368,7 +368,7 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
     def finalize(self):
         return self.runner.finalize_retention_outcome(self.identity, custody=self.custody, parent=self.custody)
 
-    def test_deliberate_red_a_scoring_chain_with_no_producer_leaves_the_outcome_absent(self):   # Leo 63035
+    def test_deliberate_red_a_scoring_chain_with_no_producer_leaves_the_outcome_absent(self):   # ruling 63035
         self._mark_complete()
         with self.assertRaisesRegex(RuntimeError, 'arm-results.json is absent'):
             self.finalize()
@@ -396,7 +396,7 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
         self.assertFalse(self.finalize())
         self.assertEqual([r['eligible_descendant_published'] for r in self.recorded], [False])
 
-    def test_p1_4_a_malformed_or_foreign_marker_is_refused_before_any_ledger_mutation(self):   # Kai 63367 P1-4
+    def test_p1_4_a_malformed_or_foreign_marker_is_refused_before_any_ledger_mutation(self):   # review 63367 P1-4
         self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
         cases = [
             {'succeeded': 'false'}, {'succeeded': 1}, {'succeeded': None}, {'run_id': ''}, {'run_id': 7}, {'run_id': 'other'},
@@ -480,7 +480,7 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
 
 
 class RealLedgerFinalizerTests(unittest.TestCase):
-    """Kai 63367 P1-3: the finalizer against the REAL ledger file and the REAL exclusive lock (no mocked ledger): an interrupted marker write
+    """review 63367 P1-3: the finalizer against the REAL ledger file and the REAL exclusive lock (no mocked ledger): an interrupted marker write
     does not double-charge the occupancy on retry, and two competing finalizers record exactly one outcome."""
 
     @classmethod
@@ -560,7 +560,7 @@ class RealLedgerFinalizerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'already recorded'):
             self.finalize()
 
-    def test_r1_the_charged_occupancy_is_the_run_duration_whenever_the_finalizer_runs(self):   # Kai 63986 R1
+    def test_r1_the_charged_occupancy_is_the_run_duration_whenever_the_finalizer_runs(self):   # review 63986 R1
         for finalize_at in (350.0, 90000.0):    # marker: dispatch_started 100, run_complete_at 200 => exactly 100 s of execution
             with self.subTest(finalize_at=finalize_at):
                 self.setUp()
