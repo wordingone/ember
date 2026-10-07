@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-07T07:08:01Z",
- "generated_at": "2026-10-07T07:08:03Z",
+ "source_events_through": "2026-10-07T08:09:37Z",
+ "generated_at": "2026-10-07T08:09:39Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,19 +89,19 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 3152147,
-   "mtime_utc": "2026-10-07T07:08:01Z",
-   "records_in_source": 4293,
+   "bytes": 3153202,
+   "mtime_utc": "2026-10-07T08:09:37Z",
+   "records_in_source": 4295,
    "unparseable_records": 0,
    "hypotheses": 540,
-   "included": 4293,
+   "included": 4295,
    "omitted_fields": {
     "ceiling": {
      "occurrences": 29,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 97,
+     "occurrences": 98,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
@@ -129,11 +129,11 @@
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 1084,
+     "occurrences": 1086,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 1084,
+     "occurrences": 1086,
      "reason": "not on the publication allowlist"
     },
     "not_produced": {
@@ -149,11 +149,11 @@
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 1084,
+     "occurrences": 1086,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 1084,
+     "occurrences": 1086,
      "reason": "not on the publication allowlist"
     },
     "voi": {
@@ -287,7 +287,7 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-07T07:08:01Z",
+    "ended": "2026-10-07T08:09:37Z",
     "hypotheses": 431,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
@@ -40128,17 +40128,19 @@
   },
   {
    "id": "issue2119-h33-h32-head-extended-ledger-repeat-20261007",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "UPDATED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-07T02:38:34Z",
-   "last_ts": "2026-10-07T06:17:24Z",
+   "last_ts": "2026-10-07T08:09:37Z",
    "events": [
     {
      "ts": "2026-10-07T02:38:34Z",
@@ -40174,6 +40176,18 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC)."
+    },
+    {
+     "ts": "2026-10-07T07:10:08Z",
+     "stage": "UPDATED",
+     "hypothesis": "SUPPORTED on the score, but the head did not advance: the executor reported success=false, so the H33 child stays DIAGNOSTIC. Not closed: whether the accounting cure lets a SUPPORTED hour advance the head. The successor repeats the leg on the cured source.",
+     "successor": "issue2119-h34-h32-head-extended-ledger-redo-20261007",
+     "because": "The next leg became a redo of the same recipe on the cured source (239e1e9c), not a new recipe; release now also requires the cure tests at the dispatch head."
+    },
+    {
+     "ts": "2026-10-07T08:09:37Z",
+     "stage": "CLOSED",
+     "because": "cycle complete: SUPPORTED at 11:17 PM LA, successor issue2119-h34-h32-head-extended-ledger-redo-20261007 PREDICTED"
     }
    ],
    "observation": "H31 (H30 child, declared serving tenant) scored fresh 5.008945345878601 and was REFUTED; H32 (same parent, same text and recipe, alone on the card, 66,767 measured updates) scored fresh 4.80034501850605 (older_early 2.6755024418234825, giant 0.9673688597977161, pass5 2.4373022466897964; episode-nll-H32.json a50d6413, plan 9a6fd054, scorer v12) and was PROMOTED (this seat 63131): two draws on identical inputs 0.2086 apart. H28 (epoch-2, every row a declared repeat) scored fresh 4.8463693261146545 against its parent's 4.842423111200333 (D = -0.003946) and was REFUSED. Hour 33 continues the promoted H32 head 57caae38 (pointer 8aa73ec0) from its terminal cursor 1048/708,498 on the H33 extended ledger bd3f9f56 (rows 0..1071 = the H31 ledger, 49 declared-repeat rows appended), cap 98,158, wall 7,500, alone on the card. Repeat share: 73 of 73 scheduled rows from the cursor are declared repeats (fresh-side passes 3-5, older pass 6), none at first pass.",
@@ -40185,7 +40199,10 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC)."
+   "ruling": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC).",
+   "not_closed": "SUPPORTED on the score, but the head did not advance: the executor reported success=false, so the H33 child stays DIAGNOSTIC. Not closed: whether the accounting cure lets a SUPPORTED hour advance the head. The successor repeats the leg on the cured source.",
+   "successor": "issue2119-h34-h32-head-extended-ledger-redo-20261007",
+   "closing": "cycle complete: SUPPORTED at 11:17 PM LA, successor issue2119-h34-h32-head-extended-ledger-redo-20261007 PREDICTED"
   },
   {
    "id": "issue2119-h33-episode-nll-20261007",
