@@ -1180,12 +1180,23 @@ def validate_training_job_purpose(identity, *, hour):
         identity, has_resume=has_resume, has_data_segment=has_data_segment)
 
 
+def validate_scored_pair_binding(identity):
+    """Kai 63986 R2 / Leo 64046: the scored-pair frozen-binding entry (population, mixture, run, source, promotion target) is pinned in a
+    RETENTION_ELIGIBLE_EXPERIMENT identity, and so in the prediction digest, before launch; `scored_pair_entry.finalize_scored_pair` refuses any
+    entry whose bytes do not hash to it. Any other purpose carries no such field."""
+    if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
+        if not load_eligibility_module()._is_sha256(identity.get('scored_pair_binding_sha256')):
+            raise ValueError('a RETENTION_ELIGIBLE_EXPERIMENT identity freezes the scored-pair entry digest (scored_pair_binding_sha256)')
+    elif 'scored_pair_binding_sha256' in identity:
+        raise ValueError('scored_pair_binding_sha256 belongs to a RETENTION_ELIGIBLE_EXPERIMENT identity only')
+
+
 def prepare_execution(prediction):
     identity = prediction.get('identity')
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources', 'training_job_purpose'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
         raise ValueError('measurement identity fields differ')
     if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
             or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
@@ -1204,6 +1215,7 @@ def prepare_execution(prediction):
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
         # Issue #2119 rows 5/14: the eligibility rule is frozen in the identity (and so in the prediction digest) before launch.
         load_eligibility_module().validate_identity_rule(identity)
+    validate_scored_pair_binding(identity)
     validate_trajectory_resources(identity)
     if hour:
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
@@ -2306,6 +2318,18 @@ def _write_new(path, value):
 # Order of the real calls (cia_hour.run_hour emits hour_result then pointer_cas; the worker writes worker-terminal.json and stamps
 # worker_terminal only after run_hour returns; the parent stamps segment_complete after OwnedProcessRunner returns with cleanup verified).
 TAIL_PHASES = ('segment_launch', 'child_publish_start', 'quarantine', 'counter', 'hour_result', 'pointer_cas', 'worker_terminal', 'segment_complete')
+TAIL_STAMP_RETRIES = 40
+TAIL_STAMP_RETRY_SECONDS = 0.05
+
+
+def _write_failed_terminal(custody, payload):
+    """Record status=failed unless a terminal record already exists. A terminal written earlier (status=completed) is immutable evidence:
+    the failure path must not die on it (H33 FileExistsError masked the original PermissionError) and must not overwrite it."""
+    path = Path(custody) / 'worker-terminal.json'
+    if path.exists():
+        return False
+    _write_new(path, payload)
+    return True
 
 
 def tail_stamp(custody, phase):
@@ -2313,10 +2337,19 @@ def tail_stamp(custody, phase):
     if phase not in TAIL_PHASES:
         raise ValueError('unknown tail phase: ' + str(phase))
     row = {'phase': phase, 'monotonic_s': time.perf_counter(), 'wall_utc': time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + ('%.3f' % (time.time() % 1))[1:] + 'Z'}
-    with Path(custody).joinpath('tail-stamps.jsonl').open('ab') as stream:
-        stream.write(canonical(row) + b'\n')
-        stream.flush()
-        os.fsync(stream.fileno())
+    # H33 (2026-10-07): a reader that opened this file without write sharing (a sampler's ReadAllLines, a scanner) makes the append-open
+    # raise PermissionError for the length of its read; the stamp is retried for a bounded 2 s, so a transient reader never fails an hour.
+    for attempt in range(TAIL_STAMP_RETRIES):
+        try:
+            with Path(custody).joinpath('tail-stamps.jsonl').open('ab') as stream:
+                stream.write(canonical(row) + b'\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            return
+        except PermissionError:
+            if attempt == TAIL_STAMP_RETRIES - 1:
+                raise
+            time.sleep(TAIL_STAMP_RETRY_SECONDS)
 
 
 class GcPauseMeter:
@@ -2540,7 +2573,10 @@ def worker(binding_path):
                 device=device, compiler=c_compiler, applied=applied)
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
                 applied_positions=applied_positions, claim=CLAIM))
-            tail_stamp(custody, 'worker_terminal')
+            try:
+                tail_stamp(custody, 'worker_terminal')
+            except OSError as error:   # evidence-only stamp after the completed terminal: the hour is not failed by it; the miss is named on stderr
+                print('TAIL_STAMP_DEGRADED worker_terminal %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
             return 0
         if trajectory_mode(prediction['identity']):
             def applied(count):
@@ -2677,7 +2713,7 @@ def worker(binding_path):
                                                     'claim': CLAIM})
         return 0
     except BaseException as error:
-        _write_new(custody / 'worker-terminal.json', {'status': 'failed', 'error_type': type(error).__name__,
+        _write_failed_terminal(custody, {'status': 'failed', 'error_type': type(error).__name__,
             'error': str(error), 'traceback': traceback.format_exc(), 'applied_positions': applied_positions,
             'claim': CLAIM})
         raise
@@ -2685,7 +2721,7 @@ def worker(binding_path):
         attention_scope.close()
 
 
-def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, dispatch_started):
+def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, dispatch_started, run_complete_at=None):
     """Issue #2119 rows 5/14: record the experiment outcome in the continuity ledger. Launch success is only a prerequisite:
     eligibility is the adjudicator's verdict from the rule frozen in the identity and the arm results in this custody. It is
     False with no arm results, and False when the adjudicator escapes with any error (the refusal is written beside the
@@ -2704,8 +2740,68 @@ def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, di
         path=ledger_module.ledger_path(parent),
         lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
         run_id=run_id, eligible_descendant_published=eligible,
-        elapsed_seconds=int(time.time() - dispatch_started))
+        # Kai 63986 R1: the occupancy is the run's own execution (dispatch_started to the run-complete instant the launch recorded), never the
+        # time the finalizer happened to run; deferred scoring or review delay is not model execution. A caller with no recorded end
+        # (the launch exception path, which records at the end of the run) falls back to now.
+        elapsed_seconds=int((time.time() if run_complete_at is None else run_complete_at) - dispatch_started),
+        finalization_delay_seconds=0 if run_complete_at is None else max(int(time.time() - run_complete_at), 0))
     return eligible
+
+
+RUN_COMPLETE_FILENAME = 'run-complete.json'
+OUTCOME_RECORDED_FILENAME = 'retention-outcome-recorded.json'
+
+
+def finalize_retention_outcome(identity, *, custody, parent):
+    """The ONLY writer of the retention outcome (Leo 63035), called by the scoring chain after both arms are scored and
+    `arm_results_producer.produce_arm_results` wrote arm-results.json. Refuses (outcome stays ABSENT, so the next segment refuses on the
+    missing outcome) when the run-complete marker is absent, when arm-results.json is absent (no producer ran), or when this custody's
+    outcome was already recorded. Reads `succeeded`, `run_id` and `dispatch_started` from the launch's marker, never from the caller."""
+    custody = Path(custody)
+    try:
+        marker = json.loads((custody / RUN_COMPLETE_FILENAME).read_bytes())
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'no run-complete marker in {custody}: {error}') from error
+    _validate_run_complete_marker(marker, identity, custody)   # Kai 63367 P1-4: every field checked BEFORE any ledger mutation
+    if not (custody / load_eligibility_module().ARM_RESULTS_FILENAME).is_file():
+        raise RuntimeError('arm-results.json is absent: the producer has not run, so the retention outcome is NOT recorded')
+    ledger_module = load_ledger_module()
+    # Kai 63367 P1-3: serialize competing finalizers and make the outcome idempotent across the ledger/marker boundary. The OS lock covers
+    # check-record-mark; the ledger itself records one outcome row per (lineage, run_id), so a retry after a failed marker write finds the
+    # row already present and never charges the occupancy twice; the marker (exclusive create) is the last durable step.
+    with ledger_module.exclusive_lock(custody / OUTCOME_RECORDED_FILENAME):
+        if (custody / OUTCOME_RECORDED_FILENAME).exists():
+            raise RuntimeError('the retention outcome for this custody was already recorded (one writer, one outcome)')
+        eligible = record_retention_outcome(identity, succeeded=marker['succeeded'], custody=custody, parent=parent,
+                                            run_id=marker['run_id'], dispatch_started=marker['dispatch_started'],
+                                            run_complete_at=marker['run_complete_at'])
+        _write_new(custody / OUTCOME_RECORDED_FILENAME, {'eligible_descendant_published': eligible, 'run_id': marker['run_id']})
+    return eligible
+
+
+def _finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _validate_run_complete_marker(marker, identity, custody):
+    """Reject a malformed or foreign run-complete marker before eligibility or ledger accounting (Kai 63367 P1-4). `succeeded` must be an exact
+    bool (a truthy string such as 'false' is refused), `run_id` the nonempty id this custody and this identity carry, `custody_name` this
+    custody's directory name, and the timestamps finite and ordered (0 < dispatch_started <= run_complete_at)."""
+    if not isinstance(marker, dict) or marker.get('status') != 'run_complete_not_yet_scored':
+        raise RuntimeError('run-complete marker is malformed')
+    if type(marker.get('succeeded')) is not bool:
+        raise RuntimeError('run-complete marker: succeeded is not an exact bool')
+    run_id = marker.get('run_id')
+    if not isinstance(run_id, str) or not run_id:
+        raise RuntimeError('run-complete marker: run_id is missing or empty')
+    custody = Path(custody)
+    if marker.get('custody_name') != custody.name or custody.name != 'measurement-' + run_id:
+        raise RuntimeError('run-complete marker: custody or run_id does not match this custody directory')
+    if isinstance(identity, dict) and identity.get('run_id') != run_id:
+        raise RuntimeError('run-complete marker: run_id does not match the identity being finalized')
+    started, completed = marker.get('dispatch_started'), marker.get('run_complete_at')
+    if not (_finite_number(started) and _finite_number(completed) and 0 < started <= completed):
+        raise RuntimeError('run-complete marker: timestamps are missing, non-finite or not ordered')
 
 
 def launch_succeeded(result, supervisor_failure, custody):
@@ -2823,8 +2919,11 @@ def launch(args, dispatch):
         tail_stamp(custody, 'segment_complete')  # typed parent-side end of the governed segment, after cleanup (charged against the hour allowance, not timeout_s)
     succeeded = launch_succeeded(result, jobs[0].failure, custody)
     if identity.get('training_job_purpose') == 'RETENTION_ELIGIBLE_EXPERIMENT':
-        record_retention_outcome(identity, succeeded=succeeded, custody=custody, parent=parent, run_id=run_id,
-                                 dispatch_started=dispatch_started)
+        # Leo 63035: the retention outcome has exactly ONE writer, the scoring chain (finalize_retention_outcome), after the arm
+        # producer has written arm-results.json. Nothing is scored yet here, so launch only marks the run complete-and-unscored.
+        _write_new(custody / RUN_COMPLETE_FILENAME, {'status': 'run_complete_not_yet_scored', 'succeeded': succeeded,
+                                                     'run_id': run_id, 'custody_name': custody.name, 'dispatch_started': dispatch_started,
+                                                     'run_complete_at': time.time(), 'claim': CLAIM})
     return 0 if succeeded else 1
 
 

@@ -261,5 +261,123 @@ class MissingEvidenceIsNeverDeterminedTests(unittest.TestCase):
         self.assertEqual(report['proved_true_unique']['count'], 0)
 
 
+class ExposureAndPhysicalTotalsAreKnownOrNullTests(unittest.TestCase):
+    """Kai 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. Otherwise it is None and the known
+    part is an explicitly incomplete subtotal; an already-seen target with an unknown mask never leaves the status determined; a
+    missing position count is unknown (never int(x or 0)) and a non-integer one is refused."""
+
+    def test_complete_evidence_keeps_the_numbers_and_marks_them_complete(self):
+        report = run([segment('s1', None, [target('A'), target('B')], positions=700),
+                      segment('s2', 's1', [target('B')], positions=300)], 's2')
+        self.assertEqual((report['status'], report['eligible_unique_total']), ('DETERMINED', 2))
+        self.assertEqual((report['applied_loss_target_exposure'], report['physical_positions']), (3, 1000))
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 3, 'complete': True})
+        self.assertEqual(report['physical_positions_known_subtotal'], {'count': 1000, 'complete': True, 'missing': []})
+        self.assertEqual([row['exposure'] for row in report['per_segment']], [2, 1])
+
+    def test_s2_an_already_seen_target_with_an_unknown_mask_is_never_determined_and_has_no_numeric_exposure(self):
+        unknown = target('A')
+        del unknown['positive_loss']
+        report = run([segment('s1', None, [target('A')]), segment('s2', 's1', [unknown])], 's2')
+        self.assertEqual(report['status'], 'UNDETERMINED')
+        self.assertIsNone(report['eligible_unique_total'])
+        self.assertIsNone(report['applied_loss_target_exposure'])
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 1, 'complete': False})
+        self.assertEqual(report['proved_true_unique']['count'], 1)                      # the credit proved before the gap stays visible
+        self.assertFalse(report['proved_true_unique']['complete'])
+        self.assertTrue(any('already-seen' in note for note in report['missing_evidence']))
+        self.assertEqual([row['exposure'] for row in report['per_segment']], [1, None])
+        self.assertEqual([row['exposure_known_subtotal'] for row in report['per_segment']], [1, 0])
+
+    def test_s2_missing_target_coverage_leaves_exposure_unknown_with_an_incomplete_subtotal(self):
+        report = run([segment('s1', None, [target('A')]), segment('s2', 's1', None, missing=['text loss masks'])], 's2')
+        self.assertIsNone(report['applied_loss_target_exposure'])
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 1, 'complete': False})
+        self.assertEqual([row['exposure'] for row in report['per_segment']], [1, None])
+
+    def test_s2_a_missing_ancestor_link_leaves_exposure_unknown(self):
+        report = run([segment('s2', 's1', [target('B')])], 's2')                        # s1 was never supplied
+        self.assertIsNone(report['applied_loss_target_exposure'])
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 1, 'complete': False})
+
+    def test_s2_absent_publication_flags_leave_exposure_unknown(self):
+        seg = segment('s1', None, [target('A')])
+        del seg['published']
+        report = run([seg], 's1')
+        self.assertIsNone(report['applied_loss_target_exposure'])
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 0, 'complete': False})
+        self.assertEqual([row['exposure'] for row in report['per_segment']], [None])
+
+    def test_deliberate_red_s2_the_pre_repair_accounting_reports_a_determined_numeric_exposure_for_kais_case(self):
+        def pre_repair(segments):       # an already-seen target with an absent mask was skipped silently: determined, numeric
+            seen, exposure, credit = set(), 0, 0
+            for seg in segments:
+                for t in seg['targets']:
+                    key = tuple(t['key'])
+                    if t.get('positive_loss') is False:
+                        continue
+                    if t.get('positive_loss') is not True:
+                        if key not in seen:
+                            seen.add(key)
+                        continue
+                    exposure += 1
+                    if key not in seen:
+                        seen.add(key)
+                        credit += 1
+            return ('DETERMINED', credit, exposure)
+
+        unknown = target('A')
+        del unknown['positive_loss']
+        segments = [segment('s1', None, [target('A')]), segment('s2', 's1', [unknown, target('B')])]
+        self.assertEqual(pre_repair(segments), ('DETERMINED', 2, 2))                    # the defect: numeric exposure, status determined
+        report = run(segments, 's2')
+        self.assertEqual(report['status'], 'UNDETERMINED')                              # the repaired accounting
+        self.assertIsNone(report['applied_loss_target_exposure'])
+        self.assertEqual(report['applied_loss_target_exposure_known_subtotal'], {'count': 2, 'complete': False})
+
+    def test_s3_a_missing_position_count_is_unknown_not_zero_and_eligible_accounting_is_preserved(self):
+        seg = segment('s1', None, [target('A')])
+        del seg['applied_positions']
+        report = run([seg], 's1')
+        self.assertIsNone(report['physical_positions'])
+        self.assertEqual(report['physical_positions_known_subtotal']['count'], 0)
+        self.assertFalse(report['physical_positions_known_subtotal']['complete'])
+        self.assertTrue(any("'s1'" in note or 's1:' in note for note in report['physical_positions_known_subtotal']['missing']))
+        self.assertIsNone(report['per_segment'][0]['applied_positions'])
+        self.assertEqual((report['status'], report['eligible_unique_total']), ('DETERMINED', 1))   # eligible-unique is untouched
+
+    def test_s3_a_known_physical_subtotal_is_labelled_incomplete_when_a_later_segment_lacks_positions(self):
+        later = segment('s2', 's1', [target('B')])
+        del later['applied_positions']
+        report = run([segment('s1', None, [target('A')], positions=1000), later], 's2')
+        self.assertIsNone(report['physical_positions'])
+        self.assertEqual({k: report['physical_positions_known_subtotal'][k] for k in ('count', 'complete')},
+                         {'count': 1000, 'complete': False})
+
+    def test_s3_a_missing_ancestor_link_makes_the_physical_total_incomplete(self):
+        report = run([segment('s2', 's1', [target('B')], positions=500)], 's2')
+        self.assertIsNone(report['physical_positions'])
+        self.assertEqual(report['physical_positions_known_subtotal']['count'], 500)
+        self.assertFalse(report['physical_positions_known_subtotal']['complete'])
+
+    def test_s3_a_non_integer_or_negative_position_count_is_refused_and_a_known_zero_is_zero(self):
+        for bad in (True, False, 1000.0, 1000.9, '1000', -1, [], {}):
+            with self.assertRaisesRegex(ca.AccountingRefusal, 'nonnegative integer', msg=repr(bad)):
+                run([segment('s1', None, [target('A')], positions=bad)], 's1')
+        report = run([segment('s1', None, [target('A')], positions=0)], 's1')
+        self.assertEqual((report['physical_positions'], report['physical_positions_known_subtotal']['complete']), (0, True))
+
+    def test_deliberate_red_s3_the_pre_repair_coercion_turns_absent_and_fractional_counts_into_numbers(self):
+        def pre_repair(value):          # int(x or 0): None -> 0, 1000.9 -> 1000, '12' -> 12, False -> 0
+            return int(value or 0)
+
+        self.assertEqual((pre_repair(None), pre_repair(1000.9), pre_repair('12'), pre_repair(False)), (0, 1000, 12, 0))
+        absent = segment('s1', None, [target('A')])
+        del absent['applied_positions']
+        self.assertIsNone(run([absent], 's1')['physical_positions'])                    # the repaired accounting: unknown, not 0
+        with self.assertRaises(ca.AccountingRefusal):
+            run([segment('s1', None, [target('A')], positions=1000.9)], 's1')           # and not silently floored to 1000
+
+
 if __name__ == '__main__':
     unittest.main()

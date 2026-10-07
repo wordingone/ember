@@ -10,11 +10,14 @@ arm gives no eligible descendant; the runner's caller never says eligible by def
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import contextlib
 import copy
 import importlib.util
 import json
+import os
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -178,7 +181,10 @@ class RunnerWiringTests(unittest.TestCase):
         source = (MODULE_DIR / 'cia_step_runner.py').read_text(encoding='utf-8')
         self.assertIn('load_eligibility_module().validate_identity_rule(identity)', source)
         self.assertIn('adjudicated_eligible_descendant(identity, run_succeeded=succeeded, custody=custody)', source)
-        self.assertIn('record_retention_outcome(identity, succeeded=succeeded, custody=custody, parent=parent', source)
+        # Leo 63035: launch() no longer records the outcome; the scoring chain's finalize_retention_outcome is the only writer.
+        self.assertIn('record_retention_outcome(identity, succeeded=marker[\'succeeded\'], custody=custody, parent=parent', source)
+        self.assertIn("'status': 'run_complete_not_yet_scored'", source)
+        self.assertEqual(source.count('= record_retention_outcome(identity'), 1)   # one call site (finalize): no second writer in launch()
         self.assertNotIn('eligible_descendant_published=succeeded', source)
 
 
@@ -314,13 +320,16 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.custody = Path(self._tmp.name)
-        self.identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}}
+        self.custody = Path(self._tmp.name) / 'measurement-r1'   # the finalizer binds the marker to this directory name and run id
+        self.custody.mkdir()
+        self.identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}, 'run_id': 'r1'}
         self.rule = elig.parse_rule(rule_text())
         self.recorded = []
         recorded = self.recorded
 
         class Ledger:
+            exclusive_lock = staticmethod(lambda target, timeout_seconds=30.0: contextlib.nullcontext())
+
             @staticmethod
             def ledger_path(parent):
                 return Path(parent) / 'ledger'
@@ -346,6 +355,89 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
     def seam(self, *, succeeded=True):
         return self.runner.record_retention_outcome(self.identity, succeeded=succeeded, custody=self.custody, parent=self.custody,
                                                     run_id='r1', dispatch_started=0.0)
+
+    def _marker(self, **over):
+        marker = {'status': 'run_complete_not_yet_scored', 'succeeded': True, 'run_id': 'r1', 'custody_name': 'measurement-r1',
+                  'dispatch_started': 100.0, 'run_complete_at': 200.0}
+        marker.update(over)
+        return marker
+
+    def _mark_complete(self, succeeded=True, **over):
+        (self.custody / 'run-complete.json').write_text(json.dumps(self._marker(succeeded=succeeded, **over)), encoding='utf-8')
+
+    def finalize(self):
+        return self.runner.finalize_retention_outcome(self.identity, custody=self.custody, parent=self.custody)
+
+    def test_deliberate_red_a_scoring_chain_with_no_producer_leaves_the_outcome_absent(self):   # Leo 63035
+        self._mark_complete()
+        with self.assertRaisesRegex(RuntimeError, 'arm-results.json is absent'):
+            self.finalize()
+        self.assertEqual(self.recorded, [])
+        self.assertFalse((self.custody / 'retention-outcome-recorded.json').exists())
+
+    def test_finalize_without_the_run_complete_marker_records_nothing(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        with self.assertRaisesRegex(RuntimeError, 'no run-complete marker'):
+            self.finalize()
+        self.assertEqual(self.recorded, [])
+
+    def test_finalize_records_exactly_once_and_a_second_call_refuses(self):
+        self._mark_complete()
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertTrue(self.finalize())
+        self.assertEqual(len(self.recorded), 1)
+        with self.assertRaisesRegex(RuntimeError, 'already recorded'):
+            self.finalize()
+        self.assertEqual(len(self.recorded), 1)
+
+    def test_finalize_reads_succeeded_from_the_marker_so_a_failed_run_is_never_eligible(self):
+        self._mark_complete(succeeded=False)
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertFalse(self.finalize())
+        self.assertEqual([r['eligible_descendant_published'] for r in self.recorded], [False])
+
+    def test_p1_4_a_malformed_or_foreign_marker_is_refused_before_any_ledger_mutation(self):   # Kai 63367 P1-4
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        cases = [
+            {'succeeded': 'false'}, {'succeeded': 1}, {'succeeded': None}, {'run_id': ''}, {'run_id': 7}, {'run_id': 'other'},
+            {'custody_name': 'measurement-other'}, {'custody_name': None},
+            {'dispatch_started': float('nan')}, {'run_complete_at': float('inf')}, {'dispatch_started': True},
+            {'dispatch_started': 300.0, 'run_complete_at': 200.0}, {'dispatch_started': 0}, {'dispatch_started': '100'},
+        ]
+        for over in cases:
+            with self.subTest(over=repr(over)):
+                (self.custody / 'run-complete.json').write_text(json.dumps(self._marker(**over)), encoding='utf-8')
+                with self.assertRaises(RuntimeError):
+                    self.finalize()
+                self.assertEqual(self.recorded, [])
+                self.assertFalse((self.custody / 'retention-outcome-recorded.json').exists())
+
+    def test_p1_4_a_marker_with_a_missing_key_leaves_no_partial_accounting(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        for key in ('succeeded', 'run_id', 'custody_name', 'dispatch_started', 'run_complete_at', 'status'):
+            with self.subTest(missing=key):
+                marker = self._marker()
+                del marker[key]
+                (self.custody / 'run-complete.json').write_text(json.dumps(marker), encoding='utf-8')
+                with self.assertRaises(RuntimeError):
+                    self.finalize()
+                self.assertEqual(self.recorded, [])
+                self.assertFalse((self.custody / 'retention-outcome-recorded.json').exists())
+
+    def test_p1_4_a_marker_for_another_identity_is_refused(self):
+        self._mark_complete()
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.identity['run_id'] = 'the-identity-of-another-run'
+        with self.assertRaisesRegex(RuntimeError, 'identity being finalized'):
+            self.finalize()
+        self.assertEqual(self.recorded, [])
+
+    def test_p1_4_a_truthy_string_succeeded_never_makes_valid_arms_eligible_in_the_adjudicator(self):
+        self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD))
+        self.assertTrue(elig.adjudicated_eligible_descendant(self.identity, run_succeeded=True, custody=self.custody))
+        for truthy in ('false', 'False', 'no', 1, [1]):
+            with self.subTest(value=repr(truthy)):
+                self.assertFalse(elig.adjudicated_eligible_descendant(self.identity, run_succeeded=truthy, custody=self.custody))
 
     def test_a_malformed_applied_positions_records_a_non_eligible_outcome_and_a_refusal(self):
         self._write_arms(arm('treatment', loss=1.5, child=TREATMENT_CHILD, positions='lots'))
@@ -385,6 +477,120 @@ class RunnerOutcomeSeamTests(unittest.TestCase):
         with unittest.mock.patch.object(self.runner, 'load_eligibility_module', lambda: Raising):
             self.seam()
         self.assertEqual(len(self.recorded), 1)   # the repaired seam records it
+
+
+class RealLedgerFinalizerTests(unittest.TestCase):
+    """Kai 63367 P1-3: the finalizer against the REAL ledger file and the REAL exclusive lock (no mocked ledger): an interrupted marker write
+    does not double-charge the occupancy on retry, and two competing finalizers record exactly one outcome."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('real_ledger_cia_step_runner', MODULE_DIR / 'cia_step_runner.py')
+        cls.runner = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.runner
+        sys.path.insert(0, str(ROOT / 'src'))
+        spec.loader.exec_module(cls.runner)
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.ledger = self.runner.load_ledger_module()
+        # Only the lineage DERIVATION is pinned (the real one falls back to the repository's selected-head file, outside this fixture); the
+        # file, the OS lock, the idempotence check and the append all stay real, and every finalizer call uses this one module object.
+        self.ledger.lineage_checkpoint_manifest_sha256 = lambda identity, **kwargs: START
+        loader = unittest.mock.patch.object(self.runner, 'load_ledger_module', lambda: self.ledger)
+        loader.start()
+        self.addCleanup(loader.stop)
+        env = unittest.mock.patch.dict(os.environ, {self.ledger.LEDGER_ROOT_ENV: str(root / 'ledger-root')})
+        env.start()
+        self.addCleanup(env.stop)
+        self.custody = root / 'receipts' / 'measurement-r1'
+        self.custody.mkdir(parents=True)
+        self.identity = {'training_experiment_continuation_rule': rule_text(), 'parent_checkpoint': {'root': 'r', 'manifest_sha256': START}, 'run_id': 'r1'}
+        self.rule = elig.parse_rule(rule_text())
+        (self.custody / elig.ARM_RESULTS_FILENAME).write_text(json.dumps({
+            'rule_sha256': self.rule['rule_sha256'], 'control': arm('control', loss=2.0, child=CONTROL_CHILD),
+            'treatment': arm('treatment', loss=1.5, child=TREATMENT_CHILD)}), encoding='utf-8')
+        # a FAILED run is never eligible, so the real ledger appends (and charges) one non-eligible outcome row for it
+        (self.custody / 'run-complete.json').write_text(json.dumps({
+            'status': 'run_complete_not_yet_scored', 'succeeded': False, 'run_id': 'r1', 'custody_name': 'measurement-r1',
+            'dispatch_started': 100.0, 'run_complete_at': 200.0}), encoding='utf-8')
+        self.ledger_file = self.ledger.ledger_path(self.custody.parent)
+
+    def finalize(self):
+        return self.runner.finalize_retention_outcome(self.identity, custody=self.custody, parent=self.custody.parent)
+
+    def outcome_rows(self):
+        return [r for r in self.ledger.read_rows(self.ledger_file) if r.get('row_kind') == 'retention_experiment_outcome']
+
+    def test_the_real_ledger_records_one_row_per_lineage_and_run_and_charges_it_once(self):
+        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity)
+        first = self.ledger.record_retention_experiment_outcome(path=self.ledger_file, lineage_sha=lineage, run_id='r1',
+                                                                eligible_descendant_published=False, elapsed_seconds=500)
+        again = self.ledger.record_retention_experiment_outcome(path=self.ledger_file, lineage_sha=lineage, run_id='r1',
+                                                                eligible_descendant_published=False, elapsed_seconds=999)
+        self.assertEqual(again, first)
+        self.assertEqual(len(self.outcome_rows()), 1)
+        self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), lineage), 500)
+        self.ledger.record_retention_experiment_outcome(path=self.ledger_file, lineage_sha=lineage, run_id='r2',
+                                                        eligible_descendant_published=False, elapsed_seconds=40)
+        self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), lineage), 540)   # a different run still charges
+
+    def test_an_interrupted_marker_write_then_a_retry_never_charges_the_occupancy_twice(self):
+        lineage = self.ledger.lineage_checkpoint_manifest_sha256(self.identity)
+        real_write_new = self.runner._write_new
+
+        def fail_the_marker_once(path, value):
+            if Path(path).name == self.runner.OUTCOME_RECORDED_FILENAME and not getattr(fail_the_marker_once, 'failed', False):
+                fail_the_marker_once.failed = True
+                raise OSError('simulated crash while creating the outcome marker')
+            return real_write_new(path, value)
+
+        with unittest.mock.patch.object(self.runner, '_write_new', fail_the_marker_once):
+            with self.assertRaises(OSError):
+                self.finalize()
+            self.assertEqual(len(self.outcome_rows()), 1)                                  # the ledger append already landed
+            self.assertFalse((self.custody / self.runner.OUTCOME_RECORDED_FILENAME).exists())   # but the marker did not
+            charged = self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), lineage)
+            self.assertFalse(self.finalize())                                              # the retry completes the marker
+        self.assertEqual(len(self.outcome_rows()), 1)                                      # no second row
+        self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), lineage), charged)
+        self.assertTrue((self.custody / self.runner.OUTCOME_RECORDED_FILENAME).is_file())
+        with self.assertRaisesRegex(RuntimeError, 'already recorded'):
+            self.finalize()
+
+    def test_r1_the_charged_occupancy_is_the_run_duration_whenever_the_finalizer_runs(self):   # Kai 63986 R1
+        for finalize_at in (350.0, 90000.0):    # marker: dispatch_started 100, run_complete_at 200 => exactly 100 s of execution
+            with self.subTest(finalize_at=finalize_at):
+                self.setUp()
+                with unittest.mock.patch.object(self.runner.time, 'time', lambda: finalize_at):
+                    self.finalize()
+                rows = self.outcome_rows()
+                self.assertEqual([r['occupancy_seconds'] for r in rows], [100])
+                self.assertEqual([r['finalization_delay_seconds'] for r in rows], [int(finalize_at - 200.0)])   # the wait is its own field
+                self.assertEqual(self.ledger.diagnostic_occupancy_seconds(self.ledger.read_rows(self.ledger_file), START), 100)
+
+    def test_two_competing_finalizers_record_exactly_one_outcome(self):
+        barrier = threading.Barrier(2)
+        results = []
+
+        def run():
+            barrier.wait()
+            try:
+                results.append(('ok', self.finalize()))
+            except RuntimeError as error:
+                results.append(('refused', str(error)))
+
+        threads = [threading.Thread(target=run) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(60)
+        self.assertEqual(sorted(kind for kind, _ in results), ['ok', 'refused'])
+        self.assertIn('already recorded', [text for kind, text in results if kind == 'refused'][0])
+        self.assertEqual(len(self.outcome_rows()), 1)
+        self.assertTrue((self.custody / self.runner.OUTCOME_RECORDED_FILENAME).is_file())
 
 
 if __name__ == '__main__':

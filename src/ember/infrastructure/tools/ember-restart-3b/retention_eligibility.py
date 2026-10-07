@@ -180,7 +180,7 @@ def adjudicated_eligible_descendant(identity: Mapping[str, Any], *, run_succeede
     """The runner's caller for `record_retention_experiment_outcome(eligible_descendant_published=...)`.
     False when the run failed, when no arm results exist, or when adjudication refuses (the refusal is written beside them);
     True only when adjudication names an eligible arm."""
-    if not run_succeeded:
+    if run_succeeded is not True:   # exact bool only: a truthy string such as 'false' must never make valid arms eligible (Kai 63367 P1-4)
         return False
     custody = Path(custody)
     arms_path = custody / ARM_RESULTS_FILENAME

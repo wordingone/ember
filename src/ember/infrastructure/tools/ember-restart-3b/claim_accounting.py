@@ -14,6 +14,10 @@ its condition evidence (any FALSE -> FALSE; any missing/unknown -> UNDETERMINED;
 A replay never mints fresh credit, including after a FALSE or UNDETERMINED original. When any original occurrence, identity,
 loss mask, provenance or ancestry link is missing, `eligible_unique_total` and the bucket counts are None (NOT zero, NOT the
 physical positions), with the missing evidence named; `proved_true_unique` is reported under its own name with complete=False.
+The same rule holds for the two other totals (Kai 64227 S2/S3): `applied_loss_target_exposure` and `physical_positions` are numbers only
+when every contributing piece of evidence is known (ancestry links, per-segment target coverage, every loss mask including those of
+already-seen targets, every `applied_positions`); otherwise they are None and the known part is reported as an explicitly incomplete
+`*_known_subtotal`. An absent `applied_positions` is unknown, never zero; a present one that is not a nonnegative integer is refused.
 
 Stdlib only; loaded by path (no sibling imports).
 """
@@ -92,6 +96,16 @@ def _ancestry(segments: Sequence[Mapping[str, Any]], head: str) -> tuple[list[st
     return list(reversed(chain)), missing
 
 
+def _positions(value: Any, sid: str) -> int | None:
+    """applied_positions: a nonnegative integer; None when the field is absent (the caller names it, it is never zero); a present
+    value that is not an integer (bool, float, string, negative) is refused rather than coerced."""
+    if value is None:
+        return None
+    if type(value) is not int or value < 0:
+        raise AccountingRefusal(f'segment {sid!r}: applied_positions must be a nonnegative integer')
+    return value
+
+
 def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, predicate_sha256: str) -> dict[str, Any]:
     if predicate_sha256 != PREDICATE_SHA256:
         raise AccountingRefusal('the predicate digest differs from the approved frozen predicate')
@@ -114,6 +128,12 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
     first_seen: dict[tuple, dict[str, Any]] = {}      # key -> original first positive-loss occurrence
     per_segment: list[dict[str, Any]] = []
     physical = loss_exposure = proved = 0
+    # Kai 64227 S2/S3: a total is a number only when every contributing piece of evidence is known. An unknown ancestry link, an
+    # unknown-coverage segment, an absent loss mask (even on an already-seen target) or an absent position count makes the total
+    # None; the known part is reported separately as an explicitly incomplete subtotal.
+    exposure_complete = not missing_links
+    physical_complete = not missing_links
+    physical_missing: list[str] = [f'selected ancestry is incomplete: {note}' for note in missing_links]
     buckets_true = {name: 0 for name in BUCKETS}
     undetermined_keys: set[tuple] = set()
     # An earlier selected segment whose targets/flags are unknown, or an unknown ancestry link below the first supplied
@@ -122,16 +142,24 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
     unresolved_after_gap: set[tuple] = set()
     for sid in chain:
         segment = by_id[sid]
-        physical += int(segment.get('applied_positions') or 0)
-        row = {'segment_id': sid, 'applied_positions': int(segment.get('applied_positions') or 0), 'eligible_increment': 0,
-               'exposure': 0}
+        positions = _positions(segment.get('applied_positions'), sid)
+        if positions is None:
+            physical_complete = False
+            physical_missing.append(f'{sid}: applied_positions is absent (the physical total is unknown, never zero)')
+        else:
+            physical += positions
+        row = {'segment_id': sid, 'applied_positions': positions, 'eligible_increment': 0, 'exposure': 0,
+               'exposure_known_subtotal': 0}
+        seg_exposure, seg_exposure_known = 0, True
         published, advanced = segment.get('published'), segment.get('advanced_head')
         if not (isinstance(published, bool) and isinstance(advanced, bool)):
             missing.append(f'{sid}: published/advanced_head evidence is absent or not boolean')
             row['eligible_increment'] = None
+            row['exposure'] = None
             row['status'] = 'UNDETERMINED'
             per_segment.append(row)
             coverage_gap = True
+            exposure_complete = False
             continue
         if not (published and advanced):
             excluded.append({'segment_id': sid, 'reason': 'known not a published, head-advancing segment'})
@@ -143,9 +171,11 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
             names = segment.get('missing_evidence') or ['per-target identities and actual loss masks']
             missing.extend(f'{sid}: {name}' for name in names)
             row['eligible_increment'] = None
+            row['exposure'] = None
             row['status'] = 'UNDETERMINED'
             per_segment.append(row)
             coverage_gap = True
+            exposure_complete = False
             continue
         open_here = False
         for target in targets:
@@ -155,13 +185,19 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
                 continue   # known masked / input-only: no loss occurrence, so no consumption on this ancestry
             if loss_flag is not True:
                 # the mask is absent: the original first occurrence cannot be established, and a later positive replay cannot mint it
+                seg_exposure_known = False
                 if key not in first_seen:
                     first_seen[key] = {'segment_id': sid, 'status': UNDETERMINED, 'reason': 'positive-loss mask absent'}
                     undetermined_keys.add(key)
                     open_here = True
                     missing.append(f'{sid} {list(key)}: positive-loss mask absent')
+                else:
+                    # an already-seen target with an unknown mask: it may be one more loss occurrence, so exposure is unknown, and
+                    # the segment is never reported as determined (Kai 64227 S2)
+                    open_here = True
+                    missing.append(f'{sid} {list(key)}: positive-loss mask absent on an already-seen target (loss exposure unknown)')
                 continue
-            row['exposure'] += 1
+            seg_exposure += 1
             loss_exposure += 1
             if key in first_seen:
                 continue   # a replay adds exposure only, whatever the original's status
@@ -185,6 +221,10 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
                 undetermined_keys.add(key)
                 open_here = True
                 missing.append(f'{sid} {list(key)}: {reason}')
+        row['exposure_known_subtotal'] = seg_exposure
+        row['exposure'] = seg_exposure if seg_exposure_known else None
+        if not seg_exposure_known:
+            exposure_complete = False
         row['status'] = 'UNDETERMINED_TARGETS' if open_here else 'DETERMINED'
         per_segment.append(row)
     if unresolved_after_gap:
@@ -199,7 +239,12 @@ def account(segments: Sequence[Mapping[str, Any]], *, head_segment_id: str, pred
             'eligible_unique_total': proved if complete else None,
             'bucket_counts': dict(buckets_true) if complete else None,
             'proved_true_unique': {'count': proved, 'buckets': dict(buckets_true), 'complete': complete},
-            'missing_evidence': missing, 'applied_loss_target_exposure': loss_exposure,
-            'physical_positions': physical, 'per_segment': per_segment, 'excluded': excluded,
+            'missing_evidence': missing,
+            'applied_loss_target_exposure': loss_exposure if exposure_complete else None,
+            'applied_loss_target_exposure_known_subtotal': {'count': loss_exposure, 'complete': exposure_complete},
+            'physical_positions': physical if physical_complete else None,
+            'physical_positions_known_subtotal': {'count': physical, 'complete': physical_complete,
+                                                  'missing': physical_missing},
+            'per_segment': per_segment, 'excluded': excluded,
             'refused_branches': refused, 'selected_segment_ids': chain,
             'unresolved_after_coverage_gap': sorted([list(k) for k in unresolved_after_gap])}

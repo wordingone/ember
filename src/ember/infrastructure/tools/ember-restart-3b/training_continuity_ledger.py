@@ -22,6 +22,7 @@ reference (`record_operator_extension`); nothing here can grant one to itself.
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -218,6 +219,41 @@ def ledger_path(custody_parent: Path | None = None) -> Path:
     return ledger_root(custody_parent) / LEDGER_FILENAME
 
 
+@contextlib.contextmanager
+def exclusive_lock(target: Path, timeout_seconds: float = 30.0):
+    """Cross-process exclusive lock keyed to `target` (a sibling `<name>.lock` file). The lock is an OS byte-range/flock lock held on an open
+    handle, so it is released when the holder dies: there is no stale-lock state to clean. Raises TimeoutError after `timeout_seconds`."""
+    lock_path = Path(target).with_name(Path(target).name + '.lock')
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, 'a+b')
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        while True:
+            try:
+                if os.name == 'nt':
+                    import msvcrt
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f'could not take the exclusive lock {lock_path} within {timeout_seconds} s') from None
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            if os.name == 'nt':
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
 def _append_row(path: Path, row: Mapping[str, Any]) -> dict[str, Any]:
     row = dict(row)
     payload = json.dumps(row, sort_keys=True, separators=(',', ':')).encode('utf-8') + b'\n'
@@ -324,12 +360,16 @@ def reserve_diagnostic_dispatch(
 
 def record_retention_experiment_outcome(
     *, path: Path, lineage_sha: str, run_id: str, eligible_descendant_published: bool,
-    elapsed_seconds: int = 0, now: float | None = None,
+    elapsed_seconds: int = 0, now: float | None = None, finalization_delay_seconds: int = 0,
 ) -> dict[str, Any] | None:
     """Record a RETENTION_ELIGIBLE_EXPERIMENT that published NO eligible descendant, so its
     elapsed time counts toward the lineage's occupancy the same way a diagnostic budget does.
     A no-op (returns None, appends nothing) when the experiment DID publish -- that case is
-    tracked by update_current_subject.py's own lineage advance, not by this ledger."""
+    tracked by update_current_subject.py's own lineage advance, not by this ledger.
+
+    Idempotent by (lineage, run_id) (Kai 63367 P1-3): under the ledger's OS lock, a second call for the same run finds the row it
+    already appended and returns it without appending, so a retry after a failed marker write never charges the occupancy twice
+    and two competing callers cannot both append."""
     if eligible_descendant_published:
         return None
     now = time.time() if now is None else now
@@ -338,8 +378,16 @@ def record_retention_experiment_outcome(
         'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT',
         'lineage_checkpoint_manifest_sha256': lineage_sha,
         'eligible_descendant_published': False, 'occupancy_seconds': int(elapsed_seconds),
+        # delay between run completion and this finalization (scoring/review wait): its own field, never added to occupancy (Kai 63986 R1)
+        'finalization_delay_seconds': max(int(finalization_delay_seconds), 0),
     }
-    return _append_row(Path(path), row)
+    path = Path(path)
+    with exclusive_lock(path):
+        for existing in read_rows(path):
+            if (existing.get('row_kind') == 'retention_experiment_outcome' and existing.get('run_id') == run_id
+                    and existing.get('lineage_checkpoint_manifest_sha256') == lineage_sha):
+                return existing
+        return _append_row(path, row)
 
 
 def record_operator_extension(

@@ -73,6 +73,26 @@ def validate_record(payload: Any) -> dict[str, Any]:
     return payload
 
 
+def _pending_candidate(
+    *, lineage_checkpoint_manifest_sha256: str,
+    training_job_purpose: str | None, run_id: str | None, blocker: str | None,
+    now: float | None,
+) -> dict[str, Any]:
+    """Validate a pending record before any caller mutates the selected-head pointer."""
+    ready = training_job_purpose is not None or run_id is not None
+    if ready == (blocker is not None):
+        raise PendingContinuationRefusal('write needs exactly one of (training_job_purpose and run_id) or blocker')
+    candidate: dict[str, Any] = {
+        'schema': SCHEMA, 'lineage_checkpoint_manifest_sha256': lineage_checkpoint_manifest_sha256,
+        'status': READY if ready else BLOCKED, 'written_at': time.time() if now is None else now,
+    }
+    if ready:
+        candidate.update(training_job_purpose=training_job_purpose, run_id=run_id)
+    else:
+        candidate['blocker'] = blocker
+    return validate_record(candidate)
+
+
 def write_pending_continuation(
     receipts_root: Path, *, lineage_checkpoint_manifest_sha256: str,
     training_job_purpose: str | None = None, run_id: str | None = None, blocker: str | None = None,
@@ -82,19 +102,11 @@ def write_pending_continuation(
 
     The current head is re-read under the pointer lock; a record for any other head is refused before any byte is written,
     so a stale writer cannot publish a ready segment for a head the pointer has already left."""
-    ready = training_job_purpose is not None or run_id is not None
-    if ready == (blocker is not None):
-        raise PendingContinuationRefusal('write needs exactly one of (training_job_purpose and run_id) or blocker')
     receipts_root = Path(receipts_root)
-    candidate: dict[str, Any] = {
-        'schema': SCHEMA, 'lineage_checkpoint_manifest_sha256': lineage_checkpoint_manifest_sha256,
-        'status': READY if ready else BLOCKED, 'written_at': time.time() if now is None else now,
-    }
-    if ready:
-        candidate.update(training_job_purpose=training_job_purpose, run_id=run_id)
-    else:
-        candidate['blocker'] = blocker
-    validate_record(candidate)
+    candidate = _pending_candidate(
+        lineage_checkpoint_manifest_sha256=lineage_checkpoint_manifest_sha256,
+        training_job_purpose=training_job_purpose, run_id=run_id, blocker=blocker, now=now,
+    )
     target = pending_path(receipts_root)
     with head_pointer._pointer_lock(head_pointer.pointer_path(receipts_root)):
         current = head_pointer.current_head_sha256(receipts_root)
@@ -116,6 +128,44 @@ def write_pending_continuation(
             except FileNotFoundError:
                 pass
     return candidate
+
+def advance_and_record_pending(
+    *, repo_root: Path, receipts_root: Path, published_checkpoint_root: Path,
+    hour_result_path: Path, hour_result_sha256: str,
+    expected_parent_checkpoint_manifest_sha256: str,
+    training_job_purpose: str | None = None, run_id: str | None = None,
+    blocker: str | None = None, now: float | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Advance a verified published head, then record the next identity/blocker for that new head.
+
+    The next record is validated against the expected parent before advancing, so invalid dispatch
+    inputs cannot move the pointer. The two durable writes use their existing compare-and-swap
+    locks. If another writer races between them or the pending write fails, the selected pointer
+    may already name the new head, but the old/missing pending record will read BLOCKED for that
+    head; it cannot appear ready for the wrong lineage.
+    """
+    _pending_candidate(
+        lineage_checkpoint_manifest_sha256=expected_parent_checkpoint_manifest_sha256,
+        training_job_purpose=training_job_purpose, run_id=run_id, blocker=blocker, now=now,
+    )
+    selected_head = head_pointer.advance_selected_continuation_head(
+        repo_root=repo_root,
+        receipts_root=receipts_root,
+        published_checkpoint_root=published_checkpoint_root,
+        hour_result_path=hour_result_path,
+        hour_result_sha256=hour_result_sha256,
+        expected_parent_checkpoint_manifest_sha256=expected_parent_checkpoint_manifest_sha256,
+        now=now,
+    )
+    pending_record = write_pending_continuation(
+        receipts_root,
+        lineage_checkpoint_manifest_sha256=selected_head['lineage_checkpoint_manifest_sha256'],
+        training_job_purpose=training_job_purpose,
+        run_id=run_id,
+        blocker=blocker,
+        now=now,
+    )
+    return {'selected_head': selected_head, 'pending_continuation': pending_record}
 
 
 def read_pending_continuation(receipts_root: Path, *, current_head_sha256: str) -> dict[str, Any]:
