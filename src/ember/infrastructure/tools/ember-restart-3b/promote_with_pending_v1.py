@@ -18,6 +18,8 @@ and exactly one of next={training_job_purpose, run_id} or blocker. Outcome codes
   7 LATE_WRITE_FAILURE            pointer moved, the pending write failed or its readback differs from the requested record: NO rollback claimed; the
                                   next-segment read is whatever the readback says (BLOCKED when missing/stale); mail ruling (review 63367 P2-5)
   6 MOVED_TO_UNEXPECTED_HEAD      pointer is not expected_child after a clean return
+  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path]}: the head moved and the pending record is exact, but
+                                  the continuity page snapshot (continuity_snapshot_hook) was not written; rerun continuity_snapshot_hook.py, do not repeat the move
 Run with the window marker absent (python).
 """
 # goal_id: EMBER-02
@@ -47,13 +49,17 @@ def make_row(ledger):
     return row
 
 
-def promote(spec, *, pending, sch, row, ruling):
-    extra = set(spec) - SPEC_FIELDS - {'next', 'blocker'}
+def promote(spec, *, pending, sch, row, ruling, snapshot=None):
+    extra = set(spec) - SPEC_FIELDS - {'next', 'blocker', 'snapshot'}
     missing = SPEC_FIELDS - set(spec)
     if extra or missing or ('next' in spec) == ('blocker' in spec):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': f'spec not closed: missing={sorted(missing)} extra={sorted(extra)} next-xor-blocker={("next" in spec) != ("blocker" in spec)}'}
     if not ruling:
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'no --ruling (no self-granted advance)'}
+    if 'snapshot' in spec:
+        shot = spec['snapshot']
+        if snapshot is None or not isinstance(shot, dict) or set(shot) - {'expected_genesis', 'custody_parent', 'snapshot_path'} or not {'expected_genesis', 'custody_parent'} <= set(shot):
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
     if not callable(getattr(pending, 'advance_and_record_pending', None)):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'pending_continuation has no advance_and_record_pending (tree lacks e0450bb3)'}
     rr = Path(spec['receipts_root'])
@@ -113,6 +119,18 @@ def promote(spec, *, pending, sch, row, ruling):
     out = {'code': 0 if ok else 6, 'status': 'PROMOTED_AND_RECORDED' if ok else 'MOVED_TO_UNEXPECTED_HEAD', 'head': current,
            'pointer_sha_after': _sha(ptr), 'next_segment_read': read}
     row(kind='promote_outcome', **{k: v for k, v in out.items() if k != 'code'})
+    if ok and 'snapshot' in spec:
+        # Row 8: the page snapshot is written at this boundary. The head has moved, so a failure is code 8 (loud), never a rollback or a retry of the move.
+        shot_spec = {**spec['snapshot'], 'published_checkpoint_root': spec['published_checkpoint_root'], 'hour_result_path': spec['hour_result_path'],
+                     'receipts_root': spec['receipts_root']}
+        if 'next' in spec:
+            shot_spec['next'] = spec['next']
+        else:
+            shot_spec['blocker'] = spec['blocker']
+        out['snapshot'] = snapshot(shot_spec)
+        row(kind='snapshot_outcome', **out['snapshot'])
+        if out['snapshot']['status'] != 'WRITTEN':
+            out.update(code=8, status='PROMOTED_SNAPSHOT_FAILED')
     return out
 
 
@@ -130,7 +148,8 @@ def main(argv):
     sys.path.insert(0, str(Path(spec['repo_root']) / 'src/ember/infrastructure/tools/ember-restart-3b'))
     import pending_continuation as pending  # noqa: E402
     import selected_continuation_head as sch  # noqa: E402
-    out = promote(spec, pending=pending, sch=sch, row=make_row(spec['ledger']), ruling=ruling)
+    import continuity_snapshot_hook as hook  # noqa: E402
+    out = promote(spec, pending=pending, sch=sch, row=make_row(spec['ledger']), ruling=ruling, snapshot=hook.publish_from_spec)
     print(json.dumps(out, sort_keys=True, default=str))
     return out['code']
 
