@@ -457,14 +457,19 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     return publish, owner_update_counts
 
 
-def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None):
+def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
     cap = 10 * runner.GIB
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
         model_config_sha256=identity['config_sha256'], _facts=expected)
-    if before is not None and (before['facts'] != expected
+    if before is not None and normalize is not None:
+        # The witness tail compares a terminal state read back from JSON; both sides pass the same normalizer, so the live path (normalize=None) is unchanged.
+        before, expected_facts = normalize(before), normalize(expected)
+    else:
+        expected_facts = expected
+    if before is not None and (before['facts'] != expected_facts
             or before['data_cursor'] != child['data_cursor']
             or before['rng_state_sha256'] != child['rng_state_sha256']):
         raise ValueError('terminal live state differs from independently reopened checkpoint bytes')
@@ -478,6 +483,68 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     facts = artifacts._cia_lineage_facts(inventory, native['state'])
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
+
+
+TERMINAL_WITNESS = 'terminal-witness.json'
+TERMINAL_WITNESS_SCHEMA = 'ember-cia-terminal-witness-v1'
+VERIFY_TAIL_RESULT = 'verify-tail-result.json'
+VERIFY_TAIL_SCHEMA = 'ember-cia-verify-tail-result-v1'
+
+
+def write_terminal_witness(runner, custody, child, terminal_state, hour_fields):
+    """Persist the live terminal state BEFORE the restore verification (H35 lost an hour because it existed only in memory when the
+    verification refused). The witness is the independent live-state facts, the published child's identity and the already-measured hour fields
+    that cannot be re-derived from disk; it is written exclusively (never overwritten) and fsynced by `_write_new`."""
+    witness = dict(schema=TERMINAL_WITNESS_SCHEMA, child_manifest_sha256=child['checkpoint_manifest_sha256'],
+                   data_cursor=dict(child['data_cursor']), terminal_state=terminal_state, hour_fields=dict(hour_fields),
+                   persisted_before_restore_verify=True)
+    runner._write_new(custody / TERMINAL_WITNESS, witness)
+    return runner.file_sha256(custody / TERMINAL_WITNESS)
+
+
+def read_terminal_witness(runner, custody):
+    path = Path(custody) / TERMINAL_WITNESS
+    try:
+        witness = json.loads(path.read_bytes())
+    except (OSError, ValueError) as error:
+        raise ValueError('terminal witness is absent or unreadable: ' + type(error).__name__) from error
+    if (not isinstance(witness, dict) or witness.get('schema') != TERMINAL_WITNESS_SCHEMA
+            or witness.get('persisted_before_restore_verify') is not True
+            or not isinstance(witness.get('terminal_state'), dict)
+            or set(witness['terminal_state']) != {'facts', 'rng_state_sha256', 'data_cursor'}):
+        raise ValueError('terminal witness is not the ' + TERMINAL_WITNESS_SCHEMA + ' record')
+    return witness
+
+
+def _json_round_trip(value):
+    return json.loads(json.dumps(value, sort_keys=True))
+
+
+def verify_tail(runner, model, optimizer, inventory, identity, custody):
+    """Resumable verify-only tail: reads the persisted witness, requires it to describe the published `trained-child` on disk, and runs the SAME
+    restore verification the hour runs, against the witness instead of the in-memory state. It never trains, never publishes and never advances a
+    head. Refuses when an hour result already exists (nothing to resume) or a tail result already exists (one tail per hour). On success it writes
+    `verify-tail-result.json`; the hour-result and any head move stay with the owner's ruling."""
+    custody = Path(custody)
+    if (custody / 'hour-result.json').exists():
+        raise ValueError('the hour already has an hour-result; there is nothing to resume')
+    if (custody / VERIFY_TAIL_RESULT).exists():
+        raise ValueError('a verify tail result already exists for this hour')
+    import checkpoint_artifacts as artifacts
+    witness = read_terminal_witness(runner, custody)
+    child = artifacts.published_checkpoint_receipt(custody / 'trained-child')
+    if child['checkpoint_manifest_sha256'] != witness['child_manifest_sha256']:
+        raise ValueError('terminal witness describes another child than the published trained-child')
+    if witness['data_cursor'] != child['data_cursor'] or witness['terminal_state']['data_cursor'] != child['data_cursor']:
+        raise ValueError('terminal witness cursor differs from the published child cursor')
+    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child,
+                              before=witness['terminal_state'], normalize=_json_round_trip)
+    result = dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
+                  child_manifest_sha256=child['checkpoint_manifest_sha256'],
+                  witness_sha256=runner.file_sha256(custody / TERMINAL_WITNESS),
+                  restored_state_matches=True, hour_result_written=False, head_advanced=False)
+    runner._write_new(custody / VERIFY_TAIL_RESULT, result)
+    return result
 
 
 def continuation_state(runner, model, optimizer, cursor, device):
@@ -979,6 +1046,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
+    # H35: the terminal state lived only in memory when the verification refused, so the published child could never be re-verified. Persist it first.
+    p10_at_publish = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)] if step_rates else None
+    write_terminal_witness(runner, custody, child, terminal_state, dict(
+        hour=hour, measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
+        pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
+        complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
+        parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id']))
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
     restore_finished = time.perf_counter()
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
