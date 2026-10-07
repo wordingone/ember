@@ -550,12 +550,20 @@ def _reject_nonfinite(token):
     raise ValueError(f"continuity snapshot carries a non-finite number ({token}); JSON NaN and Infinity are refused")
 
 
+def _parse_finite_float(token):
+    """An ordinary JSON literal such as 1e999 parses to infinity without ever reaching parse_constant."""
+    value = float(token)
+    if not math.isfinite(value):
+        raise ValueError(f"continuity snapshot carries a non-finite number ({token}); it overflows to infinity")
+    return value
+
+
 def load_continuity_status(path):
     """Closed load of the committed continuity snapshot: the training-continuity status dict plus when it was
     captured and the head it describes. Anything outside the closed key sets, a non-hex digest or a negative
     count refuses; the loader never repairs."""
     with open(path, "r", encoding="utf-8") as stream:
-        payload = json.load(stream, parse_constant=_reject_nonfinite)
+        payload = json.load(stream, parse_constant=_reject_nonfinite, parse_float=_parse_finite_float)
     _closed(payload, {"schema_version", "captured_at", "head_manifest_sha256", "status"}, "root")
     if payload["schema_version"] != CONTINUITY_SNAPSHOT_SCHEMA:
         raise ValueError(f"continuity snapshot schema_version must be {CONTINUITY_SNAPSHOT_SCHEMA}")
