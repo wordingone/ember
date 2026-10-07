@@ -237,6 +237,24 @@ class TailEntryTests(Fixture):
         (self.lost / cia_hour.TERMINAL_WITNESS).write_text('not json')
         self.refuses('terminal witness is malformed')
 
+    def test_it_refuses_the_minimal_witness_without_the_child_digest_or_top_level_cursor(self):
+        minimal = {'schema': cia_hour.TERMINAL_WITNESS_SCHEMA, 'persisted_before_restore_verify': True,
+                   'terminal_state': {'facts': {}, 'rng_state_sha256': {}, 'data_cursor': {}}}
+        path = self.lost / cia_hour.TERMINAL_WITNESS
+        path.write_text(json.dumps(minimal))
+        self.refuses('required fields are missing or mistyped')
+        good = json.loads(json.dumps(dict(minimal, child_manifest_sha256='b' * 64, data_cursor=dict(CURSOR), hour_fields={})))
+        path.write_text(json.dumps(good))
+        cia_verify_tail.preflight(self.lost, window_marker=self.marker)                      # the same record with its fields passes
+        for mutate in (lambda w: w.pop('child_manifest_sha256'), lambda w: w.pop('data_cursor'), lambda w: w.pop('hour_fields'),
+                       lambda w: w.update(child_manifest_sha256='XYZ'), lambda w: w.update(child_manifest_sha256=7),
+                       lambda w: w.update(data_cursor=[]), lambda w: w.update(hour_fields='x'),
+                       lambda w: w['terminal_state'].update(facts=[]), lambda w: w['terminal_state'].update(data_cursor='c')):
+            broken = json.loads(json.dumps(good))
+            mutate(broken)
+            path.write_text(json.dumps(broken))
+            self.refuses('terminal witness is malformed')
+
     def test_it_refuses_a_launch_binding_without_run_id_gpu_uuid_or_a_hex_digest(self):
         for launch in ({'prediction_sha256': 'a' * 64, 'gpu_uuid': 'GPU-x'}, {'prediction_sha256': 'a' * 64, 'run_id': 'r'},
                        {'prediction_sha256': 'not hex', 'run_id': 'r', 'gpu_uuid': 'GPU-x'}, {'prediction_sha256': 'a' * 64, 'run_id': '', 'gpu_uuid': 'GPU-x'}):

@@ -516,6 +516,11 @@ def read_terminal_witness(runner, custody):
             or not isinstance(witness.get('terminal_state'), dict)
             or set(witness['terminal_state']) != {'facts', 'rng_state_sha256', 'data_cursor'}):
         raise ValueError('terminal witness is not the ' + TERMINAL_WITNESS_SCHEMA + ' record')
+    digest = witness.get('child_manifest_sha256')
+    if (not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest)
+            or not isinstance(witness.get('data_cursor'), dict) or not isinstance(witness.get('hour_fields'), dict)
+            or not isinstance(witness['terminal_state']['facts'], dict) or not isinstance(witness['terminal_state']['data_cursor'], dict)):
+        raise ValueError('terminal witness required fields are missing or mistyped')
     return witness, hashlib.sha256(data).hexdigest()
 
 
