@@ -113,7 +113,7 @@ jobs:
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Run HF custody canary regressions
         run: python -B -m pytest -q tests/test_hf_custody_sync.py tests/test_remint_hashes.py
-      - name: Execute the #2119 continuity, lineage ancestry, head-pointer and claim-status suites (owned, bounded)
+      - name: "Execute the #2119 continuity, lineage ancestry, head-pointer and claim-status suites (owned, bounded)"
         # Each command runs on its own line under set -e, so one failing suite fails the step; a timeout is exit 124.
         run: |
           set -euo pipefail
