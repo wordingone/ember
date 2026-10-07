@@ -54,6 +54,10 @@ one. Read it before proposing any arm, and write to it every time an experiment 
 Newest first. Automatic entries carry the loop hypothesis id.
 
 <!-- JOURNAL-LOG-BEGIN -->
+### 2026-10-07 12:10 AM LA — Next after `issue2119-h33-h32-head-extended-ledger-repeat-20261007`
+- **Successor hypothesis / not closed:** SUPPORTED on the score, but the head did not advance: the executor reported success=false, so the H33 child stays DIAGNOSTIC. Not closed: whether the accounting cure lets a SUPPORTED hour advance the head. The successor repeats the leg on the cured source.
+- **Successor id:** `issue2119-h34-h32-head-extended-ledger-redo-20261007`
+
 ### 2026-10-07 12:08 AM LA — Next after `issue2119-h33-episode-nll-20261007`
 - **Successor hypothesis / not closed:** Score closed: H33 diagnostic child fresh 4.7699 (episode-nll-H33.json 93220f5a). Successor: the H34 redo of the same data and parent with cure commit 239e1e9c, sampler arm v10 and one conditional tenant; its prediction is frozen in h34-prediction-20261007.txt.
 - **Successor id:** `issue2119-h34-h32-head-extended-ledger-redo-20261007`
