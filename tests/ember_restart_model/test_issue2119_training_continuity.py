@@ -530,6 +530,79 @@ class StatusProducerTests(unittest.TestCase):
         self.assertIn('diagnostic_occupancy_seconds', record['diagnostic_allowance'])
 
 
+class RealPointerFinalizerTests(unittest.TestCase):
+    """issue #2119 row 3b review (the deferred finalization): the REAL pointer, the REAL lineage derivation (nothing patched) and the real
+    ledger. A no-reference RETENTION_ELIGIBLE_EXPERIMENT begun at head A and finalized after the head advanced to B is charged to A, the
+    lineage its launch reserved against, and never to B."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = patch.dict(os.environ, {}, clear=False)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(ledger.LEDGER_ROOT_ENV, None)
+        self.custody = self.root / 'receipts' / 'measurement-r1'
+        self.custody.mkdir(parents=True)
+        self.receipts_root = ledger.ledger_root(self.custody.parent)   # == self.root: the pointer and the ledger share it
+        self.identity = {'run_id': 'r1', 'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT'}   # no checkpoint_probe, no continuation
+        self.head_a = self._advance('hour-a', head_pointer.GENESIS_SENTINEL, 1000.0)
+        self.key_a = ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.receipts_root)
+        self.assertEqual(self.key_a, self.head_a['manifest_sha256'])
+        (self.custody / 'arm-results.json').write_text('{}', encoding='utf-8')
+        (self.custody / 'run-complete.json').write_text(json.dumps({
+            'status': 'run_complete_not_yet_scored', 'succeeded': False, 'run_id': 'r1', 'custody_name': 'measurement-r1',
+            'dispatch_started': 100.0, 'run_complete_at': 200.0, runner.LAUNCH_LINEAGE_FIELD: self.key_a}), encoding='utf-8')
+        self.ledger_file = ledger.ledger_path(self.custody.parent)
+
+    def _advance(self, name, parent, now):
+        c = _published_checkpoint(self.root, name)
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root, published_checkpoint_root=c['published_checkpoint_root'],
+            hour_result_path=c['hour_result_path'], hour_result_sha256=c['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=parent, now=now)
+        return c
+
+    def _finalize(self):
+        return runner.finalize_retention_outcome(self.identity, custody=self.custody, parent=self.custody.parent)
+
+    def _outcome_lineages(self):
+        return [r['lineage_checkpoint_manifest_sha256'] for r in ledger.read_rows(self.ledger_file)
+                if r.get('row_kind') == 'retention_experiment_outcome']
+
+    def test_a_head_advance_before_the_finalizer_still_charges_the_launch_lineage(self):
+        head_b = self._advance('hour-b', self.head_a['manifest_sha256'], 1001.0)
+        # the defect this guards: a re-derivation at finalize time now names B, so keying there would charge the wrong lineage
+        self.assertEqual(ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.receipts_root), head_b['manifest_sha256'])
+        self.assertFalse(self._finalize())
+        self.assertEqual(self._outcome_lineages(), [self.key_a])
+        rows = ledger.read_rows(self.ledger_file)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, self.key_a), 100)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, head_b['manifest_sha256']), 0)
+
+    def test_an_interrupted_marker_write_then_a_head_advance_then_the_retry_charges_the_launch_lineage_once(self):
+        real_write_new = runner._write_new
+
+        def fail_the_marker_once(path, value):
+            if Path(path).name == runner.OUTCOME_RECORDED_FILENAME and not getattr(fail_the_marker_once, 'failed', False):
+                fail_the_marker_once.failed = True
+                raise OSError('simulated crash while creating the outcome marker')
+            return real_write_new(path, value)
+
+        with patch.object(runner, '_write_new', fail_the_marker_once):
+            with self.assertRaises(OSError):
+                self._finalize()
+            self.assertEqual(self._outcome_lineages(), [self.key_a])                 # the ledger append landed at head A
+            head_b = self._advance('hour-b', self.head_a['manifest_sha256'], 1001.0)  # the head moves before the retry
+            self.assertFalse(self._finalize())
+        self.assertEqual(self._outcome_lineages(), [self.key_a])                     # still ONE row, still A: (lineage, run_id) idempotence held
+        rows = ledger.read_rows(self.ledger_file)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, self.key_a), 100)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, head_b['manifest_sha256']), 0)
+
+
 class LedgerRootDerivedFromCustodyTests(unittest.TestCase):
     def test_two_dispatch_parents_share_one_ledger_and_no_parent_refuses(self):
         import tempfile
