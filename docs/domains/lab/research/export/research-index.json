@@ -1,8 +1,8 @@
 {
  "schema": "ember-research-index-v1",
  "produced_by": "seat record: build.py",
- "source_events_through": "2026-10-07T01:13:26Z",
- "generated_at": "2026-10-07T01:13:28Z",
+ "source_events_through": "2026-10-07T07:08:01Z",
+ "generated_at": "2026-10-07T07:08:03Z",
  "is_complete_research_history": false,
  "coverage": {
   "registry": {
@@ -89,19 +89,19 @@
   },
   "loop": {
    "path": "seat record: issue1945-loop.jsonl",
-   "bytes": 3134050,
-   "mtime_utc": "2026-10-07T01:13:26Z",
-   "records_in_source": 4273,
+   "bytes": 3152147,
+   "mtime_utc": "2026-10-07T07:08:01Z",
+   "records_in_source": 4293,
    "unparseable_records": 0,
-   "hypotheses": 537,
-   "included": 4273,
+   "hypotheses": 540,
+   "included": 4293,
    "omitted_fields": {
     "ceiling": {
      "occurrences": 29,
      "reason": "not on the publication allowlist"
     },
     "decision_changed": {
-     "occurrences": 96,
+     "occurrences": 97,
      "reason": "not on the publication allowlist"
     },
     "duplicate_of": {
@@ -109,31 +109,31 @@
      "reason": "not on the publication allowlist"
     },
     "expect": {
-     "occurrences": 135,
+     "occurrences": 138,
      "reason": "not on the publication allowlist"
     },
     "gate": {
-     "occurrences": 137,
+     "occurrences": 140,
      "reason": "not on the publication allowlist"
     },
     "gate_state": {
-     "occurrences": 113,
+     "occurrences": 115,
      "reason": "not on the publication allowlist"
     },
     "interval": {
-     "occurrences": 135,
+     "occurrences": 138,
      "reason": "not on the publication allowlist"
     },
     "interval_held": {
-     "occurrences": 109,
+     "occurrences": 111,
      "reason": "not on the publication allowlist"
     },
     "model": {
-     "occurrences": 1064,
+     "occurrences": 1084,
      "reason": "not on the publication allowlist"
     },
     "node": {
-     "occurrences": 1064,
+     "occurrences": 1084,
      "reason": "not on the publication allowlist"
     },
     "not_produced": {
@@ -141,19 +141,19 @@
      "reason": "not on the publication allowlist"
     },
     "observed": {
-     "occurrences": 111,
+     "occurrences": 113,
      "reason": "not on the publication allowlist"
     },
     "quantity": {
-     "occurrences": 135,
+     "occurrences": 138,
      "reason": "not on the publication allowlist"
     },
     "seat": {
-     "occurrences": 1064,
+     "occurrences": 1084,
      "reason": "not on the publication allowlist"
     },
     "skill_version": {
-     "occurrences": 1064,
+     "occurrences": 1084,
      "reason": "not on the publication allowlist"
     },
     "voi": {
@@ -243,10 +243,10 @@
   ],
   "sanitizer": {
    "host_account_paths_removed": 41,
-   "absolute_local_paths_normalized": 913,
+   "absolute_local_paths_normalized": 918,
    "operator_name_occurrences_replaced": 2,
-   "seat_name_occurrences_replaced": 1138,
-   "seat_record_paths_rewritten": 1656,
+   "seat_name_occurrences_replaced": 1144,
+   "seat_record_paths_rewritten": 1660,
    "credential_shaped_strings_flagged": 0,
    "credential_flag_sites": []
   },
@@ -287,8 +287,8 @@
     "index": 3,
     "is_current": true,
     "started": "2026-09-20T21:34:33Z",
-    "ended": "2026-10-07T01:13:26Z",
-    "hypotheses": 428,
+    "ended": "2026-10-07T07:08:01Z",
+    "hypotheses": 431,
     "boundary_basis": "derived from the loop log: a quiet interval longer than 4 hours separates this group of events from the one before it"
    },
    {
@@ -314,7 +314,7 @@
   "note": "What the site leads with. The site renders Ember research generally; this file selects which work is FEATURED and where its numbers come from. Change the featured block to feature different work -- nothing about the site is specific to one issue.",
   "ember": {
    "name": "Ember",
-   "what": "Ember is a from-scratch language model trained on one RTX 4090. Everything it knows was learned on that single card. For the #1945 throughput-and-qualification campaign as documented through 2026-09-27, the accounting contract requires receipts for trained-token counts and reproducible checkpoints. This requirement is not evidence that every run met it; no result counts unless a third party can inspect a supporting artifact.",
+   "what": "Ember is a from-scratch language model trained on one RTX 4090. Everything it knows was learned on that single card, under a fixed accounting contract: every trained token is receipted, every checkpoint is reproducible, and no result counts unless an artifact a third party can open says it happened.",
    "why": "The constraint is the experiment. One consumer card is a hard budget, so every question becomes a measurement question -- where the time actually goes, and what would have to change for it to go somewhere else."
   },
   "featured": {
@@ -374,7 +374,7 @@
     }
    ],
    "measurement": {
-    "label": "Gate B — Applied positions per second, governed hour",
+    "label": "Applied positions per second, governed hour",
     "units": "positions/s",
     "basis": "governed",
     "receipt": "seat record: six-gate-a1-attempt14-v3-20260927.predicate.json",
@@ -39794,17 +39794,18 @@
   },
   {
    "id": "issue2119-h30-episode-nll-20261006",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-06T16:44:07Z",
-   "last_ts": "2026-10-06T17:14:56Z",
+   "last_ts": "2026-10-07T01:13:27Z",
    "events": [
     {
      "ts": "2026-10-06T16:44:07Z",
@@ -39841,6 +39842,11 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen criterion, quoted: CAUSAL 'the H27 recipe (fresh-side repeats included) holds held-out fresh near the H27 child' is REFUTED if the H30 child scored on the same plan has fresh > 4.8663693261146545 (the H28 child 4.8463693261146545 + 0.02; engineering band, NOT a measured noise floor). Observed fresh 4.8277712762355804 <= 4.8663693261146545, so the causal clause is SUPPORTED. CHECKPOINT acceptance (frozen policy f2113a69, a separate label) is refused if fresh > 6.196879416704178 OR older_early_shards > 3.063157856464386 OR D = 4.842423111200333 - fresh is not above B0 = 0: fresh 4.8277712762355804 <= 6.196879416704178, older_early 2.7048128992319107 <= 3.063157856464386, D = +0.014651834964752197 > 0, so acceptance holds on all three (this seat 61196 ADVANCE). Other arms: giant 0.9705671966075897, pass5 2.4499153792858124. Receipt episode-nll-H30.json sha256 efb44cba142a42a97c0fb4fa714e65315818e96d1b3dc30da9496bc78b089c05. H30 vs H28 is one same-configuration pair (n = 1), not a noise floor."
+    },
+    {
+     "ts": "2026-10-07T01:13:27Z",
+     "stage": "CLOSED",
+     "because": "Ruled; the episode-NLL scorer v12 is the standing instrument for H31 and H32. No successor on the instrument; the next scored hour opens its own row."
     }
    ],
    "observation": "The H27 child (the parent) scored fresh 4.842423111200333 and the H28 child 4.8463693261146545 on plan 9a6fd054 (scorer v12, 4 arms x 64 episodes, receipts episode-nll-H27.json 76bdd89b and episode-nll-H28.json 6b131803). The thirtieth hour (DECLARED EPOCH-2, the H27 recipe from the H27 head: the H27 child continued 68396 measured updates from cursor 948/2,699,961 on the H28 ledger 7ae4a4c3 unchanged, a same-configuration repeat of H28, no second tenant) ended (hour-result sha256 3ba99972). Whether its child's held-out fresh score stays within 0.02 of the H28 child is what the frozen scoring below decides.",
@@ -39852,21 +39858,23 @@
     "seat record: episode-nll-H30.json"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen criterion, quoted: CAUSAL 'the H27 recipe (fresh-side repeats included) holds held-out fresh near the H27 child' is REFUTED if the H30 child scored on the same plan has fresh > 4.8663693261146545 (the H28 child 4.8463693261146545 + 0.02; engineering band, NOT a measured noise floor). Observed fresh 4.8277712762355804 <= 4.8663693261146545, so the causal clause is SUPPORTED. CHECKPOINT acceptance (frozen policy f2113a69, a separate label) is refused if fresh > 6.196879416704178 OR older_early_shards > 3.063157856464386 OR D = 4.842423111200333 - fresh is not above B0 = 0: fresh 4.8277712762355804 <= 6.196879416704178, older_early 2.7048128992319107 <= 3.063157856464386, D = +0.014651834964752197 > 0, so acceptance holds on all three (this seat 61196 ADVANCE). Other arms: giant 0.9705671966075897, pass5 2.4499153792858124. Receipt episode-nll-H30.json sha256 efb44cba142a42a97c0fb4fa714e65315818e96d1b3dc30da9496bc78b089c05. H30 vs H28 is one same-configuration pair (n = 1), not a noise floor."
+   "ruling": "Frozen criterion, quoted: CAUSAL 'the H27 recipe (fresh-side repeats included) holds held-out fresh near the H27 child' is REFUTED if the H30 child scored on the same plan has fresh > 4.8663693261146545 (the H28 child 4.8463693261146545 + 0.02; engineering band, NOT a measured noise floor). Observed fresh 4.8277712762355804 <= 4.8663693261146545, so the causal clause is SUPPORTED. CHECKPOINT acceptance (frozen policy f2113a69, a separate label) is refused if fresh > 6.196879416704178 OR older_early_shards > 3.063157856464386 OR D = 4.842423111200333 - fresh is not above B0 = 0: fresh 4.8277712762355804 <= 6.196879416704178, older_early 2.7048128992319107 <= 3.063157856464386, D = +0.014651834964752197 > 0, so acceptance holds on all three (this seat 61196 ADVANCE). Other arms: giant 0.9705671966075897, pass5 2.4499153792858124. Receipt episode-nll-H30.json sha256 efb44cba142a42a97c0fb4fa714e65315818e96d1b3dc30da9496bc78b089c05. H30 vs H28 is one same-configuration pair (n = 1), not a noise floor.",
+   "closing": "Ruled; the episode-NLL scorer v12 is the standing instrument for H31 and H32. No successor on the instrument; the next scored hour opens its own row."
   },
   {
    "id": "issue2119-h31-h30-child-extended-ledger-20261006",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-06T17:55:18Z",
-   "last_ts": "2026-10-07T01:13:13Z",
+   "last_ts": "2026-10-07T01:13:27Z",
    "events": [
     {
      "ts": "2026-10-06T17:55:18Z",
@@ -39902,6 +39910,11 @@
      "stage": "RULED",
      "verdict": "REFUTED",
      "because": "Frozen criterion: fresh <= parent 4.8277712762355804 + 0.02 = 4.8477712762355804; observed fresh 5.008945345878601 is above it by 0.161174; acceptance D = -0.181174 not > 0 (this seat 62207; journal-h31-entry-20261006.txt)"
+    },
+    {
+     "ts": "2026-10-07T01:13:27Z",
+     "stage": "CLOSED",
+     "because": "Ruled REFUTED on the frozen band (this seat 62207); head stayed 27b1d03b. Successor: H32 repeat from the same head without a tenant, since closed SUPPORTED."
     }
    ],
    "observation": "Three same-recipe children scored on plan 9a6fd054 (scorer v12, 65,536 targets per arm): the H27 child fresh 4.842423111200333, the H28 child 4.8463693261146545, the H30 child 4.8277712762355804 (older_early 2.7048128992319107, giant 0.9705671966075897, pass5 2.4499153792858124; episode-nll-H30.json efb44cba; H30 trained 68,396 measured updates from the H27 child, hour-result sha 3ba99972, pointer now e1f69ef3). Hour 31 continues the H30 child from its terminal cursor 998/3,100,345 on the H31 EXTENDED declared-repeat ledger (the H28 ledger's 93,368,647 unconsumed tokens first, then 51 declared-repeat rows), cap 98,158, wall 7,200 (this seat 61363), serving as the one declared concurrent tenant. Whether one more hour of the same recipe holds held-out fresh within 0.02 of the H30 child is what the frozen scoring below decides.",
@@ -39913,7 +39926,8 @@
     "<host-local path>"
    ],
    "verdict": "REFUTED",
-   "ruling": "Frozen criterion: fresh <= parent 4.8277712762355804 + 0.02 = 4.8477712762355804; observed fresh 5.008945345878601 is above it by 0.161174; acceptance D = -0.181174 not > 0 (this seat 62207; journal-h31-entry-20261006.txt)"
+   "ruling": "Frozen criterion: fresh <= parent 4.8277712762355804 + 0.02 = 4.8477712762355804; observed fresh 5.008945345878601 is above it by 0.161174; acceptance D = -0.181174 not > 0 (this seat 62207; journal-h31-entry-20261006.txt)",
+   "closing": "Ruled REFUTED on the frozen band (this seat 62207); head stayed 27b1d03b. Successor: H32 repeat from the same head without a tenant, since closed SUPPORTED."
   },
   {
    "id": "issue2119-h31-episode-nll-20261006",
@@ -39986,17 +40000,18 @@
   },
   {
    "id": "issue2119-h32-h30-head-extended-ledger-alone-20261006",
-   "stage": "RULED",
+   "stage": "CLOSED",
    "stages_seen": [
     "OBSERVED",
     "EXPLAINED",
     "PREDICTED",
     "RUNNING",
     "MEASURED",
-    "RULED"
+    "RULED",
+    "CLOSED"
    ],
    "first_ts": "2026-10-06T21:36:24Z",
-   "last_ts": "2026-10-07T01:13:13Z",
+   "last_ts": "2026-10-07T01:13:28Z",
    "events": [
     {
      "ts": "2026-10-06T21:36:24Z",
@@ -40032,6 +40047,11 @@
      "stage": "RULED",
      "verdict": "SUPPORTED",
      "because": "Frozen criterion: fresh <= 4.8477712762355804 (parent 4.8277712762355804 + 0.02); observed fresh 4.80034501850605 is below it; acceptance f2113a69 passes all three clauses (fresh <= 6.196879416704178, older_early 2.6755 <= 3.063157856464386, D = +0.027426 > 0); PROMOTE per this seat 63131, packet a50d6413; run-to-run spread 0.2086 vs the H31 draw, so not evidence of improvement"
+    },
+    {
+     "ts": "2026-10-07T01:13:28Z",
+     "stage": "CLOSED",
+     "because": "Ruled SUPPORTED against the frozen band, PROMOTE 63131, pointer advanced 00:52:33Z (sha 8aa73ec0). Successor: H33 declared repeat from the 57caae38 head, opened in its own row before its claim."
     }
    ],
    "observation": "H31 (the H30 child continued on the H31 EXTENDED declared-repeat ledger with a declared serving tenant, wall 7,200, 66,096 measured updates) scored fresh 5.008945345878601 against its parent's 4.8277712762355804 (older_early 2.706576317548752 vs 2.7048128992319107, giant 0.9726533740758896, pass5 2.4723584949970245; episode-nll-H31.json, plan 9a6fd054, scorer v12, 65,536 targets per arm) and was ruled REFUTED by this seat 62207 (band 4.8477712762355804); not promoted, the head stays the H30 child 27b1d03b under pointer e1f69ef3. Hour 32 continues that head from its own terminal cursor 998/3,100,345 on the same ledger (the parent's tokens_seen fixes the start, so it reads the same text), cap 98,158, wall 7,200, alone on the card (no tenant), to observe a second draw on identical text and parent.",
@@ -40043,7 +40063,8 @@
     "<host-local path>"
    ],
    "verdict": "SUPPORTED",
-   "ruling": "Frozen criterion: fresh <= 4.8477712762355804 (parent 4.8277712762355804 + 0.02); observed fresh 4.80034501850605 is below it; acceptance f2113a69 passes all three clauses (fresh <= 6.196879416704178, older_early 2.6755 <= 3.063157856464386, D = +0.027426 > 0); PROMOTE per this seat 63131, packet a50d6413; run-to-run spread 0.2086 vs the H31 draw, so not evidence of improvement"
+   "ruling": "Frozen criterion: fresh <= 4.8477712762355804 (parent 4.8277712762355804 + 0.02); observed fresh 4.80034501850605 is below it; acceptance f2113a69 passes all three clauses (fresh <= 6.196879416704178, older_early 2.6755 <= 3.063157856464386, D = +0.027426 > 0); PROMOTE per this seat 63131, packet a50d6413; run-to-run spread 0.2086 vs the H31 draw, so not evidence of improvement",
+   "closing": "Ruled SUPPORTED against the frozen band, PROMOTE 63131, pointer advanced 00:52:33Z (sha 8aa73ec0). Successor: H33 declared repeat from the 57caae38 head, opened in its own row before its claim."
   },
   {
    "id": "issue2119-h32-episode-nll-20261006",
@@ -40104,6 +40125,182 @@
     "seat record: episode-nll-H32.json"
    ],
    "closing": "this seat ruling mail 63131 (63130 packet): PROMOTE H32 on frozen criteria; fresh 4.80035, older_early 2.67550, D +0.02743; no improvement established beyond the ~0.21 run-to-run spread"
+  },
+  {
+   "id": "issue2119-h33-h32-head-extended-ledger-repeat-20261007",
+   "stage": "RULED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED"
+   ],
+   "first_ts": "2026-10-07T02:38:34Z",
+   "last_ts": "2026-10-07T06:17:24Z",
+   "events": [
+    {
+     "ts": "2026-10-07T02:38:34Z",
+     "stage": "OBSERVED",
+     "observation": "H31 (H30 child, declared serving tenant) scored fresh 5.008945345878601 and was REFUTED; H32 (same parent, same text and recipe, alone on the card, 66,767 measured updates) scored fresh 4.80034501850605 (older_early 2.6755024418234825, giant 0.9673688597977161, pass5 2.4373022466897964; episode-nll-H32.json a50d6413, plan 9a6fd054, scorer v12) and was PROMOTED (this seat 63131): two draws on identical inputs 0.2086 apart. H28 (epoch-2, every row a declared repeat) scored fresh 4.8463693261146545 against its parent's 4.842423111200333 (D = -0.003946) and was REFUSED. Hour 33 continues the promoted H32 head 57caae38 (pointer 8aa73ec0) from its terminal cursor 1048/708,498 on the H33 extended ledger bd3f9f56 (rows 0..1071 = the H31 ledger, 49 declared-repeat rows appended), cap 98,158, wall 7,500, alone on the card. Repeat share: 73 of 73 scheduled rows from the cursor are declared repeats (fresh-side passes 3-5, older pass 6), none at first pass.",
+     "receipt": "seat record: h33-prediction-20261007.txt"
+    },
+    {
+     "ts": "2026-10-07T02:38:34Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading: every row of this hour is a repeat, so any held-out fresh change is repeated-text training, never new data. H31 and H32 ran this same 1:1 pattern from one parent and scored 5.008945345878601 and 4.80034501850605, so the pattern alone does not fix the outcome; H28 shows a repeat-only hour can end above its parent. If fresh stays at or below the band (4.82034501850605) the head keeps its held-out fresh on the next span; if it lands near H31's 5.008945345878601 the rise recurs on a different span and parent, which points at the pattern (repeat-only exposure) rather than at the tenant or one parent. One hour cannot separate parent, text span and run-to-run noise. The 0.02 band is an engineering choice, NOT a measured noise floor. No new cause is asserted."
+    },
+    {
+     "ts": "2026-10-07T02:38:35Z",
+     "stage": "PREDICTED",
+     "refuted_if": "CAUSAL hypothesis 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if the H33 child scored on the same plan has fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above B0 = 0. Point-value comparisons on the full-precision receipt fields, same population, scorer and positive-loss target denominator, never shifted after the result. WALL label (separate): the hour is refused as a wall failure if the H33 hour elapsed (segment_launch to worker_terminal) leaves WALL 7,500 minus elapsed below the 300 s minimum margin (wall_margin_check_v1.sh, sha 9942c4fc, unchanged); the H32 hour left 534.6 s at 7,500.",
+     "supported_if": "valid same-plan score with fresh <= 4.82034501850605, and separately acceptance when fresh <= 6.196879416704178, older_early <= 3.063157856464386 and D above B0 = 0, and the wall margin at the 7,500 s cap is at least 300 s on the H33 hour (predicted elapsed about 6,970 s, margin about 530 s). Forecast fresh 4.90 (4.70 to 5.10), older_early 2.69; qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag.",
+     "instrument": "the H33 chain segment (derived from chain_segment_H32_v1.sh by derive_h33_chain_v1.py; window through with_card_window.sh / gpu_window.sh); extended ledger bd3f9f56 (builder build_h33_ledger_v1.py, label sidecar h33-epoch-labels-v1.json) over the union root h25-union-20261005 (mixture identity h33-mixed-20261007T012124Z); cap 98,158 (the H33 cap receipt); dispatch-tree check v1 (c13998ac); child scorer child_nll_v12_episodes.py on the bound plan; baselines from episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H30.json efb44cba and episode-nll-H28.json 6b131803."
+    },
+    {
+     "ts": "2026-10-07T02:56:01Z",
+     "stage": "RUNNING",
+     "note": "this seat template checkpoint probe + governed hour, ~80 min",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-07T05:36:39Z",
+     "stage": "MEASURED",
+     "receipt": "<host-local path>"
+    },
+    {
+     "ts": "2026-10-07T06:17:24Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC)."
+    }
+   ],
+   "observation": "H31 (H30 child, declared serving tenant) scored fresh 5.008945345878601 and was REFUTED; H32 (same parent, same text and recipe, alone on the card, 66,767 measured updates) scored fresh 4.80034501850605 (older_early 2.6755024418234825, giant 0.9673688597977161, pass5 2.4373022466897964; episode-nll-H32.json a50d6413, plan 9a6fd054, scorer v12) and was PROMOTED (this seat 63131): two draws on identical inputs 0.2086 apart. H28 (epoch-2, every row a declared repeat) scored fresh 4.8463693261146545 against its parent's 4.842423111200333 (D = -0.003946) and was REFUSED. Hour 33 continues the promoted H32 head 57caae38 (pointer 8aa73ec0) from its terminal cursor 1048/708,498 on the H33 extended ledger bd3f9f56 (rows 0..1071 = the H31 ledger, 49 declared-repeat rows appended), cap 98,158, wall 7,500, alone on the card. Repeat share: 73 of 73 scheduled rows from the cursor are declared repeats (fresh-side passes 3-5, older pass 6), none at first pass.",
+   "explanation": "Mechanism reading: every row of this hour is a repeat, so any held-out fresh change is repeated-text training, never new data. H31 and H32 ran this same 1:1 pattern from one parent and scored 5.008945345878601 and 4.80034501850605, so the pattern alone does not fix the outcome; H28 shows a repeat-only hour can end above its parent. If fresh stays at or below the band (4.82034501850605) the head keeps its held-out fresh on the next span; if it lands near H31's 5.008945345878601 the rise recurs on a different span and parent, which points at the pattern (repeat-only exposure) rather than at the tenant or one parent. One hour cannot separate parent, text span and run-to-run noise. The 0.02 band is an engineering choice, NOT a measured noise floor. No new cause is asserted.",
+   "criterion": "CAUSAL hypothesis 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if the H33 child scored on the same plan has fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above B0 = 0. Point-value comparisons on the full-precision receipt fields, same population, scorer and positive-loss target denominator, never shifted after the result. WALL label (separate): the hour is refused as a wall failure if the H33 hour elapsed (segment_launch to worker_terminal) leaves WALL 7,500 minus elapsed below the 300 s minimum margin (wall_margin_check_v1.sh, sha 9942c4fc, unchanged); the H32 hour left 534.6 s at 7,500.",
+   "criterion_supported_if": "valid same-plan score with fresh <= 4.82034501850605, and separately acceptance when fresh <= 6.196879416704178, older_early <= 3.063157856464386 and D above B0 = 0, and the wall margin at the 7,500 s cap is at least 300 s on the H33 hour (predicted elapsed about 6,970 s, margin about 530 s). Forecast fresh 4.90 (4.70 to 5.10), older_early 2.69; qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag.",
+   "instrument": "the H33 chain segment (derived from chain_segment_H32_v1.sh by derive_h33_chain_v1.py; window through with_card_window.sh / gpu_window.sh); extended ledger bd3f9f56 (builder build_h33_ledger_v1.py, label sidecar h33-epoch-labels-v1.json) over the union root h25-union-20261005 (mixture identity h33-mixed-20261007T012124Z); cap 98,158 (the H33 cap receipt); dispatch-tree check v1 (c13998ac); child scorer child_nll_v12_episodes.py on the bound plan; baselines from episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H30.json efb44cba and episode-nll-H28.json 6b131803.",
+   "receipts": [
+    "<host-local path>"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC)."
+  },
+  {
+   "id": "issue2119-h33-episode-nll-20261007",
+   "stage": "CLOSED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED",
+    "RUNNING",
+    "MEASURED",
+    "RULED",
+    "UPDATED",
+    "CLOSED"
+   ],
+   "first_ts": "2026-10-07T05:43:07Z",
+   "last_ts": "2026-10-07T07:08:01Z",
+   "events": [
+    {
+     "ts": "2026-10-07T05:43:07Z",
+     "stage": "OBSERVED",
+     "observation": "The H32 child (the parent) scored fresh 4.80034501850605, the H31 child (same recipe, same text, one draw) 5.008945345878601 and the H28 child 4.8463693261146545 on plan 9a6fd054 (scorer v12, 4 arms x 64 episodes; receipts episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H28.json 6b131803). The thirty-third hour (DECLARED REPEAT: the H32 child continued 68118 measured updates from cursor 1048/708,498 on the extended ledger bd3f9f56, alone on the card, hour result sha256 742ede96) produced the H33 child 0b1f2ef1; the executor returned success=false (terminal-stamp PermissionError after the hour result), so the child is DIAGNOSTIC and the head does not advance (this seat 64316). Its held-out score on the same plan is the next observation.",
+     "receipt": "seat record: h33-prediction-20261007.txt"
+    },
+    {
+     "ts": "2026-10-07T05:43:07Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading registered before the score: the H33 inputs equal H31/H32 (text pattern, optimizer, cap, wall; no tenant) with a different parent (the H32 child), so a difference from the parent is run-to-run spread plus repeated-text training; every scheduled row is a repeat, so any held-out fresh change is attributed to repeated-text training, never to new data. The 0.02 band is an engineering band, NOT a measured noise floor. The result is a diagnostic reading; it advances nothing."
+    },
+    {
+     "ts": "2026-10-07T05:43:08Z",
+     "stage": "PREDICTED",
+     "refuted_if": "CAUSAL 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early_shards > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above 0 (B0 = 0); not claimed here because the executor returned success=false.",
+     "supported_if": "valid same-plan score with fresh <= 4.82034501850605 (the parent level held), reported as DIAGNOSTIC only; qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag.",
+     "instrument": "chain_segment_episode_nll_h33_v1.sh (derived from chain_segment_episode_nll_h32_v1.sh by derive_episode_chain_h33.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on plan 9a6fd054, tree b8f2ff29 rescore worktree; child manifest 0b1f2ef1 via explicit custody path; parent baseline episode-nll-H32.json a50d6413; same-recipe baseline episode-nll-H31.json."
+    },
+    {
+     "ts": "2026-10-07T05:55:09Z",
+     "stage": "RUNNING",
+     "note": "H33 child fresh-vs-older episode NLL under the TEMPLATE forward (scorer v12, plan 9a6fd05492538593662d9b1e62cc15fd7a19b226d0de386ea4b31dddc8848248)",
+     "gpu": true
+    },
+    {
+     "ts": "2026-10-07T06:17:14Z",
+     "stage": "MEASURED",
+     "receipt": "seat record: episode-nll-H33.json",
+     "note": "a build seat 64451: v12 scorer rc=0, pointer unchanged"
+    },
+    {
+     "ts": "2026-10-07T06:17:23Z",
+     "stage": "RULED",
+     "verdict": "SUPPORTED",
+     "because": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC)."
+    },
+    {
+     "ts": "2026-10-07T07:08:01Z",
+     "stage": "UPDATED",
+     "hypothesis": "Score closed: H33 diagnostic child fresh 4.7699 (episode-nll-H33.json 93220f5a). Successor: the H34 redo of the same data and parent with cure commit 239e1e9c, sampler arm v10 and one conditional tenant; its prediction is frozen in h34-prediction-20261007.txt.",
+     "successor": "issue2119-h34-h32-head-extended-ledger-redo-20261007",
+     "because": "H34 redoes H33's data from the same parent with the tail-stamp cure; H33 child stays diagnostic, so the next hour is a redo, not an advance."
+    },
+    {
+     "ts": "2026-10-07T07:08:01Z",
+     "stage": "CLOSED",
+     "because": "Measurement cycle complete: H33 diagnostic score recorded and ruled; successor H34 registered."
+    }
+   ],
+   "observation": "The H32 child (the parent) scored fresh 4.80034501850605, the H31 child (same recipe, same text, one draw) 5.008945345878601 and the H28 child 4.8463693261146545 on plan 9a6fd054 (scorer v12, 4 arms x 64 episodes; receipts episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H28.json 6b131803). The thirty-third hour (DECLARED REPEAT: the H32 child continued 68118 measured updates from cursor 1048/708,498 on the extended ledger bd3f9f56, alone on the card, hour result sha256 742ede96) produced the H33 child 0b1f2ef1; the executor returned success=false (terminal-stamp PermissionError after the hour result), so the child is DIAGNOSTIC and the head does not advance (this seat 64316). Its held-out score on the same plan is the next observation.",
+   "explanation": "Mechanism reading registered before the score: the H33 inputs equal H31/H32 (text pattern, optimizer, cap, wall; no tenant) with a different parent (the H32 child), so a difference from the parent is run-to-run spread plus repeated-text training; every scheduled row is a repeat, so any held-out fresh change is attributed to repeated-text training, never to new data. The 0.02 band is an engineering band, NOT a measured noise floor. The result is a diagnostic reading; it advances nothing.",
+   "criterion": "CAUSAL 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early_shards > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above 0 (B0 = 0); not claimed here because the executor returned success=false.",
+   "criterion_supported_if": "valid same-plan score with fresh <= 4.82034501850605 (the parent level held), reported as DIAGNOSTIC only; qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag.",
+   "instrument": "chain_segment_episode_nll_h33_v1.sh (derived from chain_segment_episode_nll_h32_v1.sh by derive_episode_chain_h33.py; window through with_card_window.sh); child scorer child_nll_v12_episodes.py (sha de4d2931) on plan 9a6fd054, tree b8f2ff29 rescore worktree; child manifest 0b1f2ef1 via explicit custody path; parent baseline episode-nll-H32.json a50d6413; same-recipe baseline episode-nll-H31.json.",
+   "receipts": [
+    "seat record: episode-nll-H33.json"
+   ],
+   "verdict": "SUPPORTED",
+   "ruling": "Frozen: refuted if fresh > 4.82034501850605. Observed H33 child fresh 4.7699 (H32 child 4.8003, gain +0.0304), older_early 2.6942 under 3.0632; inside forecast 4.70-5.10. Checkpoint acceptance not claimed: executor success=false, head unchanged (DIAGNOSTIC).",
+   "not_closed": "Score closed: H33 diagnostic child fresh 4.7699 (episode-nll-H33.json 93220f5a). Successor: the H34 redo of the same data and parent with cure commit 239e1e9c, sampler arm v10 and one conditional tenant; its prediction is frozen in h34-prediction-20261007.txt.",
+   "successor": "issue2119-h34-h32-head-extended-ledger-redo-20261007",
+   "closing": "Measurement cycle complete: H33 diagnostic score recorded and ruled; successor H34 registered."
+  },
+  {
+   "id": "issue2119-h34-h32-head-extended-ledger-redo-20261007",
+   "stage": "PREDICTED",
+   "stages_seen": [
+    "OBSERVED",
+    "EXPLAINED",
+    "PREDICTED"
+   ],
+   "first_ts": "2026-10-07T07:07:15Z",
+   "last_ts": "2026-10-07T07:07:15Z",
+   "events": [
+    {
+     "ts": "2026-10-07T07:07:15Z",
+     "stage": "OBSERVED",
+     "observation": "H31 (H30 child, declared serving tenant) scored fresh 5.008945345878601 and was REFUTED; H32 (same pattern, alone, 66,767 measured updates) scored fresh 4.80034501850605 (episode-nll-H32.json a50d6413, plan 9a6fd054, scorer v12) and was PROMOTED (this seat 63131); the H33 hour (same inputs, from the H32 head, 68,118 measured updates) returned rc=1 after its hour result (tail-stamp PermissionError, then FileExistsError in the failure path), so its head did not advance and its child 0b1f2ef1 is DIAGNOSTIC; its same-plan score is fresh 4.76993228495121 (episode-nll-H33.json 93220f5a). H28 (epoch-2) scored fresh 4.8463693261146545 against its parent 4.842423111200333 (D = -0.003946) and was REFUSED. Hour 34 REDOES H33's data on the same parent (the H32 head 57caae38, pointer 8aa73ec0, cursor 1048/708,498, ledger bd3f9f56) with the tail-stamp cure commit 239e1e9c, sampler arm v10 and one declared conditional serving tenant (starts only after ARMED + 5 min baseline + a VRAM fit gate).",
+     "receipt": "seat record: h34-prediction-20261007.txt"
+    },
+    {
+     "ts": "2026-10-07T07:07:15Z",
+     "stage": "EXPLAINED",
+     "hypothesis": "Mechanism reading: every row of this hour is a repeat, so any held-out fresh change is repeated-text training, never new data. Three draws on this pattern (H31 5.008945345878601, H32 4.80034501850605, H33 diagnostic 4.76993228495121) span 0.2390 nat from different parents or runs, so one hour cannot separate parent, text span and run-to-run noise; H28 shows a repeat-only hour can end above its parent. The cure and the sampler change touch only the tail stamps and the sampler read, not training. If the conditional tenant runs, a per-update rate difference from H33 is confounded by the tenant and is reported with that label. The 0.02 band is an engineering choice, NOT a measured noise floor."
+    },
+    {
+     "ts": "2026-10-07T07:07:15Z",
+     "stage": "PREDICTED",
+     "refuted_if": "CAUSAL hypothesis 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if the H34 child scored on the same plan has fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above B0 = 0. Point-value comparisons on the full-precision receipt fields, same population, scorer and positive-loss target denominator, never shifted after the result. The H33 diagnostic score is not acceptance evidence for any child.",
+     "supported_if": "valid same-plan score with fresh <= 4.82034501850605, and separately acceptance when fresh <= 6.196879416704178, older_early <= 3.063157856464386 and D above B0 = 0, with a valid terminal (executor success true, no tail-stamp failure) and the wall margin at the 7,500 s cap at least 300 s. Qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag; a tenant-resident rate carries the tenant label.",
+     "instrument": "the H34 chain segment (derived from chain_segment_H33_v1.sh by derive_h34_chain_v1.py; window through with_card_window.sh / gpu_window.sh); extended ledger bd3f9f56 over the union root h25-union-20261005 (mixture identity h33-mixed-20261007T012124Z); cap 98,158; dispatch tree 239e1e9c (tail-stamp cure, dispatch-tree check v1); sampler arm v10; tenant gate h34_tenant_gate_v1.sh; child scorer child_nll_v12_episodes.py on the bound plan; baselines from episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H33.json 93220f5a (diagnostic) and episode-nll-H28.json 6b131803."
+    }
+   ],
+   "observation": "H31 (H30 child, declared serving tenant) scored fresh 5.008945345878601 and was REFUTED; H32 (same pattern, alone, 66,767 measured updates) scored fresh 4.80034501850605 (episode-nll-H32.json a50d6413, plan 9a6fd054, scorer v12) and was PROMOTED (this seat 63131); the H33 hour (same inputs, from the H32 head, 68,118 measured updates) returned rc=1 after its hour result (tail-stamp PermissionError, then FileExistsError in the failure path), so its head did not advance and its child 0b1f2ef1 is DIAGNOSTIC; its same-plan score is fresh 4.76993228495121 (episode-nll-H33.json 93220f5a). H28 (epoch-2) scored fresh 4.8463693261146545 against its parent 4.842423111200333 (D = -0.003946) and was REFUSED. Hour 34 REDOES H33's data on the same parent (the H32 head 57caae38, pointer 8aa73ec0, cursor 1048/708,498, ledger bd3f9f56) with the tail-stamp cure commit 239e1e9c, sampler arm v10 and one declared conditional serving tenant (starts only after ARMED + 5 min baseline + a VRAM fit gate).",
+   "explanation": "Mechanism reading: every row of this hour is a repeat, so any held-out fresh change is repeated-text training, never new data. Three draws on this pattern (H31 5.008945345878601, H32 4.80034501850605, H33 diagnostic 4.76993228495121) span 0.2390 nat from different parents or runs, so one hour cannot separate parent, text span and run-to-run noise; H28 shows a repeat-only hour can end above its parent. The cure and the sampler change touch only the tail stamps and the sampler read, not training. If the conditional tenant runs, a per-update rate difference from H33 is confounded by the tenant and is reported with that label. The 0.02 band is an engineering choice, NOT a measured noise floor.",
+   "criterion": "CAUSAL hypothesis 'one more hour of the declared-repeat 1:1 recipe from the H32 head holds held-out fresh near the parent H32 child' refuted if the H34 child scored on the same plan has fresh > 4.82034501850605 (the H32 child 4.80034501850605 + 0.02; engineering band, NOT a measured noise floor). CHECKPOINT acceptance (separate label, frozen policy f2113a69) refused if fresh > 6.196879416704178 OR older_early > 3.063157856464386 OR the actual-parent fresh gain D = 4.80034501850605 - fresh is not above B0 = 0. Point-value comparisons on the full-precision receipt fields, same population, scorer and positive-loss target denominator, never shifted after the result. The H33 diagnostic score is not acceptance evidence for any child.",
+   "criterion_supported_if": "valid same-plan score with fresh <= 4.82034501850605, and separately acceptance when fresh <= 6.196879416704178, older_early <= 3.063157856464386 and D above B0 = 0, with a valid terminal (executor success true, no tail-stamp failure) and the wall margin at the 7,500 s cap at least 300 s. Qualified if the identity, plan, scorer or counters differ; every receipt carries the declared repeat flag; a tenant-resident rate carries the tenant label.",
+   "instrument": "the H34 chain segment (derived from chain_segment_H33_v1.sh by derive_h34_chain_v1.py; window through with_card_window.sh / gpu_window.sh); extended ledger bd3f9f56 over the union root h25-union-20261005 (mixture identity h33-mixed-20261007T012124Z); cap 98,158; dispatch tree 239e1e9c (tail-stamp cure, dispatch-tree check v1); sampler arm v10; tenant gate h34_tenant_gate_v1.sh; child scorer child_nll_v12_episodes.py on the bound plan; baselines from episode-nll-H32.json a50d6413, episode-nll-H31.json, episode-nll-H33.json 93220f5a (diagnostic) and episode-nll-H28.json 6b131803."
   }
  ],
  "registry": [
