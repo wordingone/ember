@@ -376,6 +376,26 @@ class AuthorityTests(Fixture):
         with self.assertRaisesRegex(cia_verify_tail.Refused, 'names another run'):
             cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
 
+    def test_the_prediction_and_the_launch_must_both_name_the_owned_run_and_device(self):
+        binding = {'launch': {'run_id': 'run42', 'gpu_uuid': 'GPU-1'}}
+        cia_verify_tail.check_run_identity(self.run_dir, binding, {'run_id': 'run42', 'gpu_uuid': 'GPU-1'})
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'another run'):          # owned A, a self-consistent B launch/prediction pair
+            cia_verify_tail.check_run_identity(self.run_dir, {'launch': {'run_id': 'runB', 'gpu_uuid': 'GPU-1'}}, {'run_id': 'runB', 'gpu_uuid': 'GPU-1'})
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'another run'):          # prediction alone names another run
+            cia_verify_tail.check_run_identity(self.run_dir, binding, {'run_id': 'runB', 'gpu_uuid': 'GPU-1'})
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'differs from the launch binding'):
+            cia_verify_tail.check_run_identity(self.run_dir, binding, {'run_id': 'run42', 'gpu_uuid': 'GPU-2'})
+
+    def test_an_ancestor_held_lock_with_no_daemon_binding_in_the_launch_is_refused(self):
+        runner, binding, facts = self.dispatch_fixture()
+        del binding['daemon']
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'canonical daemon differs'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+        runner, binding, facts = self.dispatch_fixture()
+        del binding['launch']['gpu_lock']
+        with self.assertRaisesRegex(cia_verify_tail.Refused, 'lock path differs'):
+            cia_verify_tail.bind_to_dispatch(self.run_dir, binding, facts, runner=runner)
+
     def test_a_forged_lock_naming_an_ancestor_that_is_not_the_canonical_daemon_is_refused(self):
         runner, binding, facts = self.dispatch_fixture()
         other = self.custody / 'other.exe'

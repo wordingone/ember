@@ -104,6 +104,15 @@ def bind_to_dispatch(custody: Path, binding: dict, facts: dict, *, runner) -> No
         raise Refused('the shared GPU lock daemon is not the canonical daemon binary')
 
 
+def check_run_identity(custody: Path, binding: dict, identity: dict) -> None:
+    """The owned job id (custody basename), the launch binding and the prediction must all name one run and one device."""
+    run_id = Path(custody).name.removeprefix('measurement-')
+    if identity['run_id'] != run_id or binding['launch']['run_id'] != run_id:
+        raise Refused('prediction or launch binding names another run than the owned custody')
+    if identity['gpu_uuid'] != binding['launch']['gpu_uuid']:
+        raise Refused('prediction differs from the launch binding')
+
+
 def pinned_entry_matches(identity: dict, runner) -> None:
     relative = ENTRY_RELATIVE
     pinned = identity.get('source_sha256', {}).get(relative)
@@ -155,8 +164,7 @@ def run(custody: Path, *, window_marker: Path | None = None) -> dict:
     prediction, _ = runner.load_prediction(custody / 'prediction.json', binding['launch']['prediction_sha256'])
     identity = prediction['identity']
     pinned_entry_matches(identity, runner)
-    if identity['run_id'] != binding['launch']['run_id'] or identity['gpu_uuid'] != binding['launch']['gpu_uuid']:
-        raise Refused('prediction differs from the launch binding')
+    check_run_identity(custody, binding, identity)
     if not runner.hour_mode(identity):
         raise Refused('the prediction is not a governed hour')
     config, prepared = runner.prepare_execution(prediction)
