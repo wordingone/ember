@@ -23,20 +23,68 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+import pending_continuation
 from training_continuity_ledger import (
     GENESIS_SENTINEL,
     diagnostic_occupancy_seconds,
     ledger_path,
     load_policy,
+    require_authority_reference,
     postponement_seconds,
     read_rows,
 )
 
-STATUS_SCHEMA = 'ember-training-continuity-status-v1'
+STATUS_SCHEMA = 'ember-training-continuity-status-v2'
+LINEAGE_SCHEMA = 'ember-training-lineage-ancestry-v1'  # training_lineage_ancestry.SCHEMA; compared, not imported, to keep this module torch- and walk-free
+UNDEFINED = 'UNDEFINED'
+CLAIM_PREDICATE_MISSING = 'frozen claim-budget predicate file (ruling mail 51039: contract owner is the data lane; the lead rules)'
+
+
+def lineage_status(record: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Retained applied positions over the WHOLE lineage, each hour counted once.
+
+    `record` is the output of `training_lineage_ancestry.walk_lineage` for the selected head
+    (which already refused any gap, swap, replay or cycle), or None for the GENESIS case. Nothing is
+    summed here: the walk derived the total twice (deltas and cursor) and this only reports it.
+    """
+    if record is None:
+        return {'depth': 0, 'retained_applied_positions': 0, 'retained_global_steps': 0}
+    if record.get('schema') != LINEAGE_SCHEMA:
+        raise ValueError('lineage record schema differs')
+    return {
+        'depth': record['depth'],
+        'genesis_manifest_sha256': record['genesis_manifest_sha256'],
+        'retained_applied_positions': record['cumulative_applied_token_delta'],
+        'retained_global_steps': record['cumulative_step_delta'],
+    }
+
+
+def claim_budget_eligible_status(predicate_path: Path | None = None) -> dict[str, Any]:
+    """Claim-budget-eligible positions: UNDEFINED until the frozen predicate file exists.
+
+    Per ruling mail 51039, no predicate is frozen yet, so this reads UNDEFINED and names what is missing. When the
+    file exists but this module has no evaluator for its schema, it refuses rather than guess: a number
+    computed from a rule nobody froze would be an invented claim figure.
+    """
+    if predicate_path is None or not Path(predicate_path).is_file():
+        return {'status': UNDEFINED, 'missing': CLAIM_PREDICATE_MISSING}
+    raise ValueError('claim-budget predicate file present but no evaluator exists for its schema yet')
+
+
+def gpu_owner_status(lease: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Who holds the GPU now, from a caller-supplied lease record (job occupancy, not sampled
+    device utilization). None is reported as not_reported, never as idle."""
+    if lease is None:
+        return {'status': 'not_reported'}
+    return {'status': 'held', 'owner': lease.get('owner'), 'run_id': lease.get('run_id'),
+            'training_job_purpose': lease.get('training_job_purpose')}
 
 
 def selected_checkpoint_status(hour_result: Mapping[str, Any] | None) -> dict[str, Any]:
-    """The selected checkpoint and its parent, and the applied targets retained under it.
+    """The selected checkpoint and its parent, and the LAST hour's applied positions.
+
+    The lineage-wide retained count is `lineage_status`; this section's count is one hour only and is
+    named accordingly (it was `retained_applied_positions`, which read as the lineage total).
 
     `hour_result` is the bound hour-result.json dict for the checkpoint currently selected as
     the lineage head, or None when no hour has ever published one (the GENESIS case). Reads
@@ -46,12 +94,12 @@ def selected_checkpoint_status(hour_result: Mapping[str, Any] | None) -> dict[st
         return {
             'child_manifest_sha256': GENESIS_SENTINEL,
             'parent_manifest_sha256': None,
-            'retained_applied_positions': 0,
+            'last_hour_applied_positions': 0,
         }
     return {
         'child_manifest_sha256': hour_result['child_manifest_sha256'],
         'parent_manifest_sha256': hour_result['parent_manifest_sha256'],
-        'retained_applied_positions': int(hour_result['applied_positions']),
+        'last_hour_applied_positions': int(hour_result['applied_positions']),
     }
 
 
@@ -86,6 +134,7 @@ def diagnostic_allowance_status(
     (`training_continuity_ledger.reserve_diagnostic_dispatch`) enforces. Read-only: this never
     appends to the ledger, it only re-derives the same two quantities from the same rows."""
     policy = load_policy() if policy is None else policy
+    require_authority_reference(policy)
     rows = read_rows(ledger_path(custody_parent))
     occupancy = diagnostic_occupancy_seconds(rows, lineage_sha)
     postponement = postponement_seconds(rows, lineage_sha, now=now)
@@ -124,16 +173,41 @@ def training_continuity_status(
     current_identity: Mapping[str, Any] | None, measurement: Mapping[str, Any] | None,
     next_identity: Mapping[str, Any] | None = None, next_blocker: str | None = None,
     policy: Mapping[str, Any] | None = None, now: float | None = None,
+    lineage_record: Mapping[str, Any] | None = None, gpu_lease: Mapping[str, Any] | None = None,
+    claim_predicate_path: Path | None = None, pending_receipts_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Issue #2119 section 6's status record: composes the five functions above for one
-    lineage. Selected checkpoint and parent, retained applied targets, last learning measurement
-    or pending, current purpose, diagnostic occupancy and postponement, and the next segment or
-    its blocker -- one call, one dict, no field computed twice by two different readers."""
+    """Issue #2119 section 6's status record: composes the functions above for one lineage.
+
+    `pending_receipts_root` (row 15): when given, the next segment or its blocker is read from the durable
+    `next-segment.json` beside the pointer (pending_continuation), for THIS lineage head, and `next_identity`/`next_blocker`
+    must not also be given; a record for another head reads blocked, a corrupt record refuses.
+    Selected checkpoint and parent, the lineage-wide retained applied positions (from the ancestry
+    walk), claim-budget-eligible positions (UNDEFINED until the frozen predicate exists), last
+    learning measurement or pending, GPU owner and purpose, diagnostic occupancy and postponement,
+    and the next segment or its blocker -- one call, one dict, no field computed twice.
+
+    When an hour result is given, `lineage_record` is required and its head must be that hour's child:
+    the walk and the hour result are two views of one checkpoint, and a mismatch refuses."""
+    if hour_result is not None:
+        if lineage_record is None:
+            raise ValueError('a published hour result needs the lineage ancestry record for its head')
+        if lineage_record.get('head_manifest_sha256') != hour_result['child_manifest_sha256']:
+            raise ValueError('lineage ancestry head differs from the hour result child')
+    elif lineage_record is not None:
+        raise ValueError('a lineage ancestry record needs the hour result of the same head')
     lineage_sha = (hour_result['child_manifest_sha256'] if hour_result is not None
                    else GENESIS_SENTINEL)
+    if pending_receipts_root is not None:
+        if next_identity is not None or next_blocker is not None:
+            raise ValueError('the pending record supplies the next segment; do not also pass next_identity or next_blocker')
+        recovered = pending_continuation.read_pending_continuation(pending_receipts_root, current_head_sha256=lineage_sha)
+        next_identity, next_blocker = recovered.get('next_identity'), recovered.get('blocker')
     return {
         'schema': STATUS_SCHEMA,
         'lineage_checkpoint_manifest_sha256': lineage_sha,
+        'lineage': lineage_status(lineage_record),
+        'claim_budget_eligible': claim_budget_eligible_status(claim_predicate_path),
+        'gpu_owner': gpu_owner_status(gpu_lease),
         'checkpoint': selected_checkpoint_status(hour_result),
         'learning_measurement': last_learning_measurement_status(measurement),
         'purpose': current_purpose_status(current_identity),

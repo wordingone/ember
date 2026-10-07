@@ -2,5 +2,6 @@
   "schema": "ember-training-continuity-policy-v1",
   "max_diagnostic_occupancy_seconds": 14400,
   "max_postponement_seconds": 21600,
-  "max_blocker_renewals": 2
+  "max_blocker_renewals": 2,
+  "authority_reference": "approved by the release authority for the operator, 2026-10-03 3:43 PM LA, under the approval-routing rule; recorded in the completion-push ledger"
 }
