@@ -18,7 +18,7 @@ one. Read it before proposing any arm, and write to it every time an experiment 
 3. State which gate the experiment moves, its ceiling, and its frozen refutation criterion. Then run it.
 4. After the ruling, check that the entry landed here. Add what the result does **not** close.
 
-## Current state
+## Historical #1945 state as of 2026-09-27
 
 | Gate | Requirement | State | Newest | Best on the current image-inclusive arm |
 |---|---|---|---|---|
