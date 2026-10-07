@@ -547,6 +547,44 @@ def verify_tail(runner, model, optimizer, inventory, identity, custody):
     return result
 
 
+def build_hour_model(*, runner, config, prepared, identity, device):
+    """The hour's complete model and optimizer, built exactly as run_hour builds them (the block between the markers is drift-tested
+    against run_hour's own text), for the verify-only tail: no checkpoint is loaded and nothing is trained here."""
+    import torch
+    from ember.model.ember_v0_decoder import CIADecoder
+    hour = identity['hour']
+    mode = runner.execution_mode(identity)
+    # BEGIN hour-model-build (mirrors run_hour; tests/ember_restart_model/test_issue2119_verify_tail.py compares the two texts)
+    model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
+    first = prepared['first']
+    lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+    definition = identity['optimizer']
+    def optimizer_factory(inventory):
+        if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
+            raise ValueError('hour optimizer population is incomplete')
+        built = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+            eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
+            **({'fused': True} if hour['arm'] == 'treatment' else {}))
+        # Same attach as cia_step_runner's own factory: under a layer template, measure_step releases the grads of
+        # parameters the template never runs, so fused AdamW neither walks nor weight-decays them. Without it the
+        # hour steps every weight (#1945: optimizer_and_sync 15.6 ms vs 2.8 ms) and is a different function.
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
+    inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
+        mode=mode, optimizer_factory=optimizer_factory)
+    if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
+        raise ValueError('hour optimizer owner membership differs')
+    # END hour-model-build
+    return model, inventory, optimizer
+
+
+def run_verify_tail(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
+    """Same signature as run_hour. `custody` is the LOST hour's custody directory (it holds the witness and the published trained-child)."""
+    identity = prediction['identity']
+    model, inventory, optimizer = build_hour_model(runner=runner, config=config, prepared=prepared, identity=identity, device=device)
+    return verify_tail(runner, model, optimizer, inventory, identity, custody)
+
+
 def continuation_state(runner, model, optimizer, cursor, device):
     """Collect complete native state facts at an owned update boundary."""
     import torch
@@ -869,6 +907,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     probe = hour['schema'] == 'checkpoint-probe-v1'
     learning = hour['schema'] == 'learning-comparison-v1'
     snapshots, paused = [], 0.0
+    # BEGIN hour-model-build (mirrors build_hour_model; the verify-tail test compares the two texts)
     model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
@@ -888,6 +927,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         mode=mode, optimizer_factory=optimizer_factory)
     if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
         raise ValueError('hour optimizer owner membership differs')
+    # END hour-model-build
     runner._write_new(custody / 'model.json', dict(population=runner.POPULATION,
         optimizer_membership=list(inventory), trainable_parameters=sum(p.numel() for p in inventory.values() if p.requires_grad),
         input_binding=prepared['binding'], hour=hour, c_compiler=compiler,

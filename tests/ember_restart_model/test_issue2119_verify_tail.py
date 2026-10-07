@@ -181,5 +181,78 @@ class RunHourOrderTests(unittest.TestCase):
         self.assertNotIn('normalize=', source)
 
 
+import cia_verify_tail  # noqa: E402
+
+
+class TailEntryTests(Fixture):
+    def setUp(self):
+        super().setUp()
+        self.marker = self.custody / 'window-marker'
+        self.marker.write_text('open')
+        self.lost = self.custody / 'lost-hour'
+        self.lost.mkdir()
+        # a lost hour custody: published child + witness + launch binding + prediction
+        write_child(self.lost / 'trained-child')
+        (self.lost / cia_hour.TERMINAL_WITNESS).write_text('{}')
+        (self.lost / 'launch.json').write_text(json.dumps({'launch': {'prediction_sha256': 'a' * 64, 'run_id': 'r', 'gpu_uuid': 'GPU-x'}}))
+        (self.lost / 'prediction.json').write_text('{}')
+
+    def refuses(self, why, **kw):
+        with self.assertRaisesRegex(cia_verify_tail.Refused, why):
+            cia_verify_tail.preflight(self.lost, window_marker=kw.get('marker', self.marker))
+
+    def test_a_complete_lost_custody_passes_preflight(self):
+        self.assertEqual(cia_verify_tail.preflight(self.lost, window_marker=self.marker)['launch']['run_id'], 'r')
+
+    def test_it_refuses_without_a_governed_window(self):
+        self.refuses('no governed GPU window', marker=self.custody / 'absent-marker')
+
+    def test_it_refuses_a_custody_that_never_wrote_a_witness(self):
+        (self.lost / cia_hour.TERMINAL_WITNESS).unlink()
+        self.refuses('no terminal witness')
+
+    def test_it_refuses_an_hour_that_has_a_result_or_a_tail_result(self):
+        (self.lost / 'hour-result.json').write_text('{}')
+        self.refuses('nothing to resume')
+        (self.lost / 'hour-result.json').unlink()
+        (self.lost / cia_hour.VERIFY_TAIL_RESULT).write_text('{}')
+        self.refuses('already exists')
+
+    def test_it_refuses_without_a_published_child_a_binding_or_a_prediction(self):
+        (self.lost / 'prediction.json').unlink()
+        self.refuses('prediction.json is absent')
+        (self.lost / 'launch.json').write_text('not json')
+        self.refuses('launch.json is absent or unreadable')
+        import shutil
+        shutil.rmtree(self.lost / 'trained-child')
+        self.refuses('no published trained-child')
+
+    def test_main_prints_refuse_rc2_and_exits_2_before_building_anything(self):
+        import io
+        from contextlib import redirect_stdout
+        with patch.object(cia_verify_tail, 'WINDOW_MARKER', self.custody / 'absent-marker'), redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(cia_verify_tail.main(['--custody', str(self.lost)]), 2)
+        self.assertTrue(out.getvalue().startswith('REFUSE rc2: '))
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(cia_verify_tail.main([]), 2)
+
+    def test_run_verify_tail_hands_the_built_model_and_the_lost_custody_to_verify_tail(self):
+        calls = []
+        with patch.object(cia_hour, 'build_hour_model', lambda **kw: ('m', {'i': 1}, 'o')),                 patch.object(cia_hour, 'verify_tail', lambda *a: calls.append(a) or {'status': 'RESTORE_VERIFIED_FROM_WITNESS'}):
+            result = cia_hour.run_verify_tail(runner='R', config=None, prepared=None, prediction={'identity': {'k': 1}}, binding=None,
+                                              custody=self.lost, device=None, compiler=None, applied=None)
+        self.assertEqual(result['status'], 'RESTORE_VERIFIED_FROM_WITNESS')
+        self.assertEqual(calls, [('R', 'm', 'o', {'i': 1}, {'k': 1}, self.lost)])
+
+
+class DriftTests(unittest.TestCase):
+    def test_the_tail_builds_the_hour_model_with_the_same_text_run_hour_uses(self):
+        def block(function):
+            source = inspect.getsource(function)
+            return source.split('# BEGIN hour-model-build')[1].split('# END hour-model-build')[0].split(chr(10), 1)[1]
+        self.assertEqual(block(cia_hour.run_hour), block(cia_hour.build_hour_model))
+        self.assertIn('AdamW', block(cia_hour.run_hour))
+
+
 if __name__ == '__main__':
     unittest.main()
