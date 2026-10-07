@@ -36,8 +36,8 @@ pointing here. The scope is:
 - Human sources come first. AI-made or mixed data is not sought ahead of them.
 - AI-made or mixed data enters only as existing, published third-party
   datasets, each with its licence, provenance, AI-made share marked, and passing
-  contamination, quality and deduplication screens and an independently
-  reviewed admission.
+  rights, contamination, quality and deduplication screens and an independently
+  reviewed admission executed through the real reader on a real sample.
 - Unknown origin is counted as its own class, never as human, and no purity
   claim is made.
 - Prospective limits from 2026-10-03: a pilot ceiling of 20M unique admitted
