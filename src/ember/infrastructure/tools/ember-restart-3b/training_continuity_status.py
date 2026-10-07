@@ -20,9 +20,11 @@ filesystem discovery beyond the one ledger read every caller already needs.
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
+import claim_accounting
 import pending_continuation
 from training_continuity_ledger import (
     GENESIS_SENTINEL,
@@ -59,16 +61,74 @@ def lineage_status(record: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def claim_budget_eligible_status(predicate_path: Path | None = None) -> dict[str, Any]:
-    """Claim-budget-eligible positions: UNDEFINED until the frozen predicate file exists.
+def segments_from_lineage(lineage_record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Claim-accounting segments for the selected ancestry, from the ancestry walk alone.
 
-    Per ruling mail 51039, no predicate is frozen yet, so this reads UNDEFINED and names what is missing. When the
-    file exists but this module has no evaluator for its schema, it refuses rather than guess: a number
-    computed from a rule nobody froze would be an invented claim figure.
+    The walk proves manifests, parent links and per-hop applied token deltas; it carries NO per-target identity or loss mask, so every
+    published hop is `targets: None` with that evidence named missing and `claim_accounting.account` returns None totals, never a guess.
+    The genesis checkpoint is the starting weights, not a training segment of this lineage: it is `published: False` (excluded, contributes
+    nothing) with `applied_positions` 0, matching `retained_applied_positions`, which also excludes it.
+    """
+    chain = lineage_record['chain']
+    segments = []
+    for index, hop in enumerate(chain):
+        genesis = index == 0
+        segments.append({
+            'segment_id': hop['manifest_sha256'],
+            'parent_segment_id': None if genesis else chain[index - 1]['manifest_sha256'],
+            'published': not genesis, 'advanced_head': not genesis,
+            'applied_positions': 0 if genesis else hop['token_delta'],
+            'budget_unit_id': None, 'targets': None,
+            'missing_evidence': ['per-target identities and actual positive-loss masks (the ancestry walk carries neither)',
+                                 'budget_unit_id (the frozen budget unit is not recorded on the hop)'],
+        })
+    return segments
+
+
+def _require_segments_cover_chain(claim_segments: list[Mapping[str, Any]], lineage_record: Mapping[str, Any]) -> None:
+    """Caller-supplied segments must be the ancestry walk's chain, hop for hop: the same manifest digests in genesis-to-head order, each
+    with the previous hop as its parent (None for genesis). A head-only segment with `parent_segment_id` None, an omitted hop, a replayed
+    hop or a re-parented hop would let `claim_accounting.account` see a shorter lineage than the one the pointer selects and return a
+    DETERMINED total that omits (or repeats) ancestry, so each refuses here before any accounting runs."""
+    chain = [hop['manifest_sha256'] for hop in lineage_record['chain']]
+    ids = [segment.get('segment_id') for segment in claim_segments]
+    if ids != chain:
+        raise ValueError(f'claim segments do not cover the lineage ancestry chain (segments {len(ids)}, chain {len(chain)}, or order/ids differ)')
+    for index, segment in enumerate(claim_segments):
+        expected_parent = None if index == 0 else chain[index - 1]
+        if segment.get('parent_segment_id') != expected_parent:
+            raise ValueError(f'claim segment {index} parent {segment.get("parent_segment_id")!r} is not the ancestry parent {expected_parent!r}')
+
+
+def claim_budget_eligible_status(
+    predicate_path: Path | None = None, *, lineage_record: Mapping[str, Any] | None = None,
+    claim_segments: list[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Claim-budget-eligible positions (issue #2119 row 7), bound to the approved frozen predicate.
+
+    No predicate file: UNDEFINED, naming what is missing (unchanged contract). A predicate file whose bytes do not hash to the approved
+    `claim_accounting.PREDICATE_SHA256` refuses (a number computed from another rule would be an invented claim figure). With the approved
+    file, `claim_accounting.account` runs over `claim_segments` when the caller has per-target evidence, otherwise over the ancestry-derived
+    segments (`segments_from_lineage`); the report is returned under `accounting`, and its totals are None, with the missing evidence named,
+    wherever the evidence is absent. The status is never a number the walk cannot support.
     """
     if predicate_path is None or not Path(predicate_path).is_file():
         return {'status': UNDEFINED, 'missing': CLAIM_PREDICATE_MISSING}
-    raise ValueError('claim-budget predicate file present but no evaluator exists for its schema yet')
+    digest = hashlib.sha256(Path(predicate_path).read_bytes()).hexdigest()
+    if digest != claim_accounting.PREDICATE_SHA256:
+        raise ValueError('claim-budget predicate file differs from the approved frozen predicate (sha256 mismatch)')
+    if claim_segments is None:
+        if lineage_record is None:
+            raise ValueError('claim accounting needs the lineage ancestry record or caller-supplied segments')
+        claim_segments = segments_from_lineage(lineage_record)
+        head = lineage_record['head_manifest_sha256']
+    else:
+        if lineage_record is None:
+            raise ValueError('caller-supplied claim segments need the lineage ancestry record to check their coverage')
+        _require_segments_cover_chain(claim_segments, lineage_record)
+        head = lineage_record['head_manifest_sha256']
+    report = claim_accounting.account(claim_segments, head_segment_id=head, predicate_sha256=digest)
+    return {'status': report['status'], 'predicate_sha256': digest, 'accounting': report}
 
 
 def gpu_owner_status(lease: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -175,6 +235,7 @@ def training_continuity_status(
     policy: Mapping[str, Any] | None = None, now: float | None = None,
     lineage_record: Mapping[str, Any] | None = None, gpu_lease: Mapping[str, Any] | None = None,
     claim_predicate_path: Path | None = None, pending_receipts_root: Path | None = None,
+    claim_segments: list[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Issue #2119 section 6's status record: composes the functions above for one lineage.
 
@@ -206,7 +267,8 @@ def training_continuity_status(
         'schema': STATUS_SCHEMA,
         'lineage_checkpoint_manifest_sha256': lineage_sha,
         'lineage': lineage_status(lineage_record),
-        'claim_budget_eligible': claim_budget_eligible_status(claim_predicate_path),
+        'claim_budget_eligible': claim_budget_eligible_status(
+            claim_predicate_path, lineage_record=lineage_record, claim_segments=claim_segments),
         'gpu_owner': gpu_owner_status(gpu_lease),
         'checkpoint': selected_checkpoint_status(hour_result),
         'learning_measurement': last_learning_measurement_status(measurement),
