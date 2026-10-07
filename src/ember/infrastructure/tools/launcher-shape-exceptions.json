@@ -52,7 +52,7 @@
     },
     {
       "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-      "sha256": "4008096282bd826b084c3e96ec6f9cb25c78c2708e59e487ed5c8f5f2bd2d575",
+      "sha256": "e5cdfe0bf8cc111b5b021020830dd42ad13b60644e0b098a4a7d73d4358f7b81",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {

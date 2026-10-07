@@ -2921,6 +2921,7 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "job_memory_ceiling_probe",
                 "training_experiment_protocol",
                 "training_experiment_continuation_rule",
+                "scored_pair_binding_sha256",
                 "training_diagnostic_question",
                 "training_diagnostic_non_advancement_reason",
                 "training_diagnostic_return_condition",
@@ -4042,12 +4043,37 @@ class TrainingJobPurposeTests(_ResumeBundleMixin, unittest.TestCase):
                     "retain the control arm if the treatment's protected "
                     "score regresses"
                 )
+                spec["scored_pair_binding_sha256"] = "a" * 64
 
             paths = self._bundle(directory, mutate_run_spec=apply)
             launch = self._validate(module, paths)
             self.assertEqual(
                 launch.training_job_purpose, "RETENTION_ELIGIBLE_EXPERIMENT"
             )
+
+    def test_retention_eligible_experiment_needs_a_sha256_scored_pair_binding(
+        self,
+    ) -> None:
+        """review 63986 R2 / ruling 64046: the frozen scored-pair entry digest rides
+        the run spec; absent or not a lowercase sha256 refuses."""
+
+        module = load_module()
+        for label, value in (("absent", None), ("short", "abc"), ("upper", "A" * 64)):
+            with self.subTest(binding=label):
+                with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+
+                    def apply(spec: dict[str, object], value=value) -> None:
+                        spec["training_job_purpose"] = "RETENTION_ELIGIBLE_EXPERIMENT"
+                        spec["training_experiment_protocol"] = "receipts/exp-protocol.json"
+                        spec["training_experiment_continuation_rule"] = "rule"
+                        if value is not None:
+                            spec["scored_pair_binding_sha256"] = value
+
+                    paths = self._bundle(directory, mutate_run_spec=apply)
+                    with self.assertRaisesRegex(
+                        ValueError, "requires a sha256 scored_pair_binding_sha256"
+                    ):
+                        self._validate(module, paths)
 
     def test_diagnostic_missing_one_of_three_required_fields_is_refused(self) -> None:
         """One deliberate red per gate: DIAGNOSTIC's three required bindings

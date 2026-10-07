@@ -35,6 +35,7 @@ never resets which checkpoint is selected.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -46,6 +47,15 @@ from typing import Any
 
 SCHEMA = 'ember-selected-continuation-head-v1'
 POINTER_FILENAME = 'selected-continuation-head.json'
+# An hour's own publish writes ONLY this file (operator ruling, mail 53920, after H20 and H21 each moved the selected
+# head before its frozen score): the selected head moves only through advance_selected_continuation_head,
+# called by the operator-ruled promotion step, never from inside an hour.
+CANDIDATE_SCHEMA = 'ember-candidate-continuation-head-v1'
+CANDIDATE_FILENAME = 'candidate-continuation-head.json'
+_CANDIDATE_FIELDS = {
+    'schema', 'candidate_checkpoint_manifest_sha256', 'parent_checkpoint_manifest_sha256',
+    'hour_result_path', 'hour_result_sha256', 'published_at',
+}
 # Matches update_current_subject.py's and training_continuity_ledger.py's own GENESIS_SENTINEL
 # convention: no checkpoint has ever advanced this pointer.
 GENESIS_SENTINEL = 'GENESIS'
@@ -53,6 +63,8 @@ _POINTER_FIELDS = {
     'schema', 'lineage_checkpoint_manifest_sha256', 'hour_result_path',
     'hour_result_sha256', 'published_at', 'seeded_reason',
 }
+LOCK_SUFFIX = '.lock'
+LOCK_TIMEOUT_SECONDS = 60.0
 _SELF_DIR = Path(__file__).resolve().parent
 
 
@@ -89,6 +101,52 @@ def _import_siblings(repo_root: Path):
 
 def pointer_path(receipts_root: Path) -> Path:
     return Path(receipts_root) / POINTER_FILENAME
+
+
+@contextlib.contextmanager
+def _pointer_lock(target_path: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
+    """Hold an OS-level exclusive lock on a sibling lock file for the WHOLE read-compare-replace.
+
+    atomic_replace_durable protects only the write; two writers that both read the same current
+    value would each pass the compare and the second replace would overwrite the newer head. The
+    lock serialises every advance and seed, so the compare re-reads under it. The lock file is
+    persistent and never deleted: the OS releases the byte-range lock when its holder dies, so a
+    leftover file with no holder never blocks (probed by attempting the lock, not by existence).
+    """
+    lock_path = target_path.parent / (target_path.name + LOCK_SUFFIX)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    with open(lock_path, 'a+b') as handle:
+        if os.name == 'nt':
+            import msvcrt
+
+            def acquire():
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+            def release():
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            def acquire():
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            def release():
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        while True:
+            try:
+                acquire()
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f'could not lock {lock_path} within {timeout} s')
+                time.sleep(0.02)
+        try:
+            yield
+        finally:
+            release()
 
 
 def load_selected_continuation_head(path: Path) -> dict[str, Any]:
@@ -157,28 +215,84 @@ def advance_selected_continuation_head(
     computed_sha256 = receipt['checkpoint_manifest_sha256']
 
     target_path = pointer_path(receipts_root)
-    # Mechanism 2: the compare-and-swap read, and the stale-parent refusal.
-    if target_path.is_file():
-        current_sha256 = load_selected_continuation_head(target_path)['lineage_checkpoint_manifest_sha256']
-    else:
-        current_sha256 = GENESIS_SENTINEL
-    if expected_parent_checkpoint_manifest_sha256 != current_sha256:
-        raise StaleParentError(
-            'stale parent: expected the selected continuation head to be '
-            f'{expected_parent_checkpoint_manifest_sha256!r}, but it is {current_sha256!r} -- '
-            'a newer continuation head has already been selected since this run\'s parent was '
-            'resolved'
-        )
+    # Mechanism 2: the compare-and-swap read and the stale-parent refusal run, with the write,
+    # under one lock so the digest compared is the digest replaced.
+    with _pointer_lock(target_path):
+        if target_path.is_file():
+            current_sha256 = load_selected_continuation_head(target_path)['lineage_checkpoint_manifest_sha256']
+        else:
+            current_sha256 = GENESIS_SENTINEL
+        if expected_parent_checkpoint_manifest_sha256 != current_sha256:
+            raise StaleParentError(
+                'stale parent: expected the selected continuation head to be '
+                f'{expected_parent_checkpoint_manifest_sha256!r}, but it is {current_sha256!r} -- '
+                'a newer continuation head has already been selected since this run\'s parent was '
+                'resolved'
+            )
 
+        candidate = {
+            'schema': SCHEMA,
+            'lineage_checkpoint_manifest_sha256': computed_sha256,
+            'hour_result_path': str(hour_result_path),
+            'hour_result_sha256': hour_result_sha256,
+            'published_at': time.time() if now is None else now,
+            'seeded_reason': '',
+        }
+        _write_pointer_atomically(target_path, candidate, durable_io)
+    return candidate
+
+
+def candidate_path(receipts_root: Path) -> Path:
+    return Path(receipts_root) / CANDIDATE_FILENAME
+
+
+def load_candidate_continuation_head(path: Path) -> dict[str, Any]:
+    """Closed-schema read of the candidate pointer; the selected-head loader never accepts it
+    (different schema and field set), so a candidate can never be read as a selected head."""
+    payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(payload, dict) or set(payload) != _CANDIDATE_FIELDS:
+        raise ValueError('candidate continuation head fields are not closed')
+    if payload.get('schema') != CANDIDATE_SCHEMA:
+        raise ValueError(f'candidate continuation head schema must be {CANDIDATE_SCHEMA!r}')
+    for key in ('candidate_checkpoint_manifest_sha256', 'hour_result_sha256'):
+        if not isinstance(payload.get(key), str) or len(payload[key]) != 64:
+            raise ValueError(f'candidate continuation head {key} must be a sha256 hex string')
+    parent = payload.get('parent_checkpoint_manifest_sha256')
+    if not isinstance(parent, str) or not (parent == GENESIS_SENTINEL or len(parent) == 64):
+        raise ValueError('candidate continuation head parent must be a sha256 hex string or GENESIS')
+    if not isinstance(payload.get('hour_result_path'), str) or not payload['hour_result_path']:
+        raise ValueError('candidate continuation head hour_result_path must be non-empty')
+    if not isinstance(payload.get('published_at'), (int, float)) or isinstance(payload.get('published_at'), bool):
+        raise ValueError('candidate continuation head published_at must be numeric')
+    return payload
+
+
+def publish_candidate_continuation_head(
+    *, repo_root: Path, receipts_root: Path, published_checkpoint_root: Path,
+    hour_result_path: Path, hour_result_sha256: str,
+    expected_parent_checkpoint_manifest_sha256: str, now: float | None = None,
+) -> dict[str, Any]:
+    """After VERIFIED PUBLICATION, record the hour's child as a CANDIDATE only. Never reads or
+    writes selected-continuation-head.json: the selected head is moved solely by
+    advance_selected_continuation_head under an operator ruling on the frozen score.
+
+    Mechanism 1 (re-derive the digest from the published checkpoint's bytes) and mechanism 3
+    (staged, round-trip-validated, atomic replace) are the same as the advance path. There is no
+    compare-and-swap against the candidate file: a newer hour overwrites an older candidate, and
+    the declared parent is recorded so the promotion step can CAS against the selected head."""
+    repo_root = Path(repo_root)
+    receipts_root = Path(receipts_root)
+    checkpoint_artifacts, durable_io = _import_siblings(repo_root)
+    receipt = checkpoint_artifacts.published_checkpoint_receipt(Path(published_checkpoint_root))
     candidate = {
-        'schema': SCHEMA,
-        'lineage_checkpoint_manifest_sha256': computed_sha256,
+        'schema': CANDIDATE_SCHEMA,
+        'candidate_checkpoint_manifest_sha256': receipt['checkpoint_manifest_sha256'],
+        'parent_checkpoint_manifest_sha256': expected_parent_checkpoint_manifest_sha256,
         'hour_result_path': str(hour_result_path),
         'hour_result_sha256': hour_result_sha256,
         'published_at': time.time() if now is None else now,
-        'seeded_reason': '',
     }
-    _write_pointer_atomically(target_path, candidate, durable_io)
+    _write_pointer_atomically(candidate_path(receipts_root), candidate, durable_io, loader=load_candidate_continuation_head)
     return candidate
 
 
@@ -219,26 +333,27 @@ def seed_selected_continuation_head(
     target_path = pointer_path(receipts_root)
     # Compare-and-swap: seeding is legal only from GENESIS. A pointer that already exists (even
     # one this same function seeded a moment ago) refuses -- seeding never overwrites.
-    if target_path.is_file():
-        raise StaleParentError(
-            'cannot seed the selected continuation head: a pointer already exists at '
-            f'{target_path} -- seeding is a one-time act for an absent pointer; use '
-            'advance_selected_continuation_head for every subsequent publication'
-        )
+    with _pointer_lock(target_path):
+        if target_path.is_file():
+            raise StaleParentError(
+                'cannot seed the selected continuation head: a pointer already exists at '
+                f'{target_path} -- seeding is a one-time act for an absent pointer; use '
+                'advance_selected_continuation_head for every subsequent publication'
+            )
 
-    candidate = {
-        'schema': SCHEMA,
-        'lineage_checkpoint_manifest_sha256': computed_sha256,
-        'hour_result_path': str(hour_result_path),
-        'hour_result_sha256': hour_result_sha256,
-        'published_at': time.time() if now is None else now,
-        'seeded_reason': reason,
-    }
-    _write_pointer_atomically(target_path, candidate, durable_io)
+        candidate = {
+            'schema': SCHEMA,
+            'lineage_checkpoint_manifest_sha256': computed_sha256,
+            'hour_result_path': str(hour_result_path),
+            'hour_result_sha256': hour_result_sha256,
+            'published_at': time.time() if now is None else now,
+            'seeded_reason': reason,
+        }
+        _write_pointer_atomically(target_path, candidate, durable_io)
     return candidate
 
 
-def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], durable_io) -> None:
+def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], durable_io, loader=None) -> None:
     """Mechanism 3, shared by advance and seed: pre-write round-trip validation, then the one
     disk mutation. The temp file sits beside the target (same directory, same volume) so
     atomic_replace_durable's MoveFileExW/os.replace boundary is the only concurrency primitive in
@@ -252,7 +367,7 @@ def _write_pointer_atomically(target_path: Path, candidate: dict[str, Any], dura
             handle.flush()
             os.fsync(handle.fileno())
         # Raises and leaves the target untouched if the candidate would fail validation.
-        load_selected_continuation_head(staged_path)
+        (loader or load_selected_continuation_head)(staged_path)
         durable_io.atomic_replace_durable(staged_path, target_path)
     finally:
         try:

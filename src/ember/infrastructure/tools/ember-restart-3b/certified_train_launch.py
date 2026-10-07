@@ -186,6 +186,9 @@ TRAINING_JOB_PURPOSES = {
 TRAINING_EXPERIMENT_RUN_SPEC_KEYS = {
     "training_experiment_protocol",
     "training_experiment_continuation_rule",
+    # review 63986 R2 / ruling 64046: sha256 of the frozen scored-pair binding entry (population, mixture, run, source, promotion target);
+    # it rides into the launch identity, and scored_pair_entry.finalize_scored_pair refuses an entry that does not hash to it.
+    "scored_pair_binding_sha256",
 }
 # Required companions for DIAGNOSTIC (issue #2119). job_memory_ceiling_probe
 # requests are always DIAGNOSTIC by construction (see
@@ -2873,6 +2876,14 @@ def _validate_training_job_purpose(
             raise ValueError(
                 "training_job_purpose RETENTION_ELIGIBLE_EXPERIMENT requires "
                 "a non-empty training_experiment_continuation_rule"
+            )
+        scored_pair_binding = run_spec.get("scored_pair_binding_sha256")
+        if not isinstance(scored_pair_binding, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", scored_pair_binding
+        ):
+            raise ValueError(
+                "training_job_purpose RETENTION_ELIGIBLE_EXPERIMENT requires "
+                "a sha256 scored_pair_binding_sha256"
             )
     else:
         assert purpose == "DIAGNOSTIC"

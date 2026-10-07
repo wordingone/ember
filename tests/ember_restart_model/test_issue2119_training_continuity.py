@@ -29,6 +29,10 @@ import training_continuity_ledger as ledger  # noqa: E402
 import training_continuity_status as status  # noqa: E402
 import selected_continuation_head as head_pointer  # noqa: E402
 
+# Every child interpreter below is an owned, hidden process (owned_children -> owned_process.OwnedProcessRunner).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from owned_children import BARRIER_CHILD_PRELUDE, pid_alive, python_argv, run_group, run_one  # noqa: E402
+
 
 def _load_step_runner():
     spec = importlib.util.spec_from_file_location('cia_step_runner_2119test', MODULE_DIR / 'cia_step_runner.py')
@@ -138,6 +142,56 @@ class PurposeGateRefusesBeforeSpawnTests(unittest.TestCase):
                 with self.assertRaises((ValueError, TypeError)) as failure:
                     runner.prepare_execution({'identity': identity})
         self.assertNotIn('DIAGNOSTIC', str(failure.exception))
+
+
+class PolicyAuthorityTests(unittest.TestCase):
+    """issue #2119 row 3a: the limit set is an approved policy, so every consumer refuses a policy that does not name the approval it came from."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.shipped = json.loads(ledger.default_policy_path().read_text(encoding='utf-8'))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, payload):
+        path = self.dir / 'policy.json'
+        path.write_text(json.dumps(payload), encoding='utf-8')
+        return path
+
+    def test_the_shipped_policy_file_names_its_approval_and_matches_the_defaults(self):
+        loaded = ledger.load_policy()
+        self.assertTrue(loaded['authority_reference'].strip())
+        self.assertEqual(loaded, ledger.DEFAULT_POLICY)
+        self.assertEqual(ledger.load_policy(self.dir / 'absent.json'), ledger.DEFAULT_POLICY)
+
+    def test_a_policy_file_without_an_authority_reference_is_refused(self):
+        unbound = {key: value for key, value in self.shipped.items() if key != 'authority_reference'}
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            ledger.load_policy(self._write(unbound))
+
+    def test_an_empty_or_non_string_authority_reference_is_refused(self):
+        for bad in ('', '   ', None, 7, ['approved']):
+            with self.subTest(reference=bad):
+                with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+                    ledger.load_policy(self._write(dict(self.shipped, authority_reference=bad)))
+
+    def test_the_reservation_gate_refuses_an_unbound_policy_before_writing_a_row(self):
+        path = self.dir / 'diagnostic-allowance-ledger.jsonl'
+        unbound = {key: value for key, value in ledger.DEFAULT_POLICY.items() if key != 'authority_reference'}
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            ledger.reserve_diagnostic_dispatch(
+                path=path, lineage_sha='abc', run_id='r1', budget_seconds=60,
+                diagnostic_question='q', non_advancement_reason='n', return_condition='c',
+                policy=unbound, now=1000.0)
+        self.assertEqual(ledger.read_rows(path), [])
+
+    def test_the_status_reader_refuses_an_unbound_policy(self):
+        unbound = dict(ledger.DEFAULT_POLICY, authority_reference='')
+        with self.assertRaisesRegex(ValueError, 'non-empty authority_reference'):
+            status.diagnostic_allowance_status(custody_parent=self.dir / 'run-1', lineage_sha='abc', policy=unbound, now=1000.0)
 
 
 class LedgerLineageAndReadBackTests(unittest.TestCase):
@@ -409,15 +463,15 @@ class StatusProducerTests(unittest.TestCase):
         self.assertEqual(result, {
             'child_manifest_sha256': ledger.GENESIS_SENTINEL,
             'parent_manifest_sha256': None,
-            'retained_applied_positions': 0,
+            'last_hour_applied_positions': 0,
         })
 
-    def test_published_checkpoint_reports_parent_and_retained_applied_positions(self):
+    def test_published_checkpoint_reports_parent_and_last_hour_applied_positions(self):
         hour_result = {'child_manifest_sha256': 'c' * 64, 'parent_manifest_sha256': 'p' * 64,
                         'applied_positions': 12288}
         self.assertEqual(status.selected_checkpoint_status(hour_result), {
             'child_manifest_sha256': 'c' * 64, 'parent_manifest_sha256': 'p' * 64,
-            'retained_applied_positions': 12288,
+            'last_hour_applied_positions': 12288,
         })
 
     def test_learning_measurement_is_pending_when_none_supplied(self):
@@ -462,13 +516,20 @@ class StatusProducerTests(unittest.TestCase):
     def test_full_status_record_composes_every_section_under_one_lineage_key(self):
         hour_result = {'child_manifest_sha256': 'child' + 'a' * 59, 'parent_manifest_sha256': 'parent' + 'b' * 58,
                         'applied_positions': 4096}
+        lineage_record = {'schema': status.LINEAGE_SCHEMA, 'head_manifest_sha256': hour_result['child_manifest_sha256'],
+                          'genesis_manifest_sha256': 'g' * 64, 'depth': 3, 'cumulative_applied_token_delta': 123456,
+                          'cumulative_step_delta': 321}
         record = status.training_continuity_status(
-            custody_parent=self.root, hour_result=hour_result,
+            custody_parent=self.root, hour_result=hour_result, lineage_record=lineage_record,
             current_identity={'training_job_purpose': 'DIAGNOSTIC', 'run_id': 'd2'},
             measurement=None, next_blocker='readiness blocker: image evaluator unbound')
         self.assertEqual(record['schema'], status.STATUS_SCHEMA)
         self.assertEqual(record['lineage_checkpoint_manifest_sha256'], hour_result['child_manifest_sha256'])
-        self.assertEqual(record['checkpoint']['retained_applied_positions'], 4096)
+        self.assertEqual(record['checkpoint']['last_hour_applied_positions'], 4096)
+        self.assertEqual(record['lineage'], {'depth': 3, 'genesis_manifest_sha256': 'g' * 64,
+                                             'retained_applied_positions': 123456, 'retained_global_steps': 321})
+        self.assertEqual(record['claim_budget_eligible'], {'status': status.UNDEFINED, 'missing': status.CLAIM_PREDICATE_MISSING})
+        self.assertEqual(record['gpu_owner'], {'status': 'not_reported'})
         self.assertEqual(record['learning_measurement'], {'status': 'pending'})
         self.assertEqual(record['purpose']['training_job_purpose'], 'DIAGNOSTIC')
         self.assertEqual(record['next_segment'],
@@ -616,6 +677,91 @@ class SelectedContinuationHeadAdvanceTests(unittest.TestCase):
         self.assertNotEqual(first_published_at, second_published_at)
 
 
+def _run_hour_source() -> str:
+    """Source text of cia_hour.run_hour (from its def to the next top-level def)."""
+    text = (MODULE_DIR / 'cia_hour.py').read_text(encoding='utf-8')
+    start = text.index('\ndef run_hour(')
+    end = text.find('\ndef ', start + 1)
+    return text[start:end if end != -1 else len(text)]
+
+
+def _hour_moves_selected_head(source: str) -> bool:
+    """True when the hour source can move the SELECTED head (an advance or seed call)."""
+    return ('advance_selected_continuation_head(' in source
+            or 'seed_selected_continuation_head(' in source)
+
+
+class CandidateContinuationHeadTests(unittest.TestCase):
+    """Operator ruling (mail 53920): an hour's own publish writes a CANDIDATE pointer only and never moves the
+    selected head (the H20 and H21 hours each did, before their frozen score)."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+        self._helper = SelectedContinuationHeadAdvanceTests('test_stale_parent_promotion_refuses_and_leaves_pointer_untouched')
+        self._helper.root = self.root
+        self._helper.receipts_root = self.receipts_root
+
+    def _publish(self, name, parent):
+        c = self._helper._published_checkpoint(name)
+        cand = head_pointer.publish_candidate_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c['published_checkpoint_root'],
+            hour_result_path=c['hour_result_path'], hour_result_sha256=c['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=parent, now=1000.0)
+        return c, cand
+
+    def test_candidate_publish_never_creates_or_moves_the_selected_head(self):
+        c1 = self._helper._published_checkpoint('hour-selected')
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=c1['published_checkpoint_root'],
+            hour_result_path=c1['hour_result_path'], hour_result_sha256=c1['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=500.0)
+        selected_before = head_pointer.pointer_path(self.receipts_root).read_bytes()
+        c2, cand = self._publish('hour-candidate', c1['manifest_sha256'])
+        self.assertEqual(head_pointer.pointer_path(self.receipts_root).read_bytes(), selected_before)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+        loaded = head_pointer.load_candidate_continuation_head(head_pointer.candidate_path(self.receipts_root))
+        self.assertEqual(loaded, cand)
+        self.assertEqual(loaded['candidate_checkpoint_manifest_sha256'], c2['manifest_sha256'])
+        self.assertEqual(loaded['parent_checkpoint_manifest_sha256'], c1['manifest_sha256'])
+
+    def test_candidate_publish_with_no_selected_head_leaves_it_absent(self):
+        self._publish('hour-first', head_pointer.GENESIS_SENTINEL)
+        self.assertFalse(head_pointer.pointer_path(self.receipts_root).exists())
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), head_pointer.GENESIS_SENTINEL)
+
+    def test_candidate_file_is_never_readable_as_a_selected_head(self):
+        self._publish('hour-cross', head_pointer.GENESIS_SENTINEL)
+        with self.assertRaises(ValueError):
+            head_pointer.load_selected_continuation_head(head_pointer.candidate_path(self.receipts_root))
+
+    def test_refused_candidate_publish_writes_nothing(self):
+        c = self._helper._published_checkpoint('hour-bad')
+        with self.assertRaisesRegex(ValueError, 'hour_result_sha256 must be a sha256 hex string'):
+            head_pointer.publish_candidate_continuation_head(
+                repo_root=ROOT, receipts_root=self.receipts_root,
+                published_checkpoint_root=c['published_checkpoint_root'],
+                hour_result_path=c['hour_result_path'], hour_result_sha256='short',
+                expected_parent_checkpoint_manifest_sha256=head_pointer.GENESIS_SENTINEL, now=1.0)
+        self.assertFalse(head_pointer.candidate_path(self.receipts_root).exists())
+        self.assertEqual(list(self.receipts_root.glob('.*.tmp')) if self.receipts_root.is_dir() else [], [])
+
+    def test_run_hour_source_cannot_move_the_selected_head(self):
+        source = _run_hour_source()
+        self.assertFalse(_hour_moves_selected_head(source))
+        self.assertIn('publish_candidate_continuation_head(', source)
+
+    def test_deliberate_red_an_hour_that_advances_the_selected_head_is_caught(self):
+        """The class check is load-bearing: restoring the old advance call into run_hour's source is detected."""
+        regressed = _run_hour_source().replace('publish_candidate_continuation_head(', 'advance_selected_continuation_head(')
+        self.assertTrue(_hour_moves_selected_head(regressed))
+
+
 class SelectedContinuationHeadSeedTests(unittest.TestCase):
     """Issue #2119 section 5 REDO (operator catch, 2026-09-28): seed_selected_continuation_head,
     the one-time bootstrap for a live lineage that already has trained history predating this
@@ -732,6 +878,346 @@ class SelectedContinuationHeadSeedTests(unittest.TestCase):
             (c1['published_checkpoint_root'] / 'checkpoint-manifest.json').read_bytes()).hexdigest()
         self.assertEqual(candidate['lineage_checkpoint_manifest_sha256'], on_disk_sha256)
         self.assertEqual(on_disk_sha256, c1['manifest_sha256'])
+
+
+_CHILD_PRELUDE = '''
+import contextlib, json, os, sys, time
+from pathlib import Path
+args = json.loads(sys.argv[1])
+sys.path.insert(0, args['module_dir'])
+import selected_continuation_head as hp
+_, dio = hp._import_siblings(Path(args['root']))
+'''
+
+_CHILD_ADVANCE = _CHILD_PRELUDE + BARRIER_CHILD_PRELUDE + '''
+mode = args.get('mode', 'plain')
+real_replace = dio.atomic_replace_durable
+peer_seen = {'value': None}
+if mode == 'die_before_replace':
+    dio.atomic_replace_durable = lambda staged, target: os._exit(7)
+elif mode == 'die_after_replace':
+    def _replace_then_die(staged, target):
+        real_replace(staged, target)
+        os._exit(7)
+    dio.atomic_replace_durable = _replace_then_die
+if args.get('rendezvous_peer'):
+    # Controlled interleaving, not a sleep: this writer announces that its compare-and-swap read already passed
+    # (the replace is reached only after the compare), then waits for the PEER to announce the same before it
+    # replaces. Without the lock both announce and both replace: the lost update is certain. With the lock the
+    # peer is still blocked on the lock, never announces, and the wait ends after rendezvous_s.
+    def _rendezvous_replace(staged, target):
+        barrier_dir = Path(args['barrier'])
+        (barrier_dir / ('at-replace-' + args['name'])).write_text('1')
+        peer_file = barrier_dir / ('at-replace-' + args['rendezvous_peer'])
+        deadline = time.monotonic() + args.get('rendezvous_s', 1.5)
+        while not peer_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        peer_seen['value'] = peer_file.exists()
+        # Two unlocked writers released together call MoveFileEx on the same target in the same instant; Windows answers one of
+        # them with WinError 5 (observed 1 of 5 runs, 2026-10-06). That denial is the OS serialising the unlocked race, not a
+        # property of the pointer code, so the test child retries it (bounded) and both writers reach their replace: the lost update.
+        retry_deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                real_replace(staged, target)
+                break
+            except PermissionError:
+                if time.monotonic() > retry_deadline:
+                    raise
+                time.sleep(0.01)
+    dio.atomic_replace_durable = _rendezvous_replace
+if mode == 'no_lock':
+    hp._pointer_lock = contextlib.contextmanager(lambda target_path, timeout=0: (yield))
+if args.get('barrier'):
+    barrier_ready_and_wait(args['barrier'], args['name'], args.get('start_delay', 0.0))
+try:
+    hp.advance_selected_continuation_head(
+        repo_root=Path(args['root']), receipts_root=Path(args['receipts_root']),
+        published_checkpoint_root=Path(args['published_checkpoint_root']),
+        hour_result_path=Path(args['hour_result_path']), hour_result_sha256=args['hour_result_sha256'],
+        expected_parent_checkpoint_manifest_sha256=args['expected_parent'], now=2000.0)
+except hp.StaleParentError:
+    print(json.dumps({'stale': True, 'peer_seen_at_replace': peer_seen['value']}))
+    sys.exit(3)
+print(json.dumps({'stale': False, 'peer_seen_at_replace': peer_seen['value']}))
+'''
+
+_CHILD_HOLD_LOCK = _CHILD_PRELUDE + '''
+with hp._pointer_lock(hp.pointer_path(Path(args['receipts_root']))):
+    Path(args['held_marker']).write_text('1')
+    if args.get('die_holding'):
+        os._exit(0)
+    release = Path(args['release_marker'])
+    deadline = time.monotonic() + args['hold_seconds']
+    while not release.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+'''
+
+_CHILD_RESTART_WRITE = _CHILD_PRELUDE + '''
+import training_continuity_ledger as ledger
+c = args['checkpoint']
+head = hp.advance_selected_continuation_head(
+    repo_root=Path(args['root']), receipts_root=Path(args['receipts_root']),
+    published_checkpoint_root=Path(c['published_checkpoint_root']), hour_result_path=Path(c['hour_result_path']),
+    hour_result_sha256=c['hour_result_sha256'], expected_parent_checkpoint_manifest_sha256=hp.GENESIS_SENTINEL, now=1000.0)
+ledger.reserve_diagnostic_dispatch(
+    path=ledger.ledger_path(Path(args['receipts_root'])), lineage_sha=head['lineage_checkpoint_manifest_sha256'],
+    run_id='restart-r1', budget_seconds=300, diagnostic_question='q', non_advancement_reason='n',
+    return_condition='c', policy=ledger.DEFAULT_POLICY, now=1000.0)
+print(json.dumps({'head': head['lineage_checkpoint_manifest_sha256']}))
+'''
+
+_CHILD_RESTART_READ = _CHILD_PRELUDE + '''
+import training_continuity_status as status
+head_sha = hp.current_head_sha256(Path(args['receipts_root']))
+allowance = status.diagnostic_allowance_status(custody_parent=Path(args['receipts_root']), lineage_sha=head_sha, now=1100.0)
+print(json.dumps({'head': head_sha, 'occupancy': allowance['diagnostic_occupancy_seconds']}))
+'''
+
+
+class SelectedContinuationHeadCrashAndRaceTests(unittest.TestCase):
+    """Issue #2119 section 6b: a hard kill between staging and replacing the pointer, and two real
+    writers racing from one parent, using real child interpreters on a temp receipts root and
+    synthetic checkpoints (never the live receipts root). Each green test has a deliberate red."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+        env_patcher = patch.dict(os.environ, {ledger.LEDGER_ROOT_ENV: str(self.root / 'ledger-root')})
+        env_patcher.start()
+        self.addCleanup(env_patcher.stop)
+
+    def _checkpoint(self, name, record_index=0):
+        hour_dir = self.root / name
+        child_dir = hour_dir / 'trained-child'
+        child_dir.mkdir(parents=True)
+        manifest_bytes = json.dumps({'data_cursor': {'shard': 0, 'record_index': record_index}}).encode('utf-8')
+        (child_dir / 'checkpoint-manifest.json').write_bytes(manifest_bytes)
+        hour_result_bytes = json.dumps({'name': name}).encode('utf-8')
+        (hour_dir / 'hour-result.json').write_bytes(hour_result_bytes)
+        return dict(published_checkpoint_root=str(child_dir), hour_result_path=str(hour_dir / 'hour-result.json'),
+                    hour_result_sha256=hashlib.sha256(hour_result_bytes).hexdigest(),
+                    manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
+
+    def _advance_in_process(self, checkpoint, expected_parent):
+        return head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=Path(checkpoint['published_checkpoint_root']),
+            hour_result_path=Path(checkpoint['hour_result_path']),
+            hour_result_sha256=checkpoint['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=expected_parent, now=1000.0)
+
+    def _child_args(self, checkpoint, expected_parent, **extra):
+        return dict(module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root),
+                    expected_parent=expected_parent, **checkpoint, **extra)
+
+    def _argv(self, script, args):
+        return python_argv('-c', script, json.dumps(args))
+
+    def _run_owned(self, script, args, *, timeout_s=60):
+        """One owned, hidden child to completion (never a bare Popen); returns the OwnedProcessResult."""
+        result = run_one(self._argv(script, args), timeout_s=timeout_s)
+        self.assertEqual(result.status, 'completed', result.stderr)
+        self.assertFalse(pid_alive(result.pid), f'pid {result.pid} still alive after completion')
+        return result
+
+    def _pointer_bytes(self):
+        path = head_pointer.pointer_path(self.receipts_root)
+        return path.read_bytes() if path.is_file() else None
+
+    def _first_head(self):
+        c1 = self._checkpoint('c1', record_index=1)
+        self._advance_in_process(c1, head_pointer.GENESIS_SENTINEL)
+        return c1
+
+    def test_a_kill_between_staging_and_replace_leaves_the_previous_head_selected(self):
+        c1 = self._first_head()
+        before = self._pointer_bytes()
+        c2 = self._checkpoint('c2', record_index=2)
+        child = self._run_owned(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_before_replace'))
+        self.assertEqual(child.returncode, 7)
+        self.assertEqual(self._pointer_bytes(), before)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c1['manifest_sha256'])
+        # A stray staged temp may survive a hard kill; it never selects anything, and the next
+        # advance from the real head succeeds without reading it.
+        self._advance_in_process(c2, c1['manifest_sha256'])
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c2['manifest_sha256'])
+
+    def test_deliberate_red_a_kill_after_the_replace_selects_the_new_head(self):
+        """The kill point matters: dying AFTER the replace leaves the NEW head selected, so the
+        before-replace test above is not vacuously true of any kill."""
+        c1 = self._first_head()
+        c2 = self._checkpoint('c2', record_index=2)
+        child = self._run_owned(_CHILD_ADVANCE, self._child_args(c2, c1['manifest_sha256'], mode='die_after_replace'))
+        self.assertEqual(child.returncode, 7)
+        self.assertEqual(head_pointer.current_head_sha256(self.receipts_root), c2['manifest_sha256'])
+
+    def test_an_error_in_replace_leaves_the_old_pointer_and_no_staged_temp(self):
+        c1 = self._first_head()
+        before = self._pointer_bytes()
+        c2 = self._checkpoint('c2', record_index=2)
+        _, durable_io = head_pointer._import_siblings(ROOT)
+        with patch.object(durable_io, 'atomic_replace_durable', side_effect=OSError('injected replace failure')):
+            with self.assertRaises(OSError):
+                self._advance_in_process(c2, c1['manifest_sha256'])
+        self.assertEqual(self._pointer_bytes(), before)
+        self.assertEqual(list(self.receipts_root.glob('.*.tmp')), [])
+
+    def _race(self, mode, trial, *, start_delay_b=0.0):
+        """Two real writers, both declaring the same parent. Neither starts its compare-and-swap until the
+        controller has seen BOTH acknowledge readiness (fail-closed in run_group), and each then meets the
+        other at the replace (rendezvous), so the overlap of the two compare reads is proved by the writers'
+        own receipts, not assumed from a delay. start_delay_b skews one writer's startup before it acknowledges."""
+        import shutil
+        import tempfile
+        shutil.rmtree(self.receipts_root, ignore_errors=True)
+        base = self._checkpoint(f'base{trial}', record_index=10 * trial + 1)
+        self._advance_in_process(base, head_pointer.GENESIS_SENTINEL)
+        a = self._checkpoint(f'a{trial}', record_index=10 * trial + 2)
+        b = self._checkpoint(f'b{trial}', record_index=10 * trial + 3)
+        with tempfile.TemporaryDirectory() as barrier:
+            jobs = []
+            for name, peer, cp, delay in (('a', 'b', a, 0.0), ('b', 'a', b, start_delay_b)):
+                args = self._child_args(cp, base['manifest_sha256'], mode=mode, barrier=barrier, name=name,
+                                        rendezvous_peer=peer, start_delay=delay)
+                jobs.append((name, self._argv(_CHILD_ADVANCE, args)))
+            outcome = run_group(jobs, barrier_dir=barrier, timeout_s=120)
+        results = [outcome.results[name] for name in ('a', 'b')]
+        for result in results:
+            self.assertEqual(result.status, 'completed', result.stderr)
+            self.assertFalse(pid_alive(result.pid), f'pid {result.pid} still alive after the race')
+            self.assertTrue(result.stdout.strip(), f'race child {result.pid} wrote no result line; rc={result.returncode} stderr tail: {result.stderr[-800:]}')
+        self.assertEqual(outcome.ready_before_go, ['a', 'b'])
+        peers_seen = [json.loads(result.stdout.strip().splitlines()[-1])['peer_seen_at_replace'] for result in results]
+        codes = sorted(result.returncode for result in results)
+        return codes, peers_seen, head_pointer.current_head_sha256(self.receipts_root), (a, b)
+
+    def test_two_real_writers_from_one_parent_exactly_one_wins(self):
+        for trial in range(4):
+            codes, peers_seen, head, (a, b) = self._race('plain', trial)
+            self.assertEqual(codes, [0, 3], f'trial {trial}: expected one winner and one StaleParentError, got {codes}')
+            self.assertIn(head, (a['manifest_sha256'], b['manifest_sha256']))
+            self.assertIn(False, peers_seen, f'trial {trial}: the lock must keep one writer out of the replace window: {peers_seen}')
+
+    def test_a_skewed_startup_does_not_change_the_locked_outcome(self):
+        """Writer b starts 2 s after writer a. The barrier still waits for b's acknowledgement, so a does not run
+        ahead alone: the locked outcome stays one winner and one stale refusal."""
+        codes, peers_seen, head, (a, b) = self._race('plain', 20, start_delay_b=2.0)
+        self.assertEqual(codes, [0, 3], codes)
+        self.assertIn(head, (a['manifest_sha256'], b['manifest_sha256']))
+
+    def test_deliberate_red_without_the_lock_both_writers_win_and_one_overwrites_the_other(self):
+        codes, peers_seen, head, (a, b) = self._race('no_lock', 0)
+        self.assertEqual(peers_seen, [True, True])  # both compare reads had passed before either replaced: the overlap is evidence
+        self.assertEqual(codes, [0, 0])  # both passed the compare: the lost-update defect the lock cures
+
+    def test_deliberate_red_a_skewed_startup_without_the_lock_still_loses_an_update(self):
+        """The skew that made a sleep-based red depend on timing (b starting after a's replace) cannot occur: the
+        unlocked writers still rendezvous at the replace, so the red holds under the skewed schedule."""
+        codes, peers_seen, head, (a, b) = self._race('no_lock', 21, start_delay_b=2.0)
+        self.assertEqual(peers_seen, [True, True])
+        self.assertEqual(codes, [0, 0])
+
+    def test_a_lock_held_by_a_killed_process_is_released_by_the_os(self):
+        import time
+        held = self.root / 'held-dead'
+        child = self._run_owned(_CHILD_HOLD_LOCK, dict(module_dir=str(MODULE_DIR), root=str(ROOT),
+                                                       receipts_root=str(self.receipts_root), die_holding=True,
+                                                       held_marker=str(held)))
+        self.assertTrue(held.exists(), 'the child never acquired the lock it was meant to die holding')
+        started = time.monotonic()
+        self._first_head()
+        self.assertLess(time.monotonic() - started, 10.0)
+
+    def test_a_live_lock_holder_makes_a_second_writer_time_out_naming_the_lock(self):
+        """The holder is an owned, hidden child on its own thread. The controller always writes the release marker
+        and joins the thread before the temporary root goes, so no lock holder outlives the test."""
+        import threading
+        import time
+        held, release = self.root / 'held-live', self.root / 'release-live'
+        outcome = {}
+
+        def hold():
+            outcome['result'] = run_one(self._argv(_CHILD_HOLD_LOCK, dict(
+                module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root), hold_seconds=60,
+                held_marker=str(held), release_marker=str(release))), timeout_s=90)
+
+        holder = threading.Thread(target=hold, name='owned-child-lock-holder', daemon=True)
+        holder.start()
+        try:
+            deadline = time.monotonic() + 30
+            while not held.exists() and holder.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(held.exists(), 'the lock holder never acquired the lock')
+            target = head_pointer.pointer_path(self.receipts_root)
+            with self.assertRaisesRegex(TimeoutError, r'\.lock'):
+                with head_pointer._pointer_lock(target, timeout=0.3):
+                    self.fail('acquired a lock another live process holds')
+        finally:
+            release.write_text('1')
+            holder.join(90)
+        self.assertFalse(holder.is_alive(), 'the lock-holder thread did not finish')
+        result = outcome['result']
+        self.assertEqual((result.status, result.returncode), ('completed', 0), result.stderr)
+        self.assertFalse(pid_alive(result.pid), 'the lock holder is still alive after release')
+
+
+class RestartRecoveryTests(unittest.TestCase):
+    """Issue #2119 section 6, row 15 (PARTIAL): a fresh interpreter recovers the selected checkpoint and the
+    diagnostic budget from disk alone. The status producer holds no in-process state (the
+    ledger test above proves only that the ledger is re-read; this one crosses real processes).
+    Not established here: durable pending-continuation restoration, and a stale or corrupt pending-continuation
+    negative. Head and occupancy restoration only."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
+        self.env = dict(os.environ, **{ledger.LEDGER_ROOT_ENV: str(self.root / 'ledger-root')})
+
+    def _run(self, script, **args):
+        payload = dict(module_dir=str(MODULE_DIR), root=str(ROOT), receipts_root=str(self.receipts_root), **args)
+        done = run_one(python_argv('-c', script, json.dumps(payload)), timeout_s=120, env=self.env)
+        self.assertEqual((done.status, done.returncode), ('completed', 0), done.stderr)
+        self.assertFalse(pid_alive(done.pid), f'pid {done.pid} still alive after completion')
+        return json.loads(done.stdout.strip().splitlines()[-1])
+
+    def _checkpoint(self, name, record_index):
+        hour_dir = self.root / name
+        child_dir = hour_dir / 'trained-child'
+        child_dir.mkdir(parents=True)
+        manifest_bytes = json.dumps({'data_cursor': {'shard': 0, 'record_index': record_index}}).encode('utf-8')
+        (child_dir / 'checkpoint-manifest.json').write_bytes(manifest_bytes)
+        hour_result_bytes = json.dumps({'name': name}).encode('utf-8')
+        (hour_dir / 'hour-result.json').write_bytes(hour_result_bytes)
+        return dict(published_checkpoint_root=str(child_dir), hour_result_path=str(hour_dir / 'hour-result.json'),
+                    hour_result_sha256=hashlib.sha256(hour_result_bytes).hexdigest(),
+                    manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
+
+    def test_a_fresh_process_recovers_the_selected_head_and_the_diagnostic_occupancy(self):
+        c1 = self._checkpoint('c1', 1)
+        written = self._run(_CHILD_RESTART_WRITE, checkpoint=c1)
+        self.assertEqual(written['head'], c1['manifest_sha256'])
+        recovered = self._run(_CHILD_RESTART_READ)
+        self.assertEqual(recovered['head'], c1['manifest_sha256'])
+        self.assertEqual(recovered['occupancy'], 300)
+
+    def test_deliberate_red_a_reader_that_caches_the_first_head_misses_an_advance_made_by_another_process(self):
+        c1, c2 = self._checkpoint('c1', 1), self._checkpoint('c2', 2)
+        self._run(_CHILD_RESTART_WRITE, checkpoint=c1)
+        cache = {'head': self._run(_CHILD_RESTART_READ)['head']}   # a module-level cache of the first read
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root,
+            published_checkpoint_root=Path(c2['published_checkpoint_root']),
+            hour_result_path=Path(c2['hour_result_path']), hour_result_sha256=c2['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=c1['manifest_sha256'], now=1500.0)
+        self.assertEqual(self._run(_CHILD_RESTART_READ)['head'], c2['manifest_sha256'])   # the uncached reader sees it
+        self.assertNotEqual(cache['head'], c2['manifest_sha256'])                          # the cached one is stale
 
 
 if __name__ == '__main__':
