@@ -163,6 +163,16 @@ def _arm_records(entry, rule, publication) -> dict[str, dict[str, Any]]:
     return records
 
 
+def _readjudicate(rule: Mapping[str, Any], arm_results: Path) -> dict[str, Any] | None:
+    """The adjudicator's verdict over the arm-results file now on disk, or None when adjudication refuses (nothing is written)."""
+    try:
+        arms = json.loads(arm_results.read_text(encoding='utf-8'))
+        verdict = elig.adjudicate(rule, arms['control'], arms['treatment'], expected_rule_sha256=arms['rule_sha256'])
+        return json.loads(json.dumps(verdict, sort_keys=True))     # the same JSON round trip the verdict file went through
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
 def finalize_scored_pair(identity: Mapping[str, Any], *, entry_path: Path, custody: Path, parent: Path, runner: Any,
                          promote_fn: Callable[..., dict[str, Any]], ruling: str | None) -> dict[str, Any]:
     """The whole chain. Raises ScoredPairRefusal / ArmProducerRefusal / EligibilityRefusal before anything is written when the entry, the
@@ -200,9 +210,18 @@ def finalize_scored_pair(identity: Mapping[str, Any], *, entry_path: Path, custo
                 or not arm_results.is_file()):
             raise ScoredPairRefusal('the recorded-outcome marker is not this run\'s completed outcome over these arm results')
         eligible = marker['eligible_descendant_published']
-        verdict = json.loads(verdict_path.read_text(encoding='utf-8')) if verdict_path.is_file() else None
-        if eligible != (verdict is not None and verdict.get('eligible_arm') is not None):
+        saved = json.loads(verdict_path.read_text(encoding='utf-8')) if verdict_path.is_file() else None
+        if eligible != (saved is not None and saved.get('eligible_arm') is not None):
             raise ScoredPairRefusal('the recorded outcome disagrees with the eligibility verdict on disk')
+        # review 65622 P1: the saved verdict is never trusted. Re-adjudicate the arm results rebuilt above under the frozen rule and require the
+        # WHOLE saved verdict to equal that result, so an edited eligible_arm (or any other edited field) refuses before any promotion.
+        rederived = _readjudicate(rule, arm_results)
+        if eligible:
+            if saved is None or rederived is None or saved != rederived:
+                raise ScoredPairRefusal('the saved eligibility verdict differs from the adjudication of the rebuilt arm records')
+        elif saved is not None and saved != rederived:
+            raise ScoredPairRefusal('the saved eligibility verdict differs from the adjudication of the rebuilt arm records')
+        verdict = rederived if eligible else saved
         resumed = True
     else:
         eligible = runner.finalize_retention_outcome(identity, custody=custody, parent=parent)

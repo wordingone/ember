@@ -279,6 +279,43 @@ class ScoredPairChainTests(unittest.TestCase):
             self.run_chain()
         self.assertEqual(self.ptr_sha(), self.pointer_before)
 
+    def test_an_edited_eligible_arm_in_the_saved_verdict_is_refused_before_any_promotion(self):
+        """review 65622 P1: control 2.0 / treatment 1.5 finalizes a treatment win with no ruling; swapping eligible_arm to control in the saved
+        verdict must not promote the control child on the later ruling. Deliberate red: without the re-adjudication the control child moves."""
+        self.real_order(control_loss=2.0, treatment_loss=1.5)
+        first = self.run_chain(ruling=None)
+        self.assertEqual(first['verdict']['eligible_arm'], 'treatment')
+        marker = self.custody / self.runner.OUTCOME_RECORDED_FILENAME
+        verdict_path = self.custody / 'eligibility-verdict.json'
+        marker_bytes, verdict_bytes = marker.read_bytes(), verdict_path.read_bytes()
+        rows_before = self.ledger.read_rows(self.ledger_file) if self.ledger_file.exists() else []
+        record = json.loads(verdict_bytes)
+        record['eligible_arm'] = 'control'
+        verdict_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding='utf-8')
+        edited_bytes = verdict_path.read_bytes()
+        with self.assertRaisesRegex(entry_mod.ScoredPairRefusal, 'differs from the adjudication of the rebuilt arm records'):
+            self.run_chain(ruling='65700')
+        self.assertEqual(self.ptr_sha(), self.pointer_before)
+        self.assertEqual(sch.current_head_sha256(self.rr), self.start['manifest'])
+        self.assertEqual(marker.read_bytes(), marker_bytes)
+        self.assertEqual(verdict_path.read_bytes(), edited_bytes)
+        self.assertEqual(self.ledger.read_rows(self.ledger_file) if self.ledger_file.exists() else [], rows_before)
+        self.assertEqual(self.rows, [])
+        verdict_path.write_bytes(verdict_bytes)                      # the untouched verdict resumes and promotes the treatment child
+        out = self.run_chain(ruling='65700')
+        self.assertEqual((out['resumed_completed_outcome'], out['promotion']['head']), (True, self.trt['manifest']))
+
+    def test_any_other_edited_verdict_field_is_refused_too(self):
+        self.real_order()
+        self.run_chain(ruling=None)
+        verdict_path = self.custody / 'eligibility-verdict.json'
+        record = json.loads(verdict_path.read_text(encoding='utf-8'))
+        record['injected_field'] = True
+        verdict_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding='utf-8')
+        with self.assertRaisesRegex(entry_mod.ScoredPairRefusal, 'differs from the adjudication'):
+            self.run_chain(ruling='65700')
+        self.assertEqual(self.ptr_sha(), self.pointer_before)
+
     # ---- the real entry point refuses a pair that is the same class but a different population ----
     def test_a_same_class_pair_scored_on_a_different_population_is_refused_and_nothing_is_written(self):
         for key, other in (('episode_plan_sha256', 'a' * 64), ('shard_ledger_sha256', 'b' * 64), ('mixture_identity_sha256', 'c' * 64)):
