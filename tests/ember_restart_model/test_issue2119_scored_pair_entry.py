@@ -86,7 +86,8 @@ class ScoredPairChainTests(unittest.TestCase):
                          'parent_checkpoint': {'root': 'r', 'manifest_sha256': self.start['manifest']}}
         (self.custody / 'run-complete.json').write_text(json.dumps({
             'status': 'run_complete_not_yet_scored', 'succeeded': True, 'run_id': 'r1', 'custody_name': 'measurement-r1',
-            'dispatch_started': 100.0, 'run_complete_at': 200.0}), encoding='utf-8')
+            'dispatch_started': 100.0, 'run_complete_at': 200.0,
+            'launch_lineage_checkpoint_manifest_sha256': self.start['manifest']}), encoding='utf-8')
         self.ledger_file = self.ledger.ledger_path(self.custody.parent)
         self.pointer_before = self.ptr_sha()
         self.scored_dir = self.root / 'scored'      # the run's outputs: they do not exist when the entry is frozen

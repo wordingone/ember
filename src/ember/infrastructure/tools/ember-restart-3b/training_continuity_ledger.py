@@ -41,11 +41,6 @@ POLICY_SCHEMA = 'ember-training-continuity-policy-v1'
 GENESIS_SENTINEL = 'GENESIS'
 LEDGER_FILENAME = 'diagnostic-allowance-ledger.jsonl'
 POLICY_FILENAME = 'training_continuity_policy.json'
-# This module's own directory, at the same depth cia_step_runner.py computes its ROOT from
-# (src/ember/infrastructure/tools/ember-restart-3b/<file>.py) -- used only as the default
-# repo_root for selected_continuation_head_sha256 below.
-_MODULE_ROOT = Path(__file__).resolve().parents[5]
-CURRENT_SUBJECT_RELATIVE_PATH = Path('manifests') / 'ember-current-subject-v1.json'
 # issue #2119 REDO finding: keying the ledger to a dispatch's --custody parent reset the
 # allowance to zero on every #1945 dispatch, because each dispatch mints a fresh timestamped
 # parent directory. The ledger therefore lives one level ABOVE the custody parent, in the
@@ -129,69 +124,34 @@ def _bound_read(path: Path, digest: str) -> dict[str, Any]:
     return json.loads(raw)
 
 
-def _load_gen_readme_status(repo_root: Path):
-    """Load gen_readme_status.py directly by path, the same dynamic-load idiom cia_step_runner.py
-    uses for its own sibling scripts (spec_from_file_location + exec, not spec.loader.exec_module,
-    matching the convention already established for this class of loader in this tool).
+def selected_continuation_head_sha256(receipts_root: Path) -> str:
+    """The lineage key for a dispatch with no checkpoint_probe/continuation reference of its own:
+    the LIVE selected-continuation-head pointer under the host-wide receipts root.
 
-    Deliberately NOT update_current_subject._import_siblings(repo_root): that helper also imports
-    checkpoint_artifacts.py, which imports torch and src.ember.model.ember_v0_model at module
-    scope -- a needless torch dependency for a controller-side lineage-key lookup that runs
-    before any model is allocated. gen_readme_status.py itself declares "Stdlib only. No
-    network." in its own header, so loading it alone keeps this path torch-free.
+    issue #2119 row 3b: this used to read the committed manifests/ember-current-subject-v1.json
+    (last written 2026-09-01), so a diagnostic was charged to a lineage that had long since
+    advanced. It now REFUSES when no live pointer exists, never falling back to that file or to
+    the genesis sentinel: a diagnostic that cannot name its lineage is not charged to a guess.
     """
-    path = Path(repo_root) / 'src/ember/governance/scripts/gen_readme_status.py'
-    spec = importlib.util.spec_from_file_location('cia_gen_readme_status', path)
-    module = importlib.util.module_from_spec(spec)
-    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
-    return module
+    import selected_continuation_head
+    if not selected_continuation_head.pointer_path(Path(receipts_root)).is_file():
+        raise ValueError(f'no selected continuation head pointer under {receipts_root}: a dispatch with '
+                         'neither a checkpoint probe nor a continuation reference cannot be keyed')
+    return selected_continuation_head.current_head_sha256(Path(receipts_root))
 
 
-def selected_continuation_head_sha256(
-    repo_root: Path | None = None, *, current_subject_path: Path | None = None,
-) -> str:
-    """The lineage key for a dispatch with no checkpoint_probe/continuation reference of its own
-    (a diagnostic with nothing to resume from): the repository's existing, durable SELECTED
-    continuation-head authority, reused rather than reinvented.
-
-    update_current_subject.py writes this record on every CONTINUE_TRAINING publication;
-    gen_readme_status.load_current_subject reads and validates it (closed schema, digest
-    re-derivation, authority binding). Before this fix, a diagnostic with no resume reference
-    fell through to GENESIS_SENTINEL unconditionally -- so it accrued its occupancy against the
-    bootstrap key rather than the lineage actually in flight, and a lineage that had already
-    advanced past genesis could never see that diagnostic's spend reflected against it.
-
-    Returns GENESIS_SENTINEL only in the genuine bootstrap case: no current-subject record has
-    ever been published (repo_root / manifests/ember-current-subject-v1.json does not exist).
-    """
-    repo_root = _MODULE_ROOT if repo_root is None else Path(repo_root)
-    target = (Path(current_subject_path) if current_subject_path is not None
-              else repo_root / CURRENT_SUBJECT_RELATIVE_PATH)
-    if not target.is_file():
-        return GENESIS_SENTINEL
-    module = _load_gen_readme_status(repo_root)
-    current = module.load_current_subject(str(target))
-    return current['subject']['checkpoint_manifest_sha256']
-
-
-def lineage_checkpoint_manifest_sha256(
-    identity: Mapping[str, Any], *, repo_root: Path | None = None,
-    current_subject_path: Path | None = None,
-) -> str:
-    """The manifest sha256 of the checkpoint this dispatch resumes from, or the current
-    selected-continuation-head, or GENESIS_SENTINEL.
+def lineage_checkpoint_manifest_sha256(identity: Mapping[str, Any], *, receipts_root: Path) -> str:
+    """The manifest sha256 of the checkpoint this dispatch resumes from, or the live
+    selected-continuation-head.
 
     Reads only fields the identity schema already carries and already verifies elsewhere
     (checkpoint_probe / continuation reopen a real prior admitted hour); this extracts a field
     from that same hour-result, it does not introduce a second admission check.
 
-    issue #2119 REDO finding: a dispatch with NEITHER checkpoint_probe NOR continuation (a
-    diagnostic with no checkpoint reference, e.g. a measurement pair run against whatever the
-    lineage currently is) used to key unconditionally to GENESIS_SENTINEL, accruing its
-    occupancy against a lineage that may have advanced long ago. It now falls back to the
-    repository's own selected-continuation-head authority (see
-    selected_continuation_head_sha256 above), and only reaches GENESIS_SENTINEL when that
-    authority itself has never been published.
+    issue #2119 row 3b: a dispatch with NEITHER checkpoint_probe NOR continuation is keyed to the LIVE
+    selected-continuation-head pointer under receipts_root, and REFUSES (ValueError) when no pointer
+    exists; it never reads the committed 2026-09-01 current-subject manifest and never returns the
+    genesis sentinel by default.
     """
     probe = identity.get('checkpoint_probe')
     if isinstance(probe, dict) and 'result_sha256' in probe and 'custody_root' in probe:
@@ -203,7 +163,7 @@ def lineage_checkpoint_manifest_sha256(
         result = _bound_read(Path(continuation['source_hour_result_path']),
                               continuation['source_hour_result_sha256'])
         return _require_child_manifest_sha256(result)
-    return selected_continuation_head_sha256(repo_root, current_subject_path=current_subject_path)
+    return selected_continuation_head_sha256(receipts_root)
 
 
 def _require_child_manifest_sha256(result: Mapping[str, Any]) -> str:
