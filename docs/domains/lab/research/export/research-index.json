@@ -314,7 +314,7 @@
   "note": "What the site leads with. The site renders Ember research generally; this file selects which work is FEATURED and where its numbers come from. Change the featured block to feature different work -- nothing about the site is specific to one issue.",
   "ember": {
    "name": "Ember",
-   "what": "Ember is a from-scratch language model trained on one RTX 4090. Everything it knows was learned on that single card, under a fixed accounting contract: every trained token is receipted, every checkpoint is reproducible, and no result counts unless an artifact a third party can open says it happened.",
+   "what": "Ember is a from-scratch language model trained on one RTX 4090. Everything it knows was learned on that single card. For the #1945 throughput-and-qualification campaign as documented through 2026-09-27, the accounting contract requires receipts for trained-token counts and reproducible checkpoints. This requirement is not evidence that every run met it; no result counts unless a third party can inspect a supporting artifact.",
    "why": "The constraint is the experiment. One consumer card is a hard budget, so every question becomes a measurement question -- where the time actually goes, and what would have to change for it to go somewhere else."
   },
   "featured": {
@@ -374,7 +374,7 @@
     }
    ],
    "measurement": {
-    "label": "Applied positions per second, governed hour",
+    "label": "Gate B — Applied positions per second, governed hour",
     "units": "positions/s",
     "basis": "governed",
     "receipt": "seat record: six-gate-a1-attempt14-v3-20260927.predicate.json",
