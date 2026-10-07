@@ -55,45 +55,20 @@ def _bare_identity(**extra):
     return identity
 
 
-def _current_subject_payload(checkpoint_sha, *, predecessor_sha=None):
-    """A minimal but fully closed-schema current-subject payload, matching every check in
-    gen_readme_status.load_current_subject -- built from the shape of the real
-    manifests/ember-current-subject-v1.json this repository already ships, with only the
-    checkpoint (and optionally predecessor) digest varied per test."""
-    predecessor_sha = predecessor_sha or hashlib.sha256(b'fixture-predecessor').hexdigest()
-    return {
-        'schema_version': 'ember-current-subject-v1',
-        'authority': {
-            'goal_id': 'EMBER-02', 'workstream_id': 'EMBER-02A',
-            'next_executed_outcome': 'EMBER-02 first sufficiently pretrained clean-genesis 3B Ember',
-        },
-        'subject': {
-            'checkpoint_manifest_sha256': checkpoint_sha,
-            'model_config_sha256': hashlib.sha256(b'fixture-model-config').hexdigest(),
-            'tokenizer_sha256': hashlib.sha256(b'fixture-tokenizer').hexdigest(),
-            'optimizer_state_sha256': hashlib.sha256(b'fixture-optimizer').hexdigest(),
-            'token_cursor': {'global_step': 2, 'record_index': 2, 'token_offset': 2048, 'tokens_seen': 2048},
-            'active_route': 'shared',
-            'parameters': {'active': 100, 'allocated': 400, 'episode_trainable': 100,
-                           'served': 400, 'trainable': 400, 'unique': 400},
-            'disposition': 'CHECKPOINT_CANDIDATE_NOT_ADMITTED',
-            'capability_credit': 'none',
-            'sufficient_pretraining_proven': False,
-            'predecessor': {'checkpoint_manifest_sha256': predecessor_sha, 'tokens_seen': 1024,
-                            'relationship': 'historical_step1_predecessor'},
-            'checkpoint_custody': {'class': 'private_checkpoint_bytes', 'locator_id': 'fixture-locator',
-                                   'public_manifest_bytes_present': False},
-            'evidence_paths': ['docs/domains/governance/ember-restart/integration-contract-v1.md'],
-        },
-    }
-
-
-def _write_current_subject(path, checkpoint_sha, *, predecessor_sha=None):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_current_subject_payload(checkpoint_sha, predecessor_sha=predecessor_sha)),
-                    encoding='utf-8')
-    return path
+def _published_checkpoint(root, name, shard=0, record_index=0):
+    """A minimal but real admitted-checkpoint fixture: an hour custody directory holding hour-result.json plus a
+    sibling trained-child/checkpoint-manifest.json -- the shape the selected-head pointer functions read."""
+    hour_dir = Path(root) / name
+    child_dir = hour_dir / 'trained-child'
+    child_dir.mkdir(parents=True)
+    manifest_bytes = json.dumps({'data_cursor': {'shard': shard, 'record_index': record_index}, 'name': name}).encode('utf-8')
+    (child_dir / 'checkpoint-manifest.json').write_bytes(manifest_bytes)
+    hour_result_bytes = json.dumps({'claim': 'fixture hour result', 'name': name}).encode('utf-8')
+    hour_result_path = hour_dir / 'hour-result.json'
+    hour_result_path.write_bytes(hour_result_bytes)
+    return dict(published_checkpoint_root=child_dir, hour_result_path=hour_result_path,
+                hour_result_sha256=hashlib.sha256(hour_result_bytes).hexdigest(),
+                manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
 
 
 class PurposeGateRefusesBeforeSpawnTests(unittest.TestCase):
@@ -202,14 +177,6 @@ class LedgerLineageAndReadBackTests(unittest.TestCase):
 
     def tearDown(self):
         self._tmp.cleanup()
-
-    def test_genesis_lineage_with_no_resume_reference(self):
-        # repo_root points at a directory with no manifests/ subdirectory at all, so this
-        # exercises the genuine bootstrap case -- never the real repository's own published
-        # current-subject record (see SelectedContinuationHeadKeyingTests for that case).
-        self.assertEqual(
-            ledger.lineage_checkpoint_manifest_sha256({}, repo_root=Path(self._tmp.name)),
-            ledger.GENESIS_SENTINEL)
 
     def test_two_custody_parents_on_the_same_lineage_share_one_ledger_and_accumulate(self):
         """issue #2119 REDO: every #1945 dispatch mints a fresh timestamped --custody parent.
@@ -369,78 +336,104 @@ class StaleOrPartialPublicationCannotAdvanceTests(unittest.TestCase):
         path.write_bytes(path.read_bytes() + b' ')
         identity = {'checkpoint_probe': {'custody_root': str(self.root), 'result_sha256': digest}}
         with self.assertRaisesRegex(ValueError, 'changed since it was bound'):
-            ledger.lineage_checkpoint_manifest_sha256(identity)
+            ledger.lineage_checkpoint_manifest_sha256(identity, receipts_root=self.root)
 
     def test_partial_publication_missing_child_manifest_refuses(self):
         path, digest = self._write('hour-result.json', {'some_other_field': True})
         identity = {'checkpoint_probe': {'custody_root': str(self.root), 'result_sha256': digest}}
         with self.assertRaisesRegex(ValueError, 'incomplete'):
-            ledger.lineage_checkpoint_manifest_sha256(identity)
+            ledger.lineage_checkpoint_manifest_sha256(identity, receipts_root=self.root)
 
     def test_well_formed_continuation_reference_resolves_the_lineage(self):
         path, digest = self._write('hour-result.json', {'child_manifest_sha256': 'b' * 64})
         identity = {'continuation': {'source_hour_result_path': str(path), 'source_hour_result_sha256': digest}}
-        self.assertEqual(ledger.lineage_checkpoint_manifest_sha256(identity), 'b' * 64)
+        self.assertEqual(ledger.lineage_checkpoint_manifest_sha256(identity, receipts_root=self.root), 'b' * 64)
 
 
 class SelectedContinuationHeadKeyingTests(unittest.TestCase):
-    """issue #2119 REDO: a diagnostic with NO checkpoint_probe/continuation of its own must key
-    to the repository's currently selected continuation head, never unconditionally to GENESIS
-    -- and a published CONTINUE_TRAINING descendant (a new selected head) must reset the
-    allowance, exactly like the existing implicit-reset test does for the checkpoint_probe path.
+    """issue #2119 row 3b: a diagnostic with NO checkpoint_probe/continuation of its own is keyed to the LIVE
+    selected-continuation-head pointer under the receipts root, REFUSES when there is none (never genesis, never the
+    committed 2026-09-01 current-subject manifest), and a pointer advance resets the allowance for the new head while
+    the old head's rows stay as audit.
     """
 
     def setUp(self):
         import tempfile
         self._tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.receipts_root = self.root / 'receipts'
         self.ledger_path = self.root / 'diagnostic-allowance-ledger.jsonl'
-        self.subject_path = self.root / 'ember-current-subject-v1.json'
 
-    def test_diagnostic_with_no_checkpoint_reference_keys_to_the_selected_head(self):
-        head = hashlib.sha256(b'selected-head-1').hexdigest()
-        _write_current_subject(self.subject_path, head)
-        self.assertEqual(
-            ledger.lineage_checkpoint_manifest_sha256(
-                {}, repo_root=ROOT, current_subject_path=self.subject_path),
-            head)
+    def _advance(self, name, parent, now):
+        c = _published_checkpoint(self.root, name)
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root, published_checkpoint_root=c['published_checkpoint_root'],
+            hour_result_path=c['hour_result_path'], hour_result_sha256=c['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=parent, now=now)
+        return c
 
-    def test_a_published_continue_training_descendant_resets_the_allowance(self):
-        """The old head's allowance is exhausted; the moment the current-subject record is
-        rewritten to name a NEW selected head (as update_current_subject.py does on every
-        CONTINUE_TRAINING publication), a diagnostic with no reference of its own keys to the
-        new head and starts with a clean allowance -- the same implicit-reset guarantee the
-        checkpoint_probe/continuation paths already had."""
-        old_head = hashlib.sha256(b'selected-head-old').hexdigest()
-        _write_current_subject(self.subject_path, old_head)
+    def _reserve(self, lineage_sha, run_id, now):
         policy = dict(ledger.DEFAULT_POLICY, max_diagnostic_occupancy_seconds=50)
-        lineage_sha = ledger.lineage_checkpoint_manifest_sha256(
-            {}, repo_root=ROOT, current_subject_path=self.subject_path)
-        self.assertEqual(lineage_sha, old_head)
-        ledger.reserve_diagnostic_dispatch(
-            path=self.ledger_path, lineage_sha=lineage_sha, run_id='r1', budget_seconds=50,
-            diagnostic_question='q', non_advancement_reason='n', return_condition='c',
-            policy=policy, now=1000.0)
+        return ledger.reserve_diagnostic_dispatch(
+            path=self.ledger_path, lineage_sha=lineage_sha, run_id=run_id, budget_seconds=50, diagnostic_question='q',
+            non_advancement_reason='n', return_condition='c', policy=policy, now=now)
+
+    def test_diagnostic_with_no_reference_keys_to_the_live_pointer(self):
+        c = self._advance('hour-x', head_pointer.GENESIS_SENTINEL, 1000.0)
+        self.assertEqual(ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root),
+                         c['manifest_sha256'])
+
+    def test_diagnostic_with_no_reference_and_no_pointer_refuses_and_never_returns_genesis(self):
+        with self.assertRaisesRegex(ValueError, 'no selected continuation head pointer'):
+            ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root)
+        with self.assertRaisesRegex(ValueError, 'no selected continuation head pointer'):
+            ledger.selected_continuation_head_sha256(self.receipts_root)
+
+    def test_a_stale_committed_manifest_is_never_read(self):
+        """The 2026-09-01 record named a dead checkpoint. A repo-shaped manifests/ember-current-subject-v1.json naming
+        a stale digest must change nothing: with no pointer the call refuses instead of returning it, and with a
+        pointer naming X the key is X."""
+        stale = hashlib.sha256(b'stale-2026-09-01-subject').hexdigest()
+        (self.root / 'manifests').mkdir()
+        (self.root / 'manifests' / 'ember-current-subject-v1.json').write_text(
+            json.dumps({'subject': {'checkpoint_manifest_sha256': stale}}), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'no selected continuation head pointer'):
+            ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root)
+        c = self._advance('hour-live', head_pointer.GENESIS_SENTINEL, 1000.0)
+        key = ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root)
+        self.assertEqual(key, c['manifest_sha256'])
+        self.assertNotEqual(key, stale)
+        self.assertFalse(hasattr(ledger, 'CURRENT_SUBJECT_RELATIVE_PATH'))
+
+    def test_advancing_the_head_resets_that_heads_allowance_and_keeps_the_old_rows(self):
+        x = self._advance('hour-x', head_pointer.GENESIS_SENTINEL, 1000.0)
+        old_key = ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root)
+        self.assertEqual(old_key, x['manifest_sha256'])
+        self._reserve(old_key, 'r1', 1000.0)
         with self.assertRaisesRegex(ValueError, 'diagnostic allowance exhausted \\(occupancy\\)'):
-            ledger.reserve_diagnostic_dispatch(
-                path=self.ledger_path,
-                lineage_sha=ledger.lineage_checkpoint_manifest_sha256(
-                    {}, repo_root=ROOT, current_subject_path=self.subject_path),
-                run_id='r2', budget_seconds=50, diagnostic_question='q',
-                non_advancement_reason='n', return_condition='c', policy=policy, now=1001.0)
-        # A CONTINUE_TRAINING publication rewrites the current-subject record to a new head.
-        new_head = hashlib.sha256(b'selected-head-new').hexdigest()
-        _write_current_subject(self.subject_path, new_head, predecessor_sha=old_head)
-        new_lineage_sha = ledger.lineage_checkpoint_manifest_sha256(
-            {}, repo_root=ROOT, current_subject_path=self.subject_path)
-        self.assertEqual(new_lineage_sha, new_head)
-        self.assertNotEqual(new_lineage_sha, lineage_sha)
-        # The new head's allowance is clean even though the old head's was exhausted.
-        ledger.reserve_diagnostic_dispatch(
-            path=self.ledger_path, lineage_sha=new_lineage_sha, run_id='r3', budget_seconds=50,
-            diagnostic_question='q', non_advancement_reason='n', return_condition='c',
-            policy=policy, now=1002.0)
+            self._reserve(ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root), 'r2', 1001.0)
+        x2 = self._advance('hour-x2', x['manifest_sha256'], 1002.0)
+        new_key = ledger.lineage_checkpoint_manifest_sha256({}, receipts_root=self.receipts_root)
+        self.assertEqual(new_key, x2['manifest_sha256'])
+        self.assertNotEqual(new_key, old_key)
+        self._reserve(new_key, 'r3', 1003.0)                       # clean allowance on the new head
+        rows = ledger.read_rows(self.ledger_path)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, old_key), 50)   # the old head's spend stays as audit
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, new_key), 50)
+        with self.assertRaisesRegex(ValueError, 'diagnostic allowance exhausted \\(occupancy\\)'):
+            self._reserve(old_key, 'r4', 1004.0)                   # the old head is still exhausted if keyed back to it
+
+    def test_the_launch_path_reads_the_key_once_before_it_can_reserve_or_spawn(self):
+        """The runner computes the lineage key from the live pointer ONCE, before the reservation and before
+        OwnedProcessRunner is constructed, and reuses it in the launch-exception outcome row."""
+        source = (MODULE_DIR / 'cia_step_runner.py').read_text(encoding='utf-8')
+        launch = source[source.index('def launch('):]
+        first_key = launch.index('lineage_checkpoint_manifest_sha256(')
+        self.assertEqual(launch.count('lineage_checkpoint_manifest_sha256('), 1)
+        self.assertLess(first_key, launch.index('reserve_diagnostic_dispatch('))
+        self.assertLess(first_key, launch.index('OwnedProcessRunner('))
+        self.assertNotIn('lineage_checkpoint_manifest_sha256(identity)', source)
 
 
 class StatusProducerTests(unittest.TestCase):
@@ -535,6 +528,79 @@ class StatusProducerTests(unittest.TestCase):
         self.assertEqual(record['next_segment'],
                          {'status': 'blocked', 'blocker': 'readiness blocker: image evaluator unbound'})
         self.assertIn('diagnostic_occupancy_seconds', record['diagnostic_allowance'])
+
+
+class RealPointerFinalizerTests(unittest.TestCase):
+    """issue #2119 row 3b review (the deferred finalization): the REAL pointer, the REAL lineage derivation (nothing patched) and the real
+    ledger. A no-reference RETENTION_ELIGIBLE_EXPERIMENT begun at head A and finalized after the head advanced to B is charged to A, the
+    lineage its launch reserved against, and never to B."""
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = patch.dict(os.environ, {}, clear=False)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(ledger.LEDGER_ROOT_ENV, None)
+        self.custody = self.root / 'receipts' / 'measurement-r1'
+        self.custody.mkdir(parents=True)
+        self.receipts_root = ledger.ledger_root(self.custody.parent)   # == self.root: the pointer and the ledger share it
+        self.identity = {'run_id': 'r1', 'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT'}   # no checkpoint_probe, no continuation
+        self.head_a = self._advance('hour-a', head_pointer.GENESIS_SENTINEL, 1000.0)
+        self.key_a = ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.receipts_root)
+        self.assertEqual(self.key_a, self.head_a['manifest_sha256'])
+        (self.custody / 'arm-results.json').write_text('{}', encoding='utf-8')
+        (self.custody / 'run-complete.json').write_text(json.dumps({
+            'status': 'run_complete_not_yet_scored', 'succeeded': False, 'run_id': 'r1', 'custody_name': 'measurement-r1',
+            'dispatch_started': 100.0, 'run_complete_at': 200.0, runner.LAUNCH_LINEAGE_FIELD: self.key_a}), encoding='utf-8')
+        self.ledger_file = ledger.ledger_path(self.custody.parent)
+
+    def _advance(self, name, parent, now):
+        c = _published_checkpoint(self.root, name)
+        head_pointer.advance_selected_continuation_head(
+            repo_root=ROOT, receipts_root=self.receipts_root, published_checkpoint_root=c['published_checkpoint_root'],
+            hour_result_path=c['hour_result_path'], hour_result_sha256=c['hour_result_sha256'],
+            expected_parent_checkpoint_manifest_sha256=parent, now=now)
+        return c
+
+    def _finalize(self):
+        return runner.finalize_retention_outcome(self.identity, custody=self.custody, parent=self.custody.parent)
+
+    def _outcome_lineages(self):
+        return [r['lineage_checkpoint_manifest_sha256'] for r in ledger.read_rows(self.ledger_file)
+                if r.get('row_kind') == 'retention_experiment_outcome']
+
+    def test_a_head_advance_before_the_finalizer_still_charges_the_launch_lineage(self):
+        head_b = self._advance('hour-b', self.head_a['manifest_sha256'], 1001.0)
+        # the defect this guards: a re-derivation at finalize time now names B, so keying there would charge the wrong lineage
+        self.assertEqual(ledger.lineage_checkpoint_manifest_sha256(self.identity, receipts_root=self.receipts_root), head_b['manifest_sha256'])
+        self.assertFalse(self._finalize())
+        self.assertEqual(self._outcome_lineages(), [self.key_a])
+        rows = ledger.read_rows(self.ledger_file)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, self.key_a), 100)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, head_b['manifest_sha256']), 0)
+
+    def test_an_interrupted_marker_write_then_a_head_advance_then_the_retry_charges_the_launch_lineage_once(self):
+        real_write_new = runner._write_new
+
+        def fail_the_marker_once(path, value):
+            if Path(path).name == runner.OUTCOME_RECORDED_FILENAME and not getattr(fail_the_marker_once, 'failed', False):
+                fail_the_marker_once.failed = True
+                raise OSError('simulated crash while creating the outcome marker')
+            return real_write_new(path, value)
+
+        with patch.object(runner, '_write_new', fail_the_marker_once):
+            with self.assertRaises(OSError):
+                self._finalize()
+            self.assertEqual(self._outcome_lineages(), [self.key_a])                 # the ledger append landed at head A
+            head_b = self._advance('hour-b', self.head_a['manifest_sha256'], 1001.0)  # the head moves before the retry
+            self.assertFalse(self._finalize())
+        self.assertEqual(self._outcome_lineages(), [self.key_a])                     # still ONE row, still A: (lineage, run_id) idempotence held
+        rows = ledger.read_rows(self.ledger_file)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, self.key_a), 100)
+        self.assertEqual(ledger.diagnostic_occupancy_seconds(rows, head_b['manifest_sha256']), 0)
 
 
 class LedgerRootDerivedFromCustodyTests(unittest.TestCase):

@@ -2721,7 +2721,7 @@ def worker(binding_path):
         attention_scope.close()
 
 
-def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, dispatch_started, run_complete_at=None):
+def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, dispatch_started, run_complete_at=None, lineage_sha=None):
     """Issue #2119 rows 5/14: record the experiment outcome in the continuity ledger. Launch success is only a prerequisite:
     eligibility is the adjudicator's verdict from the rule frozen in the identity and the arm results in this custody. It is
     False with no arm results, and False when the adjudicator escapes with any error (the refusal is written beside the
@@ -2738,7 +2738,8 @@ def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, di
             pass
     ledger_module.record_retention_experiment_outcome(
         path=ledger_module.ledger_path(parent),
-        lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+        lineage_sha=(lineage_sha if lineage_sha is not None
+                     else ledger_module.lineage_checkpoint_manifest_sha256(identity, receipts_root=ledger_module.ledger_root(parent))),
         run_id=run_id, eligible_descendant_published=eligible,
         # review 63986 R1: the occupancy is the run's own execution (dispatch_started to the run-complete instant the launch recorded), never the
         # time the finalizer happened to run; deferred scoring or review delay is not model execution. A caller with no recorded end
@@ -2749,6 +2750,7 @@ def record_retention_outcome(identity, *, succeeded, custody, parent, run_id, di
 
 
 RUN_COMPLETE_FILENAME = 'run-complete.json'
+LAUNCH_LINEAGE_FIELD = 'launch_lineage_checkpoint_manifest_sha256'
 OUTCOME_RECORDED_FILENAME = 'retention-outcome-recorded.json'
 
 
@@ -2765,6 +2767,9 @@ def finalize_retention_outcome(identity, *, custody, parent):
     _validate_run_complete_marker(marker, identity, custody)   # review 63367 P1-4: every field checked BEFORE any ledger mutation
     if not (custody / load_eligibility_module().ARM_RESULTS_FILENAME).is_file():
         raise RuntimeError('arm-results.json is absent: the producer has not run, so the retention outcome is NOT recorded')
+    marker_lineage = marker.get(LAUNCH_LINEAGE_FIELD)
+    if marker_lineage is None and not (isinstance(identity, dict) and (identity.get('checkpoint_probe') or identity.get('continuation'))):
+        raise RuntimeError('run-complete marker carries no launch lineage key and the identity has no checkpoint reference: the outcome cannot be keyed to the lineage the launch reserved against')
     ledger_module = load_ledger_module()
     # review 63367 P1-3: serialize competing finalizers and make the outcome idempotent across the ledger/marker boundary. The OS lock covers
     # check-record-mark; the ledger itself records one outcome row per (lineage, run_id), so a retry after a failed marker write finds the
@@ -2774,7 +2779,7 @@ def finalize_retention_outcome(identity, *, custody, parent):
             raise RuntimeError('the retention outcome for this custody was already recorded (one writer, one outcome)')
         eligible = record_retention_outcome(identity, succeeded=marker['succeeded'], custody=custody, parent=parent,
                                             run_id=marker['run_id'], dispatch_started=marker['dispatch_started'],
-                                            run_complete_at=marker['run_complete_at'])
+                                            run_complete_at=marker['run_complete_at'], lineage_sha=marker_lineage)
         _write_new(custody / OUTCOME_RECORDED_FILENAME, {'eligible_descendant_published': eligible, 'run_id': marker['run_id']})
     return eligible
 
@@ -2799,6 +2804,9 @@ def _validate_run_complete_marker(marker, identity, custody):
         raise RuntimeError('run-complete marker: custody or run_id does not match this custody directory')
     if isinstance(identity, dict) and identity.get('run_id') != run_id:
         raise RuntimeError('run-complete marker: run_id does not match the identity being finalized')
+    launch_lineage = marker.get(LAUNCH_LINEAGE_FIELD)
+    if launch_lineage is not None and not (isinstance(launch_lineage, str) and re.fullmatch(r'[0-9a-f]{64}', launch_lineage)):
+        raise RuntimeError('run-complete marker: launch lineage key is not a 64-hex digest')
     started, completed = marker.get('dispatch_started'), marker.get('run_complete_at')
     if not (_finite_number(started) and _finite_number(completed) and 0 < started <= completed):
         raise RuntimeError('run-complete marker: timestamps are missing, non-finite or not ordered')
@@ -2843,6 +2851,12 @@ def launch(args, dispatch):
     child_env = None
     if hour_mode(identity) and identity['hour']['schema'] == 'governed-hour-v1':
         child_env = layer_child_env(identity, custody)  # refuses a governed hour whose identity declares no layer_template
+    launch_lineage_sha = None
+    if identity.get('training_job_purpose') in ('DIAGNOSTIC', 'RETENTION_ELIGIBLE_EXPERIMENT'):
+        # Issue #2119 row 3b: the lineage key is read ONCE, before any spawn, from the live pointer (refusing when there is none), and reused
+        # by the reservation and by the launch-exception outcome row, so a refusal can never mask the original error after the run started.
+        launch_lineage_sha = load_ledger_module().lineage_checkpoint_manifest_sha256(
+            identity, receipts_root=load_ledger_module().ledger_root(parent))
     if identity.get('training_job_purpose') == 'DIAGNOSTIC':
         # Issue #2119 section 3: reserve the declared budget BEFORE any GPU spawn. The budget is
         # the same wall_seconds limit OwnedProcessRunner already enforces below -- no second,
@@ -2850,7 +2864,7 @@ def launch(args, dispatch):
         ledger_module = load_ledger_module()
         ledger_module.reserve_diagnostic_dispatch(
             path=ledger_module.ledger_path(parent),
-            lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+            lineage_sha=launch_lineage_sha,
             run_id=run_id, budget_seconds=resource_limits(identity)['wall_seconds'],
             diagnostic_question=identity['training_diagnostic_question'],
             non_advancement_reason=identity['training_diagnostic_non_advancement_reason'],
@@ -2903,7 +2917,7 @@ def launch(args, dispatch):
             ledger_module = load_ledger_module()
             ledger_module.record_retention_experiment_outcome(
                 path=ledger_module.ledger_path(parent),
-                lineage_sha=ledger_module.lineage_checkpoint_manifest_sha256(identity),
+                lineage_sha=launch_lineage_sha,
                 run_id=run_id, eligible_descendant_published=False,
                 elapsed_seconds=int(time.time() - dispatch_started))
         raise
@@ -2923,7 +2937,8 @@ def launch(args, dispatch):
         # producer has written arm-results.json. Nothing is scored yet here, so launch only marks the run complete-and-unscored.
         _write_new(custody / RUN_COMPLETE_FILENAME, {'status': 'run_complete_not_yet_scored', 'succeeded': succeeded,
                                                      'run_id': run_id, 'custody_name': custody.name, 'dispatch_started': dispatch_started,
-                                                     'run_complete_at': time.time(), 'claim': CLAIM})
+                                                     'run_complete_at': time.time(), 'claim': CLAIM,
+                                                     LAUNCH_LINEAGE_FIELD: launch_lineage_sha})
     return 0 if succeeded else 1
 
 
