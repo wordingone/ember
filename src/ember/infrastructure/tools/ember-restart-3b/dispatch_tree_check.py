@@ -48,6 +48,34 @@ def require_commit_in_head(tree: str | Path, commit: str) -> str:
     return full.stdout.strip()
 
 
+POST_HOUR_GATE = 'post_hour_promotion_gate.py'
+PROMOTION_CALLS = ('promote_with_pending_v1', 'advance_selected_continuation_head', 'scored_pair_cli')
+
+
+def dispatch_script_gate_problems(script_text: str) -> list[str]:
+    """Issue #2119 clause 1: an hour dispatch script must call the post-hour promotion gate on a non-comment line, and must not reach any
+    promotion entry (promote_with_pending_v1, advance_selected_continuation_head, scored_pair_cli) on a non-comment line BEFORE that call.
+    Returns the problems found (empty list = the script routes promotion through the gate). A commented-out call does not count."""
+    gate_line = None
+    early = []
+    for number, line in enumerate(script_text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        if POST_HOUR_GATE in stripped:
+            if gate_line is None:
+                gate_line = number
+            continue
+        if gate_line is None and any(name in stripped for name in PROMOTION_CALLS):
+            early.append(number)
+    problems = []
+    if gate_line is None:
+        problems.append(f'no non-comment call to {POST_HOUR_GATE}')
+    for number in early:
+        problems.append(f'line {number} reaches a promotion entry before the gate')
+    return problems
+
+
 def hour_source_advances_selected_head(source_text: str) -> list[int]:
     """Line numbers of every call to a pointer mover in the hour source (empty list = candidate-only publication)."""
     hits = []

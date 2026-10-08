@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 SPEC_FIELDS = {'published_checkpoint_root', 'hour_result_path', 'expected_genesis', 'custody_parent'}
 SPEC_OPTIONAL = {'snapshot_path', 'receipts_root', 'next', 'blocker', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id',
-                 'refusal_receipt', 'private_path', 'page_path'}
+                 'refusal_receipt', 'private_path', 'page_path', 'gpu_window_marker', 'measurement_receipt', 'hold_record'}
 
 
 def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_genesis_manifest_sha256: str,
@@ -36,8 +36,12 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
                      now: float | None = None, claim_predicate: Path | None = None, receipts_root: Path | None = None,
                      candidate_record: Path | None = None, ruling_log: Path | None = None, ruling_id: str | None = None,
                      refusal_receipt: Path | None = None, private_path: Path | None = None,
-                     page_path: Path | None = None) -> dict[str, Any]:
-    """`claim_predicate` (the approved frozen file; its bytes must hash to claim_accounting.PREDICATE_SHA256) makes the claim-budget section
+                     page_path: Path | None = None, gpu_window_marker: Path | None = None, measurement_receipt: Path | None = None,
+                     hold_record: Path | None = None) -> dict[str, Any]:
+    """Row 7 producer: naming `gpu_window_marker`, `measurement_receipt` or `hold_record` makes that status section come from the live source
+    (continuity_sources) -- the marker then the process census for the GPU owner, a scorer receipt for exactly this head, the training-hold record --
+    with UNKNOWN and its reason when the source is missing, unreadable or for another head. Leaving a key out leaves the older section unchanged.
+    `claim_predicate` (the approved frozen file; its bytes must hash to claim_accounting.PREDICATE_SHA256) makes the claim-budget section
     UNDETERMINED with its missing evidence named instead of UNDEFINED. The candidate audit reads `candidate_record` (default
     `receipts_root/candidate-continuation-head.json`) and, when `ruling_id` is given, the RULED row in `ruling_log` and the `refusal_receipt` it cites;
     a caller's `next_blocker` text never feeds it. `private_path` also writes the audit with full local paths (never committed).
@@ -46,17 +50,26 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
     reported in `outcome['page']` without undoing the snapshot."""
     try:
         import continuity_snapshot
+        import continuity_sources
         import lineage_candidate_audit
         import training_continuity_status
         import training_lineage_ancestry
         hour_result = json.loads(Path(hour_result_path).read_text(encoding='utf-8'))
         record = training_lineage_ancestry.walk_lineage(
             head_directory, expected_genesis_manifest_sha256=expected_genesis_manifest_sha256)
+        producer = {}
+        if gpu_window_marker is not None:
+            producer['gpu_owner'] = continuity_sources.gpu_owner(Path(gpu_window_marker))
+        if measurement_receipt is not None:
+            producer['measurement_section'] = continuity_sources.last_measurement_from_receipt(
+                Path(measurement_receipt), hour_result['child_manifest_sha256'])
+        if hold_record is not None:
+            producer['postponement'] = continuity_sources.postponement_from_hold(Path(hold_record))
         status = training_continuity_status.training_continuity_status(
             custody_parent=Path(custody_parent), hour_result=hour_result, current_identity=None, measurement=None,
             next_identity=next_identity, next_blocker=next_blocker, lineage_record=record,
             pending_receipts_root=pending_receipts_root, now=now,
-            claim_predicate_path=Path(claim_predicate) if claim_predicate is not None else None)
+            claim_predicate_path=Path(claim_predicate) if claim_predicate is not None else None, **producer)
         if candidate_record is None and receipts_root is not None:
             candidate_record = Path(receipts_root) / 'candidate-continuation-head.json'
         audit = lineage_candidate_audit.audit_candidate(
@@ -96,7 +109,8 @@ def _publish_from_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
     if extra or missing or ('next' in spec and 'blocker' in spec):
         return {'status': 'FAILED', 'why': f'snapshot spec not closed: missing={sorted(missing)} extra={sorted(extra)}'}
     for name in ('published_checkpoint_root', 'hour_result_path', 'custody_parent', 'snapshot_path', 'claim_predicate', 'candidate_record',
-                 'ruling_log', 'ruling_id', 'refusal_receipt', 'private_path', 'page_path'):
+                 'ruling_log', 'ruling_id', 'refusal_receipt', 'private_path', 'page_path', 'gpu_window_marker', 'measurement_receipt',
+                 'hold_record'):
         if name in spec and (not isinstance(spec[name], str) or not spec[name]):
             return {'status': 'FAILED', 'why': f'snapshot spec {name} must be a non-empty string; a present value is never replaced by the default'}
     receipts_root = spec.get('receipts_root')
@@ -115,7 +129,10 @@ def _publish_from_spec(spec: Mapping[str, Any]) -> dict[str, Any]:
         ruling_log=Path(spec['ruling_log']) if 'ruling_log' in spec else None, ruling_id=spec.get('ruling_id'),
         refusal_receipt=Path(spec['refusal_receipt']) if 'refusal_receipt' in spec else None,
         private_path=Path(spec['private_path']) if 'private_path' in spec else None,
-        page_path=Path(spec['page_path']) if 'page_path' in spec else None)
+        page_path=Path(spec['page_path']) if 'page_path' in spec else None,
+        gpu_window_marker=Path(spec['gpu_window_marker']) if 'gpu_window_marker' in spec else None,
+        measurement_receipt=Path(spec['measurement_receipt']) if 'measurement_receipt' in spec else None,
+        hold_record=Path(spec['hold_record']) if 'hold_record' in spec else None)
 
 
 def main(argv: list[str] | None = None) -> int:
