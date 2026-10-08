@@ -857,6 +857,72 @@ def adapt_tool_use(
     return row
 
 
+IMAGE_TEXT_PREDICTION_CLAIM_BOUNDARY = (
+    "KEYED CORRECTNESS RATE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT"
+)
+
+
+def _image_text_inference_module():
+    """The #1947 image-text producer owns receipt verification, as #2162 does for tool use."""
+
+    import importlib.util
+
+    module_path = Path(__file__).resolve().with_name("issue1947_image_text_inference.py")
+    spec = importlib.util.spec_from_file_location("issue1947_image_text_inference", module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("IMAGE_TEXT_INFERENCE_MODULE_MISSING_REFUSED")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def adapt_image_text_prediction(
+    contract_path: Path, answer_contract_path: Path, answer_key_path: Path,
+    inference_receipt_path: Path, expected_checkpoint_manifest_sha256: str,
+) -> dict[str, object]:
+    """E-MATRIX-IMAGE-TEXT from a verified checkpoint-inference receipt and the keyed answer contract.
+
+    Not yet the row's producer of record: PREDICTION_SOURCE keeps E-MATRIX-IMAGE-TEXT as
+    admitted_asset_derived, and tests/test_issue1947_evidence_kind_matches_producer.py binds the
+    row to adapt_image_text, until a real receipt exists. Moving the row is one deliberate change in
+    both places, made with the first card run's receipt.
+    """
+
+    if not isinstance(expected_checkpoint_manifest_sha256, str) or len(expected_checkpoint_manifest_sha256) != 64:
+        raise ValueError("IMAGE_TEXT_INFERENCE_CHECKPOINT_BINDING_REFUSED")
+    module = _image_text_inference_module()
+    verified = module.verify_receipt(
+        inference_receipt_path, answer_contract_path, contract_path, answer_key_path,
+        expected_checkpoint_manifest_sha256=expected_checkpoint_manifest_sha256,
+    )
+    receipt = verified["receipt"]
+    items = verified["items"]
+    if len(items) != module.ITEM_COUNT:
+        raise ValueError("IMAGE_TEXT_INFERENCE_TOTALITY_REFUSED")
+    row: dict[str, object] = {
+        "schema_version": "ember-issue1947-image-text-prediction-row-receipt-v1",
+        "result": "IMAGE_TEXT_PREDICTION_ROW_PRODUCED",
+        "row_id": "E-MATRIX-IMAGE-TEXT",
+        "task_class": "checkpoint_inference",
+        "contract_raw_sha256": verified["base_contract_raw_sha256"],
+        "answer_contract_raw_sha256": verified["answer_contract_raw_sha256"],
+        "answer_contract_self_sha256": verified["answer_contract"]["self_sha256"],
+        "inference_receipt_raw_sha256": verified["receipt_raw_sha256"],
+        "inference_receipt_self_sha256": receipt["self_sha256"],
+        "checkpoint_manifest_raw_sha256": expected_checkpoint_manifest_sha256,
+        "decode_contract_sha256": receipt["decode_contract_sha256"],
+        "frozen_order_sha256": receipt["frozen_order_sha256"],
+        "item_count": len(items),
+        "parsed_count": verified["parsed_count"],
+        "matched_count": verified["matched_count"],
+        "items": items,
+        "score": verified["score"],
+        "claim_boundary": IMAGE_TEXT_PREDICTION_CLAIM_BOUNDARY,
+    }
+    row["self_sha256"] = sha(canonical(row))
+    return row
+
+
 ROUTING_PATHWAY_ROW_ID = "E-MATRIX-ROUTING-PATHWAY"
 ROUTING_PATHWAY_CLAIM_BOUNDARY = (
     "PATHWAY ENGAGEMENT RATE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT"
@@ -1019,7 +1085,37 @@ def main() -> int:
         help="the preflight designation's checkpoint manifest raw sha256; the receipt must bind it",
     )
     routing_pathway.add_argument("--result", type=Path, required=True)
+    image_text_prediction = subparsers.add_parser("adapt-image-text-prediction")
+    image_text_prediction.add_argument("--contract", type=Path, required=True)
+    image_text_prediction.add_argument("--answer-contract", type=Path, required=True)
+    image_text_prediction.add_argument("--answer-key", type=Path, required=True)
+    image_text_prediction.add_argument("--inference-receipt", type=Path, required=True)
+    image_text_prediction.add_argument("--expected-checkpoint-manifest-sha256", required=True)
+    image_text_prediction.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
+    if args.operation == "adapt-image-text-prediction":
+        try:
+            row = adapt_image_text_prediction(
+                args.contract, args.answer_contract, args.answer_key, args.inference_receipt,
+                args.expected_checkpoint_manifest_sha256)
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue1947-image-text-prediction-row-refusal-v1",
+                "result": "IMAGE_TEXT_PREDICTION_REFUSED",
+                "row_id": "E-MATRIX-IMAGE-TEXT",
+                "task_class": "checkpoint_inference",
+                "reason": str(error),
+                "claim_boundary": "CHECKPOINT INFERENCE ROW REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
     if args.operation == "adapt-routing-pathway":
         try:
             row = adapt_routing_pathway(
