@@ -308,10 +308,12 @@ IMAGE_PROJECTION_TENSOR = 'image.weight'   # ember_v0_decoder.embed_image reads 
 LINEAGE_DEPTH_LIMIT = 64
 
 
-def lineage_root(checkpoint_root: Path):
+def lineage_root(checkpoint_root: Path, expected_manifest_sha256: str):
     """Walk `lineage.parent_checkpoint` from the evaluated checkpoint to the lineage root (a manifest with no `lineage`).
 
-    Every hop is bound by digest: the parent's manifest bytes must hash to the child's `lineage.parent_manifest_sha256`.
+    The first read is bound to the digest the checkpoint validator already verified (`expected_manifest_sha256`), so the
+    walk starts from the same manifest the scored model was opened from. Every later hop is bound the same way: the
+    parent's manifest bytes must hash to the child's `lineage.parent_manifest_sha256`.
     Returns (root, root_manifest, root_manifest_sha256, depth). An unreadable or digest-mismatched manifest, a malformed
     lineage record, a parent field outside `lineage`, a cycle or an over-deep chain refuses: the comparison is only as good
     as the root it is taken against.
@@ -331,6 +333,8 @@ def lineage_root(checkpoint_root: Path):
 
     current, depth = Path(checkpoint_root), 0
     manifest, manifest_sha256 = read(current)
+    if manifest_sha256 != expected_manifest_sha256:
+        raise ProducerRefusal('PROJECTION_SOURCE', f'{current}: manifest digest differs from the validated checkpoint')
     seen = {manifest_sha256}
     while 'lineage' in manifest:
         lineage = manifest['lineage']
@@ -351,7 +355,8 @@ def lineage_root(checkpoint_root: Path):
     return current, manifest, manifest_sha256, depth
 
 
-def image_projection_source(checkpoint_artifacts, checkpoint_root: Path, head_projection) -> dict:
+def image_projection_source(checkpoint_artifacts, checkpoint_root: Path, head_projection,
+                            head_manifest_sha256: str) -> dict:
     """Was the evaluated checkpoint's image projection changed by training? Measured, never assumed.
 
     Compares the head's own `image.weight` with the lineage root's `image.weight`, read through the repository's
@@ -361,7 +366,7 @@ def image_projection_source(checkpoint_artifacts, checkpoint_root: Path, head_pr
     import torch
     if head_projection is None:
         raise ProducerRefusal('PROJECTION_SOURCE', f'evaluated checkpoint carries no {IMAGE_PROJECTION_TENSOR}')
-    root, manifest, root_manifest_sha256, depth = lineage_root(checkpoint_root)
+    root, manifest, root_manifest_sha256, depth = lineage_root(checkpoint_root, head_manifest_sha256)
     if depth == 0:
         genesis, core_sha256 = head_projection, None
     else:
@@ -627,7 +632,8 @@ def evaluate(checkpoint_root: str, protected_manifest: str) -> dict:
     model, verified, architecture_sha256, head_projection = open_reference(
         checkpoint_artifacts, gate, Path(checkpoint_root), Path(env['EMBER_MMMU_CHECKPOINT_RECEIPT']))
     # Measured before any item is scored, so a refusal here costs no item work.
-    projection_source = image_projection_source(checkpoint_artifacts, Path(checkpoint_root), head_projection)
+    projection_source = image_projection_source(checkpoint_artifacts, Path(checkpoint_root), head_projection,
+                                                verified['checkpoint_manifest_sha256'])
     projection_trained = projection_source['trained']
     del head_projection
     opened = time.monotonic()
