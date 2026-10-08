@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import hashlib
 import importlib.util
 import json
 import os
@@ -46,11 +47,17 @@ def _parse_stamp(text: str) -> float:
     return float(calendar.timegm(time.strptime(text, '%Y-%m-%dT%H:%M:%SZ')))
 
 
-def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path]) -> dict[str, Any]:
-    """Compare the snapshot with the live head and the newest receipts. Never raises: every unreadable input is a STALE reason."""
+def _fingerprint(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _evaluate(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path]) -> tuple[dict[str, Any], Any, str | None]:
+    """Return (verdict, validated snapshot object or None, content fingerprint of the bytes that were validated or None). Never raises."""
     reasons: list[str] = []
     verdict: dict[str, Any] = {'snapshot_head': None, 'live_head': None, 'captured_at': None, 'newest_receipt_utc': None}
     captured_epoch = None
+    validated = None
+    fingerprint = None
     try:
         snapshot = json.loads(Path(snapshot_path).read_text(encoding='utf-8'))
         if not isinstance(snapshot, dict) or snapshot.get('schema_version') != SNAPSHOT_SCHEMA:
@@ -63,8 +70,17 @@ def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_path
     if captured_epoch is not None:
         # "readable and valid" is the strict loader's answer, not a schema_version string: a snapshot the page cannot render is not current
         try:
-            _renderer().load_continuity_status(Path(snapshot_path))
+            before = _fingerprint(snapshot_path)
+            validated = _renderer().load_continuity_status(Path(snapshot_path))
+            if _fingerprint(snapshot_path) != before:
+                raise ValueError('snapshot changed while it was validated')
+            # the head and time that are compared below come from THIS validated object, not from the earlier plain parse
+            verdict['snapshot_head'] = validated['head_manifest_sha256']
+            verdict['captured_at'] = validated['captured_at']
+            captured_epoch = _parse_stamp(validated['captured_at'])
+            fingerprint = before
         except Exception as error:  # noqa: BLE001
+            validated = None
             reasons.append(f'snapshot failed validation ({type(error).__name__}: {error})')
     try:
         live = live_head()
@@ -90,7 +106,22 @@ def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_path
             reasons.append(f'newest receipt {newest[1]} ({_stamp(newest[0])}) is newer than the snapshot captured_at ({verdict["captured_at"]})')
     verdict['state'] = 'STALE' if reasons else 'CURRENT'
     verdict['reasons'] = reasons
-    return verdict
+    return verdict, validated, fingerprint
+
+
+def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path]) -> dict[str, Any]:
+    """Compare the snapshot with the live head and the newest receipts. Never raises: every unreadable input is a STALE reason."""
+    return _evaluate(snapshot_path, live_head=live_head, receipt_paths=receipt_paths)[0]
+
+
+def _go_stale(verdict: dict[str, Any], reason: str) -> None:
+    verdict['state'] = 'STALE'
+    verdict['reasons'] = list(verdict['reasons']) + [reason]
+
+
+def _render_block(validated: Any) -> str:
+    gen = _renderer()
+    return gen.render_continuity_status_block(validated).rstrip('\n')
 
 
 def _renderer():
@@ -101,7 +132,8 @@ def _renderer():
     return module
 
 
-def render_live_page(snapshot_path: Path, verdict: dict[str, Any], *, generated_at: str) -> str:
+def render_live_page(snapshot_path: Path, verdict: dict[str, Any], *, generated_at: str, block: str | None = None) -> str:
+    """Pure formatting: the snapshot facts arrive as `block`, rendered from the object that freshness validated. The file is never re-read here."""
     lines: list[str] = []
     stale = verdict['state'] != 'CURRENT'
     if stale:
@@ -112,11 +144,8 @@ def render_live_page(snapshot_path: Path, verdict: dict[str, Any], *, generated_
     lines.append(f"State: **{verdict['state']}**. Live selected head: `{verdict['live_head']}`. Snapshot head: `{verdict['snapshot_head']}`, "
                  f"captured `{verdict['captured_at']}`. Newest receipt read: `{verdict['newest_receipt_utc']}`.")
     lines.append('')
-    try:
-        gen = _renderer()
-        block = gen.render_continuity_status_block(gen.load_continuity_status(Path(snapshot_path)))
-    except Exception as error:  # noqa: BLE001
-        lines.append(f'No snapshot facts are shown: the snapshot did not load ({type(error).__name__}).')
+    if block is None:
+        lines.append('No snapshot facts are shown: the snapshot did not load or render.')
         return '\n'.join(lines) + '\n'
     if stale:
         lines.append('## Last snapshot, NOT current (reference only)')
@@ -137,8 +166,33 @@ def generate_live_page(*, snapshot_path: Path, receipts_root: Path | None, out_p
         current_head = lambda: selected_continuation_head.current_head_sha256(Path(receipts_root))  # noqa: E731
     if receipts_root is not None:
         receipts.append(selected_continuation_head.pointer_path(Path(receipts_root)))
-    verdict = freshness(snapshot_path, live_head=current_head, receipt_paths=receipts)
-    text = render_live_page(snapshot_path, verdict, generated_at=_stamp(time.time() if now is None else now))
+    verdict, validated, fingerprint = _evaluate(snapshot_path, live_head=current_head, receipt_paths=receipts)
+    block = None
+    if validated is not None:
+        try:
+            block = _render_block(validated)
+        except Exception as error:  # noqa: BLE001
+            _go_stale(verdict, f'page render failed ({type(error).__name__}: {error})')
+    generated_at = _stamp(time.time() if now is None else now)
+    text = None
+    for _attempt in range(2):
+        try:
+            # the file must still be the bytes that were validated; a deletion or rewrite after the check is a STALE page, not a CURRENT one
+            if fingerprint is not None:
+                try:
+                    unchanged = _fingerprint(snapshot_path) == fingerprint
+                except OSError:
+                    unchanged = False
+                if not unchanged:
+                    raise ValueError('snapshot changed or vanished after it was validated')
+            text = render_live_page(snapshot_path, verdict, generated_at=generated_at, block=block)
+            break
+        except Exception as error:  # noqa: BLE001
+            _go_stale(verdict, f'page generation failed ({type(error).__name__}: {error})')
+            fingerprint = None            # already stale; the retry formats the red banner without the failed check
+            block = None
+    if text is None:                      # formatting itself failed twice: write the minimal red page
+        text = f"{BANNER_PREFIX} {'; '.join(verdict['reasons'])}.\n"
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_name(out_path.name + '.tmp')

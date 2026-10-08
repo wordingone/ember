@@ -175,6 +175,85 @@ class StalePageTests(Base):
         finally:
             selected_continuation_head.current_head_sha256 = original
 
+    def test_deliberate_red_a_snapshot_deleted_after_validation_is_stale_not_current(self):
+        # review of 3a481a02 (2340-1): freshness said CURRENT, the page then re-read the file, found it gone, and still said CURRENT
+        def head_reader_that_deletes_the_snapshot():
+            self.snapshot.unlink()
+            return H3
+        verdict = live.generate_live_page(snapshot_path=self.snapshot, receipts_root=None, out_path=self.out, receipt_paths=[self.receipt],
+                                          current_head=head_reader_that_deletes_the_snapshot, now=CAPTURED_EPOCH + 5)
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('snapshot changed or vanished after it was validated')
+        self.assertNotIn('State: **CURRENT**', self.page())
+        self.assertIn('No snapshot facts are shown', self.page())
+
+    def test_deliberate_red_a_snapshot_rewritten_after_validation_is_stale_not_current(self):
+        def head_reader_that_rewrites_the_snapshot():
+            self.rewrite_snapshot(lambda payload: payload.update(captured_at='2026-10-08T16:00:01Z'))
+            return H3
+        verdict = live.generate_live_page(snapshot_path=self.snapshot, receipts_root=None, out_path=self.out, receipt_paths=[self.receipt],
+                                          current_head=head_reader_that_rewrites_the_snapshot, now=CAPTURED_EPOCH + 5)
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('changed or vanished')
+
+    def test_deliberate_red_a_render_failure_on_a_valid_snapshot_is_stale_not_current(self):
+        original = live._render_block
+
+        def broken(validated):
+            raise RuntimeError('renderer exploded')
+        live._render_block = broken
+        try:
+            verdict = self.generate()
+        finally:
+            live._render_block = original
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('page render failed (RuntimeError: renderer exploded)')
+        self.assertNotIn('State: **CURRENT**', self.page())
+
+    def test_the_page_is_rendered_from_the_validated_object_without_reading_the_file_again(self):
+        loads = []
+        original_renderer = live._renderer
+
+        def counting_renderer():
+            module = original_renderer()
+            loader = module.load_continuity_status
+
+            def counted(path):
+                loads.append(path)
+                return loader(path)
+            module.load_continuity_status = counted
+            return module
+        live._renderer = counting_renderer
+        try:
+            verdict = self.generate()
+        finally:
+            live._renderer = original_renderer
+        self.assertEqual(verdict['state'], 'CURRENT')
+        self.assertEqual(len(loads), 1)                           # one strict load: freshness validates, the render uses that object
+
+    def test_the_real_cli_exits_1_when_the_snapshot_vanishes_after_validation_and_0_for_the_valid_control(self):
+        pointer_root = self.dir / 'pointer-root'
+        args = ['--snapshot', str(self.snapshot), '--receipts-root', str(pointer_root), '--out', str(self.out), '--receipt', str(self.receipt)]
+        import selected_continuation_head
+        original = selected_continuation_head.current_head_sha256
+        try:
+            pointer = selected_continuation_head.pointer_path(pointer_root)
+            pointer.parent.mkdir(parents=True, exist_ok=True)
+            pointer.write_text('{}', encoding='utf-8')
+            os.utime(pointer, (CAPTURED_EPOCH - 60, CAPTURED_EPOCH - 60))
+            selected_continuation_head.current_head_sha256 = lambda root: H3
+            self.assertEqual(live.main(args), 0)                                      # valid control: CURRENT
+            self.assertEqual(self.page().splitlines()[0].startswith(live.BANNER_PREFIX), False)
+
+            def vanishing(root):
+                self.snapshot.unlink()
+                return H3
+            selected_continuation_head.current_head_sha256 = vanishing
+            self.assertEqual(live.main(args), 1)                                      # vanished after validation: STALE, nonzero
+            self.assertTrue(self.page().splitlines()[0].startswith(live.BANNER_PREFIX))
+        finally:
+            selected_continuation_head.current_head_sha256 = original
+
     def test_a_corrupt_snapshot_is_stale(self):
         self.snapshot.write_text('{not json', encoding='utf-8')
         self.assertEqual(self.generate()['state'], 'STALE')
