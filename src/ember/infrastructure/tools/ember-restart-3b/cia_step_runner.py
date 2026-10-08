@@ -958,7 +958,7 @@ HOUR_WALL_SECONDS = 5656
 # Issue #2119 only: one optional declared wall for a governed-hour-v1 identity, HOUR_WALL_SECONDS < value <= this cap. Absent means
 # HOUR_WALL_SECONDS. It lives in the identity, so prediction, plan, worker and supervisor all read the same value through
 # resource_limits; there is no supervisor-side override and no mode alias.
-HOUR_WALL_SECONDS_CAP = 7200
+HOUR_WALL_SECONDS_CAP = 7500
 
 
 # Issue #2119 layer policy: the hour identity declares the layer template the child trains under, {mode: full} or three keep sets.

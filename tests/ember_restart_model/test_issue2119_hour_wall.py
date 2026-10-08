@@ -24,13 +24,13 @@ class HourWallTests(unittest.TestCase):
         self.assertEqual(runner.HOUR_WALL_SECONDS, 5656)
 
     def test_declared_wall_up_to_the_cap_is_the_limit(self):
-        for value in (5657, 6033, 7200):
+        for value in (5657, 6033, 7200, 7500):
             self.assertEqual(runner.resource_limits(hour(wall_seconds=value))['wall_seconds'], value)
             self.assertEqual(runner.resource_limits(hour(wall_seconds=value))['max_b_write_gib'], 24)
 
     def test_above_the_cap_refuses(self):
         with self.assertRaises(ValueError):
-            runner.resource_limits(hour(wall_seconds=7201))
+            runner.resource_limits(hour(wall_seconds=7501))
 
     def test_default_given_explicitly_or_below_it_refuses(self):
         for value in (5656, 5655, 3600, 0, -1):
