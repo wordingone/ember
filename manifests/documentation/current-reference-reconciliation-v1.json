@@ -1416,7 +1416,7 @@
     },
     {
       "document": "docs/domains/governance/authority/CONTINUITY.md",
-      "line": 337,
+      "line": 335,
       "resolution": {
         "canonical_token": "domains/model/configs/nck-c10.json",
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
@@ -1425,7 +1425,7 @@
     },
     {
       "document": "docs/domains/governance/authority/CONTINUITY.md",
-      "line": 338,
+      "line": 336,
       "resolution": {
         "canonical_token": "domains/model/configs/nck-schedule.json",
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
@@ -6146,7 +6146,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "d07e28b517f341abb574441d038e6b3743484fe50a998b121057a989f76caca0",
+  "rows_sha256": "07ec1acf4ee4140068c56bd8eddeead1e5f3ffeafd02f3a3c08eb1fa90a24fa3",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",

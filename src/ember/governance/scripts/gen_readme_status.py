@@ -576,7 +576,7 @@ def _private_path_strings(value, found=None):
     return found
 
 
-def _check_candidate_audit(candidate_audit):
+def _check_candidate_audit(candidate_audit, head, lineage):
     if not isinstance(candidate_audit, dict) or candidate_audit.get("schema") != CONTINUITY_CANDIDATE_AUDIT_SCHEMA:
         raise ValueError(f"continuity snapshot candidate_audit schema must be {CONTINUITY_CANDIDATE_AUDIT_SCHEMA}")
     audit_status = candidate_audit.get("status")
@@ -585,16 +585,34 @@ def _check_candidate_audit(candidate_audit):
     duplicate = candidate_audit.get("duplicate_credit")
     if not isinstance(duplicate, dict) or duplicate.get("each_hour_counted_once") is not True:
         raise ValueError("continuity snapshot candidate_audit must carry a passing duplicate_credit check")
+    # the duplicate-credit tuple must reconcile with the selected lineage it audits: a true flag beside counts that disagree is not a check
+    for name in ("distinct_manifests", "hops_checked", "summed_step_delta", "summed_token_delta"):
+        value = duplicate.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"continuity snapshot candidate_audit duplicate_credit.{name} must be a non-negative integer")
+    expected = {"distinct_manifests": lineage["depth"], "hops_checked": max(lineage["depth"] - 1, 0),
+                "summed_step_delta": lineage["retained_global_steps"], "summed_token_delta": lineage["retained_applied_positions"]}
+    for name, want in expected.items():
+        if duplicate[name] != want:
+            raise ValueError(f"continuity snapshot candidate_audit duplicate_credit.{name} {duplicate[name]} disagrees with the selected lineage ({want})")
     if audit_status != "NO_CANDIDATE":
         candidate = candidate_audit.get("candidate")
         retained = candidate_audit.get("retained")
         if not isinstance(candidate, dict) or not isinstance(retained, dict):
             raise ValueError("continuity snapshot candidate_audit needs candidate and retained sections")
         _closed_hash(candidate.get("manifest_sha256"), "candidate manifest_sha256")
+        parent_is_head = candidate.get("parent_is_selected_head")
+        if not isinstance(parent_is_head, bool) or parent_is_head != (candidate.get("parent_manifest_sha256") == head):
+            raise ValueError("continuity snapshot candidate_audit parent_is_selected_head must be a boolean that matches the candidate parent and the selected head")
         in_chain = retained.get("candidate_in_retained_chain")
-        if (audit_status == "RETAINED_IN_CHAIN") != (in_chain is True):
+        credited = retained.get("positions_credited_to_lineage")
+        if not isinstance(in_chain, bool):
+            raise ValueError("continuity snapshot candidate_audit candidate_in_retained_chain must be a boolean")
+        if isinstance(credited, bool) or not isinstance(credited, int) or credited < 0:
+            raise ValueError("continuity snapshot candidate_audit positions_credited_to_lineage must be a non-negative integer")
+        if (audit_status == "RETAINED_IN_CHAIN") != in_chain:
             raise ValueError("continuity snapshot candidate_audit status disagrees with candidate_in_retained_chain")
-        if not in_chain and retained.get("positions_credited_to_lineage") != 0:
+        if audit_status != "RETAINED_IN_CHAIN" and credited != 0:
             raise ValueError("continuity snapshot candidate_audit credits positions to a candidate that is not retained")
         if audit_status == "REFUSED_NOT_RETAINED":
             ruling = candidate_audit.get("refusal_ruling")
@@ -701,7 +719,7 @@ def load_continuity_status(path):
             raise ValueError("continuity status next_segment.status must be ready or blocked")
         for name in ("training_job_purpose", "run_id"):
             _text(nxt[name], f"next_segment.{name}", nullable=True)
-    _check_candidate_audit(payload["candidate_audit"])
+    _check_candidate_audit(payload["candidate_audit"], head, lineage)
     leaked = _private_path_strings(payload)
     if leaked:
         raise ValueError(f"continuity snapshot carries a local filesystem path: {leaked[0]!r}")
@@ -716,7 +734,8 @@ def render_continuity_status_block(payload):
     lineage, checkpoint, claim = status["lineage"], status["checkpoint"], status["claim_budget_eligible"]
     allowance, nxt = status["diagnostic_allowance"], status["next_segment"]
     if claim["status"] == "MEASURED":
-        claim_line = f"- Claim-budget-eligible unique targets: `{claim['eligible_unique_total']}` (frozen predicate evaluated)."
+        total = claim["accounting"]["eligible_unique_total"] if "accounting" in claim else claim["eligible_unique_total"]   # the loader admits both shapes
+        claim_line = f"- Claim-budget-eligible unique targets: `{total}` (frozen predicate evaluated)."
     elif "accounting" in claim:
         evidence = claim["accounting"]["missing_evidence"]
         reasons = sorted({re.sub(r"^(segment )?'?[0-9a-f]{64}'?: ", "", item) for item in evidence})
