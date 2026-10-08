@@ -18,7 +18,7 @@ and exactly one of next={training_job_purpose, run_id} or blocker. Outcome codes
   7 LATE_WRITE_FAILURE            pointer moved, the pending write failed or its readback differs from the requested record: NO rollback claimed; the
                                   next-segment read is whatever the readback says (BLOCKED when missing/stale); mail ruling (review 63367 P2-5)
   6 MOVED_TO_UNEXPECTED_HEAD      pointer is not expected_child after a clean return
-  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path][, page_path]}: the head moved and the pending record is exact, but
+  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path][, page_path][, gpu_window_marker][, measurement_receipt][, hold_record]}: the head moved and the pending record is exact, but
                                   the continuity page snapshot (continuity_snapshot_hook) was not written; rerun continuity_snapshot_hook.py, do not repeat the move
 Run with the window marker absent (python).
 """
@@ -51,7 +51,8 @@ def make_row(ledger):
 
 
 # the hook already accepts these; the production caller whitelisted four of them, so a real hour could not bind the frozen claim predicate or a ruling
-SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id', 'refusal_receipt')
+SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id', 'refusal_receipt',
+                             'gpu_window_marker', 'measurement_receipt', 'hold_record')
 SNAPSHOT_KEYS = {'expected_genesis', 'custody_parent', *SNAPSHOT_OPTIONAL_STRINGS}
 
 
@@ -65,7 +66,7 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
     if 'snapshot' in spec:
         shot = spec['snapshot']
         if snapshot is None or not isinstance(shot, dict) or set(shot) - SNAPSHOT_KEYS or not {'expected_genesis', 'custody_parent'} <= set(shot):
-            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path][, claim_predicate][, candidate_record][, ruling_log][, ruling_id][, refusal_receipt]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path][, claim_predicate][, candidate_record][, ruling_log][, ruling_id][, refusal_receipt][, gpu_window_marker][, measurement_receipt][, hold_record]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
         # Values, not just keys: a None or non-string path would raise inside the writer after the head moved.
         if (not isinstance(shot['expected_genesis'], str) or not re.fullmatch(r'[0-9a-f]{64}', shot['expected_genesis'])
                 or not isinstance(shot['custody_parent'], str) or not shot['custody_parent']

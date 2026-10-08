@@ -219,7 +219,12 @@ def load_selected_continuation_head(path: Path) -> dict[str, Any]:
     """Read and closed-schema-validate the pointer. Every field is checked -- the caller's own
     claim about the file's contents is never trusted, matching gen_readme_status.load_current_
     subject's discipline for the sibling authority this reuses the pattern from."""
-    payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    return parse_selected_continuation_head(Path(path).read_bytes())
+
+
+def parse_selected_continuation_head(raw: bytes) -> dict[str, Any]:
+    """The same closed-schema validation over bytes the caller already read, so one load can bind every later read to ONE generation of the pointer."""
+    payload = json.loads(raw.decode('utf-8'))
     if not isinstance(payload, dict) or set(payload) != _POINTER_FIELDS:
         raise ValueError('selected continuation head fields are not closed')
     if payload.get('schema') != SCHEMA:

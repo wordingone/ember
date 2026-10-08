@@ -305,6 +305,47 @@ class PromoteIntegrationTests(Fixture):
             self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (field, bad))
             self.assertEqual((pending.calls, rows), ([], []), (field, bad))
 
+    def test_the_row_7_producer_keys_pass_the_production_caller_to_the_writer(self):
+        # the hook accepts these three; the caller's whitelist once refused them, so no real hour could bind a live source
+        keys = {'gpu_window_marker': str(self.root / 'gpu-window-open'), 'measurement_receipt': str(self.root / 'episode-nll.json'),
+                'hold_record': str(self.root / 'training-hold.json')}
+        seen = []
+
+        def writer(spec):
+            seen.append(spec)
+            return {'status': 'WRITTEN'}
+        out, pending, _ = self.run_promote(self.spec(**keys), writer=writer)
+        self.assertEqual(out['code'], 0)
+        self.assertEqual(len(pending.calls), 1)
+        self.assertEqual({name: seen[0][name] for name in keys}, keys)
+
+    def test_the_live_page_tracks_every_existing_producer_input_not_only_the_hour_result_deliberate_red(self):
+        import continuity_page_live
+        from unittest import mock
+        sources = {name: self.root / f'{name}.src' for name in ('gpu_window_marker', 'measurement_receipt', 'hold_record')}
+        for path in sources.values():
+            path.write_text('x', encoding='utf-8')
+        absent = str(self.root / 'absent-hold.json')
+        captured = {}
+
+        def fake_page(**kwargs):
+            captured.update(kwargs)
+            return {'state': 'CURRENT', 'reasons': []}
+        with mock.patch.object(continuity_page_live, 'generate_live_page', fake_page):
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in sources.items()}))
+            tracked = {Path(path) for path in captured['receipt_paths']}
+            self.assertEqual(tracked, {self.hour_result, *sources.values()})           # a changed hold, measurement or marker makes the page STALE
+            captured.clear()
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), hold_record=absent))
+            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})   # an absent named source is UNKNOWN in the status, not tracked
+
+    def test_a_non_string_or_empty_producer_key_refuses_before_any_move_deliberate_red(self):
+        for field in ('gpu_window_marker', 'measurement_receipt', 'hold_record'):
+            for bad in (None, '', 7):
+                out, pending, rows = self.run_promote(self.spec(**{field: bad}))
+                self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (field, bad))
+                self.assertEqual((pending.calls, rows), ([], []), (field, bad))
+
     def test_a_writer_that_raises_after_the_move_still_records_the_outcome_and_is_code_8(self):
         def raising_writer(spec):
             raise TypeError('expected str, bytes or os.PathLike object, not NoneType')

@@ -130,14 +130,19 @@ class GateTests(GateFixture):
         self.assertEqual(self.receipt()['scored_pair_cli_exit'], 3)
 
 
+_OMIT = object()          # a score() override that removes the key from the receipt
+
+
 class CadenceTests(GateFixture):
     """Row 20: the declared cadence (a8ffe5a5). A head advance needs a scorer-v12 receipt for exactly that child, on the frozen plan, whose bytes hash to the cited digest."""
     CHILD = 'c' * 64
 
     def score(self, **over):
         body = {'schema': gate.CADENCE_SCORE_SCHEMA, 'label': 'H99 child episode NLL v12 template forward',
-                'bindings': {'episode_plan_sha256': gate.CADENCE_PLAN_SHA256, 'checkpoint_manifest_sha256': self.CHILD}}
+                'bindings': {'episode_plan_sha256': gate.CADENCE_PLAN_SHA256, 'checkpoint_manifest_sha256': self.CHILD},
+                'arms': {'fresh': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
         body.update(over)
+        body = {key: value for key, value in body.items() if value is not _OMIT}
         path = self.custody / 'episode-nll.json'
         path.write_text(json.dumps(body, sort_keys=True), encoding='utf-8')
         return path, hashlib.sha256(path.read_bytes()).hexdigest()
@@ -194,6 +199,17 @@ class CadenceTests(GateFixture):
                 code, _ = self.advance(path, digest)
                 self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)
 
+    def test_a_receipt_with_the_right_header_and_no_scores_refuses_the_advance_DELIBERATE_RED(self):
+        fresh = {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]}
+        for name, over in {'no arms': dict(arms=_OMIT), 'empty arms': dict(arms={}), 'zero episodes': dict(arms={'fresh': dict(fresh, episodes=0)}),
+                           'no mean': dict(arms={'fresh': dict(fresh, mean_nll=None)}), 'rows differ': dict(arms={'fresh': dict(fresh, per_episode=[])})}.items():
+            with self.subTest(name):
+                path, digest = self.score(**over)
+                code, out = self.advance(path, digest)
+                self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)
+                self.assertIn('carries no scores', out)
+                self.assertEqual(self.calls, [])
+
     def test_the_declaration_bytes_must_hash_to_the_frozen_declaration(self):
         path, digest = self.score()
         declaration = self.root / 'declaration.md'
@@ -213,10 +229,16 @@ class CadenceTests(GateFixture):
 
 
 class DispatchLintTests(unittest.TestCase):
-    GOOD = '#!/usr/bin/env bash\nrun_hour\npython -B $T/post_hour_promotion_gate.py --identity "$I" --custody "$C" --parent "$P" || true\npython promote_with_pending_v1.py S\n'
+    GATE = 'python -B $T/post_hour_promotion_gate.py --identity "$I" --custody "$C" --parent "$P" --advance-child "$CHILD" --score-receipt "$R"'
+    HANDLER = 'case $? in 0|5) ;; *) echo "REFUSE rc17: post-hour gate"; exit 17;; esac'
+    GOOD = f'#!/usr/bin/env bash\nrun_hour\n{GATE}\n{HANDLER}\npython promote_with_pending_v1.py S\n'
 
     def test_gate_before_promotion_passes(self):
         self.assertEqual(tree_check.dispatch_script_gate_problems(self.GOOD), [])
+
+    def test_the_one_line_refusal_handler_passes(self):
+        text = f'run_hour\n{self.GATE} || {{ echo REFUSE; exit 17; }}\npython promote_with_pending_v1.py S\n'
+        self.assertEqual(tree_check.dispatch_script_gate_problems(text), [])
 
     def test_missing_gate_fails(self):
         self.assertTrue(tree_check.dispatch_script_gate_problems('run_hour\npython promote_with_pending_v1.py S\n'))
@@ -227,13 +249,36 @@ class DispatchLintTests(unittest.TestCase):
         self.assertTrue(tree_check.dispatch_script_gate_problems(text))
 
     def test_promotion_before_the_gate_fails(self):
-        text = 'python promote_with_pending_v1.py S\npython post_hour_promotion_gate.py --identity i\n'
+        text = f'python promote_with_pending_v1.py S\n{self.GATE}\n{self.HANDLER}\n'
         problems = tree_check.dispatch_script_gate_problems(text)
         self.assertEqual(problems, ['line 1 reaches a promotion entry before the gate'])
 
     def test_direct_scored_pair_cli_before_the_gate_fails(self):
-        problems = tree_check.dispatch_script_gate_problems('python scored_pair_cli.py --identity i\npython post_hour_promotion_gate.py --identity i\n')
+        problems = tree_check.dispatch_script_gate_problems(f'python scored_pair_cli.py --identity i\n{self.GATE}\n{self.HANDLER}\n')
         self.assertEqual(len(problems), 1)
+
+    def test_a_gate_whose_refusal_is_swallowed_fails_DELIBERATE_RED(self):
+        for tail in (' || true', ' || :', '; true'):
+            text = f'run_hour\n{self.GATE}{tail}\n{self.HANDLER}\npython promote_with_pending_v1.py S\n'
+            problems = tree_check.dispatch_script_gate_problems(text)
+            self.assertEqual(len(problems), 1, (tail, problems))
+            self.assertIn('swallows the gate refusal', problems[0])
+
+    def test_a_gate_with_no_refusal_handler_fails_DELIBERATE_RED(self):
+        problems = tree_check.dispatch_script_gate_problems(f'run_hour\n{self.GATE}\npython promote_with_pending_v1.py S\n')
+        self.assertEqual(len(problems), 1)
+        self.assertIn('no refusal handler', problems[0])
+
+    def test_a_head_moving_script_whose_gate_omits_advance_child_fails_DELIBERATE_RED(self):
+        gate = self.GATE.replace(' --advance-child "$CHILD" --score-receipt "$R"', '')
+        for mover in ('promote_with_pending_v1.py S', 'advance_selected_continuation_head X'):
+            problems = tree_check.dispatch_script_gate_problems(f'run_hour\n{gate}\n{self.HANDLER}\npython {mover}\n')
+            self.assertEqual(len(problems), 1, (mover, problems))
+            self.assertIn('--advance-child', problems[0])
+
+    def test_a_script_that_never_moves_the_head_needs_no_advance_child(self):
+        gate = self.GATE.replace(' --advance-child "$CHILD" --score-receipt "$R"', '')
+        self.assertEqual(tree_check.dispatch_script_gate_problems(f'run_hour\n{gate}\n{self.HANDLER}\n'), [])
 
 
 if __name__ == '__main__':

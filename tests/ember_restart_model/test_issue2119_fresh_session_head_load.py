@@ -43,7 +43,7 @@ class LoadHeadTests(unittest.TestCase):
         self.write_pointer(self.head, hashlib.sha256(hour).hexdigest())
 
     def write_pointer(self, head, hour_sha):
-        pointer = {'hour_result_path': str(self.hour).replace('/', '\\'), 'hour_result_sha256': hour_sha, 'lineage_checkpoint_manifest_sha256': head,
+        pointer = {'hour_result_path': str(self.hour), 'hour_result_sha256': hour_sha, 'lineage_checkpoint_manifest_sha256': head,
                    'published_at': 1.0, 'schema': 'ember-selected-continuation-head-v1', 'seeded_reason': ''}
         (self.receipts / 'selected-continuation-head.json').write_text(json.dumps(pointer, sort_keys=True), encoding='utf-8')
 
@@ -62,6 +62,24 @@ class LoadHeadTests(unittest.TestCase):
         self.assertEqual(result['control_wrong_digest']['outcome'], 'REFUSED')
         self.assertEqual(result['lineage_head'], self.head)
         self.assertEqual(result['pointer_sha256'], hashlib.sha256((self.receipts / 'selected-continuation-head.json').read_bytes()).hexdigest())
+
+    def test_one_load_binds_every_later_read_to_the_pointer_generation_it_parsed_DELIBERATE_RED(self):
+        import selected_continuation_head as sch
+        pointer_file = self.receipts / 'selected-continuation-head.json'
+        first_generation = hashlib.sha256(pointer_file.read_bytes()).hexdigest()
+        real_parse = sch.parse_selected_continuation_head
+
+        def parse_then_a_writer_replaces_the_pointer(raw):
+            parsed = real_parse(raw)
+            self.write_pointer('f' * 64, '0' * 64)                      # a concurrent writer publishes the next generation right after this load parsed the first
+            return parsed
+        with unittest.mock.patch.object(sch, 'parse_selected_continuation_head', parse_then_a_writer_replaces_the_pointer):
+            result = fresh.load_head(self.receipts, admit=self.strict_admit)
+        second_generation = hashlib.sha256(pointer_file.read_bytes()).hexdigest()
+        self.assertNotEqual(first_generation, second_generation)
+        self.assertEqual(result['pointer_sha256'], first_generation)     # the receipt names the bytes that were parsed, not whatever is on disk afterwards
+        self.assertEqual(result['lineage_head'], self.head)
+        self.assertEqual(result['admission']['outcome'], 'ADMITTED')
 
     def test_hour_result_bytes_must_hash_to_the_pointer_DELIBERATE_RED(self):
         self.write_pointer(self.head, '0' * 64)
@@ -111,7 +129,7 @@ class ChildExitTests(unittest.TestCase):
 class RunFreshTests(unittest.TestCase):
     def test_child_is_a_different_process_and_facts_are_recorded(self):
         script = 'import json,os;print("noise");print("%s"+json.dumps({"pid":os.getpid(),"result":{}}))' % fresh.CHILD_MARKER
-        child = fresh.run_fresh([sys.executable, '-B', '-c', script])
+        child = fresh.run_fresh(fresh.python_argv('-c', script))
         self.assertNotEqual(child['pid'], os.getpid())
         self.assertEqual(child['parent_pid'], os.getpid())
         self.assertEqual(child['child_exit'], 0)
@@ -119,15 +137,56 @@ class RunFreshTests(unittest.TestCase):
     def test_a_child_claiming_the_parent_pid_refuses_DELIBERATE_RED(self):
         script = 'import json;print("%s"+json.dumps({"pid":%d,"result":{}}))' % (fresh.CHILD_MARKER, os.getpid())
         with self.assertRaisesRegex(fresh.LoadRefusal, 'not a fresh session'):
-            fresh.run_fresh([sys.executable, '-B', '-c', script])
+            fresh.run_fresh(fresh.python_argv('-c', script))
 
     def test_a_child_with_no_result_line_refuses(self):
         with self.assertRaisesRegex(fresh.LoadRefusal, 'no result'):
-            fresh.run_fresh([sys.executable, '-B', '-c', 'print("nothing useful")'])
+            fresh.run_fresh(fresh.python_argv('-c', 'print("nothing useful")'))
 
     def test_a_crashing_child_refuses(self):
         with self.assertRaisesRegex(fresh.LoadRefusal, 'no result'):
-            fresh.run_fresh([sys.executable, '-B', '-c', 'raise SystemExit(9)'])
+            fresh.run_fresh(fresh.python_argv('-c', 'raise SystemExit(9)'))
+
+
+class ChildBoundaryTests(unittest.TestCase):
+    """The fresh child is a hidden, wrapped process on Windows, never a bare sys.executable child."""
+    WRAPPED = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', 'helpers/.codex/headless-python.ps1', '--', '-B', 'child.py']
+
+    def hidden(self):
+        class Startup:
+            wShowWindow = 0
+        return {'creationflags': 0x08000000, 'startupinfo': Startup(), 'shell': False}
+
+    def test_a_hidden_wrapped_child_passes_the_boundary(self):
+        self.assertEqual(fresh.child_boundary_problems(self.WRAPPED, self.hidden(), windows=True), [])
+        self.assertEqual(fresh.child_boundary_problems([sys.executable, '-B', 'child.py'], {'shell': False}, windows=False), [])
+
+    def test_a_bare_sys_executable_child_on_windows_fails_the_boundary_DELIBERATE_RED(self):
+        problems = fresh.child_boundary_problems([sys.executable, '-B', 'child.py'], {}, windows=True)
+        self.assertEqual(len(problems), 3, problems)
+        self.assertIn('mandatory headless-python.ps1 wrapper', problems[0])
+        self.assertTrue(any('CREATE_NO_WINDOW' in p for p in problems) and any('STARTUPINFO' in p for p in problems))
+
+    def test_each_missing_piece_is_named_on_its_own_DELIBERATE_RED(self):
+        self.assertEqual(len(fresh.child_boundary_problems(self.WRAPPED, dict(self.hidden(), creationflags=0), windows=True)), 1)
+        self.assertEqual(len(fresh.child_boundary_problems(self.WRAPPED, dict(self.hidden(), startupinfo=None), windows=True)), 1)
+        self.assertEqual(len(fresh.child_boundary_problems(['python', 'child.py'], self.hidden(), windows=True)), 1)
+        self.assertEqual(len(fresh.child_boundary_problems(self.WRAPPED, dict(self.hidden(), shell=True), windows=True)), 1)
+
+    def test_run_fresh_refuses_a_bare_child_before_spawning_anything_on_windows_DELIBERATE_RED(self):
+        with unittest.mock.patch.object(fresh.os, 'name', 'nt'), unittest.mock.patch.object(fresh, 'hidden_kwargs', return_value={'shell': False}), \
+                unittest.mock.patch.object(fresh.subprocess, 'run', side_effect=AssertionError('must not spawn')):
+            with self.assertRaisesRegex(fresh.LoadRefusal, 'process boundary'):
+                fresh.run_fresh([sys.executable, '-B', 'child.py'])
+
+    def test_the_real_launch_command_and_kwargs_satisfy_the_boundary(self):
+        command, kwargs = fresh.python_argv('child.py'), fresh.hidden_kwargs()
+        self.assertEqual(fresh.child_boundary_problems(command, kwargs, windows=os.name == 'nt'), [])
+        if os.name == 'nt':
+            self.assertEqual(command[:5], ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File'])
+            self.assertTrue(kwargs['creationflags'] & 0x08000000)
+        else:
+            self.assertEqual(command[0], sys.executable)
 
 
 if __name__ == '__main__':

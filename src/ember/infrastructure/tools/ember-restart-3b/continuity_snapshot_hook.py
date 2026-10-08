@@ -88,8 +88,13 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
             if receipts_root is None:
                 raise ValueError('page_path needs receipts_root: the live head is read from the pointer, never from this snapshot')
             import continuity_page_live
+            # Freshness tracks every live input the status was built from, not just the hour result: a hold record, a measurement receipt or a window
+            # marker that exists now and changes (or disappears) after this snapshot makes the page STALE. A named source that is absent now is
+            # already UNKNOWN in the status, so it is not tracked (it would read STALE forever).
+            tracked = [Path(hour_result_path)] + [Path(source) for source in (gpu_window_marker, measurement_receipt, hold_record)
+                                                  if source is not None and Path(source).exists()]
             verdict = continuity_page_live.generate_live_page(snapshot_path=path, receipts_root=Path(receipts_root), out_path=Path(page_path),
-                                                              receipt_paths=[Path(hour_result_path)])
+                                                              receipt_paths=tracked)
             outcome['page'] = {'status': 'WRITTEN', 'path': str(page_path), 'state': verdict['state'], 'reasons': verdict['reasons']}
         except Exception as error:  # noqa: BLE001 - the snapshot is already written; report
             outcome['page'] = {'status': 'FAILED', 'why': f'{type(error).__name__}: {error}'}

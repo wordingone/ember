@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -55,8 +54,8 @@ else:
 
 
 def dead_pid() -> int:
-    flags = 0x08000000 if os.name == 'nt' else 0
-    out = subprocess.run([sys.executable, '-B', '-c', 'import os;print(os.getpid())'], capture_output=True, text=True, creationflags=flags, check=True)
+    out = run_one(python_argv('-c', 'import os;print(os.getpid())'), timeout_s=120)      # an owned, hidden child through the headless wrapper on Windows
+    assert out.returncode == 0, out.stderr
     return int(out.stdout.strip())
 
 
@@ -77,6 +76,11 @@ class CrashSweepTests(unittest.TestCase):
     def listing(self):
         return sorted(path.name for path in self.receipts.iterdir())
 
+    def settled_listing(self):
+        """What the directory holds once no writer is running. Windows removes the idle lock file; POSIX keeps it by design (an unlink would race a waiting
+        flock), so there the lock file is the one expected extra and anything else is a stray."""
+        return ['selected-continuation-head.json'] + ([] if os.name == 'nt' else ['selected-continuation-head.json.lock'])
+
     def head(self):
         return json.loads((self.receipts / 'selected-continuation-head.json').read_text(encoding='utf-8'))['lineage_checkpoint_manifest_sha256']
 
@@ -88,12 +92,18 @@ class CrashSweepTests(unittest.TestCase):
         self.assertTrue(any(name.endswith('.tmp') for name in stray), stray)   # the crash really left a staged file behind (the unswept shape)
         self.run_child('ok', WIN_B, P0)                                   # the next writer: not blocked, and it cleans up after the dead one
         self.assertEqual(self.head(), WIN_B)
-        self.assertEqual(self.listing(), ['selected-continuation-head.json'])
+        self.assertEqual(self.listing(), self.settled_listing())
 
     def test_a_clean_advance_also_leaves_only_the_pointer(self):
         self.run_child('ok', P0, 'SEED')
         self.run_child('ok', WIN_A, P0)
-        self.assertEqual(self.listing(), ['selected-continuation-head.json'])
+        self.assertEqual(self.listing(), self.settled_listing())
+
+    def test_the_settled_listing_names_no_staged_temp_file_on_any_platform_DELIBERATE_RED(self):
+        self.run_child('ok', P0, 'SEED')
+        self.run_child('crash', WIN_A, P0, expect_rc=9)
+        self.assertNotEqual(self.listing(), self.settled_listing())      # the unswept crash shape is not the settled one on Windows or POSIX
+        self.assertTrue(any(name.endswith('.tmp') for name in self.listing()))
 
 
 class SweepScopeTests(unittest.TestCase):

@@ -79,14 +79,38 @@ class GpuOwnerTests(SourceFixture):
         marker = self.write('gpu-window-open', '2026-10-08T19:00:00Z\n')
         self.assertEqual(sources.gpu_owner(marker, census_empty)['status'], 'UNKNOWN')
 
+    def test_a_blank_line_two_is_unknown_never_the_third_line_owner_DELIBERATE_RED(self):
+        for text in ('2026-10-08T19:00:00Z\n\nseat-b: not the owner\n', '2026-10-08T19:00:00Z\n   \nseat-b: not the owner\n'):
+            out = sources.gpu_owner(self.write('gpu-window-open', text), census_empty)
+            self.assertEqual(out['status'], 'UNKNOWN', text)
+            self.assertIn('line 2', out['reason'])
+
     def test_no_marker_path_at_all_is_unknown(self):
         self.assertEqual(sources.gpu_owner(None, census_empty)['status'], 'UNKNOWN')
+
+    def test_an_unreadable_python_command_line_is_unknown_never_free_DELIBERATE_RED(self):
+        for rows in ([{'ProcessId': 7, 'CommandLine': None}], {'ProcessId': 7, 'CommandLine': ''}, [{'ProcessId': 7}, {'ProcessId': 8, 'CommandLine': 'python other.py'}]):
+            out = sources.gpu_owner(self.root / 'absent', lambda rows=rows: sources.trainers_in_rows(rows))
+            self.assertEqual(out['status'], 'UNKNOWN', rows)
+            self.assertIn('could not read the command line', out['reason'])
+
+    def test_readable_command_lines_still_read_free_or_held(self):
+        free = [{'ProcessId': 7, 'CommandLine': 'python other.py'}]
+        self.assertEqual(sources.gpu_owner(self.root / 'absent', lambda: sources.trainers_in_rows(free)), {'status': 'free'})
+        held = free + [{'ProcessId': 9, 'CommandLine': 'python -B cia_hour.py --x'}, {'ProcessId': 11, 'CommandLine': None}]   # a known holder wins over an unreadable row
+        out = sources.gpu_owner(self.root / 'absent', lambda: sources.trainers_in_rows(held))
+        self.assertEqual((out['status'], out['owner']), ('held', 'process census'))
+        self.assertIn('9', out['training_job_purpose'])
+
+    def test_a_census_that_returns_no_list_is_unknown(self):
+        self.assertEqual(sources.gpu_owner(self.root / 'absent', lambda: sources.trainers_in_rows('garbage'))['status'], 'UNKNOWN')
 
 
 class MeasurementTests(SourceFixture):
     def receipt(self, head=HEAD, **over):
         body = {'schema': sources.SCORE_SCHEMA, 'label': 'scorer-v12', 'finished_utc': '2026-10-08T18:00:00Z',
-                'bindings': {'checkpoint_manifest_sha256': head, 'episode_plan_sha256': '9' * 64}}
+                'bindings': {'checkpoint_manifest_sha256': head, 'episode_plan_sha256': '9' * 64},
+                'arms': {'fresh': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
         body.update(over)
         return self.write('episode-nll-H34.json', body)
 
@@ -106,6 +130,19 @@ class MeasurementTests(SourceFixture):
             out = sources.last_measurement_from_receipt(receipt, HEAD)
             self.assertEqual(out['status'], 'UNKNOWN', receipt)
             self.assertTrue(out['reason'])
+
+    def test_a_header_with_the_right_head_but_no_scores_is_unknown_never_measured_DELIBERATE_RED(self):
+        fresh = {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]}
+        for name, arms in (('no arms', None), ('no fresh arm', {}), ('zero episodes', {'fresh': dict(fresh, episodes=0)}), ('no mean', {'fresh': dict(fresh, mean_nll=None)}),
+                           ('nan mean', {'fresh': dict(fresh, mean_nll=float('nan'))}), ('bool episodes', {'fresh': dict(fresh, episodes=True)}),
+                           ('rows differ from episodes', {'fresh': dict(fresh, per_episode=[{}])})):
+            body = {'schema': sources.SCORE_SCHEMA, 'label': 'scorer-v12', 'finished_utc': '2026-10-08T18:00:00Z',
+                    'bindings': {'checkpoint_manifest_sha256': HEAD, 'episode_plan_sha256': '9' * 64}}
+            if arms is not None:
+                body['arms'] = arms
+            out = sources.last_measurement_from_receipt(self.write('headeronly.json', json.dumps(body, allow_nan=True)), HEAD)
+            self.assertEqual(out['status'], 'UNKNOWN', name)
+            self.assertIn('carries no scores', out['reason'], name)
 
     def test_no_finish_time_is_unknown(self):
         self.assertEqual(sources.last_measurement_from_receipt(self.receipt(finished_utc='yesterday'), HEAD)['status'], 'UNKNOWN')

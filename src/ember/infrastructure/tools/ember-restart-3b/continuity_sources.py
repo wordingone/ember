@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -39,6 +40,22 @@ def unknown(reason: str) -> dict[str, Any]:
     return {'status': UNKNOWN, 'reason': reason}
 
 
+def scores_problem(body: Any) -> str | None:
+    """Why a score receipt carries no scores (None = it does). A header with the right schema, label and bindings but no measured episodes is not a measurement."""
+    arms = body.get('arms') if isinstance(body, dict) else None
+    fresh = arms.get('fresh') if isinstance(arms, dict) else None
+    if not isinstance(fresh, dict):
+        return 'the receipt has no arms.fresh section'
+    episodes, mean, per_episode = fresh.get('episodes'), fresh.get('mean_nll'), fresh.get('per_episode')
+    if isinstance(episodes, bool) or not isinstance(episodes, int) or episodes < 1:
+        return 'arms.fresh.episodes is not a positive integer'
+    if isinstance(mean, bool) or not isinstance(mean, (int, float)) or not math.isfinite(mean):
+        return 'arms.fresh.mean_nll is not a finite number'
+    if not isinstance(per_episode, list) or len(per_episode) != episodes:
+        return 'arms.fresh.per_episode does not hold one row per episode'
+    return None
+
+
 def gpu_owner_from_marker(marker: Path | None) -> dict[str, Any] | None:
     """Held (the marker's owner and purpose), None when there is no marker file, UNKNOWN for a marker that cannot be read or has no owner line."""
     if marker is None:
@@ -47,11 +64,11 @@ def gpu_owner_from_marker(marker: Path | None) -> dict[str, Any] | None:
     if not marker.exists():
         return None
     try:
-        lines = [line.strip() for line in marker.read_text(encoding='utf-8').splitlines() if line.strip()]
+        lines = [line.strip() for line in marker.read_text(encoding='utf-8').splitlines()]      # blank lines are kept: line 2 is LITERALLY line 2
     except OSError as error:
         return unknown(f'the window marker is unreadable ({type(error).__name__})')
-    if len(lines) < 2:
-        return unknown('the window marker has no owner line')
+    if len(lines) < 2 or not lines[1]:
+        return unknown('the window marker has no owner line (line 2 is missing or blank)')
     owner, _, purpose = lines[1].partition(':')
     if not owner.strip():
         return unknown('the window marker owner line is empty')
@@ -62,22 +79,39 @@ def process_census() -> list[dict[str, Any]]:
     """Python processes whose command line names a training entry point (TRAINER_MARKERS). Raises on any failure to enumerate: the caller reports UNKNOWN."""
     command = ("Get-CimInstance Win32_Process -Filter \"Name='python.exe' OR Name='pythonw.exe'\" | "
                "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress")
-    flags = 0x08000000 if os.name == 'nt' else 0
+    hidden: dict[str, Any] = {'shell': False}
+    if os.name == 'nt':
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
+        hidden.update(creationflags=subprocess.CREATE_NO_WINDOW, startupinfo=startup)      # no console window, same boundary as every other child
     done = subprocess.run(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], capture_output=True, text=True,
-                          timeout=60, creationflags=flags)
+                          timeout=60, **hidden)
     if done.returncode != 0:
         raise RuntimeError(f'the process census exited {done.returncode}')
     text = done.stdout.strip()
-    rows = [] if not text else json.loads(text)
+    return trainers_in_rows([] if not text else json.loads(text))
+
+
+def trainers_in_rows(rows: Any) -> list[dict[str, Any]]:
+    """Trainer processes among Win32_Process rows. A python process whose command line cannot be read (null or empty) could be a trainer, so the whole
+    census raises and the caller reports UNKNOWN: an unreadable command line is never read as 'not a trainer', never as 'free'."""
     if isinstance(rows, dict):
         rows = [rows]
-    found = []
+    if not isinstance(rows, list):
+        raise RuntimeError('the process census returned rows that are not a list')
+    found, unreadable = [], []
     for row in rows:
-        line = row.get('CommandLine') or ''
+        line = row.get('CommandLine') if isinstance(row, dict) else None
+        if not isinstance(line, str) or not line.strip():
+            unreadable.append(row.get('ProcessId') if isinstance(row, dict) else None)
+            continue
         for marker in TRAINER_MARKERS:
             if marker in line:
                 found.append({'pid': row.get('ProcessId'), 'entry_point': marker})
                 break
+    if unreadable and not found:
+        raise RuntimeError(f'the process census could not read the command line of python pid(s) {unreadable}')
     return found
 
 
@@ -89,7 +123,7 @@ def gpu_owner(marker: Path | None, census: Callable[[], list[dict[str, Any]]] = 
     try:
         holders = census()
     except Exception as error:  # noqa: BLE001 - any failure to enumerate is UNKNOWN, never free
-        return unknown(f'the process census failed ({type(error).__name__}); no marker is present')
+        return unknown(f'the process census failed ({type(error).__name__}: {str(error)[:200]}); no marker is present')
     if not holders:
         return {'status': 'free'}
     first = holders[0]
@@ -112,6 +146,9 @@ def last_measurement_from_receipt(receipt: Path | None, head_manifest_sha256: st
         return unknown(f'the measurement receipt is not a {SCORE_SCHEMA} receipt')
     if bindings.get('checkpoint_manifest_sha256') != head_manifest_sha256:
         return unknown('the newest measurement receipt scores a different checkpoint than the selected head')
+    missing_scores = scores_problem(body)
+    if missing_scores is not None:
+        return unknown(f'the measurement receipt names this head but carries no scores ({missing_scores})')
     finished = body.get('finished_utc')
     if not isinstance(finished, str) or _STAMP.fullmatch(finished) is None:
         return unknown('the measurement receipt carries no UTC finish time')

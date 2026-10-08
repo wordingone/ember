@@ -93,6 +93,12 @@ def cadence_problems(advance_child: str, score_receipt: Path | None, score_recei
         problems.append('the score receipt was not scored on the frozen plan 9a6fd054')
     if bindings.get('checkpoint_manifest_sha256') != advance_child:
         problems.append('the score receipt scores a different checkpoint than the child to advance to (a twin or branch is never lineage evidence)')
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import continuity_sources
+    missing_scores = continuity_sources.scores_problem(receipt)
+    if missing_scores is not None:
+        problems.append(f'the score receipt carries no scores ({missing_scores}): a header alone is not a measurement')
     return problems
 
 

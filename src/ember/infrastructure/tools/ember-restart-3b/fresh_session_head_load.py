@@ -50,22 +50,27 @@ def load_head(receipts_root: Path, *, head_dir: Path | None = None, controls: bo
     pointer_file = sch.pointer_path(Path(receipts_root))
     if not pointer_file.is_file():
         raise LoadRefusal(f'no selected-continuation-head pointer at {pointer_file}')
-    pointer = sch.load_selected_continuation_head(pointer_file)
+    # ONE generation: every file is read once into bytes, and the hash, the parse and the receipt all use those same bytes. A second read of a file that a
+    # concurrent writer replaced between the two reads would mix two generations of the pointer, the hour result or the manifest in one load.
+    pointer_bytes = pointer_file.read_bytes()
+    pointer = sch.parse_selected_continuation_head(pointer_bytes)
     head = pointer['lineage_checkpoint_manifest_sha256']
     hour_result = Path(pointer['hour_result_path'])
     if not hour_result.is_file():
         raise LoadRefusal(f'the pointer names an hour result that is not a file: {hour_result}')
-    if _sha256(hour_result) != pointer['hour_result_sha256']:
+    hour_bytes = hour_result.read_bytes()
+    if hashlib.sha256(hour_bytes).hexdigest() != pointer['hour_result_sha256']:
         raise LoadRefusal('the hour result bytes do not hash to the pointer hour_result_sha256')
-    if json.loads(hour_result.read_text(encoding='utf-8')).get('child_manifest_sha256') != head:
+    if json.loads(hour_bytes.decode('utf-8')).get('child_manifest_sha256') != head:
         raise LoadRefusal('the hour result child differs from the pointer lineage head')
     directory = Path(head_dir) if head_dir is not None else hour_result.parent / 'trained-child'
     manifest = directory / 'checkpoint-manifest.json'
     if not manifest.is_file():
         raise LoadRefusal(f'the head directory has no checkpoint-manifest.json: {directory}')
-    if _sha256(manifest) != head:
+    manifest_bytes = manifest.read_bytes()
+    if hashlib.sha256(manifest_bytes).hexdigest() != head:
         raise LoadRefusal('the head directory manifest bytes do not hash to the pointer lineage head')
-    cap = json.loads(manifest.read_text(encoding='utf-8'))['max_restore_payload_bytes']
+    cap = json.loads(manifest_bytes.decode('utf-8'))['max_restore_payload_bytes']
     if admit is None:
         import importlib.util
         spec = importlib.util.spec_from_file_location('parameter_counter', HERE / 'parameter_counter.py')
@@ -84,17 +89,62 @@ def load_head(receipts_root: Path, *, head_dir: Path | None = None, controls: bo
         except Exception as error:  # noqa: BLE001 - the receipt records the exact refusal class and text
             return {'outcome': 'REFUSED', 'error_class': type(error).__name__, 'error': str(error)[:300], 'seconds': round(time.monotonic() - started, 1)}
 
-    result = {'pointer_sha256': _sha256(pointer_file), 'lineage_head': head, 'hour_result_sha256': pointer['hour_result_sha256'],
+    result = {'pointer_sha256': hashlib.sha256(pointer_bytes).hexdigest(), 'lineage_head': head, 'hour_result_sha256': pointer['hour_result_sha256'],
               'admission': attempt(head)}
     if controls:
         result['control_wrong_digest'] = attempt('0' * 64)
     return result
 
 
+HEADLESS_WRAPPER = Path.home() / '.codex' / 'headless-python.ps1'
+
+
+def python_argv(*args: str) -> list[str]:
+    """The child interpreter's command. Windows: through the mandatory headless wrapper (powershell -File headless-python.ps1 -- <args>), which starts the
+    interpreter with no window. POSIX: the interpreter directly."""
+    if os.name == 'nt':
+        return ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(HEADLESS_WRAPPER), '--', '-B', *args]
+    return [sys.executable, '-B', *args]
+
+
+def hidden_kwargs() -> dict:
+    """Windows: no console window (CREATE_NO_WINDOW plus a hidden STARTUPINFO), shell=False. POSIX: shell=False."""
+    if os.name != 'nt':
+        return {'shell': False}
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    return {'creationflags': subprocess.CREATE_NO_WINDOW, 'startupinfo': startup, 'shell': False}
+
+
+def child_boundary_problems(command: list[str], kwargs: dict, *, windows: bool) -> list[str]:
+    """Why a child launch breaks the process boundary (empty = hidden, wrapped, no shell). A bare interpreter child on Windows is the failure this names."""
+    problems = []
+    if kwargs.get('shell'):
+        problems.append('the child is launched through a shell')
+    if windows:
+        if not any(str(part).replace('\\', '/').endswith('headless-python.ps1') for part in command):
+            problems.append('the child does not go through the mandatory headless-python.ps1 wrapper')
+        if not kwargs.get('creationflags', 0) & 0x08000000:
+            problems.append('the child is not created with CREATE_NO_WINDOW')
+        startup = kwargs.get('startupinfo')
+        if startup is None or getattr(startup, 'wShowWindow', None) != 0:
+            problems.append('the child has no hidden STARTUPINFO')
+    return problems
+
+
 def run_fresh(child_command: list[str]) -> dict:
-    """Spawn the child interpreter and return its result with process facts. A child that shares the parent's pid refuses."""
+    """Spawn the child interpreter and return its result with process facts. A child that shares the parent's pid refuses; so does a child launch
+    that is not hidden and wrapped (child_boundary_problems)."""
     started = time.time()
-    done = subprocess.run(child_command, capture_output=True, text=True, timeout=3600)
+    kwargs = hidden_kwargs()
+    problems = child_boundary_problems(child_command, kwargs, windows=os.name == 'nt')
+    if problems:
+        raise LoadRefusal('the child launch breaks the process boundary: ' + '; '.join(problems))
+    env = dict(os.environ)
+    if os.name == 'nt':
+        env.setdefault('CODEX_PYTHON', sys.executable)       # the wrapper starts CODEX_PYTHON; pin it to this interpreter
+    done = subprocess.run(child_command, capture_output=True, text=True, timeout=3600, env=env, **kwargs)
     lines = [line for line in done.stdout.splitlines() if line.startswith(CHILD_MARKER)]
     if done.returncode not in (0, 3, 4) or not lines:
         raise LoadRefusal(f'the child produced no result (exit {done.returncode}): {done.stderr.strip()[-300:]}')
@@ -136,7 +186,7 @@ def main(argv=None) -> int:
     parser.add_argument('--head-dir', type=Path)
     parser.add_argument('--controls', action='store_true')
     args = parser.parse_args(argv)
-    command = [sys.executable, '-B', str(Path(__file__).resolve()), '--child', '--receipts-root', str(args.receipts_root)]
+    command = python_argv(str(Path(__file__).resolve()), '--child', '--receipts-root', str(args.receipts_root))
     if args.head_dir is not None:
         command += ['--head-dir', str(args.head_dir)]
     if args.controls:
