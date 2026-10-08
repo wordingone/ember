@@ -39,7 +39,7 @@ from typing import Any, Callable
 
 ANSWER_CONTRACT_SCHEMA = "ember-issue1947-protected-image-text-answer-contract-v1"
 BASE_CONTRACT_SCHEMA = "ember-protected-image-text-contract-v1"
-RECEIPT_SCHEMA = "ember-image-text-inference-receipt-v1"
+RECEIPT_SCHEMA = "ember-image-text-inference-receipt-v2"
 ROW_ID = "E-MATRIX-IMAGE-TEXT"
 ITEM_COUNT = 847
 RESULT_PASS = "IMAGE_TEXT_INFERENCE_PASS"
@@ -51,6 +51,20 @@ NEVER_READ_LIFT = {
     "date": "2026-10-07",
     "scope": "the sealed answer-contract builder only; the model, emitter, receipts and rows never hold a letter or the key",
 }
+# The public boundary (review of PR 2345, R1): a receipt carries no letter in any form -- not the gold
+# letter, not the predicted letter, not an unkeyed digest of either or of the decoded text -- and no key.
+# The pass harness (never the emitter) keys each prediction; the verifier refuses any field outside these sets.
+RECEIPT_FIELDS = frozenset({
+    "schema_version", "result", "row_id", "base_contract_raw_sha256", "answer_contract_raw_sha256",
+    "answer_contract_self_sha256", "checkpoint_manifest_raw_sha256", "model_bindings", "decode_contract",
+    "decode_contract_sha256", "frozen_order_sha256", "item_count", "parsed_count", "wall_seconds_total",
+    "records", "claim_boundary", "self_sha256",
+})
+RECORD_FIELDS = frozenset({
+    "position", "item_id", "image_sha256s", "item_text_sha256", "decoded_text_hmac", "prediction_hmac",
+    "parsed", "prompt_token_count", "generated_token_count", "stop_reason", "elapsed_seconds",
+})
+MODEL_BINDING_VALUE_TYPES = (str, int, float, bool)
 
 DECODE_CONTRACT: dict[str, Any] = {
     "strategy": "greedy_argmax",
@@ -98,6 +112,13 @@ def keyed_answer_digest(key: bytes, item_id: str, letter: str) -> str:
     return hmac.new(key, item_id.encode("utf-8") + b"\x00" + letter.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def keyed_decoded_digest(key: bytes, item_id: str, decoded: str) -> str:
+    # Domain-separated from the answer digest (0x01), so a decoded text equal to a bare letter never collides with it.
+    if len(key) != KEY_BYTES:
+        raise ValueError("IMAGE_TEXT_ANSWER_KEY_LENGTH_REFUSED")
+    return hmac.new(key, item_id.encode("utf-8") + b"\x01" + decoded.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def load_self_hashed(path: Path, schema_version: str, label: str) -> tuple[dict[str, Any], bytes]:
     raw = path.read_bytes()
     try:
@@ -141,6 +162,10 @@ def build_answer_contract(
     frozen = base.get("frozen_items")
     if not isinstance(frozen, list) or len(frozen) != ITEM_COUNT:
         raise ValueError("IMAGE_TEXT_BASE_CONTRACT_TOTALITY_REFUSED")
+    # The caller's digest is not the authority: the base contract's own frozen source identity is.
+    source = base.get("source")
+    if not isinstance(source, dict) or source.get("answer_dictionary_sha256") != expected_answer_dictionary_sha256:
+        raise ValueError("IMAGE_TEXT_ANSWER_DICTIONARY_IDENTITY_REFUSED:base_source")
     dictionary_raw = answer_dictionary_path.read_bytes()
     if sha(dictionary_raw) != expected_answer_dictionary_sha256:
         raise ValueError("IMAGE_TEXT_ANSWER_DICTIONARY_IDENTITY_REFUSED")
@@ -190,6 +215,8 @@ def load_answer_contract(answer_contract_path: Path, base_contract_path: Path) -
         or contract.get("base_contract_self_sha256") != base.get("self_sha256")
         or contract.get("gold_digest_rule") != GOLD_DIGEST_RULE
         or contract.get("never_read_lift") != NEVER_READ_LIFT
+        or not isinstance(base.get("source"), dict)
+        or contract.get("answer_dictionary_sha256") != base["source"].get("answer_dictionary_sha256")
         or contract.get("totality") != {"expected": ITEM_COUNT, "observed": ITEM_COUNT, "complete": True}
     ):
         raise ValueError("IMAGE_TEXT_ANSWER_CONTRACT_BINDING_REFUSED")
@@ -232,21 +259,34 @@ def extract_letter(decoded: str, option_count: int) -> str | None:
     return None
 
 
+def _verified_payload(read_payload: PayloadReader, ref: dict[str, Any], item_id: str) -> bytes:
+    # The reader is not trusted to have checked anything: size and sha256 of the bytes the emitter
+    # will see are compared here against the base contract's declared object.
+    raw = read_payload(ref, item_id)
+    if not isinstance(raw, (bytes, bytearray)) or len(raw) != ref.get("byte_count") or sha(bytes(raw)) != ref.get("sha256"):
+        raise ValueError(f"IMAGE_TEXT_PAYLOAD_BINDING_REFUSED:{item_id}:{ref.get('sha256')}")
+    return bytes(raw)
+
+
 def run_pass(
     base: dict[str, Any],
     answer_contract: dict[str, Any],
     read_payload: PayloadReader,
     emit: Emitter,
     *,
+    prediction_key: bytes,
     progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    # prediction_key is held by this harness only; emit() never receives it.
+    if len(prediction_key) != KEY_BYTES or sha(prediction_key) != answer_contract["answer_key_sha256"]:
+        raise ValueError("IMAGE_TEXT_ANSWER_KEY_BINDING_REFUSED")
     frozen = base["frozen_items"]
     option_counts = {answer["item_id"]: answer["option_count"] for answer in answer_contract["items"]}
     records: list[dict[str, Any]] = []
     for position, item in enumerate(frozen):
         item_id = item["item_id"]
-        images = [read_payload(image, item_id) for image in item["image_objects"]]
-        text_raw = read_payload(item["item_text_object"], item_id)
+        images = [_verified_payload(read_payload, image, item_id) for image in item["image_objects"]]
+        text_raw = _verified_payload(read_payload, item["item_text_object"], item_id)
         text = json.loads(text_raw)
         if not isinstance(text, dict) or set(text) != {"id", "question", "options"} or text.get("id") != item_id:
             raise ValueError(f"IMAGE_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
@@ -263,8 +303,8 @@ def run_pass(
             "item_id": item_id,
             "image_sha256s": [image["sha256"] for image in item["image_objects"]],
             "item_text_sha256": item["item_text_object"]["sha256"],
-            "decoded_text_sha256": sha(decoded.encode("utf-8")),
-            "predicted_letter": letter,
+            "decoded_text_hmac": keyed_decoded_digest(prediction_key, item_id, decoded),
+            "prediction_hmac": keyed_answer_digest(prediction_key, item_id, letter) if letter is not None else None,
             "parsed": letter is not None,
             "prompt_token_count": int(emitted.get("prompt_token_count", -1)),
             "generated_token_count": int(emitted.get("generated_token_count", -1)),
@@ -340,6 +380,13 @@ def verify_receipt(
     body = dict(receipt)
     if body.pop("self_sha256", None) != sha(canonical(body)):
         raise ValueError("IMAGE_TEXT_INFERENCE_RECEIPT_SELF_HASH_REFUSED")
+    model_bindings = receipt.get("model_bindings")
+    if (
+        set(receipt) != RECEIPT_FIELDS
+        or not isinstance(model_bindings, dict)
+        or not all(isinstance(value, MODEL_BINDING_VALUE_TYPES) for value in model_bindings.values())
+    ):
+        raise ValueError("IMAGE_TEXT_RECEIPT_FIELD_ALLOWLIST_REFUSED")
     if receipt.get("checkpoint_manifest_raw_sha256") != expected_checkpoint_manifest_sha256:
         raise ValueError("IMAGE_TEXT_INFERENCE_CHECKPOINT_BINDING_REFUSED")
     if (
@@ -365,21 +412,27 @@ def verify_receipt(
     parsed = matched = 0
     for position, (record, item, answer) in enumerate(zip(records, frozen, contract["items"])):
         item_id = item["item_id"]
-        if not isinstance(record, dict) or record.get("position") != position or record.get("item_id") != item_id:
+        if not isinstance(record, dict) or set(record) != RECORD_FIELDS:
+            raise ValueError(f"IMAGE_TEXT_RECEIPT_FIELD_ALLOWLIST_REFUSED:{position}")
+        if record.get("position") != position or record.get("item_id") != item_id:
             raise ValueError("IMAGE_TEXT_EMISSION_ORDER_REFUSED")
         if (
             record.get("image_sha256s") != [image["sha256"] for image in item["image_objects"]]
             or record.get("item_text_sha256") != item["item_text_object"]["sha256"]
         ):
             raise ValueError(f"IMAGE_TEXT_INFERENCE_CONTRACT_BINDING_REFUSED:{item_id}")
-        letter = record.get("predicted_letter")
-        if letter is not None and (not isinstance(letter, str) or letter not in LETTERS[: answer["option_count"]]):
+        keyed = record.get("prediction_hmac")
+        allowed = {keyed_answer_digest(key, item_id, option) for option in LETTERS[: answer["option_count"]]}
+        if keyed is not None and keyed not in allowed:
             raise ValueError(f"IMAGE_TEXT_PREDICTION_SHAPE_REFUSED:{item_id}")
-        if record.get("parsed") is not (letter is not None):
+        if record.get("parsed") is not (keyed is not None):
             raise ValueError(f"IMAGE_TEXT_PREDICTION_SHAPE_REFUSED:parsed:{item_id}")
-        prediction = keyed_answer_digest(key, item_id, letter) if letter is not None else sha(canonical({"item_id": item_id, "unparsed": True}))
-        is_matched = letter is not None and hmac.compare_digest(prediction, answer["gold_answer_hmac"])
-        parsed += int(letter is not None)
+        decoded_hmac = record.get("decoded_text_hmac")
+        if not isinstance(decoded_hmac, str) or len(decoded_hmac) != 64:
+            raise ValueError(f"IMAGE_TEXT_PREDICTION_SHAPE_REFUSED:decoded:{item_id}")
+        prediction = keyed if keyed is not None else sha(canonical({"item_id": item_id, "unparsed": True}))
+        is_matched = keyed is not None and hmac.compare_digest(keyed, answer["gold_answer_hmac"])
+        parsed += int(keyed is not None)
         matched += int(is_matched)
         rows.append({
             "item_id": item_id,
@@ -402,7 +455,7 @@ def verify_receipt(
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     verify = sub.add_parser("verify", help="re-verify a receipt with the key (verifier only)")
@@ -412,7 +465,7 @@ def main() -> int:
     verify.add_argument("--key", type=Path, required=True)
     verify.add_argument("--checkpoint-manifest-sha256", required=True)
     sub.add_parser("produce", help="real inference on the card (not wired: needs the vision input path)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.command == "produce":
         # The designated 3B head's image input path is not yet proven (owner ruling, mail 68177: the input-path
         # census). Refuse by name rather than emit a receipt from a path nobody has checked.

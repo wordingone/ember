@@ -9,8 +9,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -70,11 +68,13 @@ class Fixture:
             })
             self.answers[item_id] = MODULE.LETTERS[index % option_count]
             self.option_counts[item_id] = option_count
-        self.base_path = write(tmp / "base.json", self_hash({
-            "schema_version": MODULE.BASE_CONTRACT_SCHEMA, "result": "PASS", "frozen_items": frozen,
-        }))
         self.dictionary_path = tmp / "answers.json"
         self.dictionary_path.write_bytes(canonical(self.answers))
+        self.base_path = write(tmp / "base.json", self_hash({
+            "schema_version": MODULE.BASE_CONTRACT_SCHEMA, "result": "PASS", "frozen_items": frozen,
+            "source": {"answer_dictionary_sha256": sha(self.dictionary_path.read_bytes()),
+                       "answer_dictionary_access": "identity_only; never_read"},
+        }))
         self.key_path = tmp / "key.bin"
         self.key_path.write_bytes(KEY)
         contract = MODULE.build_answer_contract(
@@ -89,14 +89,15 @@ class Fixture:
         assert len(raw) == ref["byte_count"]
         return raw
 
-    def produce(self, answer_for) -> Path:
+    def produce(self, answer_for, read_payload=None) -> Path:
         loaded = MODULE.load_answer_contract(self.answer_path, self.base_path)
 
         def emit(images, text, position):
             return {"decoded_text": answer_for(text["id"], position), "generated_token_count": 1,
                     "prompt_token_count": 10, "stop_reason": "eos_token"}
 
-        result = MODULE.run_pass(loaded["base"], loaded["contract"], self.read_payload, emit)
+        result = MODULE.run_pass(loaded["base"], loaded["contract"], read_payload or self.read_payload, emit,
+                                 prediction_key=KEY)
         receipt = MODULE.build_receipt(loaded=loaded, pass_result=result,
                                        checkpoint_manifest_raw_sha256=CHECKPOINT, model_bindings={"fixture": True})
         return write(self.tmp / "receipt.json", receipt)
@@ -173,7 +174,7 @@ def test_wrong_key_refuses(fx, tmp_path):
 def test_tampered_receipt_without_rehash_refuses(fx):
     path = fx.produce(lambda item_id, _p: "A")
     payload = json.loads(path.read_bytes())
-    payload["records"][0]["predicted_letter"] = "B"
+    payload["records"][0]["prediction_hmac"] = MODULE.keyed_answer_digest(KEY, "item-0000", "B")
     with pytest.raises(ValueError, match="SELF_HASH_REFUSED"):
         fx.verify(write(path.with_name("tampered.json"), payload))
 
@@ -200,7 +201,7 @@ def test_wrong_image_control_refuses(fx):
 
 def test_letter_outside_options_refuses(fx):
     def out_of_range(p):
-        p["records"][0]["predicted_letter"] = "J"
+        p["records"][0]["prediction_hmac"] = MODULE.keyed_answer_digest(KEY, "item-0000", "J")
     with pytest.raises(ValueError, match="PREDICTION_SHAPE_REFUSED"):
         fx.verify(rewrite(fx.produce(lambda item_id, _p: "A"), out_of_range))
 
@@ -218,9 +219,14 @@ def test_answer_outside_item_options_refuses_the_builder(fx, tmp_path):
     answers["item-0000"] = "E"  # item-0000 has two options
     bad = tmp_path / "bad-answers.json"
     bad.write_bytes(canonical(answers))
+    # A base frozen to this dictionary's identity, so the letter check (not the identity check) is what refuses.
+    base = write(tmp_path / "base-bad.json", self_hash({
+        **json.loads(fx.base_path.read_bytes()),
+        "source": {"answer_dictionary_sha256": sha(bad.read_bytes()), "answer_dictionary_access": "identity_only; never_read"},
+    }))
     with pytest.raises(ValueError, match="ANSWER_LETTER_REFUSED:item-0000"):
         MODULE.build_answer_contract(
-            base_contract_path=fx.base_path, answer_dictionary_path=bad,
+            base_contract_path=base, answer_dictionary_path=bad,
             expected_answer_dictionary_sha256=sha(bad.read_bytes()), key=KEY, option_counts=fx.option_counts,
         )
 
@@ -239,10 +245,81 @@ def test_answer_contract_bound_to_another_base_refuses(fx, tmp_path):
         MODULE.load_answer_contract(fx.answer_path, other)
 
 
-def test_produce_refuses_until_the_vision_path_is_proven():
-    completed = subprocess.run([sys.executable, "-B", str(SOURCE), "produce"], capture_output=True, text=True)
-    assert completed.returncode == 2
-    assert "IMAGE_TEXT_REAL_EMITTER_UNWIRED_REFUSED" in completed.stdout
+def test_produce_refuses_until_the_vision_path_is_proven(capsys):
+    # In process: no child interpreter is spawned (review of PR 2345, R3).
+    assert MODULE.main(["produce"]) == 2
+    assert "IMAGE_TEXT_REAL_EMITTER_UNWIRED_REFUSED" in capsys.readouterr().out
+
+
+def _add_field(record_level: bool, name: str, value: object):
+    def mutate(p):
+        (p["records"][0] if record_level else p)[name] = value
+    return mutate
+
+
+@pytest.mark.parametrize("record_level,name,value", [
+    (True, "predicted_letter", "A"),
+    (True, "gold_letter", "A"),
+    (False, "gold_letter", "A"),
+    (False, "answer_key", KEY.hex()),
+    (True, "decoded_text_sha256", sha(b"A")),
+])
+def test_receipt_field_outside_the_allowlist_refuses(fx, record_level, name, value):
+    # Each mutation re-hashes the receipt, so only the allowlist can refuse it (deliberate red).
+    path = rewrite(fx.produce(lambda item_id, _p: "A"), _add_field(record_level, name, value))
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED"):
+        fx.verify(path)
+
+
+def test_model_bindings_must_be_flat_scalars(fx):
+    path = rewrite(fx.produce(lambda item_id, _p: "A"),
+                   lambda p: p["model_bindings"].__setitem__("answers", {"item-0000": "A"}))
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED"):
+        fx.verify(path)
+
+
+def test_receipt_holds_no_unkeyed_letter_digest(fx):
+    raw = fx.produce(lambda item_id, _p: f"Answer: {fx.answers[item_id]}").read_bytes().decode()
+    receipt = json.loads(raw)
+    assert all("predicted_letter" not in record for record in receipt["records"])
+    for letter in MODULE.LETTERS:
+        assert sha(letter.encode()) not in raw and sha(f"Answer: {letter}".encode()) not in raw
+
+
+def test_pass_harness_refuses_an_unbound_prediction_key(fx):
+    loaded = MODULE.load_answer_contract(fx.answer_path, fx.base_path)
+    with pytest.raises(ValueError, match="ANSWER_KEY_BINDING_REFUSED"):
+        MODULE.run_pass(loaded["base"], loaded["contract"], fx.read_payload,
+                        lambda *_a: {"decoded_text": "A"}, prediction_key=bytes(32))
+
+
+def test_caller_digest_must_equal_the_base_source_identity(fx, tmp_path):
+    # Deliberate red: a dictionary whose caller-supplied digest matches its own bytes, but not the base's frozen identity.
+    other = tmp_path / "other-answers.json"
+    other.write_bytes(canonical({**fx.answers, "item-0000": "B"}))
+    with pytest.raises(ValueError, match="ANSWER_DICTIONARY_IDENTITY_REFUSED:base_source"):
+        MODULE.build_answer_contract(
+            base_contract_path=fx.base_path, answer_dictionary_path=other,
+            expected_answer_dictionary_sha256=sha(other.read_bytes()), key=KEY, option_counts=fx.option_counts,
+        )
+
+
+def test_answer_contract_whose_dictionary_identity_differs_from_the_base_refuses(fx):
+    path = rewrite(fx.answer_path, lambda p: p.__setitem__("answer_dictionary_sha256", "e" * 64))
+    with pytest.raises(ValueError, match="ANSWER_CONTRACT_BINDING_REFUSED"):
+        MODULE.load_answer_contract(path, fx.base_path)
+
+
+@pytest.mark.parametrize("tamper", ["swap", "truncate"])
+def test_supplied_bytes_must_match_the_declared_hash(fx, tamper):
+    # Deliberate red: the reader hands back bytes that are not the declared object.
+    def bad_reader(ref, item_id):
+        raw = fx.read_payload(ref, item_id)
+        if item_id != "item-0003":
+            return raw
+        return raw[:-1] if tamper == "truncate" else bytes(reversed(raw))
+    with pytest.raises(ValueError, match="PAYLOAD_BINDING_REFUSED:item-0003"):
+        fx.produce(lambda item_id, _p: "A", read_payload=bad_reader)
 
 
 def _release_row_module():
