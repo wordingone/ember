@@ -53,10 +53,50 @@ class ResourceCensus(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'resource-consuming'):
                     launch.reject_resource_conflicts(self.rows, 2, set())
 
-    def test_exited_object_that_a_gpu_context_still_lists_refuses(self):
+    def test_exited_object_that_nvidia_smi_still_lists_is_not_a_tenant(self):
+        # Lead ruling 68756 (b): nvidia-smi still lists 69952 although the process exited; WDDM keeps a context on the dead object.
         self.add_with_state(True)
+        launch.reject_resource_conflicts(self.rows, 2, {3})
+
+    def test_live_gpu_listed_python_still_refuses(self):
+        # Same row shape as 69952 but alive: a real GPU tenant.
+        self.add_with_state(False, commit=2048)
         with self.assertRaisesRegex(ValueError, 'resource-consuming'):
             launch.reject_resource_conflicts(self.rows, 2, {3})
+
+    def test_unknown_state_gpu_listed_python_still_refuses(self):
+        self.add_with_state(None, commit=2048)
+        with self.assertRaisesRegex(ValueError, 'resource-consuming'):
+            launch.reject_resource_conflicts(self.rows, 2, {3})
+
+    def test_current_resource_census_passes_an_exited_gpu_listed_object_and_refuses_a_live_one(self):
+        original_run, original_census = launch.subprocess.run, launch.process_census
+        launch.subprocess.run = lambda command, **kwargs: type('R', (), {'stdout': '69952\n'})()
+        try:
+            for exited, refuses in ((True, False), (False, True), (None, True)):
+                with self.subTest(exited=exited):
+                    row = {'ProcessId': 69952, 'ParentProcessId': 0, 'Name': 'python.exe', 'PageFileUsage': 15382260,
+                           'CommandLine': 'python.exe serve_owned_cia_batch.py', 'HasExited': exited}
+                    launch.process_census = lambda row=row: [{'ProcessId': launch.os.getpid(), 'ParentProcessId': 0, 'Name': 'python.exe',
+                                                              'PageFileUsage': 2048, 'CommandLine': 'python.exe x.py'}, row]
+                    if refuses:
+                        with self.assertRaisesRegex(ValueError, r'\[69952\]'):
+                            launch.current_resource_census()
+                    else:
+                        rows = launch.current_resource_census()
+                        self.assertTrue([r for r in rows if r['ProcessId'] == 69952][0]['wddm_device_listed'])
+        finally:
+            launch.subprocess.run, launch.process_census = original_run, original_census
+
+    def test_an_exited_gpu_object_stays_counted_by_the_total_device_memory_gate(self):
+        # Skipping the exited object for tenancy does not hide its VRAM: the total-device sample counts every byte in use.
+        from ember.governance.scripts import cia_conformance_resources as resources
+        uuid = 'GPU-00000000-0000-0000-0000-000000000000'
+        total_mib = 24564
+        ok = resources.parse_device_sample(f'{uuid}, {total_mib}, 3056', uuid)
+        self.assertEqual(ok['used_bytes'], 3056 * 1024 ** 2)
+        with self.assertRaisesRegex(ValueError, 'total-device memory envelope exceeded'):
+            resources.parse_device_sample(f'{uuid}, {total_mib}, {20 * 1024 + 1}', uuid)
 
     def test_a_live_unowned_trainer_next_to_an_exited_object_still_refuses(self):
         self.add_with_state(True)
