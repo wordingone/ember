@@ -49,9 +49,10 @@ class Base(unittest.TestCase):
         stamp = CAPTURED_EPOCH - seconds_before_capture
         os.utime(self.receipt, (stamp, stamp))
 
-    def generate(self, *, head=H3, receipts=None, snapshot=None):
+    def generate(self, *, head=H3, receipts=None, snapshot=None, absent=()):
         return live.generate_live_page(snapshot_path=snapshot or self.snapshot, receipts_root=None, out_path=self.out,
-                                       receipt_paths=[self.receipt] if receipts is None else receipts, current_head=lambda: head, now=CAPTURED_EPOCH + 5)
+                                       receipt_paths=[self.receipt] if receipts is None else receipts, absent_paths=absent,
+                                       current_head=lambda: head, now=CAPTURED_EPOCH + 5)
 
     def page(self):
         return self.out.read_text(encoding='utf-8')
@@ -115,6 +116,48 @@ class StalePageTests(Base):
         verdict = self.generate(receipts=[self.dir / 'absent-receipt.json'])
         self.assertEqual(verdict['state'], 'STALE')
         self.assert_red_banner('receipt missing: absent-receipt.json')
+
+    def test_deliberate_red_a_source_absent_at_capture_that_appears_later_is_stale_for_marker_measurement_and_hold(self):
+        for name in ('gpu-window-open', 'episode-nll.json', 'training-hold.json'):
+            with self.subTest(name):
+                source = self.dir / name
+                if source.exists():
+                    source.unlink()
+                self.assertEqual(self.generate(absent=[source])['state'], 'CURRENT')     # control: still absent, the snapshot's answer stands
+                source.write_text('x', encoding='utf-8')
+                verdict = self.generate(absent=[source])
+                self.assertEqual(verdict['state'], 'STALE')
+                self.assert_red_banner(f'source appeared after the snapshot: {name}')
+
+    def test_deliberate_red_a_source_present_at_capture_that_is_later_removed_is_stale(self):
+        source = self.dir / 'gpu-window-open'
+        source.write_text('x', encoding='utf-8')
+        os.utime(source, (CAPTURED_EPOCH - 60, CAPTURED_EPOCH - 60))
+        self.assertEqual(self.generate(receipts=[self.receipt, source])['state'], 'CURRENT')    # control
+        source.unlink()
+        verdict = self.generate(receipts=[self.receipt, source])
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('receipt missing: gpu-window-open')
+
+    def test_the_real_cli_absent_flag_exits_0_before_the_named_source_appears_and_1_after(self):
+        pointer_root = self.dir / 'pointer-root'
+        source = self.dir / 'gpu-window-open'
+        args = ['--snapshot', str(self.snapshot), '--receipts-root', str(pointer_root), '--out', str(self.out), '--receipt', str(self.receipt),
+                '--absent', str(source)]
+        import selected_continuation_head
+        original = selected_continuation_head.current_head_sha256
+        selected_continuation_head.current_head_sha256 = lambda root: H3
+        try:
+            pointer = selected_continuation_head.pointer_path(pointer_root)
+            pointer.parent.mkdir(parents=True, exist_ok=True)
+            pointer.write_text('{}', encoding='utf-8')
+            os.utime(pointer, (CAPTURED_EPOCH - 60, CAPTURED_EPOCH - 60))
+            self.assertEqual(live.main(args), 0)                                      # control: the source is still absent
+            source.write_text('x', encoding='utf-8')
+            self.assertEqual(live.main(args), 1)                                      # it appeared after the snapshot: STALE, nonzero
+            self.assertIn('source appeared after the snapshot: gpu-window-open', self.page().splitlines()[0])
+        finally:
+            selected_continuation_head.current_head_sha256 = original
 
     def test_a_live_head_reader_that_raises_is_stale_not_a_crash(self):
         def broken():

@@ -130,7 +130,7 @@ class ScoredPairChainTests(unittest.TestCase):
         bindings.update(binding_overrides)
         path = self.scored_dir / f'{role}-scored.json'
         # a real scorer-v12 receipt: label, and one measured row per episode (the head mover refuses a header without scores)
-        fresh = {'mean_nll': loss} if getattr(self, 'header_only', False) else {'episodes': 2, 'mean_nll': loss, 'per_episode': [{'nll': loss}, {'nll': loss}]}
+        fresh = {'mean_nll': loss} if getattr(self, 'header_only', False) else {'episodes': 2, 'mean_nll': loss, 'total_nll': loss * 2048, 'targets': 2048, 'per_episode': [{'shard_index': 0, 'token_offset': 0, 'loss_sum': loss * 1024, 'targets': 1024}, {'shard_index': 0, 'token_offset': 1024, 'loss_sum': loss * 1024, 'targets': 1024}]}
         path.write_text(json.dumps({'schema': 'ember-2119-child-episode-nll-v1', 'label': 'scorer v12 fixture', 'bindings': bindings,
                                     'arms': {'fresh': fresh}}), encoding='utf-8')
         return path, ckpt_receipt

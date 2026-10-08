@@ -54,6 +54,10 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
         import lineage_candidate_audit
         import training_continuity_status
         import training_lineage_ancestry
+        # presence of every named live source is captured BEFORE any is read, so what the status says (a section, or UNKNOWN for a missing source)
+        # and what freshness later compares against are the same moment
+        named_sources = [Path(source) for source in (gpu_window_marker, measurement_receipt, hold_record) if source is not None]
+        present_at_capture = {source: source.exists() for source in named_sources}
         hour_result = json.loads(Path(hour_result_path).read_text(encoding='utf-8'))
         record = training_lineage_ancestry.walk_lineage(
             head_directory, expected_genesis_manifest_sha256=expected_genesis_manifest_sha256)
@@ -88,13 +92,13 @@ def publish_snapshot(*, head_directory: Path, hour_result_path: Path, expected_g
             if receipts_root is None:
                 raise ValueError('page_path needs receipts_root: the live head is read from the pointer, never from this snapshot')
             import continuity_page_live
-            # Freshness tracks every live input the status was built from, not just the hour result: a hold record, a measurement receipt or a window
-            # marker that exists now and changes (or disappears) after this snapshot makes the page STALE. A named source that is absent now is
-            # already UNKNOWN in the status, so it is not tracked (it would read STALE forever).
-            tracked = [Path(hour_result_path)] + [Path(source) for source in (gpu_window_marker, measurement_receipt, hold_record)
-                                                  if source is not None and Path(source).exists()]
+            # Freshness tracks every live input the status was built from, not just the hour result. A source present at capture that changes or
+            # disappears makes the page STALE; a source ABSENT at capture stays a named dependency (its status section is UNKNOWN, or the marker means
+            # no window) and makes the page STALE the moment it appears. Dropping an absent source would leave that old answer CURRENT.
+            tracked = [Path(hour_result_path)] + [source for source in named_sources if present_at_capture[source]]
+            absent = [source for source in named_sources if not present_at_capture[source]]
             verdict = continuity_page_live.generate_live_page(snapshot_path=path, receipts_root=Path(receipts_root), out_path=Path(page_path),
-                                                              receipt_paths=tracked)
+                                                              receipt_paths=tracked, absent_paths=absent)
             outcome['page'] = {'status': 'WRITTEN', 'path': str(page_path), 'state': verdict['state'], 'reasons': verdict['reasons']}
         except Exception as error:  # noqa: BLE001 - the snapshot is already written; report
             outcome['page'] = {'status': 'FAILED', 'why': f'{type(error).__name__}: {error}'}

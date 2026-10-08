@@ -47,6 +47,32 @@ def write_manifest(root: Path, name: str, *, tokens: int, step: int, parent: Pat
     return directory, hashlib.sha256(raw).hexdigest()
 
 
+
+def bad_score_rows():
+    """Scorer-v12 arms.fresh shapes that carry no usable scored rows. Each is refused by name (review finding 1; the first is the reviewer's pinned counterexample)."""
+    row = {'loss_sum': 4608.0, 'targets': 1024}
+    good = {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [dict(row), dict(row)]}
+    def with_rows(first, **over):
+        return dict(good, per_episode=[first, dict(row)], **over)
+    return {
+        'rows with no scored values': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]},
+        'rows with no scored values and consistent totals': dict(good, per_episode=[{}, {}]),
+        'nan loss_sum': with_rows(dict(row, loss_sum=float('nan'))),
+        'infinite loss_sum': with_rows(dict(row, loss_sum=float('inf'))),
+        'negative loss_sum': with_rows(dict(row, loss_sum=-1.0)),
+        'string loss_sum': with_rows(dict(row, loss_sum='4608.0')),
+        'target count 0': with_rows(dict(row, targets=0), targets=1024),
+        'fractional target count': with_rows(dict(row, targets=1024.5)),
+        'boolean target count': with_rows(dict(row, targets=True)),
+        'row is not an object': dict(good, per_episode=[4.5, 4.5]),
+        'mean disagrees with the rows': dict(good, mean_nll=9.0),
+        'total_nll disagrees with the rows': dict(good, total_nll=100.0),
+        'arm targets disagree with the rows': dict(good, targets=2049),
+        'no total_nll': {key: value for key, value in good.items() if key != 'total_nll'},
+        'no arm targets': {key: value for key, value in good.items() if key != 'targets'},
+    }
+
+
 class Fixture(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -64,12 +90,12 @@ class Fixture(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
 
-    def score_fields(self, *, child=None, plan=None, scores=True, name='score-receipt.json'):
+    def score_fields(self, *, child=None, plan=None, scores=True, name='score-receipt.json', fresh_override=None):
         """A scorer-v12 receipt for `child` (default the fixture child) on the cadence plan, written and cited by digest, the way the head mover re-checks it."""
-        fresh = {'episodes': 2, 'mean_nll': 3.5, 'per_episode': [{'nll': 3.4}, {'nll': 3.6}]}
+        fresh = {'episodes': 2, 'total_nll': 7168.0, 'targets': 2048, 'mean_nll': 3.5, 'per_episode': [{'loss_sum': 3481.6, 'targets': 1024}, {'loss_sum': 3686.4, 'targets': 1024}]}
         body = {'schema': cadence.CADENCE_SCORE_SCHEMA, 'label': 'child-episode-nll scorer v12 fixture',
                 'bindings': {'episode_plan_sha256': plan or cadence.CADENCE_PLAN_SHA256, 'checkpoint_manifest_sha256': child or self.c_sha},
-                'arms': {'fresh': fresh if scores else {'mean_nll': 3.5}}}
+                'arms': {'fresh': fresh_override if fresh_override is not None else fresh if scores else {'mean_nll': 3.5}}}
         path = self.root / name
         raw = json.dumps(body, sort_keys=True).encode()
         path.write_bytes(raw)
@@ -279,6 +305,12 @@ class PromoteIntegrationTests(Fixture):
         spec = {**self.spec(), **self.score_fields(scores=False, name='header-only.json')}
         self.refused_before_any_move(spec, 'carries no scores')
 
+    def test_a_receipt_whose_rows_carry_no_valid_scored_values_is_refused_before_any_move_deliberate_red(self):
+        for name, fresh in bad_score_rows().items():
+            with self.subTest(name):
+                spec = {**self.spec(), **self.score_fields(fresh_override=fresh, name='bad-rows.json')}
+                self.refused_before_any_move(spec, 'carries no scores')
+
     def test_a_receipt_that_does_not_hash_to_the_cited_digest_is_refused_deliberate_red(self):
         spec = self.spec()
         spec['score_receipt_sha256'] = '0' * 64
@@ -397,7 +429,29 @@ class PromoteIntegrationTests(Fixture):
             self.assertEqual(tracked, {self.hour_result, *sources.values()})           # a changed hold, measurement or marker makes the page STALE
             captured.clear()
             self.run_promote(self.spec(page_path=str(self.root / 'p.md'), hold_record=absent))
-            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})   # an absent named source is UNKNOWN in the status, not tracked
+            # an absent named source stays a named dependency with its captured absence (review finding 2): UNKNOWN in the status now, STALE once it appears
+            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})
+            self.assertEqual({Path(path) for path in captured['absent_paths']}, {Path(absent)})
+
+    def test_every_absent_named_source_is_passed_with_its_captured_absence_and_none_when_all_exist_deliberate_red(self):
+        import continuity_page_live
+        from unittest import mock
+        names = ('gpu_window_marker', 'measurement_receipt', 'hold_record')
+        captured = {}
+
+        def fake_page(**kwargs):
+            captured.update(kwargs)
+            return {'state': 'CURRENT', 'reasons': []}
+        with mock.patch.object(continuity_page_live, 'generate_live_page', fake_page):
+            absent = {name: self.root / f'{name}.absent' for name in names}
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in absent.items()}))
+            self.assertEqual({Path(path) for path in captured['absent_paths']}, set(absent.values()))
+            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})
+            captured.clear()
+            for path in absent.values():
+                path.write_text('x', encoding='utf-8')
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in absent.items()}))
+            self.assertEqual(list(captured['absent_paths']), [])
 
     def test_a_non_string_or_empty_producer_key_refuses_before_any_move_deliberate_red(self):
         for field in ('gpu_window_marker', 'measurement_receipt', 'hold_record'):

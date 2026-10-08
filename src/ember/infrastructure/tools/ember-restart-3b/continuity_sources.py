@@ -31,6 +31,8 @@ from typing import Any, Callable
 SCORE_SCHEMA = 'ember-2119-child-episode-nll-v1'
 HOLD_SCHEMA = 'ember-training-hold-v1'
 UNKNOWN = 'UNKNOWN'
+# the scorer states no tolerance; its mean is float64 total / targets, so a relative 1e-6 only absorbs float summation order, not a wrong number
+SCORE_REL_TOL = 1e-6
 _STAMP = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')
 # command-line markers of a process that holds the GPU for training; a scorer or probe holds the GPU only inside a governed window, which writes the marker
 TRAINER_MARKERS = ('cia_hour.py', 'cia_step_runner.py', 'certified_train_launch.py', 'cia_verify_tail.py')
@@ -53,6 +55,26 @@ def scores_problem(body: Any) -> str | None:
         return 'arms.fresh.mean_nll is not a finite number'
     if not isinstance(per_episode, list) or len(per_episode) != episodes:
         return 'arms.fresh.per_episode does not hold one row per episode'
+    # scorer v12 writes one row per episode {shard_index, token_offset, loss_sum, targets} and the arm totals total_nll / targets / mean_nll
+    # (= total_nll / targets); a row with no scored values is not a measurement, so every row and the aggregate are checked
+    loss_total, target_total = 0.0, 0
+    for index, row in enumerate(per_episode):
+        if not isinstance(row, dict):
+            return f'arms.fresh.per_episode[{index}] is not a row object'
+        loss, targets = row.get('loss_sum'), row.get('targets')
+        if isinstance(loss, bool) or not isinstance(loss, (int, float)) or not math.isfinite(loss) or loss < 0:
+            return f'arms.fresh.per_episode[{index}].loss_sum is not a finite non-negative number'
+        if isinstance(targets, bool) or not isinstance(targets, int) or targets < 1:
+            return f'arms.fresh.per_episode[{index}].targets is not an integer of at least 1'
+        loss_total += float(loss)
+        target_total += targets
+    total, arm_targets = fresh.get('total_nll'), fresh.get('targets')
+    if isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total) or not math.isclose(total, loss_total, rel_tol=SCORE_REL_TOL):
+        return 'arms.fresh.total_nll does not equal the sum of the row loss_sum values'
+    if isinstance(arm_targets, bool) or not isinstance(arm_targets, int) or arm_targets != target_total:
+        return 'arms.fresh.targets does not equal the sum of the row targets'
+    if not math.isclose(mean, loss_total / target_total, rel_tol=SCORE_REL_TOL):
+        return 'arms.fresh.mean_nll does not equal the row loss_sum total over the row targets total'
     return None
 
 

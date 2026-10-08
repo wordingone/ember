@@ -106,11 +106,37 @@ class GpuOwnerTests(SourceFixture):
         self.assertEqual(sources.gpu_owner(self.root / 'absent', lambda: sources.trainers_in_rows('garbage'))['status'], 'UNKNOWN')
 
 
+
+def bad_score_rows():
+    """Scorer-v12 arms.fresh shapes that carry no usable scored rows. Each is refused by name (review finding 1; the first is the reviewer's pinned counterexample)."""
+    row = {'loss_sum': 4608.0, 'targets': 1024}
+    good = {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [dict(row), dict(row)]}
+    def with_rows(first, **over):
+        return dict(good, per_episode=[first, dict(row)], **over)
+    return {
+        'rows with no scored values': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]},
+        'rows with no scored values and consistent totals': dict(good, per_episode=[{}, {}]),
+        'nan loss_sum': with_rows(dict(row, loss_sum=float('nan'))),
+        'infinite loss_sum': with_rows(dict(row, loss_sum=float('inf'))),
+        'negative loss_sum': with_rows(dict(row, loss_sum=-1.0)),
+        'string loss_sum': with_rows(dict(row, loss_sum='4608.0')),
+        'target count 0': with_rows(dict(row, targets=0), targets=1024),
+        'fractional target count': with_rows(dict(row, targets=1024.5)),
+        'boolean target count': with_rows(dict(row, targets=True)),
+        'row is not an object': dict(good, per_episode=[4.5, 4.5]),
+        'mean disagrees with the rows': dict(good, mean_nll=9.0),
+        'total_nll disagrees with the rows': dict(good, total_nll=100.0),
+        'arm targets disagree with the rows': dict(good, targets=2049),
+        'no total_nll': {key: value for key, value in good.items() if key != 'total_nll'},
+        'no arm targets': {key: value for key, value in good.items() if key != 'targets'},
+    }
+
+
 class MeasurementTests(SourceFixture):
     def receipt(self, head=HEAD, **over):
         body = {'schema': sources.SCORE_SCHEMA, 'label': 'scorer-v12', 'finished_utc': '2026-10-08T18:00:00Z',
                 'bindings': {'checkpoint_manifest_sha256': head, 'episode_plan_sha256': '9' * 64},
-                'arms': {'fresh': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
+                'arms': {'fresh': {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
         body.update(over)
         return self.write('episode-nll-H34.json', body)
 
@@ -143,6 +169,21 @@ class MeasurementTests(SourceFixture):
             out = sources.last_measurement_from_receipt(self.write('headeronly.json', json.dumps(body, allow_nan=True)), HEAD)
             self.assertEqual(out['status'], 'UNKNOWN', name)
             self.assertIn('carries no scores', out['reason'], name)
+
+    def test_a_score_receipt_whose_rows_carry_no_valid_scored_values_is_unknown_never_measured_DELIBERATE_RED(self):
+        for name, fresh in bad_score_rows().items():
+            with self.subTest(name):
+                body = {'schema': sources.SCORE_SCHEMA, 'label': 'scorer-v12', 'finished_utc': '2026-10-08T18:00:00Z',
+                        'bindings': {'checkpoint_manifest_sha256': HEAD, 'episode_plan_sha256': '9' * 64}, 'arms': {'fresh': fresh}}
+                out = sources.last_measurement_from_receipt(self.write('badrows.json', json.dumps(body, allow_nan=True)), HEAD)
+                self.assertEqual(out['status'], 'UNKNOWN')
+                self.assertIn('carries no scores', out['reason'])
+                self.assertIsNotNone(sources.scores_problem(body))
+
+    def test_a_mean_that_differs_only_by_float_summation_order_is_still_measured(self):
+        fresh = {'episodes': 3, 'total_nll': 0.1 + 0.2 + 0.3, 'targets': 3, 'mean_nll': 0.6 / 3,
+                 'per_episode': [{'loss_sum': 0.1, 'targets': 1}, {'loss_sum': 0.2, 'targets': 1}, {'loss_sum': 0.3, 'targets': 1}]}
+        self.assertIsNone(sources.scores_problem({'arms': {'fresh': fresh}}))
 
     def test_no_finish_time_is_unknown(self):
         self.assertEqual(sources.last_measurement_from_receipt(self.receipt(finished_utc='yesterday'), HEAD)['status'], 'UNKNOWN')

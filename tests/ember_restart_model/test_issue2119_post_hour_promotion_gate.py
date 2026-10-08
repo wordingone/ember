@@ -130,6 +130,32 @@ class GateTests(GateFixture):
         self.assertEqual(self.receipt()['scored_pair_cli_exit'], 3)
 
 
+
+def bad_score_rows():
+    """Scorer-v12 arms.fresh shapes that carry no usable scored rows. Each is refused by name (review finding 1; the first is the reviewer's pinned counterexample)."""
+    row = {'loss_sum': 4608.0, 'targets': 1024}
+    good = {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [dict(row), dict(row)]}
+    def with_rows(first, **over):
+        return dict(good, per_episode=[first, dict(row)], **over)
+    return {
+        'rows with no scored values': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]},
+        'rows with no scored values and consistent totals': dict(good, per_episode=[{}, {}]),
+        'nan loss_sum': with_rows(dict(row, loss_sum=float('nan'))),
+        'infinite loss_sum': with_rows(dict(row, loss_sum=float('inf'))),
+        'negative loss_sum': with_rows(dict(row, loss_sum=-1.0)),
+        'string loss_sum': with_rows(dict(row, loss_sum='4608.0')),
+        'target count 0': with_rows(dict(row, targets=0), targets=1024),
+        'fractional target count': with_rows(dict(row, targets=1024.5)),
+        'boolean target count': with_rows(dict(row, targets=True)),
+        'row is not an object': dict(good, per_episode=[4.5, 4.5]),
+        'mean disagrees with the rows': dict(good, mean_nll=9.0),
+        'total_nll disagrees with the rows': dict(good, total_nll=100.0),
+        'arm targets disagree with the rows': dict(good, targets=2049),
+        'no total_nll': {key: value for key, value in good.items() if key != 'total_nll'},
+        'no arm targets': {key: value for key, value in good.items() if key != 'targets'},
+    }
+
+
 _OMIT = object()          # a score() override that removes the key from the receipt
 
 
@@ -140,7 +166,7 @@ class CadenceTests(GateFixture):
     def score(self, **over):
         body = {'schema': gate.CADENCE_SCORE_SCHEMA, 'label': 'H99 child episode NLL v12 template forward',
                 'bindings': {'episode_plan_sha256': gate.CADENCE_PLAN_SHA256, 'checkpoint_manifest_sha256': self.CHILD},
-                'arms': {'fresh': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
+                'arms': {'fresh': {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [{'loss_sum': 4608.0, 'targets': 1024}, {'loss_sum': 4608.0, 'targets': 1024}]}}}
         body.update(over)
         body = {key: value for key, value in body.items() if value is not _OMIT}
         path = self.custody / 'episode-nll.json'
@@ -205,6 +231,15 @@ class CadenceTests(GateFixture):
                            'no mean': dict(arms={'fresh': dict(fresh, mean_nll=None)}), 'rows differ': dict(arms={'fresh': dict(fresh, per_episode=[])})}.items():
             with self.subTest(name):
                 path, digest = self.score(**over)
+                code, out = self.advance(path, digest)
+                self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)
+                self.assertIn('carries no scores', out)
+                self.assertEqual(self.calls, [])
+
+    def test_a_receipt_whose_rows_carry_no_valid_scored_values_refuses_the_advance_DELIBERATE_RED(self):
+        for name, fresh in bad_score_rows().items():
+            with self.subTest(name):
+                path, digest = self.score(arms={'fresh': fresh})
                 code, out = self.advance(path, digest)
                 self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)
                 self.assertIn('carries no scores', out)
