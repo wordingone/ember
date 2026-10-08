@@ -1142,6 +1142,14 @@ def require_result_outside_lost_custody(identity, result_path):
         raise ValueError('a verify-tail result path inside the lost custody is refused')
 
 
+def require_tail_custody_outside_lost_custody(identity, custody):
+    """review 67480 P1: the tail's prospective custody (parent / measurement-<tail_run_id>) must resolve outside the lost tree before launch creates it."""
+    lost = Path(identity['verify_tail']['lost_custody']).resolve(strict=False)
+    target = Path(custody).resolve(strict=False)
+    if target == lost or lost in target.parents:
+        raise ValueError('a verify-tail custody inside the lost custody is refused')
+
+
 def validate_trajectory_resources(identity):
     if trajectory_mode(identity):
         emission = trajectory_checkpoint_emission(identity)
@@ -2900,6 +2908,9 @@ def launch(args, dispatch):
     if dispatch['job_id'] != run_id:
         raise ValueError('prediction run identity differs from authenticated dispatch')
     parent = args.custody.resolve(strict=True)
+    if verify_tail_mode(prediction['identity']):
+        # The lost custody is read-only: refuse a tail custody inside it BEFORE the drive check, the mkdir or any stamp (a later refusal cannot undo a write).
+        require_tail_custody_outside_lost_custody(prediction['identity'], parent / ('measurement-' + run_id))
     if parent.drive.upper() != 'B:' or not parent.is_dir():
         raise ValueError('daemon custody must be an existing B directory')
     custody = parent / ('measurement-' + run_id)

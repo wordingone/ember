@@ -330,6 +330,27 @@ class TailEntryTests(Fixture):
         shutil.rmtree(self.custody / 'trained-child')
         self.refuses('no published trained-child')
 
+    def test_it_refuses_published_child_manifest_bytes_that_differ_from_the_frozen_digest_before_any_build(self):
+        """review 67480 P2: a valid unchanged witness is not enough; the REAL manifest bytes are checked in preflight, read-only."""
+        identity = self.identity_for()
+        manifest = self.custody / 'trained-child' / 'checkpoint-manifest.json'
+        original = manifest.read_bytes()
+        witness_before = (self.custody / cia_hour.TERMINAL_WITNESS).read_bytes()
+        manifest.write_bytes(original + b' ')
+        self.refuses('manifest bytes differ from the digest frozen', identity=identity)
+        self.assertEqual((self.custody / cia_hour.TERMINAL_WITNESS).read_bytes(), witness_before)    # the witness still matches its pin
+        manifest.write_bytes(original)
+        self.preflight(identity)                                                                    # restored bytes pass again
+        manifest.unlink()
+        self.refuses('no published checkpoint manifest', identity=identity)
+
+    def test_preflight_reads_the_lost_custody_without_writing_into_it(self):
+        before = self.listing(self.custody)
+        stamps = {name: (self.custody / name).stat().st_mtime_ns for name in before if (self.custody / name).is_file()}
+        self.preflight()
+        self.assertEqual(self.listing(self.custody), before)
+        self.assertEqual({name: (self.custody / name).stat().st_mtime_ns for name in stamps}, stamps)
+
     def test_it_refuses_a_lost_custody_that_is_not_the_measurement_directory_of_the_lost_run(self):
         self.refuses('is not a directory', identity=self.identity_for(lost_custody=str(self.root / 'absent')))
         self.refuses('not the measurement directory', identity=self.identity_for(lost_run_id='c' * 32))
@@ -491,6 +512,65 @@ class SourcePinTests(unittest.TestCase):
         import cia_step_runner as runner
         self.assertIn("'verify_tail'", inspect.getsource(runner.prepare_execution))
         self.assertIn('verify_tail_mode(identity)', inspect.getsource(runner.prepare_execution))
+
+
+class LaunchBoundaryTests(unittest.TestCase):
+    """review 67480 P1: launch() validates the tail custody is outside the lost tree BEFORE any mkdir, stamp or other write."""
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.lost = self.root / ('measurement-' + LOST_ID)
+        (self.lost / 'nested').mkdir(parents=True)
+        (self.lost / 'trained-child').mkdir()
+        self.sibling = self.root / 'daemon-custody'
+        self.sibling.mkdir()
+        identity = {'run_id': TAIL_ID, 'hour': dict(SourcePinTests.HOUR), 'training_job_purpose': 'DIAGNOSTIC',
+                    'verify_tail': {'lost_custody': str(self.lost), 'lost_run_id': LOST_ID,
+                                    'witness_sha256': 'c' * 64, 'child_manifest_sha256': 'd' * 64}}
+        raw = json.dumps({'identity': identity}).encode()
+        self.prediction = self.root / 'prediction.json'
+        self.prediction.write_bytes(raw)
+        self.digest = hashlib.sha256(raw).hexdigest()
+
+    def launch(self, parent):
+        import cia_step_runner as runner
+        args = types.SimpleNamespace(live=True, prediction=self.prediction, prediction_sha256=self.digest, custody=parent,
+                                     hidden_helper=self.root / 'absent-helper')
+        with patch.dict(os.environ, {'EMBER_GATE_AUTHORIZED': '1'}):
+            return runner.launch(args, {'job_id': TAIL_ID})
+
+    def snapshot(self):
+        return sorted(str(p.relative_to(self.root)) for p in self.root.rglob('*'))
+
+    def test_a_parent_equal_to_the_lost_custody_or_nested_in_it_creates_nothing(self):
+        for parent in (self.lost, self.lost / 'nested'):
+            before = self.snapshot()
+            with self.assertRaisesRegex(ValueError, 'custody inside the lost custody is refused'):
+                self.launch(parent)
+            self.assertEqual(self.snapshot(), before)
+            self.assertFalse((parent / ('measurement-' + TAIL_ID)).exists())
+
+    def test_a_sibling_parent_passes_the_containment_check_and_still_creates_nothing_before_later_gates(self):
+        before = self.snapshot()
+        with self.assertRaises(ValueError) as caught:                      # a non-B tmp parent trips the later drive gate, not containment
+            self.launch(self.sibling)
+        self.assertNotIn('inside the lost custody', str(caught.exception))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_the_containment_check_runs_before_the_mkdir_in_launch(self):
+        import cia_step_runner as runner
+        source = inspect.getsource(runner.launch)
+        self.assertLess(source.index('require_tail_custody_outside_lost_custody('), source.index('custody.mkdir()'))
+        self.assertLess(source.index('require_tail_custody_outside_lost_custody('), source.index("tail_stamp(custody, 'segment_launch')"))
+
+    def test_the_containment_function_refuses_the_lost_tree_and_admits_a_sibling(self):
+        import cia_step_runner as runner
+        identity = {'verify_tail': {'lost_custody': str(self.lost)}}
+        for inside in (self.lost, self.lost / 'nested' / ('measurement-' + TAIL_ID), self.lost / ('measurement-' + TAIL_ID)):
+            with self.assertRaisesRegex(ValueError, 'inside the lost custody'):
+                runner.require_tail_custody_outside_lost_custody(identity, inside)
+        runner.require_tail_custody_outside_lost_custody(identity, self.sibling / ('measurement-' + TAIL_ID))
 
 
 class DriftTests(unittest.TestCase):

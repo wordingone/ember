@@ -20,6 +20,7 @@ the GPU build and the restore against the witness are not exercised by this file
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -77,8 +78,14 @@ def pin_lost_custody(identity: dict, *, hour_module) -> tuple:
         raise Refused('terminal witness bytes differ from the digest frozen in the tail prediction')
     if witness['child_manifest_sha256'] != pin['child_manifest_sha256']:
         raise Refused('terminal witness describes another child than the one frozen in the tail prediction')
-    if not (lost / 'trained-child').is_dir():
+    child = lost / 'trained-child'
+    if not child.is_dir():
         raise Refused('no published trained-child under the lost custody')
+    manifest = child / 'checkpoint-manifest.json'
+    if manifest.is_symlink() or not manifest.is_file():
+        raise Refused('no published checkpoint manifest under the lost trained-child')
+    if hashlib.sha256(manifest.read_bytes()).hexdigest() != pin['child_manifest_sha256']:
+        raise Refused('published trained-child manifest bytes differ from the digest frozen in the tail prediction')
     return witness, digest
 
 
