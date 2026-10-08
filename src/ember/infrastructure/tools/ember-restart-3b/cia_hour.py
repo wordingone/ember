@@ -557,7 +557,8 @@ def verify_tail(runner, model, optimizer, inventory, identity, lost_custody):
                 lost_run_id=pin['lost_run_id'],
                 child_manifest_sha256=child['checkpoint_manifest_sha256'],
                 witness_sha256=witness_sha256,
-                restored_state_matches=True, hour_result_written=False, head_advanced=False)
+                restored_state_matches=True, hour_result_written=False, head_advanced=False,
+                data_cursor=dict(child['data_cursor']), committed_cursor_advanced=False)
 
 
 def write_verify_tail_result(runner, tail_custody, identity, result):
@@ -566,8 +567,20 @@ def write_verify_tail_result(runner, tail_custody, identity, result):
     tail = Path(tail_custody)
     target = tail / VERIFY_TAIL_RESULT
     runner.require_result_outside_lost_custody(identity, target)
-    if not (tail / 'worker-terminal.json').is_file():
+    terminal_path = tail / 'worker-terminal.json'
+    if not terminal_path.is_file():
         raise ValueError('the tail result is written only after its own worker-terminal')
+    terminal_bytes = terminal_path.read_bytes()
+    try:
+        terminal = json.loads(terminal_bytes)
+    except ValueError as error:
+        raise ValueError('the tail worker-terminal is unreadable') from error
+    # review 67531: the zero-applied claim is the worker's own terminal count, not a constant of this function.
+    if (not isinstance(terminal, dict) or terminal.get('status') != 'completed'
+            or type(terminal.get('applied_positions')) is not int or terminal['applied_positions'] != 0):
+        raise ValueError('a verify-only tail applies no positions: its worker-terminal must be completed with applied_positions == 0')
+    result = dict(result, worker_terminal_sha256=hashlib.sha256(terminal_bytes).hexdigest(),
+                  worker_terminal_applied_positions=terminal['applied_positions'])
     runner._write_new(target, result)
     return runner.file_sha256(target)
 

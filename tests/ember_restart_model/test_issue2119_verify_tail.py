@@ -230,21 +230,39 @@ class ResultCustodyTests(Fixture):
         with self.assertRaisesRegex(ValueError, 'only after its own worker-terminal'):
             cia_hour.write_verify_tail_result(self.runner, self.tail_custody, self.identity, self.result)
         self.assertFalse((self.tail_custody / cia_hour.VERIFY_TAIL_RESULT).exists())
-        (self.tail_custody / 'worker-terminal.json').write_text('{"status": "completed"}')
+        (self.tail_custody / 'worker-terminal.json').write_text('{"status": "completed", "applied_positions": 0}')
         digest = cia_hour.write_verify_tail_result(self.runner, self.tail_custody, self.identity, self.result)
         written = self.tail_custody / cia_hour.VERIFY_TAIL_RESULT
         self.assertEqual(digest, FakeRunner.file_sha256(written))
-        self.assertEqual(json.loads(written.read_bytes()), self.result)
+        record = json.loads(written.read_bytes())
+        terminal = self.tail_custody / 'worker-terminal.json'
+        self.assertEqual(record, dict(self.result, worker_terminal_sha256=FakeRunner.file_sha256(terminal), worker_terminal_applied_positions=0))
         self.assertEqual(self.listing(self.custody), lost_before)
 
+    def test_the_result_records_the_witness_child_cursor_and_no_committed_cursor_advance(self):
+        self.assertEqual(self.result['data_cursor'], CURSOR)                                    # the verified child (== witness) cursor identity
+        self.assertEqual(self.result['data_cursor'], self.terminal_state['data_cursor'])
+        self.assertIs(self.result['committed_cursor_advanced'], False)
+        self.assertIs(self.result['head_advanced'], False)
+
+    def test_a_terminal_that_is_not_completed_with_zero_applied_positions_refuses_and_writes_no_result(self):
+        terminal = self.tail_custody / 'worker-terminal.json'
+        for body in ('{"status": "completed", "applied_positions": 4096}', '{"status": "completed"}', '{"status": "completed", "applied_positions": true}',
+                     '{"status": "completed", "applied_positions": 0.0}', '{"status": "failed", "applied_positions": 0}', 'not json', '[]'):
+            terminal.write_text(body)
+            with self.assertRaisesRegex(ValueError, 'applies no positions|unreadable'):
+                cia_hour.write_verify_tail_result(self.runner, self.tail_custody, self.identity, self.result)
+            self.assertFalse((self.tail_custody / cia_hour.VERIFY_TAIL_RESULT).exists(), body)
+            terminal.unlink()
+
     def test_one_result_per_tail(self):
-        (self.tail_custody / 'worker-terminal.json').write_text('{"status": "completed"}')
+        (self.tail_custody / 'worker-terminal.json').write_text('{"status": "completed", "applied_positions": 0}')
         cia_hour.write_verify_tail_result(self.runner, self.tail_custody, self.identity, self.result)
         with self.assertRaises(FileExistsError):
             cia_hour.write_verify_tail_result(self.runner, self.tail_custody, self.identity, self.result)
 
     def test_a_result_path_inside_the_lost_custody_refuses_and_writes_nothing(self):
-        (self.custody / 'worker-terminal.json').write_text('{"status": "completed"}')      # even a custody that looks finished
+        (self.custody / 'worker-terminal.json').write_text('{"status": "completed", "applied_positions": 0}')      # even a custody that looks finished
         lost_before = self.listing(self.custody)
         with self.assertRaisesRegex(ValueError, 'inside the lost custody'):
             cia_hour.write_verify_tail_result(self.runner, self.custody, self.identity, self.result)
