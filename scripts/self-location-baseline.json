@@ -1719,7 +1719,7 @@
       "expression": "os.path.join(GOVERNANCE_SCRIPTS, 'ember_totality', 'receipts-totality')",
       "expression_sha256": "d5245d5cff458415ad2ebbc61623a59546f8962a47d859e5ea8fc723322b3973",
       "justification": "Correct as emitted, and the only one of these rows whose derived path is NOT an ancestor of the file. `DEFAULT_DATA_ROOT` names a DATA location, not a self-location: it derives to `<root>/src/ember/governance/scripts/ember_totality/receipts-totality`, a receipts directory addressed from a governance root. `_root_like` matches it on the trailing ROOT and expects the repository root; the binding is about where data lives, and the two are different questions that the name-based predicate cannot separate.",
-      "line": 64,
+      "line": 65,
       "path": "src/ember/governance/scripts/gen_readme_status.py",
       "status": "MISMATCH",
       "target": "DEFAULT_DATA_ROOT"
@@ -2482,6 +2482,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "2ac9cea5bdc15e75db98f415ce28d524d2a38261644d0528330d927b2ad64fd5",
+  "self_sha256": "d2869e81c99d72ba738d59ca6bc93b038784608b40fc1da58d0eb244bc97d74b",
   "workstream_id": "EMBER-02A"
 }
