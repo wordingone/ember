@@ -32,15 +32,19 @@ def utc_stamp(now: float | None = None) -> str:
     return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() if now is None else now))
 
 
-def build_snapshot(status: Mapping[str, Any], *, captured_at: str | None = None) -> dict[str, Any]:
-    """The committed record: exactly the status dict, its capture time and the head it describes."""
+def build_snapshot(status: Mapping[str, Any], *, candidate_audit: Mapping[str, Any], captured_at: str | None = None) -> dict[str, Any]:
+    """The committed record: exactly the status dict, its capture time, the head it describes and the candidate audit (the refused
+    child and the duplicate-credit check, derived from files by `lineage_candidate_audit`; pass its `public_view`, which carries no path).
+    No snapshot was ever committed under this schema, so the audit is part of v1 rather than a v2."""
     if status.get('schema') != STATUS_SCHEMA:
         raise ValueError(f'status schema must be {STATUS_SCHEMA}')
     head = status.get('lineage_checkpoint_manifest_sha256')
     if not isinstance(head, str) or not head:
         raise ValueError('status carries no lineage head digest')
+    if not isinstance(candidate_audit, Mapping) or not candidate_audit.get('status'):
+        raise ValueError('a snapshot needs the candidate audit (status NO_CANDIDATE when there is none)')
     return {'schema_version': SNAPSHOT_SCHEMA, 'captured_at': captured_at or utc_stamp(), 'head_manifest_sha256': head,
-            'status': dict(status)}
+            'status': dict(status), 'candidate_audit': dict(candidate_audit)}
 
 
 def write_snapshot(path: Path, snapshot: Mapping[str, Any]) -> Path:
