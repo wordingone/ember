@@ -60,6 +60,12 @@ def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_path
         captured_epoch = _parse_stamp(snapshot['captured_at'])
     except Exception as error:  # noqa: BLE001
         reasons.append(f'snapshot missing or unreadable ({type(error).__name__})')
+    if captured_epoch is not None:
+        # "readable and valid" is the strict loader's answer, not a schema_version string: a snapshot the page cannot render is not current
+        try:
+            _renderer().load_continuity_status(Path(snapshot_path))
+        except Exception as error:  # noqa: BLE001
+            reasons.append(f'snapshot failed validation ({type(error).__name__}: {error})')
     try:
         live = live_head()
         if not isinstance(live, str) or not live:

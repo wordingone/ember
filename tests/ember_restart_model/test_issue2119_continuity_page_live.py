@@ -123,6 +123,58 @@ class StalePageTests(Base):
         self.assertEqual(verdict['state'], 'STALE')
         self.assertIn('live selected head unreadable', verdict['reasons'][0])
 
+    def rewrite_snapshot(self, mutate):
+        payload = json.loads(self.snapshot.read_text(encoding='utf-8'))
+        mutate(payload)
+        self.snapshot.write_text(json.dumps(payload), encoding='utf-8')
+
+    def test_deliberate_red_valid_json_with_a_missing_status_is_stale_not_current(self):
+        # review of 82481add: the right schema_version and a loadable head passed freshness, then the page said CURRENT with no facts
+        self.rewrite_snapshot(lambda payload: payload.pop('status'))
+        verdict = self.generate()
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('snapshot failed validation')
+        self.assertIn('No snapshot facts are shown', self.page())
+        self.assertNotIn('State: **CURRENT**', self.page())
+
+    def test_deliberate_red_an_audit_tuple_that_disagrees_with_the_lineage_is_stale(self):
+        self.rewrite_snapshot(lambda payload: payload['candidate_audit']['duplicate_credit'].update(distinct_manifests=1))
+        verdict = self.generate()
+        self.assertEqual(verdict['state'], 'STALE')
+        self.assert_red_banner('snapshot failed validation')
+        self.assertIn('disagrees with the selected lineage', verdict['reasons'][0])
+
+    def test_deliberate_red_a_malformed_nested_field_is_stale(self):
+        self.rewrite_snapshot(lambda payload: payload['status']['lineage'].update(depth=-1))
+        self.assertEqual(self.generate()['state'], 'STALE')
+        self.assert_red_banner('snapshot failed validation')
+
+    def test_deliberate_red_a_missing_candidate_audit_is_stale(self):
+        self.rewrite_snapshot(lambda payload: payload.pop('candidate_audit'))
+        self.assertEqual(self.generate()['state'], 'STALE')
+        self.assert_red_banner('snapshot failed validation')
+
+    def test_the_real_cli_exits_1_for_a_semantic_invalid_snapshot_and_0_for_the_valid_control(self):
+        pointer_root = self.dir / 'pointer-root'
+        args = ['--snapshot', str(self.snapshot), '--receipts-root', str(pointer_root), '--out', str(self.out), '--receipt', str(self.receipt)]
+        head_reader = lambda root: H3  # noqa: E731
+        import selected_continuation_head
+        original = selected_continuation_head.current_head_sha256
+        selected_continuation_head.current_head_sha256 = head_reader
+        try:
+            pointer = selected_continuation_head.pointer_path(pointer_root)
+            pointer.parent.mkdir(parents=True, exist_ok=True)
+            pointer.write_text('{}', encoding='utf-8')
+            os.utime(pointer, (CAPTURED_EPOCH - 60, CAPTURED_EPOCH - 60))
+            self.assertEqual(live.main(args), 0)                                      # valid control: CURRENT
+            self.assertNotIn('NOT current', self.page().splitlines()[0])
+            self.rewrite_snapshot(lambda payload: payload.pop('status'))
+            os.utime(self.snapshot, (CAPTURED_EPOCH, CAPTURED_EPOCH))
+            self.assertEqual(live.main(args), 1)                                      # semantic-invalid: STALE, nonzero
+            self.assertTrue(self.page().splitlines()[0].startswith(live.BANNER_PREFIX))
+        finally:
+            selected_continuation_head.current_head_sha256 = original
+
     def test_a_corrupt_snapshot_is_stale(self):
         self.snapshot.write_text('{not json', encoding='utf-8')
         self.assertEqual(self.generate()['state'], 'STALE')

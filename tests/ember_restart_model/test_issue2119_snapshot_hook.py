@@ -26,6 +26,7 @@ MODULE_DIR = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
+import claim_accounting as ca  # noqa: E402
 import continuity_snapshot as snap  # noqa: E402
 import continuity_snapshot_hook as hook  # noqa: E402
 import promote_with_pending_v1 as promote_module  # noqa: E402
@@ -154,6 +155,17 @@ class HookTests(Fixture):
         self.assertIn('AncestryRefusal', outcome['why'])
         self.assertEqual(self.out.read_bytes(), before)
         self.assertTrue(snap.check_live(self.out, current_head=lambda: 'e' * 64)['stale'])
+
+    def test_the_repair_cli_exits_8_when_the_snapshot_is_written_but_the_page_is_not(self):
+        # review of 82481add: main() returned 0 for WRITTEN even when the requested live page FAILED, so a repair rerun read as success
+        spec_file = self.root / 'spec.json'
+        spec_file.write_text('{}', encoding='utf-8')
+        cases = (({'status': 'WRITTEN', 'page': {'status': 'FAILED', 'why': 'OSError: disk full'}}, 8),
+                 ({'status': 'WRITTEN', 'page': {'status': 'WRITTEN', 'state': 'CURRENT', 'reasons': []}}, 0),
+                 ({'status': 'WRITTEN'}, 0), ({'status': 'FAILED', 'why': 'x'}, 8))
+        for result, expected in cases:
+            with patch.object(hook, 'publish_from_spec', return_value=result), patch('builtins.print'):
+                self.assertEqual(hook.main([str(spec_file)]), expected, result)
 
     def test_a_hour_result_for_another_head_writes_nothing(self):
         other = json.loads(self.hour_result.read_text())
@@ -335,6 +347,93 @@ class PromoteIntegrationTests(Fixture):
         self.assertNotEqual(out['code'], 0)
         self.assertNotIn('snapshot', out)
         self.assertFalse(self.out.exists())
+
+
+class PromoteBindingTests(Fixture):
+    """The production caller (promote) must forward the frozen claim predicate and the ruling/receipt the hook already accepts."""
+
+    def setUp(self):
+        super().setUp()
+        self.receipts = self.root / 'receipts'
+        self.receipts.mkdir()
+        self.cand = 'd' * 64
+        cand_hour = self.root / 'candidate-hour-result.json'
+        cand_bytes = json.dumps({'child_manifest_sha256': self.cand, 'parent_manifest_sha256': self.c_sha, 'applied_positions': 77}, sort_keys=True).encode()
+        cand_hour.write_bytes(cand_bytes)
+        (self.receipts / 'candidate-continuation-head.json').write_text(json.dumps({
+            'candidate_checkpoint_manifest_sha256': self.cand, 'hour_result_path': str(cand_hour), 'hour_result_sha256': hashlib.sha256(cand_bytes).hexdigest(),
+            'parent_checkpoint_manifest_sha256': self.c_sha, 'published_at': 1.0, 'schema': 'ember-candidate-continuation-head-v1'}), encoding='utf-8')
+        self.receipt = self.root / 'episode-nll.json'
+        receipt_bytes = json.dumps({'bindings': {'checkpoint_manifest_sha256': self.cand}}, sort_keys=True).encode()
+        self.receipt.write_bytes(receipt_bytes)
+        self.receipt_sha = hashlib.sha256(receipt_bytes).hexdigest()
+        self.log = self.root / 'loop.jsonl'
+        self.write_log(self.receipt_sha[:8])
+        self.predicate = self.root / 'predicate.json'
+        self.predicate.write_bytes(b'{"schema": "ember-claim-budget-predicate-v1", "fixture": true}')
+        self.predicate_sha = hashlib.sha256(self.predicate.read_bytes()).hexdigest()
+        self.pinned = patch.object(ca, 'PREDICATE_SHA256', self.predicate_sha)
+
+    def write_log(self, cited):
+        self.log.write_text(json.dumps({'id': 'ep-1', 'stage': 'RULED', 'verdict': 'REFUTED',
+                                        'because': f'limit exceeded; receipt episode-nll.json sha256 {cited}; pointer unchanged'}) + '\n', encoding='utf-8')
+
+    def spec(self, **bindings):
+        shot = {'expected_genesis': self.g_sha, 'custody_parent': str(self.custody), 'snapshot_path': str(self.out),
+                'claim_predicate': str(self.predicate), 'ruling_log': str(self.log), 'ruling_id': 'ep-1', 'refusal_receipt': str(self.receipt), **bindings}
+        return {'repo_root': str(self.root), 'receipts_root': str(self.receipts), 'published_checkpoint_root': str(self.c),
+                'hour_result_path': str(self.hour_result), 'expected_parent': self.b_sha, 'expected_child': self.c_sha,
+                'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'no admitted mixture bound yet', 'snapshot': shot}
+
+    def run_promote(self, spec):
+        rows = []
+        pending = FakePending()
+        with self.pinned:
+            out = promote_module.promote(spec, pending=pending, sch=FakeHeads(self.root, self.c_sha), row=lambda **fields: rows.append(fields),
+                                         ruling='66882', snapshot=hook.publish_from_spec)
+        return out, pending, rows
+
+    def test_the_production_promote_forwards_the_claim_predicate_and_the_known_refusal_to_the_snapshot(self):
+        out, pending, _ = self.run_promote(self.spec())
+        self.assertEqual((out['code'], out['snapshot']['status']), (0, 'WRITTEN'))
+        shot = json.loads(self.out.read_text(encoding='utf-8'))
+        self.assertEqual(shot['status']['claim_budget_eligible']['status'], 'UNDETERMINED')            # not UNDEFINED: the predicate reached the status
+        self.assertEqual(shot['status']['claim_budget_eligible']['predicate_sha256'], self.predicate_sha)
+        audit = shot['candidate_audit']
+        self.assertEqual((audit['status'], audit['retained']['positions_credited_to_lineage']), ('REFUSED_NOT_RETAINED', 0))
+        self.assertEqual(audit['refusal_ruling']['receipt_sha256'], self.receipt_sha)
+        self.assertEqual(len(pending.calls), 1)
+
+    def test_without_the_bindings_the_same_candidate_is_unruled_and_the_claim_is_undefined_control(self):
+        spec = self.spec()
+        for name in ('claim_predicate', 'ruling_log', 'ruling_id', 'refusal_receipt'):
+            del spec['snapshot'][name]
+        out, _, _ = self.run_promote(spec)
+        self.assertEqual(out['code'], 0)
+        shot = json.loads(self.out.read_text(encoding='utf-8'))
+        self.assertEqual((shot['candidate_audit']['status'], shot['status']['claim_budget_eligible']['status']), ('UNRULED_NOT_RETAINED', 'UNDEFINED'))
+
+    def test_a_ruling_that_cites_another_receipt_is_code_8_after_the_move_and_writes_no_snapshot_deliberate_red(self):
+        self.write_log('0' * 8)
+        out, pending, _ = self.run_promote(self.spec())
+        self.assertEqual((out['code'], out['status']), (8, 'PROMOTED_SNAPSHOT_FAILED'))
+        self.assertIn('not a prefix', out['snapshot']['why'])
+        self.assertFalse(self.out.exists())
+        self.assertEqual(len(pending.calls), 1)                  # the move stands; the failure is loud, not a rollback
+
+    def test_a_malformed_or_incomplete_binding_refuses_before_any_move_deliberate_red(self):
+        for name, bad in (('claim_predicate', 5), ('claim_predicate', ''), ('ruling_id', None), ('ruling_log', 3), ('refusal_receipt', ''), ('candidate_record', 7)):
+            out, pending, rows = self.run_promote(self.spec(**{name: bad}))
+            self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (name, bad))
+            self.assertEqual((pending.calls, rows), ([], []), (name, bad))
+        spec = self.spec()
+        del spec['snapshot']['refusal_receipt']                  # a ruling id with no receipt it cites
+        out, pending, _ = self.run_promote(spec)
+        self.assertEqual((out['code'], pending.calls), (4, []))
+
+    def test_an_unknown_snapshot_key_still_refuses_before_any_move(self):
+        out, pending, _ = self.run_promote(self.spec(surprise='x'))
+        self.assertEqual((out['code'], pending.calls), (4, []))
 
 
 if __name__ == '__main__':

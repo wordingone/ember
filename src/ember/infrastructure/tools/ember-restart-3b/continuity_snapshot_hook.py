@@ -11,7 +11,7 @@ caller to make loud, and the page stays visibly stale (`continuity_snapshot.chec
 describing a head that is no longer current.
 
   publish_snapshot(...)  -> {'status': 'WRITTEN', 'path', 'head', 'captured_at'} | {'status': 'FAILED', 'why'}
-  python continuity_snapshot_hook.py SPEC.json     (rerun after a FAILED outcome; exit 0 WRITTEN, 8 FAILED)
+  python continuity_snapshot_hook.py SPEC.json     (rerun after a FAILED outcome; exit 0 WRITTEN, 8 FAILED or WRITTEN with a FAILED page)
 """
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
@@ -125,7 +125,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     out = publish_from_spec(json.loads(Path(args[0]).read_text(encoding='utf-8')))
     print(json.dumps(out, sort_keys=True))
-    return 0 if out['status'] == 'WRITTEN' else 8
+    page = out.get('page')
+    page_failed = isinstance(page, dict) and page.get('status') == 'FAILED'   # the snapshot is written but the requested live page is not: the repair run must not read as success
+    return 0 if out['status'] == 'WRITTEN' and not page_failed else 8
 
 
 if __name__ == '__main__':

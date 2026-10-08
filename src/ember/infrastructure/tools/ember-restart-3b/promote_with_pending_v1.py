@@ -50,6 +50,11 @@ def make_row(ledger):
     return row
 
 
+# the hook already accepts these; the production caller whitelisted four of them, so a real hour could not bind the frozen claim predicate or a ruling
+SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id', 'refusal_receipt')
+SNAPSHOT_KEYS = {'expected_genesis', 'custody_parent', *SNAPSHOT_OPTIONAL_STRINGS}
+
+
 def promote(spec, *, pending, sch, row, ruling, snapshot=None):
     extra = set(spec) - SPEC_FIELDS - {'next', 'blocker', 'snapshot'}
     missing = SPEC_FIELDS - set(spec)
@@ -59,12 +64,13 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'no --ruling (no self-granted advance)'}
     if 'snapshot' in spec:
         shot = spec['snapshot']
-        if snapshot is None or not isinstance(shot, dict) or set(shot) - {'expected_genesis', 'custody_parent', 'snapshot_path', 'page_path'} or not {'expected_genesis', 'custody_parent'} <= set(shot):
-            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
+        if snapshot is None or not isinstance(shot, dict) or set(shot) - SNAPSHOT_KEYS or not {'expected_genesis', 'custody_parent'} <= set(shot):
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path][, claim_predicate][, candidate_record][, ruling_log][, ruling_id][, refusal_receipt]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
         # Values, not just keys: a None or non-string path would raise inside the writer after the head moved.
         if (not isinstance(shot['expected_genesis'], str) or not re.fullmatch(r'[0-9a-f]{64}', shot['expected_genesis'])
                 or not isinstance(shot['custody_parent'], str) or not shot['custody_parent']
-                or any(name in shot and (not isinstance(shot[name], str) or not shot[name]) for name in ('snapshot_path', 'page_path'))):
+                or any(name in shot and (not isinstance(shot[name], str) or not shot[name]) for name in SNAPSHOT_OPTIONAL_STRINGS)
+                or (('ruling_id' in shot) != ('ruling_log' in shot and 'refusal_receipt' in shot))):
             return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec values must be a 64-hex expected_genesis and non-empty string custody_parent / snapshot_path; refused before the move'}
     if not callable(getattr(pending, 'advance_and_record_pending', None)):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'pending_continuation has no advance_and_record_pending (tree lacks e0450bb3)'}
