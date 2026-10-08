@@ -69,6 +69,73 @@ class Fixture(unittest.TestCase):
         return hook.publish_snapshot(**args)
 
 
+class CandidateAuditHookTests(Fixture):
+    """The hook derives the refused child and the duplicate-credit check from files; the caller's blocker text cannot feed them."""
+
+    def setUp(self):
+        super().setUp()
+        self.receipts = self.root / 'receipts'
+        self.receipts.mkdir()
+        self.cand = 'd' * 64
+        self.cand_hour = self.root / 'candidate-hour-result.json'
+        self.cand_hour_bytes = json.dumps({'child_manifest_sha256': self.cand, 'parent_manifest_sha256': self.c_sha, 'applied_positions': 77}, sort_keys=True).encode()
+        self.cand_hour.write_bytes(self.cand_hour_bytes)
+        self.write_candidate(self.cand, self.c_sha)
+        self.receipt = self.root / 'episode-nll.json'
+        receipt_bytes = json.dumps({'bindings': {'checkpoint_manifest_sha256': self.cand}}, sort_keys=True).encode()
+        self.receipt.write_bytes(receipt_bytes)
+        self.receipt_sha = hashlib.sha256(receipt_bytes).hexdigest()
+        self.log = self.root / 'loop.jsonl'
+        self.write_log(self.receipt_sha[:8])
+
+    def write_candidate(self, cand, parent):
+        (self.receipts / 'candidate-continuation-head.json').write_text(json.dumps({
+            'candidate_checkpoint_manifest_sha256': cand, 'hour_result_path': str(self.cand_hour), 'hour_result_sha256': hashlib.sha256(self.cand_hour_bytes).hexdigest(),
+            'parent_checkpoint_manifest_sha256': parent, 'published_at': 1.0, 'schema': 'ember-candidate-continuation-head-v1'}), encoding='utf-8')
+
+    def write_log(self, cited):
+        self.log.write_text(json.dumps({'id': 'ep-1', 'stage': 'RULED', 'verdict': 'REFUTED',
+                                        'because': f'limit exceeded; receipt episode-nll.json sha256 {cited}; pointer unchanged'}) + '\n', encoding='utf-8')
+
+    def test_refused_candidate_is_derived_from_files_and_the_blocker_text_does_not_feed_it(self):
+        private = self.root / 'private.json'
+        outcome = self.publish(receipts_root=self.receipts, ruling_log=self.log, ruling_id='ep-1', refusal_receipt=self.receipt, private_path=private,
+                               next_blocker='the child 0000 was refused')
+        self.assertEqual(outcome['status'], 'WRITTEN')
+        audit = json.loads(self.out.read_text(encoding='utf-8'))['candidate_audit']
+        self.assertEqual((audit['status'], audit['candidate']['manifest_sha256']), ('REFUSED_NOT_RETAINED', self.cand))
+        self.assertEqual(audit['retained']['positions_credited_to_lineage'], 0)
+        self.assertEqual(audit['refusal_ruling']['receipt_sha256'], self.receipt_sha)
+        self.assertNotIn(self.root.name, self.out.read_text(encoding='utf-8'))            # the committed view carries no path
+        self.assertIn(self.root.name, json.dumps(json.loads(private.read_text(encoding='utf-8'))['candidate_audit']))   # the private view does
+
+    def test_a_candidate_equal_to_the_head_reads_retained_in_chain_deliberate_control(self):
+        self.write_candidate(self.c_sha, self.b_sha)
+        self.cand_hour_bytes = json.dumps({'child_manifest_sha256': self.c_sha, 'parent_manifest_sha256': self.b_sha, 'applied_positions': 50}, sort_keys=True).encode()
+        self.cand_hour.write_bytes(self.cand_hour_bytes)
+        self.write_candidate(self.c_sha, self.b_sha)
+        self.assertEqual(self.publish(receipts_root=self.receipts)['status'], 'WRITTEN')
+        audit = json.loads(self.out.read_text(encoding='utf-8'))['candidate_audit']
+        self.assertEqual((audit['status'], audit['retained']['positions_credited_to_lineage']), ('RETAINED_IN_CHAIN', 50))
+
+    def test_a_ruling_that_cites_another_receipt_writes_nothing_deliberate_red(self):
+        self.write_log('0' * 8)
+        outcome = self.publish(receipts_root=self.receipts, ruling_log=self.log, ruling_id='ep-1', refusal_receipt=self.receipt)
+        self.assertEqual(outcome['status'], 'FAILED')
+        self.assertIn('not a prefix', outcome['why'])
+        self.assertFalse(self.out.exists())
+
+    def test_no_candidate_record_reads_no_candidate(self):
+        self.assertEqual(self.publish()['status'], 'WRITTEN')
+        self.assertEqual(json.loads(self.out.read_text(encoding='utf-8'))['candidate_audit']['status'], 'NO_CANDIDATE')
+
+    def test_spec_keys_for_the_audit_are_admitted_and_unknown_keys_still_refuse(self):
+        base = {'published_checkpoint_root': str(self.c), 'hour_result_path': str(self.hour_result), 'expected_genesis': self.g_sha,
+                'custody_parent': str(self.custody), 'snapshot_path': str(self.out), 'blocker': 'x', 'receipts_root': str(self.receipts)}
+        self.assertEqual(hook.publish_from_spec({**base, 'surprise': 1})['status'], 'FAILED')
+        self.assertEqual(hook.publish_from_spec({**base, 'ruling_id': 'ep-1', 'ruling_log': str(self.log), 'refusal_receipt': str(self.receipt)})['status'], 'WRITTEN')
+
+
 class HookTests(Fixture):
     def test_writes_a_snapshot_whose_head_is_the_published_head_and_check_live_agrees(self):
         outcome = self.publish()
@@ -168,6 +235,30 @@ class PromoteIntegrationTests(Fixture):
         self.assertEqual(json.loads(self.out.read_text(encoding='utf-8'))['head_manifest_sha256'], self.c_sha)
         self.assertEqual([row['kind'] for row in rows][-2:], ['promote_outcome', 'snapshot_outcome'])
         self.assertEqual(len(pending.calls), 1)
+
+    def test_the_hour_end_move_regenerates_the_live_page_and_an_unreadable_pointer_reads_stale_deliberate_red(self):
+        page = self.root / 'live-page.md'
+        out, _, rows = self.run_promote(self.spec(page_path=str(page)))
+        self.assertEqual((out['code'], out['snapshot']['status']), (0, 'WRITTEN'))
+        self.assertEqual((out['snapshot']['page']['status'], out['snapshot']['page']['state']), ('WRITTEN', 'STALE'))   # the test pointer is not a real one
+        first = page.read_text(encoding='utf-8').splitlines()[0]
+        self.assertTrue(first.startswith('> **[RED] STALE'), first)
+        self.assertIn('live selected head is GENESIS', first)                  # no pointer file: the reader reports the genesis head, which is not the snapshot head
+        self.assertIn('receipt missing: selected-continuation-head.json', first)
+        self.assertEqual(rows[-1]['kind'], 'snapshot_outcome')
+
+    def test_a_page_write_failure_after_the_move_is_code_8(self):
+        def writer(spec):
+            return {'status': 'WRITTEN', 'page': {'status': 'FAILED', 'why': 'OSError: disk full'}}
+        out, pending, _ = self.run_promote(self.spec(page_path=str(self.root / 'p.md')), writer=writer)
+        self.assertEqual((out['code'], out['status']), (8, 'PROMOTED_SNAPSHOT_FAILED'))
+        self.assertEqual(len(pending.calls), 1)
+
+    def test_a_bad_page_path_refuses_before_any_move(self):
+        for bad in (None, '', 5):
+            out, pending, rows = self.run_promote(self.spec(page_path=bad))
+            self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), bad)
+            self.assertEqual((pending.calls, rows), ([], []), bad)
 
     def test_a_move_without_a_snapshot_key_behaves_exactly_as_before(self):
         spec = self.spec()

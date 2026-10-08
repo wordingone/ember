@@ -35,6 +35,9 @@ sys.modules[_spec.name] = page
 _spec.loader.exec_module(page)
 
 H1, H2, H3 = 'a' * 64, 'b' * 64, 'c' * 64
+NO_CANDIDATE_AUDIT = {'schema': 'ember-lineage-candidate-audit-v1', 'status': 'NO_CANDIDATE', 'candidate': None, 'retained': None,
+                      'refusal_ruling': None, 'duplicate_credit': {'hops_checked': 2, 'distinct_manifests': 3, 'each_hour_counted_once': True,
+                                                                   'summed_token_delta': 3000, 'summed_step_delta': 30}}
 
 
 def status_dict(*, retained=3000, last_hour=1000, head=H3):
@@ -59,7 +62,7 @@ def status_dict(*, retained=3000, last_hour=1000, head=H3):
 
 
 def snapshot_dict(**kw):
-    return producer.build_snapshot(status_dict(**kw), captured_at='2026-10-06T20:00:00Z')
+    return producer.build_snapshot(status_dict(**kw), candidate_audit=NO_CANDIDATE_AUDIT, captured_at='2026-10-06T20:00:00Z')
 
 
 class Base(unittest.TestCase):
@@ -215,6 +218,163 @@ class RenderTests(Base):
         self.assertIn('Last learning measurement: pending.', block)
 
 
+REAL_CLAIM_SECTION = ROOT / 'tests/fixtures/issue2119_claim_undetermined_step2_9ce44ee9.json'   # claim_budget_eligible of the step-2 readout
+
+
+class ClaimSectionAndCandidateTests(Base):
+    """The loader admits the real UNDETERMINED claim readout under an exact key set, and the candidate audit is closed."""
+
+    def real_claim(self):
+        return json.loads(REAL_CLAIM_SECTION.read_text(encoding='utf-8'))
+
+    def snapshot_with(self, claim, head=H3):
+        snap = snapshot_dict(head=head)
+        claim = copy.deepcopy(claim)
+        claim['accounting']['head_segment_id'] = head   # the fixture was minted for the real head; the snapshot here has a synthetic one
+        snap['status']['claim_budget_eligible'] = claim
+        return snap
+
+    def test_green_the_real_step_2_undetermined_readout_loads_and_renders_without_a_number(self):
+        claim = self.real_claim()
+        self.assertEqual(claim['status'], 'UNDETERMINED')
+        self.assertEqual(claim['predicate_sha256'], '3a2b13004730c3391e136024b2a063bcd1bed2406c18fee44440f04f28841b87')
+        self.assertEqual(len(claim['accounting']['missing_evidence']), 97)
+        block = page.render_continuity_status_block(page.load_continuity_status(self.write(self.snapshot_with(claim))))
+        line = [row for row in block.splitlines() if row.startswith('- Claim-budget-eligible')][0]
+        self.assertIn('**UNDETERMINED**', line)
+        self.assertIn('`97` missing-evidence items in `3` kinds', line)
+        self.assertIn(claim['predicate_sha256'], line)
+        self.assertIn('no number is shown', line)
+
+    def test_red_an_unknown_key_in_the_claim_section_still_refuses(self):
+        for mutate in (lambda c: c.update(extra=1), lambda c: c.pop('predicate_sha256')):
+            claim = self.real_claim()
+            mutate(claim)
+            with self.assertRaises(ValueError):
+                page.load_continuity_status(self.write(self.snapshot_with(claim)))
+
+    def test_an_undetermined_claim_with_a_total_or_without_named_evidence_refuses(self):
+        for mutate in (lambda c: c['accounting'].update(eligible_unique_total=5),
+                       lambda c: c['accounting'].update(missing_evidence=[]),
+                       lambda c: c.update(status='MEASURED')):
+            claim = self.real_claim()
+            mutate(claim)
+            with self.assertRaises(ValueError):
+                page.load_continuity_status(self.write(self.snapshot_with(claim)))
+
+    def test_a_claim_accounting_for_another_head_refuses(self):
+        snap = self.snapshot_with(self.real_claim())
+        snap['status']['claim_budget_eligible']['accounting']['head_segment_id'] = H1
+        with self.assertRaises(ValueError):
+            page.load_continuity_status(self.write(snap))
+
+    def test_green_a_measured_accounting_claim_loads_and_renders_its_nested_total(self):
+        # review of b22b65c9: the loader admitted this shape but the renderer read a top-level total and raised KeyError
+        claim = {'status': 'MEASURED', 'predicate_sha256': self.real_claim()['predicate_sha256'],
+                 'accounting': {'head_segment_id': H3, 'eligible_unique_total': 12345}}
+        block = page.render_continuity_status_block(page.load_continuity_status(self.write(self.snapshot_with(claim))))
+        line = [row for row in block.splitlines() if row.startswith('- Claim-budget-eligible')][0]
+        self.assertIn('`12345`', line)
+        self.assertIn('frozen predicate evaluated', line)
+
+    def refused_audit(self):
+        audit = copy.deepcopy(NO_CANDIDATE_AUDIT)
+        audit.update(status='REFUSED_NOT_RETAINED',
+                     candidate={'manifest_sha256': H1, 'parent_manifest_sha256': H3, 'parent_is_selected_head': True},
+                     retained={'candidate_in_retained_chain': False, 'positions_credited_to_lineage': 0},
+                     refusal_ruling={'verdict': 'REFUTED', 'row_sha256': H2, 'receipt_sha256': H2})
+        return audit
+
+    def test_a_refused_candidate_renders_its_ruling_and_zero_credit_and_the_duplicate_check(self):
+        snap = snapshot_dict()
+        snap['candidate_audit'] = self.refused_audit()
+        block = page.render_continuity_status_block(page.load_continuity_status(self.write(snap)))
+        self.assertIn('`REFUSED_NOT_RETAINED`', block)
+        self.assertIn('positions credited to the lineage `0`', block)
+        self.assertIn('each hour counted once: `true`', block)
+
+    def test_a_candidate_audit_that_contradicts_itself_or_leaks_a_path_refuses(self):
+        def credited(a):
+            a['retained']['positions_credited_to_lineage'] = 5
+        def retained_mismatch(a):
+            a['retained']['candidate_in_retained_chain'] = True
+        def no_ruling(a):
+            a['refusal_ruling'] = None
+        def duplicate_failed(a):
+            a['duplicate_credit']['each_hour_counted_once'] = False
+        def leaks_path(a):
+            a['candidate']['record_path'] = 'B:' + chr(92) + 'x' + chr(92) + 'y.json'
+        for mutate in (credited, retained_mismatch, no_ruling, duplicate_failed, leaks_path):
+            snap = snapshot_dict()
+            snap['candidate_audit'] = self.refused_audit()
+            mutate(snap['candidate_audit'])
+            with self.assertRaises(ValueError, msg=mutate.__name__):
+                page.load_continuity_status(self.write(snap))
+
+    def test_deliberate_red_a_truthy_string_flag_or_a_non_integer_credit_refuses(self):
+        # review of b22b65c9: 'false' is truthy, so `in_chain is True` and `if not in_chain` both passed a refused candidate with credit 1
+        cases = (('false', 1), ('false', 0), (0, 0), (None, 0), (False, True), (False, 1), (False, -1), (False, 0.0), (False, '0'))
+        for flag, credit in cases:
+            snap = snapshot_dict()
+            snap['candidate_audit'] = self.refused_audit()
+            snap['candidate_audit']['retained'] = {'candidate_in_retained_chain': flag, 'positions_credited_to_lineage': credit}
+            with self.assertRaises(ValueError, msg=repr((flag, credit))):
+                page.load_continuity_status(self.write(snap))
+
+    def test_green_strict_flag_and_credit_still_load_for_refused_and_retained_candidates(self):
+        snap = snapshot_dict()
+        snap['candidate_audit'] = self.refused_audit()
+        page.load_continuity_status(self.write(snap))                                   # False / 0 with a REFUTED ruling
+        retained = self.refused_audit()
+        retained.update(status='RETAINED_IN_CHAIN', retained={'candidate_in_retained_chain': True, 'positions_credited_to_lineage': 150},
+                        refusal_ruling=None)
+        snap['candidate_audit'] = retained
+        block = page.render_continuity_status_block(page.load_continuity_status(self.write(snap)))
+        self.assertIn('positions credited to the lineage `150`', block)
+
+    def test_deliberate_red_an_audit_tuple_that_disagrees_with_the_selected_lineage_refuses(self):
+        # review of b22b65c9: each_hour_counted_once=true was accepted beside counts that did not reconcile with the selected lineage
+        def distinct(a):
+            a['duplicate_credit']['distinct_manifests'] = 1
+        def hops(a):
+            a['duplicate_credit']['hops_checked'] = 0
+        def steps(a):
+            a['duplicate_credit']['summed_step_delta'] = 29
+        def tokens(a):
+            a['duplicate_credit']['summed_token_delta'] = 1
+        def boolean(a):
+            a['duplicate_credit']['distinct_manifests'] = True
+        def text(a):
+            a['duplicate_credit']['hops_checked'] = '2'
+        def parent_flag_lies(a):
+            a.update(self.refused_audit())
+            a['candidate']['parent_is_selected_head'] = False
+        def parent_flag_string(a):
+            a.update(self.refused_audit())
+            a['candidate']['parent_is_selected_head'] = 'true'
+        for mutate in (distinct, hops, steps, tokens, boolean, text, parent_flag_lies, parent_flag_string):
+            snap = snapshot_dict()
+            snap['candidate_audit'] = copy.deepcopy(NO_CANDIDATE_AUDIT)
+            mutate(snap['candidate_audit'])
+            with self.assertRaises(ValueError, msg=mutate.__name__):
+                page.load_continuity_status(self.write(snap))
+
+    def test_green_an_audit_tuple_that_reconciles_with_the_lineage_loads(self):
+        snap = snapshot_dict()
+        payload = page.load_continuity_status(self.write(snap))
+        duplicate = snap['candidate_audit']['duplicate_credit']
+        lineage = snap['status']['lineage']
+        self.assertEqual((duplicate['distinct_manifests'], duplicate['hops_checked']), (lineage['depth'], lineage['depth'] - 1))
+        self.assertEqual((duplicate['summed_step_delta'], duplicate['summed_token_delta']),
+                         (lineage['retained_global_steps'], lineage['retained_applied_positions']))
+        self.assertIsNotNone(payload)
+
+    def test_the_audit_schema_constants_agree(self):
+        import lineage_candidate_audit
+        self.assertEqual(page.CONTINUITY_CANDIDATE_AUDIT_SCHEMA, lineage_candidate_audit.SCHEMA)
+        self.assertEqual(page.CONTINUITY_CANDIDATE_AUDIT_STATUSES, set(lineage_candidate_audit.STATUSES))
+
+
 class PageTests(Base):
     def page_text(self, block='old'):
         return f'intro\n{page.CONTINUITY_BEGIN_MARKER}\n{block}\n{page.CONTINUITY_END_MARKER}\noutro\n'
@@ -256,7 +416,7 @@ class ProducerTests(Base):
         bad = status_dict()
         bad['schema'] = 'something-else'
         with self.assertRaises(ValueError):
-            producer.build_snapshot(bad)
+            producer.build_snapshot(bad, candidate_audit=NO_CANDIDATE_AUDIT)
 
     def test_check_live_reports_a_snapshot_older_than_the_live_head_as_stale(self):
         path = producer.write_snapshot(self.dir / 'snapshot.json', snapshot_dict(head=H3))

@@ -1,0 +1,443 @@
+{
+ "accounting": {
+  "applied_loss_target_exposure": null,
+  "applied_loss_target_exposure_known_subtotal": {
+   "complete": false,
+   "count": 0
+  },
+  "bucket_counts": null,
+  "budget_unit_id": null,
+  "eligible_unique_total": null,
+  "excluded": [
+   {
+    "reason": "known not a published, head-advancing segment",
+    "segment_id": "785d95f286ee619ff9e1e7e70b988a2b8cc52dce8b03e0cbaf451ce4d3a4a07c"
+   }
+  ],
+  "head_segment_id": "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0",
+  "missing_evidence": [
+   "segment '785d95f286ee619ff9e1e7e70b988a2b8cc52dce8b03e0cbaf451ce4d3a4a07c': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '71b18972672a5a4bd91f24d22fb25d3f6a0add9d307bb8df220041b2ee0014f9': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'eb07a3f8da8e855711941c14820417afc5eecadbb4356f9e20fe9530640203aa': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '5c5aa4714847525a83f56b3fabc1ad3d7a4bc5a55f7af62ea01be826a91e0b62': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '497d81ea20cc26d75a14eb36bb4b20c534f6f1aaaab4423cb39c8e98c9630f83': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '930539bed74fad4300e51179cfbcb4940c443d1d5679d6b4d997501c79196258': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '9a1bed51c7cfd9c337374709bccf17c257578f1054311b24f2519531b1772bed': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'ccf2229c6584f2a652f4dbbc42107b72786be4a409afaf058d32ec68d833208e': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '36eb0f8a7aa28e4a1ce68e50f0c584d45a8973b00ea95af986beabb75c80f40a': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'd157f2dfa4eeb54c717988716e837288bc0d878b8a8b85f5e2ad5f4efa4c1f81': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '242357b60a16aa51d7f5136a15ba57c8fb8c900d188f30b12889ae8962218898': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'd7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'd293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '6d2ce84c872531b411ef2c70dd26fc69933352cfd87abfa60db2637778828b30': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '1a49e34921d45e4f0b23f6c17fe4677bb0572b1b619d9d92ad8e544f297d7225': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '1a4caac2ddca38938ff9869e2ba82b4b0d9c5bd38ce1fc83402f31e242ff5967': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '349c3e078dab700c5fcf5d5e55c1d3a1605e0fa2bb05b8eb87f8988df8ecb1b3': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '27b1d03b769f8715cd3e8840009fcb7f3a60a8eadc6ef7ae9ae147d31398ef8f': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment '57caae38de09d13cadc64052a9ee04db03317b6ae4924dede9f2bfb8fd2ffd4d': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "segment 'd9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0': budget_unit_id is absent (the frozen budget unit is unproved)",
+   "71b18972672a5a4bd91f24d22fb25d3f6a0add9d307bb8df220041b2ee0014f9: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "71b18972672a5a4bd91f24d22fb25d3f6a0add9d307bb8df220041b2ee0014f9: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "eb07a3f8da8e855711941c14820417afc5eecadbb4356f9e20fe9530640203aa: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "eb07a3f8da8e855711941c14820417afc5eecadbb4356f9e20fe9530640203aa: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "5c5aa4714847525a83f56b3fabc1ad3d7a4bc5a55f7af62ea01be826a91e0b62: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "5c5aa4714847525a83f56b3fabc1ad3d7a4bc5a55f7af62ea01be826a91e0b62: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "497d81ea20cc26d75a14eb36bb4b20c534f6f1aaaab4423cb39c8e98c9630f83: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "497d81ea20cc26d75a14eb36bb4b20c534f6f1aaaab4423cb39c8e98c9630f83: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "930539bed74fad4300e51179cfbcb4940c443d1d5679d6b4d997501c79196258: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "930539bed74fad4300e51179cfbcb4940c443d1d5679d6b4d997501c79196258: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "9a1bed51c7cfd9c337374709bccf17c257578f1054311b24f2519531b1772bed: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "9a1bed51c7cfd9c337374709bccf17c257578f1054311b24f2519531b1772bed: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "ccf2229c6584f2a652f4dbbc42107b72786be4a409afaf058d32ec68d833208e: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "ccf2229c6584f2a652f4dbbc42107b72786be4a409afaf058d32ec68d833208e: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "36eb0f8a7aa28e4a1ce68e50f0c584d45a8973b00ea95af986beabb75c80f40a: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "36eb0f8a7aa28e4a1ce68e50f0c584d45a8973b00ea95af986beabb75c80f40a: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "d157f2dfa4eeb54c717988716e837288bc0d878b8a8b85f5e2ad5f4efa4c1f81: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "d157f2dfa4eeb54c717988716e837288bc0d878b8a8b85f5e2ad5f4efa4c1f81: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "242357b60a16aa51d7f5136a15ba57c8fb8c900d188f30b12889ae8962218898: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "242357b60a16aa51d7f5136a15ba57c8fb8c900d188f30b12889ae8962218898: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "d7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "d7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "6d2ce84c872531b411ef2c70dd26fc69933352cfd87abfa60db2637778828b30: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "6d2ce84c872531b411ef2c70dd26fc69933352cfd87abfa60db2637778828b30: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "1a49e34921d45e4f0b23f6c17fe4677bb0572b1b619d9d92ad8e544f297d7225: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "1a49e34921d45e4f0b23f6c17fe4677bb0572b1b619d9d92ad8e544f297d7225: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "1a4caac2ddca38938ff9869e2ba82b4b0d9c5bd38ce1fc83402f31e242ff5967: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "1a4caac2ddca38938ff9869e2ba82b4b0d9c5bd38ce1fc83402f31e242ff5967: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "349c3e078dab700c5fcf5d5e55c1d3a1605e0fa2bb05b8eb87f8988df8ecb1b3: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "349c3e078dab700c5fcf5d5e55c1d3a1605e0fa2bb05b8eb87f8988df8ecb1b3: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "27b1d03b769f8715cd3e8840009fcb7f3a60a8eadc6ef7ae9ae147d31398ef8f: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "27b1d03b769f8715cd3e8840009fcb7f3a60a8eadc6ef7ae9ae147d31398ef8f: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "57caae38de09d13cadc64052a9ee04db03317b6ae4924dede9f2bfb8fd2ffd4d: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "57caae38de09d13cadc64052a9ee04db03317b6ae4924dede9f2bfb8fd2ffd4d: budget_unit_id (the frozen budget unit is not recorded on the hop)",
+   "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0: per-target identities and actual positive-loss masks (the ancestry walk carries neither)",
+   "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0: budget_unit_id (the frozen budget unit is not recorded on the hop)"
+  ],
+  "per_segment": [
+   {
+    "applied_positions": 0,
+    "eligible_increment": 0,
+    "exposure": 0,
+    "exposure_known_subtotal": 0,
+    "segment_id": "785d95f286ee619ff9e1e7e70b988a2b8cc52dce8b03e0cbaf451ce4d3a4a07c",
+    "status": "EXCLUDED"
+   },
+   {
+    "applied_positions": 67108864,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "71b18972672a5a4bd91f24d22fb25d3f6a0add9d307bb8df220041b2ee0014f9",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 318758912,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "eb07a3f8da8e855711941c14820417afc5eecadbb4356f9e20fe9530640203aa",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 324214784,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "5c5aa4714847525a83f56b3fabc1ad3d7a4bc5a55f7af62ea01be826a91e0b62",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 306733056,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "497d81ea20cc26d75a14eb36bb4b20c534f6f1aaaab4423cb39c8e98c9630f83",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 337113088,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "930539bed74fad4300e51179cfbcb4940c443d1d5679d6b4d997501c79196258",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 324005888,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "9a1bed51c7cfd9c337374709bccf17c257578f1054311b24f2519531b1772bed",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 102182912,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "ccf2229c6584f2a652f4dbbc42107b72786be4a409afaf058d32ec68d833208e",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101892096,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101666816,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 102346752,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "36eb0f8a7aa28e4a1ce68e50f0c584d45a8973b00ea95af986beabb75c80f40a",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 103354368,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 104247296,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "d157f2dfa4eeb54c717988716e837288bc0d878b8a8b85f5e2ad5f4efa4c1f81",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 105181184,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "242357b60a16aa51d7f5136a15ba57c8fb8c900d188f30b12889ae8962218898",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 105275392,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "d7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101781504,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101740544,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101281792,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101879808,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101814272,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 101974016,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 201875456,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 202539008,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 208969728,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "6d2ce84c872531b411ef2c70dd26fc69933352cfd87abfa60db2637778828b30",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 207802368,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 206184448,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 211202048,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 283201536,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "1a49e34921d45e4f0b23f6c17fe4677bb0572b1b619d9d92ad8e544f297d7225",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 292962304,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "1a4caac2ddca38938ff9869e2ba82b4b0d9c5bd38ce1fc83402f31e242ff5967",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 301527040,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "349c3e078dab700c5fcf5d5e55c1d3a1605e0fa2bb05b8eb87f8988df8ecb1b3",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 280154112,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "27b1d03b769f8715cd3e8840009fcb7f3a60a8eadc6ef7ae9ae147d31398ef8f",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 273481728,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "57caae38de09d13cadc64052a9ee04db03317b6ae4924dede9f2bfb8fd2ffd4d",
+    "status": "UNDETERMINED"
+   },
+   {
+    "applied_positions": 279629824,
+    "eligible_increment": null,
+    "exposure": null,
+    "exposure_known_subtotal": 0,
+    "segment_id": "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0",
+    "status": "UNDETERMINED"
+   }
+  ],
+  "physical_positions": 6064082944,
+  "physical_positions_known_subtotal": {
+   "complete": true,
+   "count": 6064082944,
+   "missing": []
+  },
+  "predicate_schema": "ember-claim-budget-predicate-v1",
+  "predicate_sha256": "3a2b13004730c3391e136024b2a063bcd1bed2406c18fee44440f04f28841b87",
+  "proved_true_unique": {
+   "buckets": {
+    "HUMAN_SOURCE_EVIDENCED": 0,
+    "MIXED_UNRESOLVED": 0,
+    "ORIGIN_UNKNOWN": 0,
+    "THIRD_PARTY_AI_GENERATED": 0
+   },
+   "complete": false,
+   "count": 0
+  },
+  "refused_branches": [],
+  "schema": "ember-claim-accounting-v1",
+  "selected_segment_ids": [
+   "785d95f286ee619ff9e1e7e70b988a2b8cc52dce8b03e0cbaf451ce4d3a4a07c",
+   "71b18972672a5a4bd91f24d22fb25d3f6a0add9d307bb8df220041b2ee0014f9",
+   "eb07a3f8da8e855711941c14820417afc5eecadbb4356f9e20fe9530640203aa",
+   "5c5aa4714847525a83f56b3fabc1ad3d7a4bc5a55f7af62ea01be826a91e0b62",
+   "497d81ea20cc26d75a14eb36bb4b20c534f6f1aaaab4423cb39c8e98c9630f83",
+   "930539bed74fad4300e51179cfbcb4940c443d1d5679d6b4d997501c79196258",
+   "9a1bed51c7cfd9c337374709bccf17c257578f1054311b24f2519531b1772bed",
+   "ccf2229c6584f2a652f4dbbc42107b72786be4a409afaf058d32ec68d833208e",
+   "702803774263a0d20fa1d823bb3440057f6269aba41d5ee6c8c4cbe655ffbb4e",
+   "f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f",
+   "36eb0f8a7aa28e4a1ce68e50f0c584d45a8973b00ea95af986beabb75c80f40a",
+   "198f60cb075fdee2d275dfe97ac947b34a56aedb6d12ffa463010b5278d2540a",
+   "d157f2dfa4eeb54c717988716e837288bc0d878b8a8b85f5e2ad5f4efa4c1f81",
+   "242357b60a16aa51d7f5136a15ba57c8fb8c900d188f30b12889ae8962218898",
+   "d7c34b426e98d39ba491b7ad4ea638ceeed943a78a09c00a70021f991e81daec",
+   "f21a8f973cb7a14c63482922a465dc09b39029a50f129d0dc3a9a888e6067219",
+   "cf3124c9314edd127602e141f9e2014ed65b8e0dc24b28834a454299d03c5e09",
+   "f65c47071a4d852c918f4965c8c70144e8c25f73c013f4d60f35e45f0cca8318",
+   "36235962de352ff174de6f64a490a399710575dd91f585f3fe2d65d62bd9b623",
+   "d293659853d84c80407e32d09a411f60249ca470e2f9f810dd81689f7ee0daf4",
+   "51c50753083f3c89ca466407260fe6e01eedc4e48c773c62bcfc9a77c35effce",
+   "b87640f5417862781f5e2202e506a5a8017941de9a5b9c85a55d8cc53fd3c4e1",
+   "a124554a190a20a98afdd405c8d181c85f5f5b643c188f391d38b5ad66da9e80",
+   "6d2ce84c872531b411ef2c70dd26fc69933352cfd87abfa60db2637778828b30",
+   "decf9893581381b8cdd2ca3c251a3fd2afbe04a29ef98cd4561e6a646d9f9205",
+   "e75f36fee48e5fb085a740ea00d0c4b51185faf4e6b24f7b4c3ec35af0007c5e",
+   "eb3b4366eea5cc3b6dc00f9e69d0a2bac21bf799ef0b3b3b1dcccc79730e30e4",
+   "1a49e34921d45e4f0b23f6c17fe4677bb0572b1b619d9d92ad8e544f297d7225",
+   "1a4caac2ddca38938ff9869e2ba82b4b0d9c5bd38ce1fc83402f31e242ff5967",
+   "349c3e078dab700c5fcf5d5e55c1d3a1605e0fa2bb05b8eb87f8988df8ecb1b3",
+   "27b1d03b769f8715cd3e8840009fcb7f3a60a8eadc6ef7ae9ae147d31398ef8f",
+   "57caae38de09d13cadc64052a9ee04db03317b6ae4924dede9f2bfb8fd2ffd4d",
+   "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0"
+  ],
+  "status": "UNDETERMINED",
+  "unresolved_after_coverage_gap": []
+ },
+ "predicate_sha256": "3a2b13004730c3391e136024b2a063bcd1bed2406c18fee44440f04f28841b87",
+ "status": "UNDETERMINED"
+}

@@ -18,7 +18,7 @@ and exactly one of next={training_job_purpose, run_id} or blocker. Outcome codes
   7 LATE_WRITE_FAILURE            pointer moved, the pending write failed or its readback differs from the requested record: NO rollback claimed; the
                                   next-segment read is whatever the readback says (BLOCKED when missing/stale); mail ruling (review 63367 P2-5)
   6 MOVED_TO_UNEXPECTED_HEAD      pointer is not expected_child after a clean return
-  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path]}: the head moved and the pending record is exact, but
+  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path][, page_path]}: the head moved and the pending record is exact, but
                                   the continuity page snapshot (continuity_snapshot_hook) was not written; rerun continuity_snapshot_hook.py, do not repeat the move
 Run with the window marker absent (python).
 """
@@ -59,12 +59,12 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'no --ruling (no self-granted advance)'}
     if 'snapshot' in spec:
         shot = spec['snapshot']
-        if snapshot is None or not isinstance(shot, dict) or set(shot) - {'expected_genesis', 'custody_parent', 'snapshot_path'} or not {'expected_genesis', 'custody_parent'} <= set(shot):
-            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
+        if snapshot is None or not isinstance(shot, dict) or set(shot) - {'expected_genesis', 'custody_parent', 'snapshot_path', 'page_path'} or not {'expected_genesis', 'custody_parent'} <= set(shot):
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
         # Values, not just keys: a None or non-string path would raise inside the writer after the head moved.
         if (not isinstance(shot['expected_genesis'], str) or not re.fullmatch(r'[0-9a-f]{64}', shot['expected_genesis'])
                 or not isinstance(shot['custody_parent'], str) or not shot['custody_parent']
-                or ('snapshot_path' in shot and (not isinstance(shot['snapshot_path'], str) or not shot['snapshot_path']))):
+                or any(name in shot and (not isinstance(shot[name], str) or not shot[name]) for name in ('snapshot_path', 'page_path'))):
             return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec values must be a 64-hex expected_genesis and non-empty string custody_parent / snapshot_path; refused before the move'}
     if not callable(getattr(pending, 'advance_and_record_pending', None)):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'pending_continuation has no advance_and_record_pending (tree lacks e0450bb3)'}
@@ -138,7 +138,7 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
         except Exception as error:  # noqa: BLE001 - the head already moved: a raising writer must still reach the outcome row and code 8
             out['snapshot'] = {'status': 'FAILED', 'why': f'{type(error).__name__}: {error}'}
         row(kind='snapshot_outcome', **out['snapshot'])
-        if out['snapshot']['status'] != 'WRITTEN':
+        if out['snapshot']['status'] != 'WRITTEN' or out['snapshot'].get('page', {}).get('status') == 'FAILED':
             out.update(code=8, status='PROMOTED_SNAPSHOT_FAILED')
     return out
 
