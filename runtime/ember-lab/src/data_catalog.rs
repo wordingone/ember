@@ -287,9 +287,9 @@ fn merge_edges(existing: &[Value], incoming: &[Value]) -> Result<Vec<Value>> {
     Ok(merged.into_values().collect())
 }
 
-/// Test-only seam between the two reads of a multi-query reader: the closure installed by a test
-/// runs once, on the calling thread, after the records read and before the edges read, so a writer
-/// commit can be placed exactly in the window the A6 race lives in. Compiled out of every build.
+// Test-only seam between the two reads of a multi-query reader: the closure installed by a test
+// runs once, on the calling thread, after the records read and before the edges read, so a writer
+// commit can be placed exactly in the window the A6 race lives in. Compiled out of every build.
 #[cfg(test)]
 thread_local! {
     static BETWEEN_READS: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
@@ -307,7 +307,28 @@ fn between_reads() {
     }
 }
 
+/// Runs a multi-query catalog read inside ONE deferred read transaction, so every SELECT in it
+/// comes from a single snapshot. Without it each SELECT is its own autocommit statement and a
+/// writer commit between the records read and the edges read yields edges whose endpoint records
+/// the first read never saw (the intermittent "edge endpoint ... is absent from the manifest").
+/// A connection that is already inside a transaction already has one snapshot and is used as is.
+/// Every reader that issues two or more catalog queries goes through this helper; the guard test
+/// `every_multi_query_catalog_reader_runs_inside_the_read_snapshot_helper` enforces it.
+fn read_snapshot<T>(conn: &Connection, read: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+    if !conn.is_autocommit() {
+        return read(conn);
+    }
+    let snapshot = conn.unchecked_transaction()?;
+    let value = read(&snapshot)?;
+    snapshot.commit()?;
+    Ok(value)
+}
+
 pub(crate) fn export_manifest(conn: &Connection) -> Result<Vec<u8>> {
+    read_snapshot(conn, export_manifest_in_snapshot)
+}
+
+fn export_manifest_in_snapshot(conn: &Connection) -> Result<Vec<u8>> {
     let records = query_payloads(
         conn,
         "SELECT payload_json FROM data_catalog_records ORDER BY kind,record_id",
@@ -324,6 +345,10 @@ pub(crate) fn export_manifest(conn: &Connection) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn status(conn: &Connection) -> Result<Value> {
+    read_snapshot(conn, status_in_snapshot)
+}
+
+fn status_in_snapshot(conn: &Connection) -> Result<Value> {
     let records = normalize_records(&query_payloads(
         conn,
         "SELECT payload_json FROM data_catalog_records ORDER BY kind,record_id",
@@ -2606,9 +2631,13 @@ mod tests {
         });
         let during = status(&reader);
         BETWEEN_READS.with(|slot| *slot.borrow_mut() = None);
-        let during = during
-            .expect("reads that straddle a commit must come from one snapshot, never a torn catalog");
-        assert_eq!(during, empty, "the straddling reader sees the catalog as of its first read");
+        let during = during.expect(
+            "reads that straddle a commit must come from one snapshot, never a torn catalog",
+        );
+        assert_eq!(
+            during, empty,
+            "the straddling reader sees the catalog as of its first read"
+        );
         let after = status(&reader).expect("status after the commit");
         assert_ne!(after, empty, "a fresh read sees the committed catalog");
         drop(reader);
@@ -2625,11 +2654,18 @@ mod tests {
         });
         let during = export_manifest(&reader);
         BETWEEN_READS.with(|slot| *slot.borrow_mut() = None);
-        let during = during
-            .expect("reads that straddle a commit must come from one snapshot, never a torn catalog");
-        assert_eq!(during, empty, "the straddling export is the catalog as of its first read");
+        let during = during.expect(
+            "reads that straddle a commit must come from one snapshot, never a torn catalog",
+        );
+        assert_eq!(
+            during, empty,
+            "the straddling export is the catalog as of its first read"
+        );
         let after = export_manifest(&reader).expect("export after the commit");
-        assert_ne!(after, empty, "a fresh export contains the committed catalog");
+        assert_ne!(
+            after, empty,
+            "a fresh export contains the committed catalog"
+        );
         drop(reader);
         std::fs::remove_dir_all(dir).unwrap();
     }
