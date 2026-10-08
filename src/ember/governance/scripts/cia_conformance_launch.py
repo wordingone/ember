@@ -54,7 +54,7 @@ def headroom():
 
 def process_census():
     command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,ExecutablePath,PageFileUsage,CreationDate) | ConvertTo-Json -Compress"]
+               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited} }) | ConvertTo-Json -Compress"]
     result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=20,
                             creationflags=subprocess.CREATE_NO_WINDOW)
     rows = json.loads(result.stdout)
@@ -103,6 +103,12 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
         if pid in ancestors:
             continue
         if str(row['Name']).lower() not in ('python.exe', 'pythonw.exe', 'py.exe'):
+            continue
+        # An EXITED Python object kept alive by a stray handle runs nothing: it is not a tenant, even when
+        # nvidia-smi still lists its pid (WDDM keeps a context on the dead object, lead ruling 68756). Its commit charge stays
+        # counted by the commit gate and its device memory by the total-device sample. An unknown state (None) or a
+        # live process is classified as before.
+        if row.get('HasExited') is True:
             continue
         commit_kib = row.get('PageFileUsage')
         command = row.get('CommandLine')
