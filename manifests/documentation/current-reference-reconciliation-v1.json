@@ -8,7 +8,7 @@
   "counts": {
     "contained_resolved_canonical_tokens": 40,
     "corrected_classifier_current_unresolved": 380,
-    "documents": 396,
+    "documents": 395,
     "explicit_filing_dispositions": 444,
     "filing_classifier_current_unresolved": 484
   },
@@ -4606,7 +4606,7 @@
     },
     {
       "document": "docs/domains/governance/roadmap/milestones/EMBER-02.md",
-      "line": 183,
+      "line": 205,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -6146,7 +6146,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "07ec1acf4ee4140068c56bd8eddeead1e5f3ffeafd02f3a3c08eb1fa90a24fa3",
+  "rows_sha256": "21649b320a22572c9ab1761adc0cf10af76bc48869f5dd43b1965a0a5ea3dc82",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",
