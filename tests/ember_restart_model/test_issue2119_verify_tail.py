@@ -432,6 +432,7 @@ class SourcePinTests(unittest.TestCase):
 
     def tail_identity(self, **changes):
         identity = {'run_id': TAIL_ID, 'hour': dict(self.HOUR), 'training_job_purpose': 'DIAGNOSTIC',
+                    'geometry': dict(documents_per_step=4, sequence_length=1024, warm_steps=1, measured_steps=2),
                     'verify_tail': {'lost_custody': 'B:/ember-live-receipts/cia-hour-x/measurement-' + self.LOST,
                                     'lost_run_id': self.LOST, 'witness_sha256': 'c' * 64, 'child_manifest_sha256': 'd' * 64}}
         identity.update(changes)
@@ -514,6 +515,82 @@ class SourcePinTests(unittest.TestCase):
         self.assertIn('verify_tail_mode(identity)', inspect.getsource(runner.prepare_execution))
 
 
+class TailPrepareScopeTests(unittest.TestCase):
+    """ruling 67506: the training hour's checkpoint-probe and production-mixture checks are skipped ONLY for an identity verify_tail_mode has passed."""
+    class Reached(Exception):
+        pass
+
+    KEYS = ('source_commit', 'source_sha256', 'config_sha256', 'data', 'seed', 'support', 'optimizer', 'batch_documents',
+            'resources', 'input_binding', 'dispatch_resources')
+
+    def identity(self, *, tail, **changes):
+        identity = {key: {} for key in self.KEYS}
+        identity.update(run_id=TAIL_ID if tail else 'c' * 32, gpu_uuid='GPU-x', hour=dict(SourcePinTests.HOUR),
+                        training_job_purpose='DIAGNOSTIC' if tail else 'CONTINUE_TRAINING',
+                        geometry=dict(documents_per_step=4, sequence_length=1024, warm_steps=1, measured_steps=2 if tail else 98158))
+        if tail:
+            identity['verify_tail'] = {'lost_custody': 'B:/ember-live-receipts/cia-hour-x/measurement-' + LOST_ID, 'lost_run_id': LOST_ID,
+                                       'witness_sha256': 'c' * 64, 'child_manifest_sha256': 'd' * 64}
+        else:
+            identity['production_mixture'] = {'admitted': 'segment'}
+            identity['checkpoint_probe'] = {'custody_root': 'B:/x'}
+        identity.update(changes)
+        return identity
+
+    def prepare(self, identity):
+        """Run prepare_execution up to the first geometry read; return what the hour module was asked."""
+        import cia_step_runner as runner
+        calls = []
+        hour_module = types.SimpleNamespace(validate_checkpoint_probe=lambda *a: calls.append('probe'),
+                                            validate_identity=lambda **k: calls.append('mixture') or {})
+
+        def reached(*args, **kwargs):
+            raise self.Reached()
+        quiet = {name: (lambda *a, **k: None) for name in ('execution_mode', 'local_routing_mode', 'attention_selection', 'training_head',
+                                                              'validate_experiment_plan', 'validate_training_job_purpose',
+                                                              'validate_scored_pair_binding', 'validate_trajectory_resources')}
+        with patch.multiple(runner, load_hour_module=lambda: hour_module, geometry_counts=reached, **quiet):
+            try:
+                runner.prepare_execution({'identity': identity})
+            except self.Reached:
+                return calls, True
+            except ValueError as error:
+                return calls, str(error)
+        return calls, False
+
+    def test_a_deliberately_ordinary_hour_still_requires_the_probe_and_mixture_checks(self):
+        calls, outcome = self.prepare(self.identity(tail=False))
+        self.assertEqual(calls, ['probe', 'mixture'])
+        self.assertIs(outcome, True)
+
+    def test_a_tail_that_passed_verify_tail_mode_needs_no_probe_and_no_mixture(self):
+        calls, outcome = self.prepare(self.identity(tail=True))
+        self.assertEqual(calls, [])
+        self.assertIs(outcome, True)
+
+    def test_a_tail_identity_that_claims_steps_a_data_segment_or_a_probe_is_refused_before_any_check(self):
+        base = self.identity(tail=True)
+        claims = (dict(geometry=dict(base['geometry'], measured_steps=98158)),       # claims the hour's updates
+                  dict(geometry=dict(base['geometry'], measured_steps=3)),
+                  dict(production_mixture={'admitted': 'segment'}),                  # claims a data segment
+                  dict(scored_pair_binding_sha256='e' * 64),
+                  dict(checkpoint_probe={'custody_root': 'B:/x'}),
+                  dict(continuation={'x': 1}),
+                  dict(parent_checkpoint={'root': 'B:/x', 'manifest_sha256': 'f' * 64}),
+                  dict(geometry=None))
+        for change in claims:
+            calls, outcome = self.prepare(dict(base, **change))
+            self.assertEqual(calls, [], change)
+            self.assertIsInstance(outcome, str, change)                              # a ValueError message, never the sentinel
+
+    def test_the_skip_is_keyed_on_verify_tail_mode_alone(self):
+        import cia_step_runner as runner
+        source = inspect.getsource(runner.prepare_execution)
+        self.assertIn('tail = verify_tail_mode(identity)', source)
+        self.assertIn('if hour and not tail:', source)
+        self.assertLess(source.index('tail = verify_tail_mode(identity)'), source.index('if hour and not tail:'))
+
+
 class LaunchBoundaryTests(unittest.TestCase):
     """review 67480 P1: launch() validates the tail custody is outside the lost tree BEFORE any mkdir, stamp or other write."""
     def setUp(self):
@@ -526,6 +603,7 @@ class LaunchBoundaryTests(unittest.TestCase):
         self.sibling = self.root / 'daemon-custody'
         self.sibling.mkdir()
         identity = {'run_id': TAIL_ID, 'hour': dict(SourcePinTests.HOUR), 'training_job_purpose': 'DIAGNOSTIC',
+                    'geometry': dict(documents_per_step=4, sequence_length=1024, warm_steps=1, measured_steps=2),
                     'verify_tail': {'lost_custody': str(self.lost), 'lost_run_id': LOST_ID,
                                     'witness_sha256': 'c' * 64, 'child_manifest_sha256': 'd' * 64}}
         raw = json.dumps({'identity': identity}).encode()

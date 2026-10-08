@@ -1102,6 +1102,7 @@ def hour_mode(identity):
 
 
 VERIFY_TAIL_KEYS = frozenset({'lost_custody', 'lost_run_id', 'witness_sha256', 'child_manifest_sha256'})
+VERIFY_TAIL_MEASURED_STEPS = 2   # the minimal governed-hour input shape; the tail executes zero updates (ruling 67506)
 
 
 def verify_tail_mode(identity):
@@ -1120,6 +1121,11 @@ def verify_tail_mode(identity):
         raise ValueError('verify_tail requires the completed governed hour and no continuation, probe, parent or trajectory')
     if identity.get('training_job_purpose') != 'DIAGNOSTIC':
         raise ValueError('a verify-only tail trains nothing: its purpose is DIAGNOSTIC')
+    geometry = identity.get('geometry')
+    if ('production_mixture' in identity or 'scored_pair_binding_sha256' in identity or not isinstance(geometry, dict)
+            or type(geometry.get('measured_steps')) is not int or geometry['measured_steps'] != VERIFY_TAIL_MEASURED_STEPS):
+        raise ValueError('a verify-only tail claims no training steps and consumes no data segment: no production mixture, no scored pair, '
+                         f'and only the minimal {VERIFY_TAIL_MEASURED_STEPS}-update input shape contract')
     lost_id, lost_custody = value['lost_run_id'], value['lost_custody']
     if not isinstance(lost_id, str) or not re.fullmatch('[0-9a-f]{32}', lost_id):
         raise ValueError('verify_tail lost_run_id must be 32 lowercase hex characters')
@@ -1265,12 +1271,12 @@ def prepare_execution(prediction):
         raise ValueError('a chained parent checkpoint binds a governed hour by root and manifest digest')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
-    verify_tail_mode(identity)
+    tail = verify_tail_mode(identity)
     local_routing_mode(identity)
     attention_selection(identity)
     training_head(identity)
     validate_experiment_plan(identity)
-    if ('production_mixture' in identity) != hour:
+    if ('production_mixture' in identity) != (hour and not tail):
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
         raise ValueError('checkpoint probe reference requires the explicit hour identity')
@@ -1280,7 +1286,8 @@ def prepare_execution(prediction):
         load_eligibility_module().validate_identity_rule(identity)
     validate_scored_pair_binding(identity)
     validate_trajectory_resources(identity)
-    if hour:
+    if hour and not tail:
+        # ruling 67506: only a tail that verify_tail_mode has passed (zero steps, no data segment, no probe) skips the training hour's probe and mixture checks.
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
         mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
     sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
@@ -1337,7 +1344,7 @@ def prepare_execution(prediction):
                     image_start=load_hour_module().chained_image_start(sys.modules[__name__], identity))
                 if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
                 if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
-    if hour:
+    if hour and not tail:
         prepared['mixture_validation'] = mixture_validation
         if 'continuation' in identity:
             prepared['continuation'] = load_hour_module().validate_continuation(sys.modules[__name__], identity)
