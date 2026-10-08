@@ -31,10 +31,11 @@ What it does, in order, refusing at the first failure:
    cached upstream `main_eval_only.py`. The accuracy that comes back is `score`.
 
 Claim boundary, stated in the receipt and here: an EXECUTABLE protected-evaluation producer. It
-grants no image capability, evaluation tier, learning or qualification credit. The CIA governed
-runner embeds text only (`cia_step_runner.py` calls `model.embed_text` and never `embed_image`),
-so on every checkpoint the runner has produced the image projection is genesis-initialized; the
-receipt says so under `image_projection_trained_by_runner: false`, sourced from that census.
+grants no image capability, evaluation tier, learning or qualification credit. Whether the image
+projection was trained is MEASURED on the evaluated checkpoint: its own `image.weight` is compared
+with the lineage root's (walked by the digest-bound `lineage.parent_checkpoint`, read through the pinned core reader), and
+`image_projection_trained_by_runner` is true only when the two differ. The comparison is recorded
+under `image_projection_source`. It is never inferred from runner source text.
 
 Configuration is by environment, because the gate's entrypoint contract carries only the two
 arguments above. Every variable is required and refused when absent; nothing is defaulted:
@@ -279,9 +280,7 @@ def repository(repo_root: Path):
     scorer = repo_root / 'scripts' / 'ember_restart_eval_mmmu.py'
     if sha256_path(scorer) != SCORER_SHA256:
         raise ProducerRefusal('SCORER_SUBSTITUTION', str(scorer))
-    runner = (tools / 'cia_step_runner.py').read_text(encoding='utf-8')
-    projection_trained = 'embed_image' in runner
-    return checkpoint_artifacts, gate, contract, scorer, projection_trained
+    return checkpoint_artifacts, gate, contract, scorer
 
 
 def open_reference(checkpoint_artifacts, gate, checkpoint_root: Path, receipt_path: Path):
@@ -296,9 +295,98 @@ def open_reference(checkpoint_artifacts, gate, checkpoint_root: Path, receipt_pa
     del optimizer, replay
     if verified['checkpoint_manifest_sha256'] != receipt['checkpoint_manifest_sha256']:
         raise ProducerRefusal('CHECKPOINT_REFUSED', 'validated manifest digest differs from the receipt')
+    # The image projection of THIS checkpoint, read from its validated tensors, so whether it was trained is
+    # measured on the head and never inferred from runner source text.
+    projection = tensors.get(IMAGE_PROJECTION_TENSOR)
+    projection = None if projection is None else projection.detach().clone()
     model, architecture_sha256 = gate.build_reference(verified, tensors)
     del tensors
-    return model, verified, architecture_sha256
+    return model, verified, architecture_sha256, projection
+
+
+IMAGE_PROJECTION_TENSOR = 'image.weight'   # ember_v0_decoder.embed_image reads exactly this core tensor
+LINEAGE_DEPTH_LIMIT = 64
+
+
+def lineage_root(checkpoint_root: Path, expected_manifest_sha256: str):
+    """Walk `lineage.parent_checkpoint` from the evaluated checkpoint to the lineage root (a manifest with no `lineage`).
+
+    The first read is bound to the digest the checkpoint validator already verified (`expected_manifest_sha256`), so the
+    walk starts from the same manifest the scored model was opened from. Every later hop is bound the same way: the
+    parent's manifest bytes must hash to the child's `lineage.parent_manifest_sha256`.
+    Returns (root, root_manifest, root_manifest_sha256, depth). An unreadable or digest-mismatched manifest, a malformed
+    lineage record, a parent field outside `lineage`, a cycle or an over-deep chain refuses: the comparison is only as good
+    as the root it is taken against.
+    """
+    def read(path: Path):
+        manifest_path = path / 'checkpoint-manifest.json'
+        try:
+            raw = manifest_path.read_bytes()
+            manifest = json.loads(raw)
+        except (OSError, ValueError) as error:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'{manifest_path}: {type(error).__name__}: {error}') from error
+        if not isinstance(manifest, dict):
+            raise ProducerRefusal('PROJECTION_SOURCE', f'{manifest_path}: manifest is not an object')
+        if 'parent_checkpoint' in manifest:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'{manifest_path}: parent_checkpoint outside the lineage record')
+        return manifest, sha256_bytes(raw)
+
+    current, depth = Path(checkpoint_root), 0
+    manifest, manifest_sha256 = read(current)
+    if manifest_sha256 != expected_manifest_sha256:
+        raise ProducerRefusal('PROJECTION_SOURCE', f'{current}: manifest digest differs from the validated checkpoint')
+    seen = {manifest_sha256}
+    while 'lineage' in manifest:
+        lineage = manifest['lineage']
+        if (not isinstance(lineage, dict) or not isinstance(lineage.get('parent_checkpoint'), str)
+                or not lineage['parent_checkpoint'] or not isinstance(lineage.get('parent_manifest_sha256'), str)):
+            raise ProducerRefusal('PROJECTION_SOURCE', f'{current}: malformed lineage record')
+        depth += 1
+        if depth > LINEAGE_DEPTH_LIMIT:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'lineage deeper than {LINEAGE_DEPTH_LIMIT} at {current}')
+        parent = Path(lineage['parent_checkpoint'])
+        manifest, parent_sha256 = read(parent)
+        if parent_sha256 != lineage['parent_manifest_sha256']:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'{parent}: manifest digest differs from the child lineage record')
+        if parent_sha256 in seen:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'lineage cycle at {parent}')
+        seen.add(parent_sha256)
+        current, manifest_sha256 = parent, parent_sha256
+    return current, manifest, manifest_sha256, depth
+
+
+def image_projection_source(checkpoint_artifacts, checkpoint_root: Path, head_projection,
+                            head_manifest_sha256: str) -> dict:
+    """Was the evaluated checkpoint's image projection changed by training? Measured, never assumed.
+
+    Compares the head's own `image.weight` with the lineage root's `image.weight`, read through the repository's
+    pinned core reader (digest-checked). `trained` is True only when the tensors differ. A checkpoint that is
+    itself the root compares with itself and reads untrained, so the field can never over-claim.
+    """
+    import torch
+    if head_projection is None:
+        raise ProducerRefusal('PROJECTION_SOURCE', f'evaluated checkpoint carries no {IMAGE_PROJECTION_TENSOR}')
+    root, manifest, root_manifest_sha256, depth = lineage_root(checkpoint_root, head_manifest_sha256)
+    if depth == 0:
+        genesis, core_sha256 = head_projection, None
+    else:
+        try:
+            core = checkpoint_artifacts.read_cia_core_object(
+                root, record=manifest['core'], architecture_config=manifest['architecture_config'])
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'lineage root core unreadable: {type(error).__name__}: {error}') from error
+        genesis, core_sha256 = core.get(IMAGE_PROJECTION_TENSOR), manifest['core']['sha256']
+        del core
+        if genesis is None:
+            raise ProducerRefusal('PROJECTION_SOURCE', f'lineage root carries no {IMAGE_PROJECTION_TENSOR}')
+    if tuple(genesis.shape) != tuple(head_projection.shape) or genesis.dtype != head_projection.dtype:
+        raise ProducerRefusal('PROJECTION_SOURCE', 'lineage root and head image projections differ in shape or dtype')
+    difference = (head_projection.float() - genesis.float()).abs()
+    return {'trained': not torch.equal(head_projection, genesis), 'tensor': IMAGE_PROJECTION_TENSOR,
+            'compared_with': 'lineage root (walked by digest-bound lineage.parent_checkpoint)', 'lineage_depth': depth,
+            'lineage_root': str(Path(root).resolve()), 'lineage_root_manifest_sha256': root_manifest_sha256,
+            'lineage_root_core_sha256': core_sha256, 'changed_elements': int((difference > 0).sum()),
+            'elements': int(difference.numel()), 'max_abs_difference': float(difference.max())}
 
 
 # ---------------------------------------------------------------- custody binding
@@ -535,13 +623,19 @@ def evaluate(checkpoint_root: str, protected_manifest: str) -> dict:
     import torch
     torch.set_num_threads(int(env['EMBER_MMMU_THREADS']))
     repo_root = Path(env['EMBER_REPO_ROOT'])
-    checkpoint_artifacts, gate, contract, scorer, projection_trained = repository(repo_root)
+    checkpoint_artifacts, gate, contract, scorer = repository(repo_root)
     custody = bind_custody(env, Path(protected_manifest))
     items = load_items(custody)
     encode, tokenizer_sha256 = _tokenizer(Path(env['EMBER_MMMU_TOKENIZER']))
     out_dir = Path(env['EMBER_MMMU_OUTPUT_DIR'])
     out_dir.mkdir(parents=True, exist_ok=True)
-    model, verified, architecture_sha256 = open_reference(checkpoint_artifacts, gate, Path(checkpoint_root), Path(env['EMBER_MMMU_CHECKPOINT_RECEIPT']))
+    model, verified, architecture_sha256, head_projection = open_reference(
+        checkpoint_artifacts, gate, Path(checkpoint_root), Path(env['EMBER_MMMU_CHECKPOINT_RECEIPT']))
+    # Measured before any item is scored, so a refusal here costs no item work.
+    projection_source = image_projection_source(checkpoint_artifacts, Path(checkpoint_root), head_projection,
+                                                verified['checkpoint_manifest_sha256'])
+    projection_trained = projection_source['trained']
+    del head_projection
     opened = time.monotonic()
     progress_path = out_dir / 'progress.jsonl'
 
@@ -571,8 +665,7 @@ def evaluate(checkpoint_root: str, protected_manifest: str) -> dict:
                        'data_cursor': verified['data_cursor'], 'model_config_sha256': verified['model_config_sha256'],
                        'receipt_path': str(Path(env['EMBER_MMMU_CHECKPOINT_RECEIPT']).resolve())},
         'image_projection_trained_by_runner': projection_trained,
-        'image_projection_note': ('cia_step_runner.py embeds text only (no embed_image call at the read commit), so the image '
-                                  'projection this producer exercises is genesis-initialized in every runner-produced checkpoint'),
+        'image_projection_source': projection_source,
         'custody': {'registry_sha256': custody['registry_sha256'], 'custody_manifest_sha256': custody['custody_manifest_sha256'],
                     'answer_sha256': ANSWER_SHA256, 'eligible_id_set_sha256': ELIGIBLE_ID_SET_SHA256, 'freeze_sha256': FREEZE_SHA256,
                     'image_inputs_sha256': IMAGE_INPUTS_SHA256, 'scorer_sha256': SCORER_SHA256, 'license_sha256': LICENSE_SHA256,
