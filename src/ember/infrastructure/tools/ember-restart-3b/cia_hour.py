@@ -457,14 +457,19 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     return publish, owner_update_counts
 
 
-def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None):
+def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
     cap = 10 * runner.GIB
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
         model_config_sha256=identity['config_sha256'], _facts=expected)
-    if before is not None and (before['facts'] != expected
+    if before is not None and normalize is not None:
+        # The witness tail compares a terminal state read back from JSON; both sides pass the same normalizer, so the live path (normalize=None) is unchanged.
+        before, expected_facts = normalize(before), normalize(expected)
+    else:
+        expected_facts = expected
+    if before is not None and (before['facts'] != expected_facts
             or before['data_cursor'] != child['data_cursor']
             or before['rng_state_sha256'] != child['rng_state_sha256']):
         raise ValueError('terminal live state differs from independently reopened checkpoint bytes')
@@ -478,6 +483,145 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     facts = artifacts._cia_lineage_facts(inventory, native['state'])
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
+
+
+TERMINAL_WITNESS = 'terminal-witness.json'
+TERMINAL_WITNESS_SCHEMA = 'ember-cia-terminal-witness-v1'
+VERIFY_TAIL_RESULT = 'verify-tail-result.json'
+VERIFY_TAIL_SCHEMA = 'ember-cia-verify-tail-result-v1'
+
+
+def write_terminal_witness(runner, custody, child, terminal_state, hour_fields):
+    """Persist the live terminal state BEFORE the restore verification (H35 lost an hour because it existed only in memory when the
+    verification refused). The witness is the independent live-state facts, the published child's identity and the already-measured hour fields
+    that cannot be re-derived from disk; it is written exclusively (never overwritten) and fsynced by `_write_new`."""
+    witness = dict(schema=TERMINAL_WITNESS_SCHEMA, child_manifest_sha256=child['checkpoint_manifest_sha256'],
+                   data_cursor=dict(child['data_cursor']), terminal_state=terminal_state, hour_fields=dict(hour_fields),
+                   persisted_before_restore_verify=True)
+    runner._write_new(custody / TERMINAL_WITNESS, witness)
+    return runner.file_sha256(custody / TERMINAL_WITNESS)
+
+
+def read_terminal_witness(runner, custody):
+    """Returns (witness, sha256 of the exact bytes parsed). The bytes are read once; the digest and the parsed record come from that one buffer,
+    so a file replaced after this read cannot change what is verified or what the result binds."""
+    path = Path(custody) / TERMINAL_WITNESS
+    try:
+        data = path.read_bytes()
+        witness = json.loads(data)
+    except (OSError, ValueError) as error:
+        raise ValueError('terminal witness is absent or unreadable: ' + type(error).__name__) from error
+    if (not isinstance(witness, dict) or witness.get('schema') != TERMINAL_WITNESS_SCHEMA
+            or witness.get('persisted_before_restore_verify') is not True
+            or not isinstance(witness.get('terminal_state'), dict)
+            or set(witness['terminal_state']) != {'facts', 'rng_state_sha256', 'data_cursor'}):
+        raise ValueError('terminal witness is not the ' + TERMINAL_WITNESS_SCHEMA + ' record')
+    digest = witness.get('child_manifest_sha256')
+    if (not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest)
+            or not isinstance(witness.get('data_cursor'), dict) or not isinstance(witness.get('hour_fields'), dict)
+            or not isinstance(witness['terminal_state']['facts'], dict) or not isinstance(witness['terminal_state']['data_cursor'], dict)):
+        raise ValueError('terminal witness required fields are missing or mistyped')
+    return witness, hashlib.sha256(data).hexdigest()
+
+
+def _json_round_trip(value):
+    return json.loads(json.dumps(value, sort_keys=True))
+
+
+def verify_tail(runner, model, optimizer, inventory, identity, lost_custody):
+    """Resumable verify-only tail: reads the lost hour's persisted witness, requires it to describe the published `trained-child` on disk, and
+    runs the SAME restore verification the hour runs, against the witness instead of the in-memory state. The lost custody is a READ-ONLY input
+    pinned by digest in the tail prediction (`identity['verify_tail']`): this function writes nothing anywhere and returns the result record. It
+    never trains, never publishes and never advances a head. Refuses when the lost hour already has an hour result (nothing to resume), when the
+    witness bytes or the published child differ from the digests frozen in the tail prediction, or when the witness describes another child. The
+    result lands in the TAIL's own custody via `write_verify_tail_result`, after that job's worker-terminal; the hour-result and any head move
+    stay with the owner's ruling."""
+    pin = identity['verify_tail']
+    custody = Path(lost_custody)
+    if (custody / 'hour-result.json').exists():
+        raise ValueError('the hour already has an hour-result; there is nothing to resume')
+    import checkpoint_artifacts as artifacts
+    witness, witness_sha256 = read_terminal_witness(runner, custody)
+    if witness_sha256 != pin['witness_sha256']:
+        raise ValueError('terminal witness bytes differ from the digest frozen in the tail prediction')
+    child = artifacts.published_checkpoint_receipt(custody / 'trained-child')
+    if child['checkpoint_manifest_sha256'] != pin['child_manifest_sha256']:
+        raise ValueError('published trained-child differs from the digest frozen in the tail prediction')
+    if child['checkpoint_manifest_sha256'] != witness['child_manifest_sha256']:
+        raise ValueError('terminal witness describes another child than the published trained-child')
+    if witness['data_cursor'] != child['data_cursor'] or witness['terminal_state']['data_cursor'] != child['data_cursor']:
+        raise ValueError('terminal witness cursor differs from the published child cursor')
+    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child,
+                              before=witness['terminal_state'], normalize=_json_round_trip)
+    return dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
+                lost_run_id=pin['lost_run_id'],
+                child_manifest_sha256=child['checkpoint_manifest_sha256'],
+                witness_sha256=witness_sha256,
+                restored_state_matches=True, hour_result_written=False, head_advanced=False,
+                data_cursor=dict(child['data_cursor']), committed_cursor_advanced=False)
+
+
+def write_verify_tail_result(runner, tail_custody, identity, result):
+    """ruling 67346 (2): the result lands in the TAIL's own custody, only after that job's worker-terminal, exclusively; a path inside the lost
+    custody is refused and nothing is ever written there. Returns the sha256 of the written bytes (the release authority records that pin)."""
+    tail = Path(tail_custody)
+    target = tail / VERIFY_TAIL_RESULT
+    runner.require_result_outside_lost_custody(identity, target)
+    terminal_path = tail / 'worker-terminal.json'
+    if not terminal_path.is_file():
+        raise ValueError('the tail result is written only after its own worker-terminal')
+    terminal_bytes = terminal_path.read_bytes()
+    try:
+        terminal = json.loads(terminal_bytes)
+    except ValueError as error:
+        raise ValueError('the tail worker-terminal is unreadable') from error
+    # review 67531: the zero-applied claim is the worker's own terminal count, not a constant of this function.
+    if (not isinstance(terminal, dict) or terminal.get('status') != 'completed'
+            or type(terminal.get('applied_positions')) is not int or terminal['applied_positions'] != 0):
+        raise ValueError('a verify-only tail applies no positions: its worker-terminal must be completed with applied_positions == 0')
+    result = dict(result, worker_terminal_sha256=hashlib.sha256(terminal_bytes).hexdigest(),
+                  worker_terminal_applied_positions=terminal['applied_positions'])
+    runner._write_new(target, result)
+    return runner.file_sha256(target)
+
+
+def build_hour_model(*, runner, config, prepared, identity, device):
+    """The hour's complete model and optimizer, built exactly as run_hour builds them (the block between the markers is drift-tested
+    against run_hour's own text), for the verify-only tail: no checkpoint is loaded and nothing is trained here."""
+    import torch
+    from ember.model.ember_v0_decoder import CIADecoder
+    hour = identity['hour']
+    mode = runner.execution_mode(identity)
+    # BEGIN hour-model-build (mirrors run_hour; tests/ember_restart_model/test_issue2119_verify_tail.py compares the two texts)
+    model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
+    first = prepared['first']
+    lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+    definition = identity['optimizer']
+    def optimizer_factory(inventory):
+        if sum(parameter.numel() for parameter in inventory.values()) != runner.POPULATION:
+            raise ValueError('hour optimizer population is incomplete')
+        built = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+            eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False,
+            **({'fused': True} if hour['arm'] == 'treatment' else {}))
+        # Same attach as cia_step_runner's own factory: under a layer template, measure_step releases the grads of
+        # parameters the template never runs, so fused AdamW neither walks nor weight-decays them. Without it the
+        # hour steps every weight (#1945: optimizer_and_sync 15.6 ms vs 2.8 ms) and is a different function.
+        built._ember_template_untrained = runner.template_untrained_parameters(inventory)
+        return built
+    inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
+        mode=mode, optimizer_factory=optimizer_factory)
+    if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
+        raise ValueError('hour optimizer owner membership differs')
+    # END hour-model-build
+    return model, inventory, optimizer
+
+
+def run_verify_tail(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
+    """Same signature as run_hour. `custody` is the TAIL's own custody (the lost hour's is the digest-pinned read-only input named by
+    `identity['verify_tail']`). Returns the result record; the worker writes it after its worker-terminal (`write_verify_tail_result`)."""
+    identity = prediction['identity']
+    model, inventory, optimizer = build_hour_model(runner=runner, config=config, prepared=prepared, identity=identity, device=device)
+    return verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
 
 
 def continuation_state(runner, model, optimizer, cursor, device):
@@ -802,6 +946,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     probe = hour['schema'] == 'checkpoint-probe-v1'
     learning = hour['schema'] == 'learning-comparison-v1'
     snapshots, paused = [], 0.0
+    # BEGIN hour-model-build (mirrors build_hour_model; the verify-tail test compares the two texts)
     model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
     lengths = runner.document_lengths(tuple(first['document_starts']), len(first['token_ids']))
@@ -821,6 +966,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         mode=mode, optimizer_factory=optimizer_factory)
     if {id(p) for group in optimizer.param_groups for p in group['params']} != {id(p) for p in inventory.values()}:
         raise ValueError('hour optimizer owner membership differs')
+    # END hour-model-build
     runner._write_new(custody / 'model.json', dict(population=runner.POPULATION,
         optimizer_membership=list(inventory), trainable_parameters=sum(p.numel() for p in inventory.values() if p.requires_grad),
         input_binding=prepared['binding'], hour=hour, c_compiler=compiler,
@@ -979,6 +1125,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
+    # H35: the terminal state lived only in memory when the verification refused, so the published child could never be re-verified. Persist it first.
+    p10_at_publish = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)] if step_rates else None
+    write_terminal_witness(runner, custody, child, terminal_state, dict(
+        hour=hour, measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
+        pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
+        complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
+        parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id']))
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
     restore_finished = time.perf_counter()
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):

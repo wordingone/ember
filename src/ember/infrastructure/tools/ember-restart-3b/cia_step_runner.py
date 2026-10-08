@@ -780,12 +780,14 @@ CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + 
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
     ('cia_hour_energy.py', 'boundary_energy_collector.py'))
+# ruling 67346: the verify-only entry is pinned by a tail prediction alone; an ordinary hour prediction neither requires nor binds it.
+TAIL_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_verify_tail.py',)
 
 
 def allowed_experiment_sources(identity):
     """One selected training function's allowed source closure across every run stage."""
     return frozenset(SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) +
-                     TRAJECTORY_SOURCES + CHECKPOINT_SOURCES + HOUR_SOURCES + streamed_sources(identity))
+                     TRAJECTORY_SOURCES + CHECKPOINT_SOURCES + HOUR_SOURCES + TAIL_SOURCES + streamed_sources(identity))
 
 
 def validate_experiment_sources(identity, plan):
@@ -814,6 +816,8 @@ def required_sources(identity):
         additional += CHECKPOINT_SOURCES
     if hour_mode(identity):
         additional += HOUR_SOURCES
+    if verify_tail_mode(identity):
+        additional += TAIL_SOURCES
     return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional + streamed_sources(identity)
 
 
@@ -1048,6 +1052,10 @@ def resource_limits(identity):
             limits.update(wall_seconds=10800, max_b_write_gib=80)
         if 'continuation' in identity:
             limits.update(wall_seconds=900, max_b_write_gib=1)
+        if 'verify_tail' in identity:
+            # review 67576 basis: a tail rebuilds the hour's model and optimizer (about 1,201 s, segment launch to first step start in the last two hours' stamps)
+            # and restores and verifies the child (about 1,505 s, counter to hour result in the hour that completed); wall >= 1.25 x 2,706 s = 3,382 s.
+            limits.update(wall_seconds=VERIFY_TAIL_WALL_SECONDS, max_b_write_gib=1)
     elif trajectory_mode(identity):
         if trajectory_checkpoint_emission(identity):
             limits.update(wall_seconds=1800, max_b_write_gib=32)
@@ -1097,6 +1105,62 @@ def hour_mode(identity):
     return True
 
 
+VERIFY_TAIL_KEYS = frozenset({'lost_custody', 'lost_run_id', 'witness_sha256', 'child_manifest_sha256'})
+VERIFY_TAIL_WALL_SECONDS = 3400   # measured basis in resource_limits; the tail owns this wall, a continuation keeps 900
+VERIFY_TAIL_MEASURED_STEPS = 2   # the minimal governed-hour input shape; the tail executes zero updates (ruling 67506)
+
+
+def verify_tail_mode(identity):
+    """A tail is its own dispatched job (fresh run id, own custody) that reads a lost hour's custody as a digest-pinned input (ruling 67346).
+
+    The key set is exact; every digest is the sha256 of bytes on disk when the prediction was frozen. The tail trains nothing: it
+    carries the lost hour's governed-hour block, a DIAGNOSTIC purpose, and neither a continuation nor a checkpoint probe nor a parent.
+    """
+    if 'verify_tail' not in identity:
+        return False
+    value = identity['verify_tail']
+    if not isinstance(value, dict) or set(value) != VERIFY_TAIL_KEYS:
+        raise ValueError('verify_tail binds exactly the lost custody, its run id, the witness digest and the child manifest digest')
+    if (not isinstance(identity.get('hour'), dict) or identity['hour'].get('schema') != 'governed-hour-v1'
+            or any(key in identity for key in ('continuation', 'checkpoint_probe', 'parent_checkpoint', 'trajectory', 'measurement'))):
+        raise ValueError('verify_tail requires the completed governed hour and no continuation, probe, parent or trajectory')
+    if identity.get('training_job_purpose') != 'DIAGNOSTIC':
+        raise ValueError('a verify-only tail trains nothing: its purpose is DIAGNOSTIC')
+    geometry = identity.get('geometry')
+    if ('production_mixture' in identity or 'scored_pair_binding_sha256' in identity or not isinstance(geometry, dict)
+            or type(geometry.get('measured_steps')) is not int or geometry['measured_steps'] != VERIFY_TAIL_MEASURED_STEPS):
+        raise ValueError('a verify-only tail claims no training steps and consumes no data segment: no production mixture, no scored pair, '
+                         f'and only the minimal {VERIFY_TAIL_MEASURED_STEPS}-update input shape contract')
+    lost_id, lost_custody = value['lost_run_id'], value['lost_custody']
+    if not isinstance(lost_id, str) or not re.fullmatch('[0-9a-f]{32}', lost_id):
+        raise ValueError('verify_tail lost_run_id must be 32 lowercase hex characters')
+    if lost_id == identity.get('run_id'):
+        raise ValueError('a tail has its own fresh run id; it never reuses the lost hour run id')
+    if (not isinstance(lost_custody, str) or not lost_custody
+            or Path(lost_custody).name != 'measurement-' + lost_id):
+        raise ValueError('verify_tail lost_custody must be the lost hour custody directory measurement-<lost_run_id>')
+    for field in ('witness_sha256', 'child_manifest_sha256'):
+        if not isinstance(value[field], str) or not re.fullmatch('[0-9a-f]{64}', value[field]):
+            raise ValueError(f'verify_tail {field} must be a lowercase sha256')
+    return True
+
+
+def require_result_outside_lost_custody(identity, result_path):
+    """ruling 67346 (2): nothing is ever written into the lost custody; the result lands in the tail's own custody."""
+    lost = Path(identity['verify_tail']['lost_custody']).resolve(strict=False)
+    target = Path(result_path).resolve(strict=False)
+    if target == lost or lost in target.parents:
+        raise ValueError('a verify-tail result path inside the lost custody is refused')
+
+
+def require_tail_custody_outside_lost_custody(identity, custody):
+    """review 67480 P1: the tail's prospective custody (parent / measurement-<tail_run_id>) must resolve outside the lost tree before launch creates it."""
+    lost = Path(identity['verify_tail']['lost_custody']).resolve(strict=False)
+    target = Path(custody).resolve(strict=False)
+    if target == lost or lost in target.parents:
+        raise ValueError('a verify-tail custody inside the lost custody is refused')
+
+
 def validate_trajectory_resources(identity):
     if trajectory_mode(identity):
         emission = trajectory_checkpoint_emission(identity)
@@ -1121,6 +1185,15 @@ def load_trajectory_module():
 def load_hour_module():
     path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/cia_hour.py'
     spec = importlib.util.spec_from_file_location('cia_governed_hour', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
+def load_tail_module():
+    path = ROOT / TAIL_SOURCES[0]
+    spec = importlib.util.spec_from_file_location('cia_governed_verify_tail', path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
@@ -1196,18 +1269,19 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources', 'training_job_purpose'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker', 'verify_tail'}:
         raise ValueError('measurement identity fields differ')
     if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
             or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
         raise ValueError('a chained parent checkpoint binds a governed hour by root and manifest digest')
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
+    tail = verify_tail_mode(identity)
     local_routing_mode(identity)
     attention_selection(identity)
     training_head(identity)
     validate_experiment_plan(identity)
-    if ('production_mixture' in identity) != hour:
+    if ('production_mixture' in identity) != (hour and not tail):
         raise ValueError('production mixture requires the explicit hour identity')
     if 'checkpoint_probe' in identity and not hour:
         raise ValueError('checkpoint probe reference requires the explicit hour identity')
@@ -1217,7 +1291,8 @@ def prepare_execution(prediction):
         load_eligibility_module().validate_identity_rule(identity)
     validate_scored_pair_binding(identity)
     validate_trajectory_resources(identity)
-    if hour:
+    if hour and not tail:
+        # ruling 67506: only a tail that verify_tail_mode has passed (zero steps, no data segment, no probe) skips the training hour's probe and mixture checks.
         load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
         mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
     sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
@@ -1274,7 +1349,7 @@ def prepare_execution(prediction):
                     image_start=load_hour_module().chained_image_start(sys.modules[__name__], identity))
                 if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
                 if measurement else prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory))
-    if hour:
+    if hour and not tail:
         prepared['mixture_validation'] = mixture_validation
         if 'continuation' in identity:
             prepared['continuation'] = load_hour_module().validate_continuation(sys.modules[__name__], identity)
@@ -2529,6 +2604,9 @@ def worker(binding_path):
         prediction, _ = load_prediction(custody / 'prediction.json', binding['launch']['prediction_sha256'])
         if prediction['identity']['run_id'] != run_id or prediction['identity']['gpu_uuid'] != binding['launch']['gpu_uuid']:
             raise ValueError('prediction differs from owned run or selected GPU')
+        if verify_tail_mode(prediction['identity']):
+            # ruling 67346: the tail's own checks (window, run identity, lost custody against its frozen digests) before any input is prepared.
+            load_tail_module().preflight(custody, binding, prediction['identity'], hour_module=load_hour_module())
         config, prepared = prepare_execution(prediction)
         check_layer_env(prediction['identity'])  # before ANY decoder import: the selectors the process holds equal the declaration
         attention_scope.enter_context(attention_context(prediction['identity']))
@@ -2567,8 +2645,10 @@ def worker(binding_path):
                     raise ValueError('hour applied count differs from bound geometry')
                 applied_positions += count
             hour_module = load_hour_module()
-            execute = hour_module.run_continuation if 'continuation' in prediction['identity'] else hour_module.run_hour
-            execute(runner=sys.modules[__name__], config=config,
+            verifying_tail = 'verify_tail' in prediction['identity']
+            execute = (hour_module.run_verify_tail if verifying_tail else
+                       hour_module.run_continuation if 'continuation' in prediction['identity'] else hour_module.run_hour)
+            outcome = execute(runner=sys.modules[__name__], config=config,
                 prepared=prepared, prediction=prediction, binding=binding, custody=custody,
                 device=device, compiler=c_compiler, applied=applied)
             _write_new(custody / 'worker-terminal.json', dict(status='completed',
@@ -2577,6 +2657,9 @@ def worker(binding_path):
                 tail_stamp(custody, 'worker_terminal')
             except OSError as error:   # evidence-only stamp after the completed terminal: the hour is not failed by it; the miss is named on stderr
                 print('TAIL_STAMP_DEGRADED worker_terminal %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+            if verifying_tail:
+                # ruling 67346 (2): the result lands in the tail's own custody, only after its worker-terminal; nothing is written into the lost custody.
+                hour_module.write_verify_tail_result(sys.modules[__name__], custody, prediction['identity'], outcome)
             return 0
         if trajectory_mode(prediction['identity']):
             def applied(count):
@@ -2837,6 +2920,9 @@ def launch(args, dispatch):
     if dispatch['job_id'] != run_id:
         raise ValueError('prediction run identity differs from authenticated dispatch')
     parent = args.custody.resolve(strict=True)
+    if verify_tail_mode(prediction['identity']):
+        # The lost custody is read-only: refuse a tail custody inside it BEFORE the drive check, the mkdir or any stamp (a later refusal cannot undo a write).
+        require_tail_custody_outside_lost_custody(prediction['identity'], parent / ('measurement-' + run_id))
     if parent.drive.upper() != 'B:' or not parent.is_dir():
         raise ValueError('daemon custody must be an existing B directory')
     custody = parent / ('measurement-' + run_id)
