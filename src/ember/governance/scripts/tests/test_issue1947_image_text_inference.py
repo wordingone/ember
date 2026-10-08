@@ -103,7 +103,8 @@ class Fixture:
         result = MODULE.run_pass(loaded["base"], loaded["contract"], read_payload or self.read_payload, emit,
                                  prediction_key=KEY)
         receipt = MODULE.build_receipt(loaded=loaded, pass_result=result,
-                                       checkpoint_manifest_raw_sha256=CHECKPOINT, model_bindings=BINDINGS)
+                                       checkpoint_manifest_raw_sha256=CHECKPOINT, model_bindings=BINDINGS,
+                                       prediction_key=KEY)
         return write(self.tmp / "receipt.json", receipt)
 
     def verify(self, receipt_path: Path, **overrides):
@@ -318,7 +319,47 @@ def test_builder_refuses_unapproved_bindings_before_publication(fx):
                              prediction_key=KEY)
     with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:model_bindings"):
         MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
-                             model_bindings={**BINDINGS, "answer_key": KEY.hex()})
+                             model_bindings={**BINDINGS, "answer_key": KEY.hex()}, prediction_key=KEY)
+
+
+HEX_BINDINGS = sorted(name for name, rule in MODULE.MODEL_BINDING_RULES.items() if rule == MODULE.HEX64)
+
+
+@pytest.mark.parametrize("name", HEX_BINDINGS)
+@pytest.mark.parametrize("value", [KEY.hex(), hashlib.sha256(KEY).hexdigest()], ids=["key_hex", "key_sha"])
+def test_builder_refuses_an_approved_binding_carrying_the_key_before_publication(fx, tmp_path, name, value):
+    loaded = MODULE.load_answer_contract(fx.answer_path, fx.base_path)
+    result = MODULE.run_pass(loaded["base"], loaded["contract"], fx.read_payload,
+                             lambda *_a: {"decoded_text": "A", "generated_token_count": 1,
+                                          "prompt_token_count": 10, "stop_reason": "eos_token"},
+                             prediction_key=KEY)
+    before = sorted(tmp_path.iterdir())
+    with pytest.raises(ValueError, match=f"FIELD_ALLOWLIST_REFUSED:model_bindings.{name}$"):
+        MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
+                             model_bindings={**BINDINGS, name: value}, prediction_key=KEY)
+    assert sorted(tmp_path.iterdir()) == before  # nothing was written
+
+
+def test_hex_binding_set_is_the_four_digests():
+    assert HEX_BINDINGS == ["emitter_source_sha256", "image_processor_sha256", "model_source_sha256",
+                            "tokenizer_sha256"]
+
+
+def test_public_field_check_fails_closed_without_the_key(fx):
+    receipt = json.loads(fx.produce(lambda _i, _p: "A").read_text(encoding="utf-8"))
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:key_required"):
+        MODULE.check_public_fields(receipt, None)
+
+
+def test_builder_refuses_a_key_not_bound_to_the_answer_contract(fx):
+    loaded = MODULE.load_answer_contract(fx.answer_path, fx.base_path)
+    result = MODULE.run_pass(loaded["base"], loaded["contract"], fx.read_payload,
+                             lambda *_a: {"decoded_text": "A", "generated_token_count": 1,
+                                          "prompt_token_count": 10, "stop_reason": "eos_token"},
+                             prediction_key=KEY)
+    with pytest.raises(ValueError, match="PREDICTION_KEY_BINDING_REFUSED"):
+        MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
+                             model_bindings=BINDINGS, prediction_key=bytes(len(KEY)))
 
 
 def test_builder_refuses_an_emitter_stop_reason_outside_the_decode_contract(fx):
@@ -329,7 +370,7 @@ def test_builder_refuses_an_emitter_stop_reason_outside_the_decode_contract(fx):
                              prediction_key=KEY)
     with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:record:0"):
         MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
-                             model_bindings=BINDINGS)
+                             model_bindings=BINDINGS, prediction_key=KEY)
 
 
 def test_receipt_holds_no_unkeyed_letter_digest(fx):

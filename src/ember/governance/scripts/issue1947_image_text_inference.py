@@ -128,15 +128,18 @@ def _is_hex64(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
 
 
-def check_public_fields(receipt: dict[str, Any], key: bytes | None = None) -> None:
+def check_public_fields(receipt: dict[str, Any], key: bytes) -> None:
     """Every emitter- or caller-controlled scalar that crosses the public boundary must fit its rule.
 
-    Run by build_receipt before a receipt exists and again by the verifier (which also holds the key)."""
+    Run with the private key by build_receipt before a receipt exists and again by the verifier.
+    A missing key fails closed: without it no digest can be checked against the key."""
     refusal = "IMAGE_TEXT_RECEIPT_FIELD_ALLOWLIST_REFUSED"
+    if not isinstance(key, bytes) or len(key) != KEY_BYTES:
+        raise ValueError(f"{refusal}:key_required")
     bindings = receipt.get("model_bindings")
     if not isinstance(bindings, dict) or set(bindings) != set(MODEL_BINDING_RULES):
         raise ValueError(f"{refusal}:model_bindings")
-    forbidden = set() if key is None else {key.hex(), sha(key)}
+    forbidden = {key.hex(), sha(key)}
     for name, rule in MODEL_BINDING_RULES.items():
         value = bindings[name]
         if rule == HEX64:
@@ -377,7 +380,12 @@ def build_receipt(
     pass_result: dict[str, Any],
     checkpoint_manifest_raw_sha256: str,
     model_bindings: dict[str, Any],
+    prediction_key: bytes,
 ) -> dict[str, Any]:
+    # The builder holds the same private key as the pass, bound to the loaded contract, so the
+    # key-aware privacy check runs before any public receipt exists, not only at verification.
+    if len(prediction_key) != KEY_BYTES or sha(prediction_key) != loaded["contract"]["answer_key_sha256"]:
+        raise ValueError("IMAGE_TEXT_PREDICTION_KEY_BINDING_REFUSED")
     receipt: dict[str, Any] = {
         "schema_version": RECEIPT_SCHEMA,
         "result": RESULT_PASS,
@@ -396,7 +404,7 @@ def build_receipt(
         "records": pass_result["records"],
         "claim_boundary": CLAIM_BOUNDARY,
     }
-    check_public_fields(receipt)  # refuse before a receipt is ever written
+    check_public_fields(receipt, prediction_key)  # refuse before a receipt is ever written
     receipt["self_sha256"] = sha(canonical(receipt))
     return receipt
 
