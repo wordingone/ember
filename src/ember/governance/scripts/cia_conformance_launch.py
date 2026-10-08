@@ -97,7 +97,7 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
     while current in by_pid and current not in ancestors:
         ancestors.add(current)
         current = by_pid[current]['ParentProcessId']
-    conflicts, described = [], []
+    conflicts = []
     for row in rows:
         pid = row['ProcessId']
         if pid in ancestors:
@@ -121,9 +121,8 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
         # allocation remains included in the total-device supervisor's ceiling.
         if pid in gpu_pids or int(commit_kib) >= 1024 ** 2 or training:
             conflicts.append(pid)
-            described.append(f'{pid}: name={row["Name"]} parent={row.get("ParentProcessId")} command={command}')
     if conflicts:
-        raise ValueError(f'unowned resource-consuming cohort requires coordination: {conflicts} ({"; ".join(described)})')
+        raise ValueError(f'unowned resource-consuming cohort requires coordination: {conflicts}')
 
 
 def current_resource_census():
