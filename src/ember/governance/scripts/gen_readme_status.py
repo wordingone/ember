@@ -43,7 +43,6 @@ import argparse
 import glob
 import hashlib
 import json
-import math
 import os
 import re
 import sys
@@ -75,13 +74,6 @@ BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
 END_MARKER = "<!-- BOARD-STATUS-END -->"
 SUBJECT_BEGIN_MARKER = "<!-- CURRENT-SUBJECT-BEGIN -->"
 SUBJECT_END_MARKER = "<!-- CURRENT-SUBJECT-END -->"
-CONTINUITY_STATUS_PATH = os.path.join(ROOT, "manifests", "ember-training-continuity-status-v1.json")
-CONTINUITY_BEGIN_MARKER = "<!-- CONTINUITY-STATUS-BEGIN -->"
-CONTINUITY_END_MARKER = "<!-- CONTINUITY-STATUS-END -->"
-CONTINUITY_SNAPSHOT_SCHEMA = "ember-training-continuity-snapshot-v1"
-CONTINUITY_STATUS_SCHEMA = "ember-training-continuity-status-v2"  # training_continuity_status.STATUS_SCHEMA; a test compares the two
-CONTINUITY_CANDIDATE_AUDIT_SCHEMA = "ember-lineage-candidate-audit-v1"  # lineage_candidate_audit.SCHEMA; a test compares the two
-CONTINUITY_CANDIDATE_AUDIT_STATUSES = {"REFUSED_NOT_RETAINED", "UNRULED_NOT_RETAINED", "RETAINED_IN_CHAIN", "NO_CANDIDATE"}
 CURRENT_SUBJECT_FIELDS = {
     "active_route",
     "capability_credit",
@@ -522,307 +514,12 @@ def render_current_subject_block(payload):
     )
 
 
-def _closed(value, keys, where):
-    if not isinstance(value, dict) or set(value) != set(keys):
-        raise ValueError(f"continuity status {where} keys are not {sorted(keys)}")
-    return value
-
-
-def _nonneg_int(value, where):
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ValueError(f"continuity status {where} must be a nonnegative integer")
-    return value
-
-
-def _digest_or_genesis(value, where):
-    if value == "GENESIS":
-        return value
-    return _closed_hash(value, where)
-
-
-def _text(value, where, *, nullable=False):
-    if value is None and nullable:
-        return value
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"continuity status {where} must be a non-empty string")
-    return value
-
-
-def _reject_nonfinite(token):
-    raise ValueError(f"continuity snapshot carries a non-finite number ({token}); JSON NaN and Infinity are refused")
-
-
-def _parse_finite_float(token):
-    """An ordinary JSON literal such as 1e999 parses to infinity without ever reaching parse_constant."""
-    value = float(token)
-    if not math.isfinite(value):
-        raise ValueError(f"continuity snapshot carries a non-finite number ({token}); it overflows to infinity")
-    return value
-
-
-def _private_path_strings(value, found=None):
-    """Every string leaf that looks like a local filesystem path (drive letter or backslash)."""
-    found = [] if found is None else found
-    if isinstance(value, str):
-        if "\\" in value or re.match(r"^[A-Za-z]:[/\\]", value):
-            found.append(value)
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            _private_path_strings(key, found)
-            _private_path_strings(item, found)
-    elif isinstance(value, list):
-        for item in value:
-            _private_path_strings(item, found)
-    return found
-
-
-def _check_candidate_audit(candidate_audit, head, lineage):
-    if not isinstance(candidate_audit, dict) or candidate_audit.get("schema") != CONTINUITY_CANDIDATE_AUDIT_SCHEMA:
-        raise ValueError(f"continuity snapshot candidate_audit schema must be {CONTINUITY_CANDIDATE_AUDIT_SCHEMA}")
-    audit_status = candidate_audit.get("status")
-    if audit_status not in CONTINUITY_CANDIDATE_AUDIT_STATUSES:
-        raise ValueError(f"continuity snapshot candidate_audit.status {audit_status!r} is not one of {sorted(CONTINUITY_CANDIDATE_AUDIT_STATUSES)}")
-    duplicate = candidate_audit.get("duplicate_credit")
-    if not isinstance(duplicate, dict) or duplicate.get("each_hour_counted_once") is not True:
-        raise ValueError("continuity snapshot candidate_audit must carry a passing duplicate_credit check")
-    # the duplicate-credit tuple must reconcile with the selected lineage it audits: a true flag beside counts that disagree is not a check
-    for name in ("distinct_manifests", "hops_checked", "summed_step_delta", "summed_token_delta"):
-        value = duplicate.get(name)
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError(f"continuity snapshot candidate_audit duplicate_credit.{name} must be a non-negative integer")
-    expected = {"distinct_manifests": lineage["depth"], "hops_checked": max(lineage["depth"] - 1, 0),
-                "summed_step_delta": lineage["retained_global_steps"], "summed_token_delta": lineage["retained_applied_positions"]}
-    for name, want in expected.items():
-        if duplicate[name] != want:
-            raise ValueError(f"continuity snapshot candidate_audit duplicate_credit.{name} {duplicate[name]} disagrees with the selected lineage ({want})")
-    if audit_status != "NO_CANDIDATE":
-        candidate = candidate_audit.get("candidate")
-        retained = candidate_audit.get("retained")
-        if not isinstance(candidate, dict) or not isinstance(retained, dict):
-            raise ValueError("continuity snapshot candidate_audit needs candidate and retained sections")
-        _closed_hash(candidate.get("manifest_sha256"), "candidate manifest_sha256")
-        parent_is_head = candidate.get("parent_is_selected_head")
-        if not isinstance(parent_is_head, bool) or parent_is_head != (candidate.get("parent_manifest_sha256") == head):
-            raise ValueError("continuity snapshot candidate_audit parent_is_selected_head must be a boolean that matches the candidate parent and the selected head")
-        in_chain = retained.get("candidate_in_retained_chain")
-        credited = retained.get("positions_credited_to_lineage")
-        if not isinstance(in_chain, bool):
-            raise ValueError("continuity snapshot candidate_audit candidate_in_retained_chain must be a boolean")
-        if isinstance(credited, bool) or not isinstance(credited, int) or credited < 0:
-            raise ValueError("continuity snapshot candidate_audit positions_credited_to_lineage must be a non-negative integer")
-        if (audit_status == "RETAINED_IN_CHAIN") != in_chain:
-            raise ValueError("continuity snapshot candidate_audit status disagrees with candidate_in_retained_chain")
-        if audit_status != "RETAINED_IN_CHAIN" and credited != 0:
-            raise ValueError("continuity snapshot candidate_audit credits positions to a candidate that is not retained")
-        if audit_status == "REFUSED_NOT_RETAINED":
-            ruling = candidate_audit.get("refusal_ruling")
-            if not isinstance(ruling, dict) or ruling.get("verdict") != "REFUTED":
-                raise ValueError("continuity snapshot candidate_audit REFUSED_NOT_RETAINED needs a REFUTED ruling")
-            _closed_hash(ruling.get("receipt_sha256"), "refusal receipt_sha256")
-
-
-def load_continuity_status(path):
-    """Closed load of the committed continuity snapshot: the training-continuity status dict plus when it was
-    captured and the head it describes. Anything outside the closed key sets, a non-hex digest or a negative
-    count refuses; the loader never repairs."""
-    with open(path, "r", encoding="utf-8") as stream:
-        payload = json.load(stream, parse_constant=_reject_nonfinite, parse_float=_parse_finite_float)
-    _closed(payload, {"schema_version", "captured_at", "head_manifest_sha256", "status", "candidate_audit"}, "root")
-    if payload["schema_version"] != CONTINUITY_SNAPSHOT_SCHEMA:
-        raise ValueError(f"continuity snapshot schema_version must be {CONTINUITY_SNAPSHOT_SCHEMA}")
-    if not isinstance(payload["captured_at"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", payload["captured_at"]):
-        raise ValueError("continuity snapshot captured_at must be YYYY-MM-DDTHH:MM:SSZ (UTC)")
-    head = _digest_or_genesis(payload["head_manifest_sha256"], "head_manifest_sha256")
-    status = _closed(payload["status"], {
-        "schema", "lineage_checkpoint_manifest_sha256", "lineage", "claim_budget_eligible", "gpu_owner", "checkpoint",
-        "learning_measurement", "purpose", "diagnostic_allowance", "next_segment"}, "status")
-    if status["schema"] != CONTINUITY_STATUS_SCHEMA:
-        raise ValueError(f"continuity status schema must be {CONTINUITY_STATUS_SCHEMA}")
-    if _digest_or_genesis(status["lineage_checkpoint_manifest_sha256"], "lineage_checkpoint_manifest_sha256") != head:
-        raise ValueError("continuity snapshot head differs from the status lineage checkpoint")
-    lineage = status["lineage"]
-    if isinstance(lineage, dict) and "genesis_manifest_sha256" in lineage:
-        _closed(lineage, {"depth", "genesis_manifest_sha256", "retained_applied_positions", "retained_global_steps"}, "lineage")
-        _closed_hash(lineage["genesis_manifest_sha256"], "lineage.genesis_manifest_sha256")
-    else:
-        _closed(lineage, {"depth", "retained_applied_positions", "retained_global_steps"}, "lineage")
-    for name in ("depth", "retained_applied_positions", "retained_global_steps"):
-        _nonneg_int(lineage[name], f"lineage.{name}")
-    claim = status["claim_budget_eligible"]
-    if not isinstance(claim, dict) or claim.get("status") not in {"UNDEFINED", "UNDETERMINED", "MEASURED"}:
-        raise ValueError("continuity status claim_budget_eligible.status must be UNDEFINED, UNDETERMINED or MEASURED")
-    if "accounting" in claim:
-        # the status as `claim_budget_eligible_status` returns it under the approved frozen predicate: exact key set, never a free-form dict
-        _closed(claim, {"status", "predicate_sha256", "accounting"}, "claim_budget_eligible")
-        _closed_hash(claim["predicate_sha256"], "claim_budget_eligible.predicate_sha256")
-        accounting = claim["accounting"]
-        if not isinstance(accounting, dict) or accounting.get("head_segment_id") != head:
-            raise ValueError("continuity status claim_budget_eligible.accounting must be an object for the snapshot head")
-        if claim["status"] == "MEASURED":
-            _nonneg_int(accounting.get("eligible_unique_total"), "claim_budget_eligible.accounting.eligible_unique_total")
-        else:
-            if claim["status"] != "UNDETERMINED" or accounting.get("eligible_unique_total") is not None:
-                raise ValueError("continuity status claim_budget_eligible with accounting must be MEASURED with a total or UNDETERMINED without one")
-            evidence = accounting.get("missing_evidence")
-            if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item for item in evidence):
-                raise ValueError("continuity status UNDETERMINED claim_budget_eligible must name its missing evidence")
-    elif claim["status"] == "MEASURED":
-        _closed(claim, {"status", "eligible_unique_total"}, "claim_budget_eligible")
-        _nonneg_int(claim["eligible_unique_total"], "claim_budget_eligible.eligible_unique_total")
-    else:
-        _closed(claim, {"status", "missing"}, "claim_budget_eligible")
-        _text(claim["missing"], "claim_budget_eligible.missing")
-    gpu = status["gpu_owner"]
-    if isinstance(gpu, dict) and gpu.get("status") == "held":
-        _closed(gpu, {"status", "owner", "run_id", "training_job_purpose"}, "gpu_owner")
-        for name in ("owner", "run_id", "training_job_purpose"):
-            _text(gpu[name], f"gpu_owner.{name}", nullable=True)
-    else:
-        _closed(gpu, {"status"}, "gpu_owner")
-        if gpu["status"] != "not_reported":
-            raise ValueError("continuity status gpu_owner.status must be held or not_reported")
-    checkpoint = _closed(status["checkpoint"], {"child_manifest_sha256", "parent_manifest_sha256", "last_hour_applied_positions"}, "checkpoint")
-    if _digest_or_genesis(checkpoint["child_manifest_sha256"], "checkpoint.child_manifest_sha256") != head:
-        raise ValueError("continuity snapshot head differs from the status checkpoint child")
-    if checkpoint["parent_manifest_sha256"] is not None:
-        _closed_hash(checkpoint["parent_manifest_sha256"], "checkpoint.parent_manifest_sha256")
-    _nonneg_int(checkpoint["last_hour_applied_positions"], "checkpoint.last_hour_applied_positions")
-    measurement = status["learning_measurement"]
-    if isinstance(measurement, dict) and measurement.get("status") == "measured":
-        _closed(measurement, {"status", "measurement"}, "learning_measurement")
-        if not isinstance(measurement["measurement"], dict):
-            raise ValueError("continuity status learning_measurement.measurement must be an object")
-    else:
-        _closed(measurement, {"status"}, "learning_measurement")
-        if measurement["status"] != "pending":
-            raise ValueError("continuity status learning_measurement.status must be measured or pending")
-    purpose = _closed(status["purpose"], {"training_job_purpose", "run_id"}, "purpose")
-    for name in ("training_job_purpose", "run_id"):
-        _text(purpose[name], f"purpose.{name}", nullable=True)
-    allowance = _closed(status["diagnostic_allowance"], {
-        "diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds",
-        "max_postponement_seconds", "at_occupancy_limit", "at_postponement_limit"}, "diagnostic_allowance")
-    for name in ("diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds", "max_postponement_seconds"):
-        if (isinstance(allowance[name], bool) or not isinstance(allowance[name], (int, float))
-                or not math.isfinite(allowance[name]) or allowance[name] < 0):
-            raise ValueError(f"continuity status diagnostic_allowance.{name} must be a nonnegative number")
-    for name in ("at_occupancy_limit", "at_postponement_limit"):
-        if not isinstance(allowance[name], bool):
-            raise ValueError(f"continuity status diagnostic_allowance.{name} must be a boolean")
-    nxt = status["next_segment"]
-    if isinstance(nxt, dict) and nxt.get("status") == "blocked":
-        _closed(nxt, {"status", "blocker"}, "next_segment")
-        _text(nxt["blocker"], "next_segment.blocker")
-    else:
-        _closed(nxt, {"status", "training_job_purpose", "run_id"}, "next_segment")
-        if nxt["status"] != "ready":
-            raise ValueError("continuity status next_segment.status must be ready or blocked")
-        for name in ("training_job_purpose", "run_id"):
-            _text(nxt[name], f"next_segment.{name}", nullable=True)
-    _check_candidate_audit(payload["candidate_audit"], head, lineage)
-    leaked = _private_path_strings(payload)
-    if leaked:
-        raise ValueError(f"continuity snapshot carries a local filesystem path: {leaked[0]!r}")
-    return payload
-
-
-def render_continuity_status_block(payload):
-    """The page block for a loaded snapshot. Lineage retained positions come from the ancestry walk
-    (`status.lineage`); the last hour's count is printed on its own line under its own name and is never presented as the
-    lineage total. The block states `captured_at` and the head digest rather than claiming currency."""
-    status = payload["status"]
-    lineage, checkpoint, claim = status["lineage"], status["checkpoint"], status["claim_budget_eligible"]
-    allowance, nxt = status["diagnostic_allowance"], status["next_segment"]
-    if claim["status"] == "MEASURED":
-        total = claim["accounting"]["eligible_unique_total"] if "accounting" in claim else claim["eligible_unique_total"]   # the loader admits both shapes
-        claim_line = f"- Claim-budget-eligible unique targets: `{total}` (frozen predicate evaluated)."
-    elif "accounting" in claim:
-        evidence = claim["accounting"]["missing_evidence"]
-        reasons = sorted({re.sub(r"^(segment )?'?[0-9a-f]{64}'?: ", "", item) for item in evidence})
-        claim_line = (f"- Claim-budget-eligible unique targets: **{claim['status']}** under predicate `{claim['predicate_sha256']}`, no number is shown; "
-                      f"`{len(evidence)}` missing-evidence items in `{len(reasons)}` kinds: " + "; ".join(reasons) + ".")
-    else:
-        claim_line = f"- Claim-budget-eligible unique targets: **{claim['status']}**, no number is shown; missing: {claim['missing']}"
-    audit = payload["candidate_audit"]
-    duplicate = audit["duplicate_credit"]
-    if audit["status"] == "NO_CANDIDATE":
-        candidate_line = "- Candidate child: none recorded."
-    else:
-        candidate, ruling = audit["candidate"], audit.get("refusal_ruling")
-        ruled = (f"; ruling `{ruling['verdict']}` (row `{ruling['row_sha256']}`, receipt `{ruling['receipt_sha256']}`)"
-                 if ruling else "; no ruling recorded")
-        candidate_line = (f"- Candidate child `{candidate['manifest_sha256']}` (parent `{candidate['parent_manifest_sha256']}`): "
-                          f"`{audit['status']}`{ruled}; positions credited to the lineage `{audit['retained']['positions_credited_to_lineage']}`.")
-    duplicate_line = (f"- Duplicate-credit check: `{duplicate['distinct_manifests']}` distinct manifests, `{duplicate['hops_checked']}` hops, "
-                      f"each hour counted once: `{str(duplicate['each_hour_counted_once']).lower()}`.")
-    measurement = status["learning_measurement"]
-    if measurement["status"] == "measured":
-        measure_line = (f"- Last learning measurement (bound to `{checkpoint['child_manifest_sha256']}`): "
-                        f"`{json.dumps(measurement['measurement'], sort_keys=True, separators=(',', ':'))}`.")
-    else:
-        measure_line = "- Last learning measurement: pending."
-    gpu = status["gpu_owner"]
-    gpu_line = ("- GPU owner: not reported." if gpu["status"] == "not_reported" else
-                f"- GPU owner: `{gpu['owner']}`, run `{gpu['run_id']}`, purpose `{gpu['training_job_purpose']}`.")
-    purpose = status["purpose"]
-    if nxt["status"] == "blocked":
-        next_line = f"- Next segment: blocked: {nxt['blocker']}"
-    else:
-        next_line = f"- Next segment: ready, purpose `{nxt['training_job_purpose']}`, run `{nxt['run_id']}`."
-    return "\n".join([
-        CONTINUITY_BEGIN_MARKER,
-        "<!-- GENERATED by src/ember/governance/scripts/gen_readme_status.py from manifests/ember-training-continuity-status-v1.json -->",
-        f"**Training continuity (snapshot captured `{payload['captured_at']}`, head `{payload['head_manifest_sha256']}`):** "
-        "this block matches the committed snapshot and does not claim to be current.",
-        "",
-        f"- Selected checkpoint: `{checkpoint['child_manifest_sha256']}`; parent: `{checkpoint['parent_manifest_sha256']}`.",
-        f"- Retained applied positions over the whole lineage (ancestry walk, depth `{lineage['depth']}`): "
-        f"`{lineage['retained_applied_positions']}` positions, `{lineage['retained_global_steps']}` steps.",
-        f"- Last hour only: `{checkpoint['last_hour_applied_positions']}` applied positions.",
-        candidate_line,
-        duplicate_line,
-        claim_line,
-        measure_line,
-        gpu_line,
-        f"- Current purpose: `{purpose['training_job_purpose']}`, run `{purpose['run_id']}`.",
-        f"- Diagnostic occupancy `{allowance['diagnostic_occupancy_seconds']}` of `{allowance['max_diagnostic_occupancy_seconds']}` s "
-        f"(at limit: `{str(allowance['at_occupancy_limit']).lower()}`); postponement `{allowance['postponement_seconds']}` of "
-        f"`{allowance['max_postponement_seconds']}` s (at limit: `{str(allowance['at_postponement_limit']).lower()}`).",
-        next_line,
-        CONTINUITY_END_MARKER,
-    ])
-
-
 def _replace_marked(text, begin, end, block, surface):
     pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
     matches = pattern.findall(text)
     if len(matches) != 1:
         raise ValueError(f"{surface} must contain exactly one {begin} ... {end} block")
     return pattern.sub(lambda _: block, text, count=1)
-
-
-def apply_continuity_status(continuity_text, snapshot_path):
-    """The page text with its continuity-status block rendered from the committed snapshot. Both halves or neither: a
-    snapshot with no page block, a page block with no snapshot, or an invalid snapshot raises ValueError."""
-    snapshot_present = os.path.isfile(snapshot_path)
-    markers_present = CONTINUITY_BEGIN_MARKER in continuity_text or CONTINUITY_END_MARKER in continuity_text
-    if not snapshot_present and not markers_present:
-        return continuity_text
-    if not snapshot_present:
-        raise ValueError("CONTINUITY.md carries a continuity-status block but the committed snapshot is absent")
-    if not markers_present:
-        raise ValueError("the continuity snapshot exists but CONTINUITY.md has no continuity-status block")
-    try:
-        snapshot = load_continuity_status(snapshot_path)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
-        raise ValueError(f"continuity snapshot is invalid: {exc}") from exc
-    return _replace_marked(
-        continuity_text,
-        CONTINUITY_BEGIN_MARKER,
-        CONTINUITY_END_MARKER,
-        render_continuity_status_block(snapshot),
-        "docs/domains/governance/authority/CONTINUITY.md",
-    )
 
 
 def subject_surfaces_current(payload, continuity_path):
@@ -871,7 +568,6 @@ def main():
     parser.add_argument("--readme", default=README_PATH, help=argparse.SUPPRESS)
     parser.add_argument("--continuity", default=CONTINUITY_PATH)
     parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
-    parser.add_argument("--continuity-snapshot", default=CONTINUITY_STATUS_PATH)
     parser.add_argument("--branch-inventory", default=BRANCH_INVENTORY_PATH)
     parser.add_argument("--branch-inventory-max-age-days", type=int, default=7)
     parser.add_argument(
@@ -964,10 +660,6 @@ def main():
         subject_block,
         "docs/domains/governance/authority/CONTINUITY.md",
     )
-    try:
-        new_continuity = apply_continuity_status(new_continuity, args.continuity_snapshot)
-    except (OSError, ValueError) as exc:
-        raise SystemExit(f"gen_readme_status: {exc}") from exc
 
     if new_continuity == continuity:
         print(
