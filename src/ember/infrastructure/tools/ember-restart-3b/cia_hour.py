@@ -528,31 +528,48 @@ def _json_round_trip(value):
     return json.loads(json.dumps(value, sort_keys=True))
 
 
-def verify_tail(runner, model, optimizer, inventory, identity, custody):
-    """Resumable verify-only tail: reads the persisted witness, requires it to describe the published `trained-child` on disk, and runs the SAME
-    restore verification the hour runs, against the witness instead of the in-memory state. It never trains, never publishes and never advances a
-    head. Refuses when an hour result already exists (nothing to resume) or a tail result already exists (one tail per hour). On success it writes
-    `verify-tail-result.json`; the hour-result and any head move stay with the owner's ruling."""
-    custody = Path(custody)
+def verify_tail(runner, model, optimizer, inventory, identity, lost_custody):
+    """Resumable verify-only tail: reads the lost hour's persisted witness, requires it to describe the published `trained-child` on disk, and
+    runs the SAME restore verification the hour runs, against the witness instead of the in-memory state. The lost custody is a READ-ONLY input
+    pinned by digest in the tail prediction (`identity['verify_tail']`): this function writes nothing anywhere and returns the result record. It
+    never trains, never publishes and never advances a head. Refuses when the lost hour already has an hour result (nothing to resume), when the
+    witness bytes or the published child differ from the digests frozen in the tail prediction, or when the witness describes another child. The
+    result lands in the TAIL's own custody via `write_verify_tail_result`, after that job's worker-terminal; the hour-result and any head move
+    stay with the owner's ruling."""
+    pin = identity['verify_tail']
+    custody = Path(lost_custody)
     if (custody / 'hour-result.json').exists():
         raise ValueError('the hour already has an hour-result; there is nothing to resume')
-    if (custody / VERIFY_TAIL_RESULT).exists():
-        raise ValueError('a verify tail result already exists for this hour')
     import checkpoint_artifacts as artifacts
     witness, witness_sha256 = read_terminal_witness(runner, custody)
+    if witness_sha256 != pin['witness_sha256']:
+        raise ValueError('terminal witness bytes differ from the digest frozen in the tail prediction')
     child = artifacts.published_checkpoint_receipt(custody / 'trained-child')
+    if child['checkpoint_manifest_sha256'] != pin['child_manifest_sha256']:
+        raise ValueError('published trained-child differs from the digest frozen in the tail prediction')
     if child['checkpoint_manifest_sha256'] != witness['child_manifest_sha256']:
         raise ValueError('terminal witness describes another child than the published trained-child')
     if witness['data_cursor'] != child['data_cursor'] or witness['terminal_state']['data_cursor'] != child['data_cursor']:
         raise ValueError('terminal witness cursor differs from the published child cursor')
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child,
                               before=witness['terminal_state'], normalize=_json_round_trip)
-    result = dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
-                  child_manifest_sha256=child['checkpoint_manifest_sha256'],
-                  witness_sha256=witness_sha256,
-                  restored_state_matches=True, hour_result_written=False, head_advanced=False)
-    runner._write_new(custody / VERIFY_TAIL_RESULT, result)
-    return result
+    return dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
+                lost_run_id=pin['lost_run_id'],
+                child_manifest_sha256=child['checkpoint_manifest_sha256'],
+                witness_sha256=witness_sha256,
+                restored_state_matches=True, hour_result_written=False, head_advanced=False)
+
+
+def write_verify_tail_result(runner, tail_custody, identity, result):
+    """ruling 67346 (2): the result lands in the TAIL's own custody, only after that job's worker-terminal, exclusively; a path inside the lost
+    custody is refused and nothing is ever written there. Returns the sha256 of the written bytes (the release authority records that pin)."""
+    tail = Path(tail_custody)
+    target = tail / VERIFY_TAIL_RESULT
+    runner.require_result_outside_lost_custody(identity, target)
+    if not (tail / 'worker-terminal.json').is_file():
+        raise ValueError('the tail result is written only after its own worker-terminal')
+    runner._write_new(target, result)
+    return runner.file_sha256(target)
 
 
 def build_hour_model(*, runner, config, prepared, identity, device):
@@ -587,10 +604,11 @@ def build_hour_model(*, runner, config, prepared, identity, device):
 
 
 def run_verify_tail(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
-    """Same signature as run_hour. `custody` is the LOST hour's custody directory (it holds the witness and the published trained-child)."""
+    """Same signature as run_hour. `custody` is the TAIL's own custody (the lost hour's is the digest-pinned read-only input named by
+    `identity['verify_tail']`). Returns the result record; the worker writes it after its worker-terminal (`write_verify_tail_result`)."""
     identity = prediction['identity']
     model, inventory, optimizer = build_hour_model(runner=runner, config=config, prepared=prepared, identity=identity, device=device)
-    return verify_tail(runner, model, optimizer, inventory, identity, custody)
+    return verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
 
 
 def continuation_state(runner, model, optimizer, cursor, device):
