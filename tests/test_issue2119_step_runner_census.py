@@ -80,6 +80,14 @@ class StepRunnerCensus(unittest.TestCase):
         for needle in ('4', 'python.exe', 'parent=1', 'train.py --x'):
             self.assertIn(needle, text)
 
+    def test_launcher_copy_refusal_names_the_process_too(self):
+        rows = base_rows() + [python_row(4, False, commit=2048, command='python.exe train.py --x', parent=1)]
+        with self.assertRaises(ValueError) as caught:
+            launch.reject_resource_conflicts(rows, 2, set())
+        text = str(caught.exception)
+        for needle in ('[4]', 'python.exe', 'parent=1', 'train.py --x'):
+            self.assertIn(needle, text)
+
     def test_census_command_reports_the_exit_state_of_python_rows(self):
         seen = []
 
