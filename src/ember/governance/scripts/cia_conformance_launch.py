@@ -104,10 +104,11 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
             continue
         if str(row['Name']).lower() not in ('python.exe', 'pythonw.exe', 'py.exe'):
             continue
-        # An EXITED Python object kept alive by a stray handle holds commit charge but runs nothing: it is not a
-        # tenant. Its charge stays counted by the commit gate. Only a positively exited object that no GPU context
-        # lists is skipped; an unknown state (None) or a live process is classified as before.
-        if row.get('HasExited') is True and pid not in gpu_pids:
+        # An EXITED Python object kept alive by a stray handle runs nothing: it is not a tenant, even when
+        # nvidia-smi still lists its pid (WDDM keeps a context on the dead object, lead ruling 68756). Its commit charge stays
+        # counted by the commit gate and its device memory by the total-device sample. An unknown state (None) or a
+        # live process is classified as before.
+        if row.get('HasExited') is True:
             continue
         commit_kib = row.get('PageFileUsage')
         command = row.get('CommandLine')
