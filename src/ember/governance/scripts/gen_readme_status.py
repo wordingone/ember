@@ -80,6 +80,8 @@ CONTINUITY_BEGIN_MARKER = "<!-- CONTINUITY-STATUS-BEGIN -->"
 CONTINUITY_END_MARKER = "<!-- CONTINUITY-STATUS-END -->"
 CONTINUITY_SNAPSHOT_SCHEMA = "ember-training-continuity-snapshot-v1"
 CONTINUITY_STATUS_SCHEMA = "ember-training-continuity-status-v2"  # training_continuity_status.STATUS_SCHEMA; a test compares the two
+CONTINUITY_CANDIDATE_AUDIT_SCHEMA = "ember-lineage-candidate-audit-v1"  # lineage_candidate_audit.SCHEMA; a test compares the two
+CONTINUITY_CANDIDATE_AUDIT_STATUSES = {"REFUSED_NOT_RETAINED", "UNRULED_NOT_RETAINED", "RETAINED_IN_CHAIN", "NO_CANDIDATE"}
 CURRENT_SUBJECT_FIELDS = {
     "active_route",
     "capability_credit",
@@ -558,13 +560,56 @@ def _parse_finite_float(token):
     return value
 
 
+def _private_path_strings(value, found=None):
+    """Every string leaf that looks like a local filesystem path (drive letter or backslash)."""
+    found = [] if found is None else found
+    if isinstance(value, str):
+        if "\\" in value or re.match(r"^[A-Za-z]:[/\\]", value):
+            found.append(value)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _private_path_strings(key, found)
+            _private_path_strings(item, found)
+    elif isinstance(value, list):
+        for item in value:
+            _private_path_strings(item, found)
+    return found
+
+
+def _check_candidate_audit(candidate_audit):
+    if not isinstance(candidate_audit, dict) or candidate_audit.get("schema") != CONTINUITY_CANDIDATE_AUDIT_SCHEMA:
+        raise ValueError(f"continuity snapshot candidate_audit schema must be {CONTINUITY_CANDIDATE_AUDIT_SCHEMA}")
+    audit_status = candidate_audit.get("status")
+    if audit_status not in CONTINUITY_CANDIDATE_AUDIT_STATUSES:
+        raise ValueError(f"continuity snapshot candidate_audit.status {audit_status!r} is not one of {sorted(CONTINUITY_CANDIDATE_AUDIT_STATUSES)}")
+    duplicate = candidate_audit.get("duplicate_credit")
+    if not isinstance(duplicate, dict) or duplicate.get("each_hour_counted_once") is not True:
+        raise ValueError("continuity snapshot candidate_audit must carry a passing duplicate_credit check")
+    if audit_status != "NO_CANDIDATE":
+        candidate = candidate_audit.get("candidate")
+        retained = candidate_audit.get("retained")
+        if not isinstance(candidate, dict) or not isinstance(retained, dict):
+            raise ValueError("continuity snapshot candidate_audit needs candidate and retained sections")
+        _closed_hash(candidate.get("manifest_sha256"), "candidate manifest_sha256")
+        in_chain = retained.get("candidate_in_retained_chain")
+        if (audit_status == "RETAINED_IN_CHAIN") != (in_chain is True):
+            raise ValueError("continuity snapshot candidate_audit status disagrees with candidate_in_retained_chain")
+        if not in_chain and retained.get("positions_credited_to_lineage") != 0:
+            raise ValueError("continuity snapshot candidate_audit credits positions to a candidate that is not retained")
+        if audit_status == "REFUSED_NOT_RETAINED":
+            ruling = candidate_audit.get("refusal_ruling")
+            if not isinstance(ruling, dict) or ruling.get("verdict") != "REFUTED":
+                raise ValueError("continuity snapshot candidate_audit REFUSED_NOT_RETAINED needs a REFUTED ruling")
+            _closed_hash(ruling.get("receipt_sha256"), "refusal receipt_sha256")
+
+
 def load_continuity_status(path):
     """Closed load of the committed continuity snapshot: the training-continuity status dict plus when it was
     captured and the head it describes. Anything outside the closed key sets, a non-hex digest or a negative
     count refuses; the loader never repairs."""
     with open(path, "r", encoding="utf-8") as stream:
         payload = json.load(stream, parse_constant=_reject_nonfinite, parse_float=_parse_finite_float)
-    _closed(payload, {"schema_version", "captured_at", "head_manifest_sha256", "status"}, "root")
+    _closed(payload, {"schema_version", "captured_at", "head_manifest_sha256", "status", "candidate_audit"}, "root")
     if payload["schema_version"] != CONTINUITY_SNAPSHOT_SCHEMA:
         raise ValueError(f"continuity snapshot schema_version must be {CONTINUITY_SNAPSHOT_SCHEMA}")
     if not isinstance(payload["captured_at"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", payload["captured_at"]):
@@ -588,7 +633,22 @@ def load_continuity_status(path):
     claim = status["claim_budget_eligible"]
     if not isinstance(claim, dict) or claim.get("status") not in {"UNDEFINED", "UNDETERMINED", "MEASURED"}:
         raise ValueError("continuity status claim_budget_eligible.status must be UNDEFINED, UNDETERMINED or MEASURED")
-    if claim["status"] == "MEASURED":
+    if "accounting" in claim:
+        # the status as `claim_budget_eligible_status` returns it under the approved frozen predicate: exact key set, never a free-form dict
+        _closed(claim, {"status", "predicate_sha256", "accounting"}, "claim_budget_eligible")
+        _closed_hash(claim["predicate_sha256"], "claim_budget_eligible.predicate_sha256")
+        accounting = claim["accounting"]
+        if not isinstance(accounting, dict) or accounting.get("head_segment_id") != head:
+            raise ValueError("continuity status claim_budget_eligible.accounting must be an object for the snapshot head")
+        if claim["status"] == "MEASURED":
+            _nonneg_int(accounting.get("eligible_unique_total"), "claim_budget_eligible.accounting.eligible_unique_total")
+        else:
+            if claim["status"] != "UNDETERMINED" or accounting.get("eligible_unique_total") is not None:
+                raise ValueError("continuity status claim_budget_eligible with accounting must be MEASURED with a total or UNDETERMINED without one")
+            evidence = accounting.get("missing_evidence")
+            if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item for item in evidence):
+                raise ValueError("continuity status UNDETERMINED claim_budget_eligible must name its missing evidence")
+    elif claim["status"] == "MEASURED":
         _closed(claim, {"status", "eligible_unique_total"}, "claim_budget_eligible")
         _nonneg_int(claim["eligible_unique_total"], "claim_budget_eligible.eligible_unique_total")
     else:
@@ -641,6 +701,10 @@ def load_continuity_status(path):
             raise ValueError("continuity status next_segment.status must be ready or blocked")
         for name in ("training_job_purpose", "run_id"):
             _text(nxt[name], f"next_segment.{name}", nullable=True)
+    _check_candidate_audit(payload["candidate_audit"])
+    leaked = _private_path_strings(payload)
+    if leaked:
+        raise ValueError(f"continuity snapshot carries a local filesystem path: {leaked[0]!r}")
     return payload
 
 
@@ -653,8 +717,25 @@ def render_continuity_status_block(payload):
     allowance, nxt = status["diagnostic_allowance"], status["next_segment"]
     if claim["status"] == "MEASURED":
         claim_line = f"- Claim-budget-eligible unique targets: `{claim['eligible_unique_total']}` (frozen predicate evaluated)."
+    elif "accounting" in claim:
+        evidence = claim["accounting"]["missing_evidence"]
+        reasons = sorted({re.sub(r"^(segment )?'?[0-9a-f]{64}'?: ", "", item) for item in evidence})
+        claim_line = (f"- Claim-budget-eligible unique targets: **{claim['status']}** under predicate `{claim['predicate_sha256']}`, no number is shown; "
+                      f"`{len(evidence)}` missing-evidence items in `{len(reasons)}` kinds: " + "; ".join(reasons) + ".")
     else:
         claim_line = f"- Claim-budget-eligible unique targets: **{claim['status']}**, no number is shown; missing: {claim['missing']}"
+    audit = payload["candidate_audit"]
+    duplicate = audit["duplicate_credit"]
+    if audit["status"] == "NO_CANDIDATE":
+        candidate_line = "- Candidate child: none recorded."
+    else:
+        candidate, ruling = audit["candidate"], audit.get("refusal_ruling")
+        ruled = (f"; ruling `{ruling['verdict']}` (row `{ruling['row_sha256']}`, receipt `{ruling['receipt_sha256']}`)"
+                 if ruling else "; no ruling recorded")
+        candidate_line = (f"- Candidate child `{candidate['manifest_sha256']}` (parent `{candidate['parent_manifest_sha256']}`): "
+                          f"`{audit['status']}`{ruled}; positions credited to the lineage `{audit['retained']['positions_credited_to_lineage']}`.")
+    duplicate_line = (f"- Duplicate-credit check: `{duplicate['distinct_manifests']}` distinct manifests, `{duplicate['hops_checked']}` hops, "
+                      f"each hour counted once: `{str(duplicate['each_hour_counted_once']).lower()}`.")
     measurement = status["learning_measurement"]
     if measurement["status"] == "measured":
         measure_line = (f"- Last learning measurement (bound to `{checkpoint['child_manifest_sha256']}`): "
@@ -679,6 +760,8 @@ def render_continuity_status_block(payload):
         f"- Retained applied positions over the whole lineage (ancestry walk, depth `{lineage['depth']}`): "
         f"`{lineage['retained_applied_positions']}` positions, `{lineage['retained_global_steps']}` steps.",
         f"- Last hour only: `{checkpoint['last_hour_applied_positions']}` applied positions.",
+        candidate_line,
+        duplicate_line,
         claim_line,
         measure_line,
         gpu_line,
