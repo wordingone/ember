@@ -496,7 +496,7 @@ def run_readonly(command, *, timeout=20):
 
 def process_census():
     result = run_readonly(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-        "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,ExecutablePath,PageFileUsage,CreationDate) | ConvertTo-Json -Compress"])
+        "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited} }) | ConvertTo-Json -Compress"])
     rows = json.loads(result.stdout)
     if not isinstance(rows, list) or not rows:
         raise ValueError('process census is missing')
@@ -528,8 +528,20 @@ def resource_census():
         raise ValueError('GPU process identity is unreadable')
     gpu_pids = {int(value) for value in values}
     rows = process_census()
+    reject_unowned_model_processes(rows, gpu_pids, os.getpid())
+    return rows
+
+
+def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
+    """Refuse a live, unowned Python process that holds model resources.
+
+    Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py requires both
+    copies to agree). An EXITED Python object kept alive by a stray handle runs nothing, so it is not a tenant even when
+    nvidia-smi still lists its pid; its commit charge stays in the commit gate and its device memory in the total-device sample.
+    An unknown state (HasExited None or absent) and a live process are classified as before.
+    """
     by_pid = {row['ProcessId']: row for row in rows}
-    current, ancestors = os.getpid(), set()
+    current, ancestors = owner_pid, set()
     while current in by_pid and current not in ancestors:
         ancestors.add(current)
         current = by_pid[current]['ParentProcessId']
@@ -538,13 +550,15 @@ def resource_census():
     for row in rows:
         if row['ProcessId'] in ancestors or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
             continue
+        if row.get('HasExited') is True:
+            continue
         if row.get('PageFileUsage') is None or not row.get('CommandLine'):
             raise ValueError('cannot classify model process resources')
         argv = windows_command_args(row['CommandLine'])
         if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
                 or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
-            raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]}')
-    return rows
+            raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]} '
+                             f'(name={row["Name"]} parent={row.get("ParentProcessId")} command={row["CommandLine"]})')
 
 
 def headroom():
