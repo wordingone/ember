@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      WIRING_EXPECTED_TESTS: "188"
+      WIRING_EXPECTED_TESTS: "196"
       WIRING_NEW_FILES: >-
         tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py
         tests/ember_restart_model/test_issue2119_fresh_session_head_load.py
