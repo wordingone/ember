@@ -51,10 +51,14 @@ CADENCE_SCORER_MARKER = 'v12'
 _SHA256 = re.compile(r'[0-9a-f]{64}')
 
 
-def cadence_problems(advance_child: str, score_receipt: Path | None, score_receipt_sha256: str | None, declaration: Path | None = None) -> list[str]:
+def cadence_problems(advance_child: str, score_receipt: Path | None, score_receipt_sha256: str | None, declaration: Path | None = None,
+                     *, plan_sha256: str = CADENCE_PLAN_SHA256) -> list[str]:
     """Why a head advance to `advance_child` is refused under the declared cadence (empty list = a scorer-v12 receipt for exactly this
-    child, on the frozen plan, whose bytes hash to the digest the caller cites). Every check reads bytes; nothing is taken from the caller's say-so."""
+    child, on the frozen plan, whose bytes hash to the digest the caller cites). Every check reads bytes; nothing is taken from the caller's say-so.
+    `plan_sha256` is the one binding a caller may declare other than the cadence plan (the scored-pair route names its own frozen entry's plan)."""
     problems = []
+    if not isinstance(plan_sha256, str) or _SHA256.fullmatch(plan_sha256) is None:
+        return ['the plan digest the receipt must be scored on is not a sha256']
     if not isinstance(advance_child, str) or _SHA256.fullmatch(advance_child) is None:
         return ['the child manifest digest to advance to is not a sha256']
     if declaration is not None:
@@ -89,8 +93,8 @@ def cadence_problems(advance_child: str, score_receipt: Path | None, score_recei
         problems.append(f'the score receipt schema is not {CADENCE_SCORE_SCHEMA}')
     if CADENCE_SCORER_MARKER not in str(receipt.get('label', '')).split():
         problems.append(f'the score receipt label does not name scorer {CADENCE_SCORER_MARKER}')
-    if bindings.get('episode_plan_sha256') != CADENCE_PLAN_SHA256:
-        problems.append('the score receipt was not scored on the frozen plan 9a6fd054')
+    if bindings.get('episode_plan_sha256') != plan_sha256:
+        problems.append(f'the score receipt was not scored on the frozen plan {plan_sha256[:8]}')
     if bindings.get('checkpoint_manifest_sha256') != advance_child:
         problems.append('the score receipt scores a different checkpoint than the child to advance to (a twin or branch is never lineage evidence)')
     if str(HERE) not in sys.path:
