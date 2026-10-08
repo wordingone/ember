@@ -152,6 +152,37 @@ class SweepScopeTests(unittest.TestCase):
         self.assertEqual(self.pointer.sweep_stale_staging(self.dir), [])
         self.assertEqual(sorted(path.name for path in self.dir.iterdir()), sorted(set(keep)))
 
+    def windows_state(self, *, handle, last_error=0, exit_ok=True, exit_code=0):
+        """_windows_pid_state against a fake kernel32: no Windows needed, so this runs on every platform."""
+        class Code:
+            def __init__(self):
+                self.value = 0
+
+        class Kernel:
+            closed = []
+
+            def OpenProcess(self, access, inherit, pid):
+                return handle
+
+            def GetExitCodeProcess(self, process, ref):
+                ref.value = exit_code
+                return exit_ok
+
+            def CloseHandle(self, process):
+                self.closed.append(process)
+        return self.pointer._windows_pid_state(41, Kernel(), lambda: last_error, c_ulong=Code, byref=lambda code: code, c_void_p=lambda value: value)
+
+    def test_windows_death_is_proven_only_by_no_such_pid_or_an_exit_code(self):
+        self.assertEqual(self.windows_state(handle=0, last_error=87), 'dead')                  # OpenProcess: no such process
+        self.assertEqual(self.windows_state(handle=5, exit_code=0), 'dead')                    # it exited
+        self.assertEqual(self.windows_state(handle=5, exit_code=259), 'alive')                 # STILL_ACTIVE
+
+    def test_an_uninspectable_writer_counts_as_alive_so_its_staged_file_is_kept_DELIBERATE_RED(self):
+        self.assertEqual(self.windows_state(handle=0, last_error=5), 'unknown')                # access denied is not absence
+        self.assertEqual(self.windows_state(handle=5, exit_ok=False), 'unknown')               # a failing exit-code query is not absence
+        for state_args in (dict(handle=0, last_error=5), dict(handle=5, exit_ok=False)):
+            self.assertNotEqual(self.windows_state(**state_args), 'dead')                      # only 'dead' lets the sweep delete
+
     def test_a_missing_directory_is_not_an_error(self):
         self.assertEqual(self.pointer.sweep_stale_staging(self.dir / 'absent'), [])
 

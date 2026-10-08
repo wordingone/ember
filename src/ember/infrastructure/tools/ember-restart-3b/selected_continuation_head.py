@@ -44,7 +44,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SCHEMA = 'ember-selected-continuation-head-v1'
 POINTER_FILENAME = 'selected-continuation-head.json'
@@ -108,21 +108,36 @@ def pointer_path(receipts_root: Path) -> Path:
     return Path(receipts_root) / POINTER_FILENAME
 
 
+_ERROR_INVALID_PARAMETER = 87    # OpenProcess for a pid that does not exist
+_STILL_ACTIVE = 259
+
+
+def _windows_pid_state(pid: int, kernel32: Any, last_error: Callable[[], int], c_ulong: Any = None, byref: Any = None, c_void_p: Any = None) -> str:
+    """'dead' only when Windows PROVES the process is gone (no such pid, or an exit code other than STILL_ACTIVE); 'alive' when it is running;
+    'unknown' when it cannot be inspected (access denied, a failing exit-code query). Only 'dead' lets the sweep delete a staged file."""
+    import ctypes
+    c_ulong, byref, c_void_p = c_ulong or ctypes.c_ulong, byref or ctypes.byref, c_void_p or ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return 'dead' if last_error() == _ERROR_INVALID_PARAMETER else 'unknown'
+    try:
+        code = c_ulong()
+        if not kernel32.GetExitCodeProcess(c_void_p(handle), byref(code)):
+            return 'unknown'
+        return 'alive' if code.value == _STILL_ACTIVE else 'dead'
+    finally:
+        kernel32.CloseHandle(c_void_p(handle))
+
+
 def _pid_alive(pid: int) -> bool:
+    """False only when the writer is PROVEN gone; an uninspectable process counts as alive so its staged file is retained."""
     if pid <= 0:
         return False
     if os.name == 'nt':
         import ctypes
-        kernel32 = ctypes.windll.kernel32
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
         kernel32.OpenProcess.restype = ctypes.c_void_p
-        handle = kernel32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
-        if not handle:
-            return False
-        try:
-            code = ctypes.c_ulong()
-            return bool(kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))) and code.value == 259   # STILL_ACTIVE
-        finally:
-            kernel32.CloseHandle(ctypes.c_void_p(handle))
+        return _windows_pid_state(pid, kernel32, ctypes.get_last_error) != 'dead'
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
