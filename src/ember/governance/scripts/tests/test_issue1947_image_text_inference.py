@@ -22,6 +22,10 @@ SPEC.loader.exec_module(MODULE)
 
 KEY = bytes(range(32))
 CHECKPOINT = "c" * 64
+BINDINGS = {
+    "model_source_sha256": "1" * 64, "tokenizer_sha256": "2" * 64, "image_processor_sha256": "3" * 64,
+    "emitter_source_sha256": "4" * 64, "device_class": "cuda", "dtype": "bfloat16",
+}
 
 
 def canonical(value: object) -> bytes:
@@ -99,7 +103,7 @@ class Fixture:
         result = MODULE.run_pass(loaded["base"], loaded["contract"], read_payload or self.read_payload, emit,
                                  prediction_key=KEY)
         receipt = MODULE.build_receipt(loaded=loaded, pass_result=result,
-                                       checkpoint_manifest_raw_sha256=CHECKPOINT, model_bindings={"fixture": True})
+                                       checkpoint_manifest_raw_sha256=CHECKPOINT, model_bindings=BINDINGS)
         return write(self.tmp / "receipt.json", receipt)
 
     def verify(self, receipt_path: Path, **overrides):
@@ -271,11 +275,61 @@ def test_receipt_field_outside_the_allowlist_refuses(fx, record_level, name, val
         fx.verify(path)
 
 
-def test_model_bindings_must_be_flat_scalars(fx):
-    path = rewrite(fx.produce(lambda item_id, _p: "A"),
-                   lambda p: p["model_bindings"].__setitem__("answers", {"item-0000": "A"}))
+def _set_binding(name: str, value: object):
+    def mutate(p):
+        p["model_bindings"][name] = value
+    return mutate
+
+
+@pytest.mark.parametrize("mutate", [
+    _set_binding("answers", {"item-0000": "A"}),       # nested extra key
+    _set_binding("answer_key", KEY.hex()),             # flat extra key holding the key (review R1 remainder)
+    _set_binding("predicted_letter", "A"),             # flat extra key holding a letter (review R1 remainder)
+    _set_binding("tokenizer_sha256", KEY.hex()),       # an approved key whose value is the answer key
+    _set_binding("tokenizer_sha256", sha(KEY)),        # ... or the answer key's digest
+    _set_binding("tokenizer_sha256", "A"),             # an approved hex key carrying a letter
+    _set_binding("dtype", "A"),                        # an approved enum key outside its enumeration
+    lambda p: p["model_bindings"].pop("dtype"),        # a missing approved key
+], ids=["nested", "flat_answer_key", "flat_predicted_letter", "key_hex_value", "key_sha_value",
+        "hex_rule", "enum_rule", "missing_key"])
+def test_model_bindings_outside_the_fixed_schema_refuse(fx, mutate):
+    # Deliberate red: each receipt is re-hashed, so only the schema check can refuse it.
+    path = rewrite(fx.produce(lambda item_id, _p: "A"), mutate)
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:model_bindings"):
+        fx.verify(path)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("stop_reason", "A"), ("stop_reason", KEY.hex()), ("generated_token_count", 17),
+    ("prompt_token_count", -1), ("prompt_token_count", "A"), ("elapsed_seconds", "A"),
+    ("decoded_text_hmac", KEY.hex()),
+])
+def test_emitter_controlled_record_scalars_outside_their_rules_refuse(fx, field, value):
+    path = rewrite(fx.produce(lambda item_id, _p: "A"), _add_field(True, field, value))
     with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED"):
         fx.verify(path)
+
+
+def test_builder_refuses_unapproved_bindings_before_publication(fx):
+    loaded = MODULE.load_answer_contract(fx.answer_path, fx.base_path)
+    result = MODULE.run_pass(loaded["base"], loaded["contract"], fx.read_payload,
+                             lambda *_a: {"decoded_text": "A", "generated_token_count": 1,
+                                          "prompt_token_count": 10, "stop_reason": "eos_token"},
+                             prediction_key=KEY)
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:model_bindings"):
+        MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
+                             model_bindings={**BINDINGS, "answer_key": KEY.hex()})
+
+
+def test_builder_refuses_an_emitter_stop_reason_outside_the_decode_contract(fx):
+    loaded = MODULE.load_answer_contract(fx.answer_path, fx.base_path)
+    result = MODULE.run_pass(loaded["base"], loaded["contract"], fx.read_payload,
+                             lambda *_a: {"decoded_text": "A", "generated_token_count": 1,
+                                          "prompt_token_count": 10, "stop_reason": "B"},
+                             prediction_key=KEY)
+    with pytest.raises(ValueError, match="FIELD_ALLOWLIST_REFUSED:record:0"):
+        MODULE.build_receipt(loaded=loaded, pass_result=result, checkpoint_manifest_raw_sha256=CHECKPOINT,
+                             model_bindings=BINDINGS)
 
 
 def test_receipt_holds_no_unkeyed_letter_digest(fx):

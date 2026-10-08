@@ -64,7 +64,19 @@ RECORD_FIELDS = frozenset({
     "position", "item_id", "image_sha256s", "item_text_sha256", "decoded_text_hmac", "prediction_hmac",
     "parsed", "prompt_token_count", "generated_token_count", "stop_reason", "elapsed_seconds",
 })
-MODEL_BINDING_VALUE_TYPES = (str, int, float, bool)
+HEX64 = "hex64"
+# model_bindings is a fixed schema, not a free dict (review of PR 2345, R1 remainder): every approved key has a value
+# rule, and no other key may appear. A hex digest may never equal the answer key or its digest (checked by the verifier).
+MODEL_BINDING_RULES: dict[str, Any] = {
+    "model_source_sha256": HEX64,
+    "tokenizer_sha256": HEX64,
+    "image_processor_sha256": HEX64,
+    "emitter_source_sha256": HEX64,
+    "device_class": frozenset({"cuda", "cpu"}),
+    "dtype": frozenset({"bfloat16", "float16", "float32"}),
+}
+STOP_REASONS = frozenset({"eos_token", "first_newline_in_decoded_text", "max_new_tokens"})
+MAX_PROMPT_TOKENS = 1_000_000
 
 DECODE_CONTRACT: dict[str, Any] = {
     "strategy": "greedy_argmax",
@@ -110,6 +122,41 @@ def keyed_answer_digest(key: bytes, item_id: str, letter: str) -> str:
     if len(key) != KEY_BYTES:
         raise ValueError("IMAGE_TEXT_ANSWER_KEY_LENGTH_REFUSED")
     return hmac.new(key, item_id.encode("utf-8") + b"\x00" + letter.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _is_hex64(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
+def check_public_fields(receipt: dict[str, Any], key: bytes | None = None) -> None:
+    """Every emitter- or caller-controlled scalar that crosses the public boundary must fit its rule.
+
+    Run by build_receipt before a receipt exists and again by the verifier (which also holds the key)."""
+    refusal = "IMAGE_TEXT_RECEIPT_FIELD_ALLOWLIST_REFUSED"
+    bindings = receipt.get("model_bindings")
+    if not isinstance(bindings, dict) or set(bindings) != set(MODEL_BINDING_RULES):
+        raise ValueError(f"{refusal}:model_bindings")
+    forbidden = set() if key is None else {key.hex(), sha(key)}
+    for name, rule in MODEL_BINDING_RULES.items():
+        value = bindings[name]
+        if rule == HEX64:
+            if not _is_hex64(value) or value in forbidden:
+                raise ValueError(f"{refusal}:model_bindings.{name}")
+        elif not isinstance(value, str) or value not in rule:
+            raise ValueError(f"{refusal}:model_bindings.{name}")
+    for record in receipt.get("records") or []:
+        if not isinstance(record, dict):
+            continue  # shape refusals belong to the verifier's record checks
+        prompt, generated = record.get("prompt_token_count"), record.get("generated_token_count")
+        elapsed = record.get("elapsed_seconds")
+        if (
+            record.get("stop_reason") not in STOP_REASONS
+            or type(prompt) is not int or not 0 <= prompt <= MAX_PROMPT_TOKENS
+            or type(generated) is not int or not 0 <= generated <= DECODE_CONTRACT["max_new_tokens"]
+            or type(elapsed) not in (int, float) or not 0 <= elapsed
+            or (record.get("decoded_text_hmac") in forbidden)
+        ):
+            raise ValueError(f"{refusal}:record:{record.get('position')}")
 
 
 def keyed_decoded_digest(key: bytes, item_id: str, decoded: str) -> str:
@@ -306,9 +353,9 @@ def run_pass(
             "decoded_text_hmac": keyed_decoded_digest(prediction_key, item_id, decoded),
             "prediction_hmac": keyed_answer_digest(prediction_key, item_id, letter) if letter is not None else None,
             "parsed": letter is not None,
-            "prompt_token_count": int(emitted.get("prompt_token_count", -1)),
-            "generated_token_count": int(emitted.get("generated_token_count", -1)),
-            "stop_reason": str(emitted.get("stop_reason", "unknown")),
+            "prompt_token_count": emitted.get("prompt_token_count"),
+            "generated_token_count": emitted.get("generated_token_count"),
+            "stop_reason": emitted.get("stop_reason"),
             "elapsed_seconds": round(time.monotonic() - started, 3),
         }
         records.append(record)
@@ -349,6 +396,7 @@ def build_receipt(
         "records": pass_result["records"],
         "claim_boundary": CLAIM_BOUNDARY,
     }
+    check_public_fields(receipt)  # refuse before a receipt is ever written
     receipt["self_sha256"] = sha(canonical(receipt))
     return receipt
 
@@ -380,13 +428,9 @@ def verify_receipt(
     body = dict(receipt)
     if body.pop("self_sha256", None) != sha(canonical(body)):
         raise ValueError("IMAGE_TEXT_INFERENCE_RECEIPT_SELF_HASH_REFUSED")
-    model_bindings = receipt.get("model_bindings")
-    if (
-        set(receipt) != RECEIPT_FIELDS
-        or not isinstance(model_bindings, dict)
-        or not all(isinstance(value, MODEL_BINDING_VALUE_TYPES) for value in model_bindings.values())
-    ):
+    if set(receipt) != RECEIPT_FIELDS:
         raise ValueError("IMAGE_TEXT_RECEIPT_FIELD_ALLOWLIST_REFUSED")
+    check_public_fields(receipt, key)
     if receipt.get("checkpoint_manifest_raw_sha256") != expected_checkpoint_manifest_sha256:
         raise ValueError("IMAGE_TEXT_INFERENCE_CHECKPOINT_BINDING_REFUSED")
     if (
