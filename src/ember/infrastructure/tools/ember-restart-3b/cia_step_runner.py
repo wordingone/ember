@@ -1050,8 +1050,12 @@ def resource_limits(identity):
         if identity['hour']['schema'] == 'learning-comparison-v1':
             # Two checkpoints plus four full parameter snapshots; the full-compute control arm runs 16,384 updates.
             limits.update(wall_seconds=10800, max_b_write_gib=80)
-        if 'continuation' in identity or 'verify_tail' in identity:
+        if 'continuation' in identity:
             limits.update(wall_seconds=900, max_b_write_gib=1)
+        if 'verify_tail' in identity:
+            # review 67576 basis: a tail rebuilds the hour's model and optimizer (about 1,201 s, segment launch to first step start in the last two hours' stamps)
+            # and restores and verifies the child (about 1,505 s, counter to hour result in the hour that completed); wall >= 1.25 x 2,706 s = 3,382 s.
+            limits.update(wall_seconds=VERIFY_TAIL_WALL_SECONDS, max_b_write_gib=1)
     elif trajectory_mode(identity):
         if trajectory_checkpoint_emission(identity):
             limits.update(wall_seconds=1800, max_b_write_gib=32)
@@ -1102,6 +1106,7 @@ def hour_mode(identity):
 
 
 VERIFY_TAIL_KEYS = frozenset({'lost_custody', 'lost_run_id', 'witness_sha256', 'child_manifest_sha256'})
+VERIFY_TAIL_WALL_SECONDS = 3400   # measured basis in resource_limits; the tail owns this wall, a continuation keeps 900
 VERIFY_TAIL_MEASURED_STEPS = 2   # the minimal governed-hour input shape; the tail executes zero updates (ruling 67506)
 
 

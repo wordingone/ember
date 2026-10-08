@@ -512,6 +512,13 @@ class SourcePinTests(unittest.TestCase):
     def test_a_tail_is_a_short_receipts_only_job(self):
         import cia_step_runner as runner
         limits = runner.resource_limits(self.tail_identity())
+        self.assertEqual((limits['wall_seconds'], limits['max_b_write_gib']), (3400, 1))
+        self.assertGreaterEqual(limits['wall_seconds'], 1.25 * (1200.6 + 1504.8))     # build span + restore span from the hour stamps, with the 1.25 margin
+
+    def test_a_continuation_keeps_its_900_second_wall(self):
+        import cia_step_runner as runner
+        identity = {k: v for k, v in self.tail_identity().items() if k != 'verify_tail'}
+        limits = runner.resource_limits(dict(identity, continuation={}))
         self.assertEqual((limits['wall_seconds'], limits['max_b_write_gib']), (900, 1))
 
     def test_a_result_path_inside_the_lost_custody_refuses(self):
