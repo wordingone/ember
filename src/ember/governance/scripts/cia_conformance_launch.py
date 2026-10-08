@@ -54,7 +54,7 @@ def headroom():
 
 def process_census():
     command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,ExecutablePath,PageFileUsage,CreationDate) | ConvertTo-Json -Compress"]
+               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited} }) | ConvertTo-Json -Compress"]
     result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=20,
                             creationflags=subprocess.CREATE_NO_WINDOW)
     rows = json.loads(result.stdout)
@@ -103,6 +103,11 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
         if pid in ancestors:
             continue
         if str(row['Name']).lower() not in ('python.exe', 'pythonw.exe', 'py.exe'):
+            continue
+        # An EXITED Python object kept alive by a stray handle holds commit charge but runs nothing: it is not a
+        # tenant. Its charge stays counted by the commit gate. Only a positively exited object that no GPU context
+        # lists is skipped; an unknown state (None) or a live process is classified as before.
+        if row.get('HasExited') is True and pid not in gpu_pids:
             continue
         commit_kib = row.get('PageFileUsage')
         command = row.get('CommandLine')
