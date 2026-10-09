@@ -433,7 +433,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
         runner.tail_stamp(custody, 'counter')
         return measured
     owner_update_counts = {}
-    def publish(name, *, steps, tokens, cursor, parent=None):
+    def publish(name, *, steps, tokens, cursor, parent=None, optimizer_transition=None):
         torch.cuda.synchronize(device)
         optimizer.zero_grad(set_to_none=True)
         # A gated fused step runs _init_group on every parameter carrying a gradient, then found_inf skips it and
@@ -453,7 +453,8 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             contract_sha256=identity['source_sha256']['src/ember/model/ember_v0_contract.py'],
             expert_genesis_sha256={}, max_serialized_bytes=cap, max_transient_scratch_bytes=cap,
             host_commit_reserve_bytes=16 * runner.GIB, pre_publish_verifier=verifier,
-            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None)
+            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None,
+            cia_optimizer_transition=optimizer_transition)
     return publish, owner_update_counts
 
 
@@ -551,6 +552,15 @@ def verify_tail(runner, model, optimizer, inventory, identity, lost_custody):
         raise ValueError('terminal witness describes another child than the published trained-child')
     if witness['data_cursor'] != child['data_cursor'] or witness['terminal_state']['data_cursor'] != child['data_cursor']:
         raise ValueError('terminal witness cursor differs from the published child cursor')
+    recorded = child.get('lineage', {}).get('optimizer_transition') if isinstance(child.get('lineage'), dict) else None
+    declared = pin.get('optimizer_transition')
+    if (recorded is None) != (declared is None) or (declared is not None and {name: recorded.get(name) for name in declared} != declared):
+        raise ValueError('the recorded optimizer transition of the lost hour differs from the one frozen in the tail prediction')
+    if declared is not None:
+        # The fresh tail optimizer is built from the fixed constructor definition like the lost hour's; the same declared
+        # change is applied before the child restore so the loader compares the child's own optimizer identity.
+        artifacts.apply_cia_lr_transition(model, optimizer, from_lr=declared['from_lr'], to_lr=declared['to_lr'],
+            parent_manifest_sha256=recorded['parent_manifest_sha256'], transition_step=recorded['transition_step'])
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child,
                               before=witness['terminal_state'], normalize=_json_round_trip)
     return dict(schema=VERIFY_TAIL_SCHEMA, status='RESTORE_VERIFIED_FROM_WITNESS',
@@ -976,6 +986,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         runner, model, optimizer, inventory, identity, binding, custody, device)
     chain = identity.get('parent_checkpoint')
     base_steps = base_tokens = 0
+    transition = applied_transition = None
     if chain is None:
         parent_root = custody / 'zero-parent'
         parent = publish('zero-parent', steps=0, tokens=0, cursor=identity['data']['cursor'])
@@ -996,6 +1007,17 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
+        # Declared learning-rate-only change (identity['optimizer_transition']): applied AFTER the exact parent restore
+        # (every loader check ran against the parent's own optimizer identity) and BEFORE graph capture binds the optimizer.
+        transition = runner.optimizer_transition(identity)
+        if transition is not None:
+            applied_transition = artifacts.apply_cia_lr_transition(model, optimizer,
+                from_lr=transition['from_lr'], to_lr=transition['to_lr'],
+                parent_manifest_sha256=parent['checkpoint_manifest_sha256'], transition_step=cursor['global_step'])
+            if {name: applied_transition['transition'][name] for name in transition} != dict(transition):
+                raise ValueError('applied optimizer transition differs from the declared one')
+            runner._write_new(custody / 'lr-transition.json', dict(parent_manifest_sha256=parent['checkpoint_manifest_sha256'],
+                parent_data_cursor=dict(cursor), **applied_transition))
     check_image_start(prepared['binding'], base_steps)
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
@@ -1122,7 +1144,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     torch.cuda.synchronize(device)
     runner.tail_stamp(custody, 'child_publish_start')
     child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
-                    cursor=pack['cursor_after'], parent=parent_root)
+                    cursor=pack['cursor_after'], parent=parent_root,
+                    optimizer_transition=dict(applied_transition['transition']) if transition is not None else None)
     checkpoint_finished = time.perf_counter()
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
     # H35: the terminal state lived only in memory when the verification refused, so the published child could never be re-verified. Persist it first.

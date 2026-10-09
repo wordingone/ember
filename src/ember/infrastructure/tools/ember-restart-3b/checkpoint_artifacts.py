@@ -3251,6 +3251,7 @@ def write_checkpoint_artifacts(
     specialist_lineage: Mapping[str, Any] | None = None,
     cia_parent_checkpoint: Path | None = None,
     cia_owner_update_counts: Mapping[str, int] | None = None,
+    cia_optimizer_transition: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
@@ -3265,8 +3266,9 @@ def write_checkpoint_artifacts(
             contract_sha256=contract_sha256,expert_genesis_sha256=expert_genesis_sha256,
             max_serialized_bytes=max_serialized_bytes,max_transient_scratch_bytes=max_transient_scratch_bytes,
             host_commit_reserve_bytes=host_commit_reserve_bytes,pre_publish_verifier=pre_publish_verifier,
-            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts)
-    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None:
+            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts,
+            cia_optimizer_transition=cia_optimizer_transition)
+    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None or cia_optimizer_transition is not None:
         raise ValueError('CIA parent checkpoint cannot supply v2 lineage')
     return _write_checkpoint_artifacts_impl(
         model,
@@ -4364,6 +4366,53 @@ def _cia_live_optimizer_state_identity(optimizer):
     return id(optimizer.state), tuple(rows)
 
 
+def _cia_adam_step_counters(model, optimizer):
+    """Per-parameter Adam step counters in inventory order (None where a parameter has no state yet)."""
+    inventory = model.parameter_inventory()
+    counters = {}
+    for name, parameter in inventory.items():
+        fields = optimizer.state.get(parameter)
+        counters[name] = float(fields['step']) if fields and 'step' in fields else None
+    return counters
+
+
+def apply_cia_lr_transition(model, optimizer, *, from_lr, to_lr, parent_manifest_sha256, transition_step):
+    """Change ONLY the learning rate of a restored CIA AdamW, after the parent restore and before graph capture.
+
+    Requires every learning-rate field (optimizer.defaults and each param group) to be the declared from_lr and no
+    initial_lr; sets them to to_lr; then proves nothing else moved: the optimizer identity differs from the pre-change
+    identity in the learning-rate fields only, every moment tensor keeps its object, storage and in-place version, and
+    every Adam step counter is unchanged. Returns the closed transition record plus the evidence.
+    """
+    from ember.model.ember_v0_decoder import CIADecoder
+    if type(model) is not CIADecoder:
+        raise ValueError('CIA learning-rate transition requires the CIA decoder')
+    import parameter_counter as cia_counter
+    transition = {'kind': cia_counter.CIA_LR_TRANSITION_KIND, 'from_lr': from_lr, 'to_lr': to_lr,
+                  'parent_manifest_sha256': parent_manifest_sha256, 'transition_step': transition_step}
+    cia_counter._cia_lr_transition_shape(transition)
+    before_identity = cia_optimizer_identity(model, optimizer)
+    if cia_counter._cia_optimizer_lrs(before_identity) != {from_lr}:
+        raise ValueError('CIA learning-rate transition from_lr differs from the restored optimizer')
+    before_state = _cia_live_optimizer_state_identity(optimizer)
+    before_steps = _cia_adam_step_counters(model, optimizer)
+    optimizer.defaults['lr'] = to_lr
+    for group in optimizer.param_groups:
+        group['lr'] = to_lr
+    after_identity = cia_optimizer_identity(model, optimizer)
+    if (after_identity != cia_counter._cia_optimizer_identity_at_lr(before_identity, to_lr)
+            or cia_counter._cia_optimizer_lrs(after_identity) != {to_lr}):
+        raise ValueError('CIA learning-rate transition changed more than the learning rate')
+    if _cia_live_optimizer_state_identity(optimizer) != before_state or _cia_adam_step_counters(model, optimizer) != before_steps:
+        raise ValueError('CIA learning-rate transition touched optimizer moments or step counters')
+    counted = [value for value in before_steps.values() if value is not None]
+    return dict(transition=transition, step_counters_sha256=_canonical_sha256(before_steps),
+                parameters_with_state=len(counted), step_counter_min=min(counted) if counted else None,
+                step_counter_max=max(counted) if counted else None,
+                identity_before_sha256=_canonical_sha256(before_identity),
+                identity_after_sha256=_canonical_sha256(after_identity))
+
+
 def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
     """Capture v2 native moments once on CPU, under owner-held update exclusion.
 
@@ -4721,7 +4770,7 @@ def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_res
 def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_state, data_cursor,
         model_config_sha256, contract_sha256, expert_genesis_sha256, max_serialized_bytes,
         max_transient_scratch_bytes, pre_publish_verifier, host_commit_reserve_bytes=None,
-        cia_parent_checkpoint=None, cia_owner_update_counts=None):
+        cia_parent_checkpoint=None, cia_owner_update_counts=None, cia_optimizer_transition=None):
     """Complete CIA publication through the existing quarantine admission authority.
 
     Caller owns exclusion from updates throughout capture. Native optimizer
@@ -4738,6 +4787,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
     descendant = cia_parent_checkpoint is not None
     if not descendant and cia_owner_update_counts is not None:
         raise ValueError('owner update counts require an actual parent transition')
+    if not descendant and cia_optimizer_transition is not None:
+        raise ValueError('an optimizer transition requires an actual parent transition')
     if not descendant and (data_cursor.get('global_step') != 0 or data_cursor.get('tokens_seen') != 0):
         raise ValueError('CIA descendant publication requires a verified parent-lineage consumer')
     parameters = _cia_quiescent_parameters(model)
@@ -4807,7 +4858,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
-                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts)
+                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts,
+                optimizer_transition=(dict(cia_optimizer_transition) if cia_optimizer_transition is not None else None))
         if (_cia_parameter_snapshot_identity(_cia_quiescent_parameters(model)) != before or cia_optimizer_identity(model,optimizer) != identity
                 or _cia_live_optimizer_state_identity(optimizer) != live_optimizer):
             raise ValueError('CIA model or optimizer identity changed during checkpoint capture')
