@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_browsergym.py"
+SCRIPT = Path(__file__).parents[2] / "scripts" / "ember_restart_eval_browsergym.py"
 
 
 def test_scores_only_outcomes_bound_to_frozen_browser_manifest():

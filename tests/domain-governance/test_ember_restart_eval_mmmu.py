@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json, subprocess, sys, tempfile
 from pathlib import Path
-SCRIPT=Path(__file__).resolve().parents[1]/"scripts"/"ember_restart_eval_mmmu.py"
+SCRIPT=Path(__file__).resolve().parents[2]/"scripts"/"ember_restart_eval_mmmu.py"
 def test_refuses_non_multiple_choice_answers_before_upstream_execution():
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp); answers=root/"answers.json"; predictions=root/"predictions.json"; score=root/"score.json"

@@ -11,7 +11,10 @@ import re
 import tempfile
 from pathlib import Path
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "ember" / "governance" / "scripts"))
 from ember_restart.prediction_contract import ContractError, validate_predictions
+from ember_restart_eval_criterion import verdict_fields
 
 HASH = re.compile(r"[0-9a-f]{64}")
 
@@ -62,6 +65,7 @@ def main() -> int:
     parser.add_argument("--references", required=True, type=Path)
     parser.add_argument("--predictions", required=True, type=Path)
     parser.add_argument("--score-output", required=True, type=Path)
+    parser.add_argument("--protocol", type=Path)
     arguments = parser.parse_args()
     if arguments.score_output.exists():
         parser.error("score output must not pre-exist")
@@ -86,7 +90,8 @@ def main() -> int:
     if references.keys() != predictions.keys():
         parser.error("predictions must exactly cover the frozen reference ids")
     correct = sum(references[key] == predictions[key] for key in references)
-    payload = {"criterion_id": "ember-3b-text-capability-v1", "criterion_result": "FAILED", "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
+    payload = {"criterion_id": "ember-3b-text-capability-v1", "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
+    payload.update(verdict_fields(arguments.protocol, payload['criterion_id'], payload['metrics'], payload['sample_count']))
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, delete=False) as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")

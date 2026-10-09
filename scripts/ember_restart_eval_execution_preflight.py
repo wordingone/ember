@@ -4,6 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import argparse,hashlib,json,math,os,tempfile,sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "ember" / "governance" / "scripts"))
 from ember_restart.prediction_contract import ContractError,validate_predictions
 CAPABILITIES=("text","image","audio","reasoning","tool")
 def sha256(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -20,7 +21,11 @@ def main():
  benchmark=envelope['benchmark'];checkpoint=sha256(a.checkpoint_manifest);split=sha256(a.split_artifact);protocol=sha256(a.protocol_artifact)
  if envelope['checkpoint_manifest_sha256']!=checkpoint or benchmark['capability']!=a.capability or benchmark['id']!=a.benchmark_id or benchmark['version']!=a.benchmark_version or benchmark['split_sha256']!=split or benchmark['protocol_sha256']!=protocol:p.error('canonical prediction envelope does not bind supplied evaluation inputs')
  expected=f'ember-3b-{a.capability}-capability-v1';rows=envelope['rows']
- if not isinstance(score,dict) or score.get('criterion_id')!=expected or score.get('criterion_result') not in ('PASSED','FAILED'):p.error('evaluator score artifact must explicitly provide the pinned criterion')
+ role=score.get('evaluation_role') if isinstance(score,dict) else None
+ if not isinstance(score,dict) or score.get('criterion_id')!=expected:p.error('evaluator score artifact must explicitly provide the pinned criterion')
+ if role=='diagnostic':
+  if 'criterion_result' in score:p.error('diagnostic evaluator score must not carry a criterion_result')
+ elif role!='adjudicated' or score.get('criterion_result') not in ('PASSED','FAILED','UNDETERMINED') or score.get('protocol_sha256')!=protocol:p.error('evaluator score must be diagnostic, or adjudicated against the supplied protocol with an explicit criterion_result')
  if a.capability=='text' and score.get('predictions_sha256')!=predictions_sha256:p.error('text score source hashes do not bind supplied evidence')
  if a.benchmark_id=='audiobench':
   if a.closed_run_artifact is None:p.error('AudioBench preflight requires closed run artifact')
@@ -29,7 +34,7 @@ def main():
  if not isinstance(count,int) or isinstance(count,bool) or count!=len(rows):p.error('evaluator sample_count must be an exact integer match for canonical rows')
  metrics=score.get('metrics')
  if not isinstance(metrics,dict) or not metrics or any(isinstance(v,bool)or not isinstance(v,(int,float))or not math.isfinite(v)for v in metrics.values()):p.error('score artifact must contain non-empty finite numeric metrics')
- payload={'result':'PREFLIGHT_ONLY','admission':'NOT_ELIGIBLE','capability':a.capability,'subject_checkpoint_sha256':checkpoint,'benchmark_id':a.benchmark_id,'benchmark_version':a.benchmark_version,'split_sha256':split,'harness_sha256':sha256(a.harness_artifact),'protocol_sha256':protocol,'predictions_sha256':predictions_sha256,'score_artifact_sha256':score_artifact_sha256,'sample_count':count,'metrics':metrics,'criterion_id':expected,'criterion_result':score['criterion_result']}
+ payload={'result':'PREFLIGHT_ONLY','admission':'NOT_ELIGIBLE','capability':a.capability,'subject_checkpoint_sha256':checkpoint,'benchmark_id':a.benchmark_id,'benchmark_version':a.benchmark_version,'split_sha256':split,'harness_sha256':sha256(a.harness_artifact),'protocol_sha256':protocol,'predictions_sha256':predictions_sha256,'score_artifact_sha256':score_artifact_sha256,'sample_count':count,'metrics':metrics,'criterion_id':expected,'evaluation_role':role,'criterion_result':score.get('criterion_result')}
  a.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:h.write(json.dumps(payload,sort_keys=True)+'\n');tmp=h.name
  os.replace(tmp,a.output)

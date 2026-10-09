@@ -4,7 +4,7 @@
 import json, subprocess, sys, tempfile
 from pathlib import Path
 
-SCRIPT=Path(__file__).resolve().parents[1]/"scripts"/"ember_restart_eval_mmmu.py"
+SCRIPT=Path(__file__).resolve().parents[2]/"scripts"/"ember_restart_eval_mmmu.py"
 
 def test_converts_central_json_list_predictions_to_private_upstream_shape():
  with tempfile.TemporaryDirectory() as tmp:

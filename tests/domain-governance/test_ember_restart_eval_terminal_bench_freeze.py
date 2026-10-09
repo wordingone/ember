@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_terminal_bench_freeze.py"
+SCRIPT = Path(__file__).parents[2] / "scripts" / "ember_restart_eval_terminal_bench_freeze.py"
 
 
 def _write_task(root: Path, *, image: str, allow_internet: str = "false") -> None:

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_terminal_bench.py"
+SCRIPT = Path(__file__).parents[2] / "scripts" / "ember_restart_eval_terminal_bench.py"
 
 
 def test_rejects_harbor_outcome_image_that_does_not_match_frozen_manifest():
