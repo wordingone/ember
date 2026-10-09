@@ -1,0 +1,231 @@
+{
+  "schema": "niko.selected_projection.successor_handoff.v1",
+  "status": "READY_FOR_KAI_SINGLE_REVIEW_PRODUCTION_NOT_EXECUTED",
+  "created_utc": "2026-10-09T15:58:53.5688575Z",
+  "scope_mail_ids": [
+    74482,
+    74612,
+    74705,
+    74698
+  ],
+  "finding_mail_id": 74753,
+  "root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z",
+  "pins": [
+    {
+      "relative_path": "selected_projection_preselected_leo74705_v2.cs",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705_v2.cs",
+      "bytes": 54858,
+      "sha256": "90fea10d7a01057d86655a19f7b59d9b560c7aadb92848ca78ff1aad2ddce1de"
+    },
+    {
+      "relative_path": "run_selected_projection_preselected_leo74705.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run_selected_projection_preselected_leo74705.ps1",
+      "bytes": 6798,
+      "sha256": "34a19f9c0012c788147b08003726c5a5bd4073b686306a6a2a8d192bbd7ccd78"
+    },
+    {
+      "relative_path": "binding-preselected-leo74705-v2.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\binding-preselected-leo74705-v2.json",
+      "bytes": 12246,
+      "sha256": "2a53fa0bc152e474ddd7c2ba11bcf00985392c46a5e7ea1695ac04f4c1f63010"
+    },
+    {
+      "relative_path": "run-command-preselected-leo74705-v2.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-command-preselected-leo74705-v2.ps1",
+      "bytes": 19602,
+      "sha256": "00dc6d1abeaa2ad2a5f69d7e76782c91f91edd2ddbc6d63a5b21f24f5c9ee5e9"
+    },
+    {
+      "relative_path": "validate-preselection-v2.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-preselection-v2.ps1",
+      "bytes": 19139,
+      "sha256": "ada3db3edca3d2a99849725622beacbf1a97b30de33b5e1b736d7daeb11a0c1e"
+    },
+    {
+      "relative_path": "validate-cap-snapshot.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-cap-snapshot.ps1",
+      "bytes": 6094,
+      "sha256": "f2d2cf2c7df2b5f35a4dc05534d22b4efec403712e417fd1e59bf08b19dfe769"
+    },
+    {
+      "relative_path": "validate-refusal-peak.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-refusal-peak.ps1",
+      "bytes": 2039,
+      "sha256": "ad9966e5283f3ad56c90f037a50a0e2d4d723652ac148187853b03bf04ecab3b"
+    },
+    {
+      "relative_path": "prior-validate-privateusage.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\prior-validate-privateusage.ps1",
+      "bytes": 7178,
+      "sha256": "42fa7c68222ee8a5bdbf44aae2a5d249d11d7d6d6616e79c40fcde30123649cc"
+    },
+    {
+      "relative_path": "validate-prediction-schema-v2.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-prediction-schema-v2.ps1",
+      "bytes": 10442,
+      "sha256": "af5b975c031ee39594448702ccf41c6732733aa7347b857e2c4cb7890c54cd02"
+    },
+    {
+      "relative_path": "validate-retention-binding-v2.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-retention-binding-v2.ps1",
+      "bytes": 5154,
+      "sha256": "d81e4534f56c4fdc9a1c92b320c8532cdc70f18bc41b83c76d569f693868a7b4"
+    },
+    {
+      "relative_path": "synthetic-preselection-red/preselection-red.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\preselection-red.json",
+      "bytes": 12135,
+      "sha256": "f293a00e109c01afea0ce8bc35f1d187fa1f567e14968bbf31e4a9411fb94c93"
+    },
+    {
+      "relative_path": "synthetic-preselection-green-v2/preselection-validation.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-green-v2\\preselection-validation.json",
+      "bytes": 97948,
+      "sha256": "18056f3f889e3a74f432d682a90bc6426cd1f8380b011ad048253e1bc14371e9"
+    },
+    {
+      "relative_path": "cap-snapshot-red-v2.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\cap-snapshot-red-v2.json",
+      "bytes": 6855,
+      "sha256": "1ae21ccadcfedc121a2882b272182ffdb429c1946f7cc8ba7cefb275db7cfa92"
+    },
+    {
+      "relative_path": "cap-snapshot-green.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\cap-snapshot-green.json",
+      "bytes": 8660,
+      "sha256": "2919ce81ef63d0d1459debacf2b766b49d0006e7381fa4abc570203aee6b1e46"
+    },
+    {
+      "relative_path": "refusal-peak-red.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\refusal-peak-red.json",
+      "bytes": 819,
+      "sha256": "aebcc46066224a81dc8031228050f1ff2e3ccdd8b2eb3333e7b27cd53835c564"
+    },
+    {
+      "relative_path": "observer-validation-v2.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\observer-validation-v2.json",
+      "bytes": 1401,
+      "sha256": "fb87e37f2e75a201ecb5a53e7f8474ee0b71fc034970a4709348de8fd9c692b0"
+    },
+    {
+      "relative_path": "retention-binding-validation.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\retention-binding-validation.json",
+      "bytes": 2133,
+      "sha256": "3ac17b7926e97416449b8fc41736e9dc0f170763f5031ac56d7894bacb8a1d29"
+    },
+    {
+      "relative_path": "validation-prediction-schema-20261009T155619Z-75dc97d39c554004b2a7a8ba121bdadb/prediction-schema-validation.json",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T155619Z-75dc97d39c554004b2a7a8ba121bdadb\\prediction-schema-validation.json",
+      "bytes": 4533,
+      "sha256": "b4240d790bad25156be5200594be9242a19bc4e562024d82dcb06d6ff8851e55"
+    },
+    {
+      "relative_path": "baseline-source-leo74221.cs",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\baseline-source-leo74221.cs",
+      "bytes": 45204,
+      "sha256": "d37e880d56548821e13a9c27af1cda73a6ff812b0c2d7a0f379e314986858f81"
+    },
+    {
+      "relative_path": "baseline-runner-leo74221.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\baseline-runner-leo74221.ps1",
+      "bytes": 6269,
+      "sha256": "63d3cdf1dd6c42826042786a94da84ff8132a919c789c1d1c6fef9af3e7b466e"
+    },
+    {
+      "relative_path": "rejected-source-e0b957c4.cs",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-source-e0b957c4.cs",
+      "bytes": 52760,
+      "sha256": "e0b957c4249b38b582cff073b2dcff9ca7dca1ee0f5dca5c851905352c4cf335"
+    },
+    {
+      "relative_path": "rejected-runner-b4263969.ps1",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-runner-b4263969.ps1",
+      "bytes": 6403,
+      "sha256": "b4263969012c7d2fe05d3ae33c31e61a976b6c704ea0e2f2e733bac418d3b654"
+    },
+    {
+      "relative_path": "selected_projection_preselected_leo74705.cs",
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705.cs",
+      "bytes": 54690,
+      "sha256": "e8f54c317ce8b275fe6778b37423f6b2a9a509319db3474e802186f4410351f2"
+    }
+  ],
+  "implementation": "Hash traversal preselects membership IDs; pass1 creates only selected Member values. ID-only duplicate detection and global leakage indexes remain all-row. Two metadata passes. Cap snapshots append scalar index counts before refusing; row Check stores exact triggering PrivateUsage, row_failure uses it without a second query.",
+  "baseline_equality_correction": "Earlier8c956c is invalid equality evidence: harness global CandidateMode routed both runs to candidate. Preserved and superseded. Final fixture passes each source/runner explicitly, checks distinct baseline d37e880d versus candidate90fea10d, compares summary and both selected JSONL output hashes.",
+  "validation": {
+    "status": "PASS_HASH_PRESELECTED_MEMBER_RETENTION",
+    "comparisons": [
+      {
+        "case": "records_before_edges-extra0",
+        "selected_ids_after_hash": 8,
+        "max_pass1_members_observed": 8,
+        "all_row_ids": 11,
+        "all_outputs_equal": true
+      },
+      {
+        "case": "edges_before_records-extra0",
+        "selected_ids_after_hash": 8,
+        "max_pass1_members_observed": 8,
+        "all_row_ids": 11,
+        "all_outputs_equal": true
+      },
+      {
+        "case": "records_before_edges-extra8192",
+        "selected_ids_after_hash": 8,
+        "max_pass1_members_observed": 8,
+        "all_row_ids": 8203,
+        "all_outputs_equal": true
+      },
+      {
+        "case": "edges_before_records-extra8192",
+        "selected_ids_after_hash": 8,
+        "max_pass1_members_observed": 8,
+        "all_row_ids": 8203,
+        "all_outputs_equal": true
+      }
+    ],
+    "child_count": 13,
+    "all_child_cleanup_verified": true,
+    "exit_codes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "duplicate_cases": 2,
+    "no_sample": "BINDING_SCHEMA refusal: nullpeak/sample_count0/inputbytes0",
+    "cap_fixture": "real Scan metadata row64 and direct diagnostic CAP_PRIVATE; C synthetic binding threshold1, current memory/counts retained; production512MiB unchanged",
+    "observer_cases": "64-row polling, real16MiB allocation over measured+1MiB, invalidWin32handle failclosed",
+    "prediction_cases": "pinned17617B A prediction parse succeeds; missing/mismatched tokenizer refusal names exactpaths; noexportcontent",
+    "static_checks": "pins,fixed512MiB process/job/private caps/nooverride,900s BelowNormal1thread,hidden/captured child,syntax,finalgateFlush beforeProcess.Start"
+  },
+  "resources": {
+    "C_only_synthetic": true,
+    "A_metadata_bytes": 17617,
+    "A_export_content_read": false,
+    "B_walks": false,
+    "Python": false,
+    "GPU": false,
+    "production_command_executed": false,
+    "production_limit_bytes": 536870912,
+    "wall_seconds": 900,
+    "root_bytes_before_handoff": 28047658,
+    "output_cap_bytes": 67108864
+  },
+  "next_accepted_action": "Kai single verdict on these exact bytes. AfterPASS, fresh immediate preflight and Leo one-run release; exactlyone invocation/noretry. Then productionreceipt/publicstatus and PR via fresh A clone wordingone/ember branch fix/issue1581-bounded-membership off origin/master, reviewed source/fixtures byteidentical, Kai identitycheck only.",
+  "next_command": "pwsh.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-command-preselected-leo74705-v2.ps1",
+  "consumer_dependency": "Selected membership/target evidence for #1581 feeding Ember02. Projection is not trainingready admission. Vera review and actual consumerload remain separate.",
+  "admission_accepted": false,
+  "issue_complete": false,
+  "native_public_delivery": "Relays74782/74830 submitted from verifiedniko; Discord tab access reports sessionownership conflict, nativeIDs/times unverified; no duplicate.",
+  "invalid_package_preserved": "Prior1557Z handoff is4-byte null after PowerShell boolean typo, not evidence; preserved. This1558Z package is parsed and checked."
+}

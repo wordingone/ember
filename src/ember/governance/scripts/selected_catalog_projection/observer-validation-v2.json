@@ -1,0 +1,28 @@
+{
+  "schema": "niko.private_usage_observer.synthetic_validation.v1",
+  "status": "PASS",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705_v2.cs",
+  "source_sha256": "90fea10d7a01057d86655a19f7b59d9b560c7aadb92848ca78ff1aad2ddce1de",
+  "started_utc": "2026-10-09T15:56:19.3772111Z",
+  "finished_utc": "2026-10-09T15:56:20.1198562Z",
+  "production_process_and_job_limit_bytes": 536870912,
+  "fixed_row_poll_interval": 64,
+  "steady_pass_peak_private_bytes": 102387712,
+  "steady_sample_count_after_63_rows": 0,
+  "steady_sample_count_after_64_rows": 1,
+  "steady_sample_count_after_pass_boundary": 2,
+  "synthetic_guard_threshold_bytes": 103579648,
+  "synthetic_overcap_observed_private_bytes": 120074240,
+  "injected_failure_reason_code": "OBSERVER_FAILED(System.ComponentModel.Win32Exception)",
+  "checks": {
+    "steady_pass_peak_recorded": true,
+    "fixed_64_row_poll_interval": true,
+    "pass_boundary_sampled": true,
+    "real_allocation_crossed_synthetic_threshold": true,
+    "synthetic_guard_refused_CAP_PRIVATE": true,
+    "production_512MiB_limit_unchanged": true,
+    "injected_query_failure_refuses_OBSERVER_FAILED": true,
+    "failure_schema_has_reason_chain_and_byte_count": true
+  },
+  "failure": ""
+}

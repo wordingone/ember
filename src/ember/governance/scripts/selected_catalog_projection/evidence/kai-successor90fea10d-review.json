@@ -1,0 +1,102 @@
+{
+  "schema": "kai.selected_projection.successor_review.v1",
+  "verdict": "PASS_BOUNDED_SOURCE_AND_EXECUTED_FIXTURE_REVIEW",
+  "reviewed_at_utc": "2026-10-09T16:12:04Z",
+  "reviewed_at_local": "2026-10-09 09:12:04 America/Los_Angeles",
+  "reviewer": "kai",
+  "authority_mail": [
+    74482,
+    74612,
+    74705,
+    74698,
+    74804
+  ],
+  "packet": {
+    "path": "C:/Users/Admin/.codex/visualizations/2026/10/01/01a0f8e5-f04d-7141-af6f-51c1dac8a822/1581-preselected-membership-leo74705-20261009T1530Z/handoff-kai-successor-20261009T1558Z.json",
+    "sha256": "df703a14bd67d2225d27d006cbf539fec8aaac0b7ed3f02d6e15b56a1b7d714d",
+    "bytes": 13577,
+    "pins_verified": 23,
+    "pinned_bytes": 443360
+  },
+  "pins": {
+    "source": "90fea10d7a01057d86655a19f7b59d9b560c7aadb92848ca78ff1aad2ddce1de",
+    "runner": "34a19f9c0012c788147b08003726c5a5bd4073b686306a6a2a8d192bbd7ccd78",
+    "binding": "2a53fa0bc152e474ddd7c2ba11bcf00985392c46a5e7ea1695ac04f4c1f63010",
+    "command": "00dc6d1abeaa2ad2a5f69d7e76782c91f91edd2ddbc6d63a5b21f24f5c9ee5e9",
+    "baseline": "d37e880d56548821e13a9c27af1cda73a6ff812b0c2d7a0f379e314986858f81",
+    "preselection_validation": "18056f3f889e3a74f432d682a90bc6426cd1f8380b011ad048253e1bc14371e9",
+    "cap_validation": "2919ce81ef63d0d1459debacf2b766b49d0006e7381fa4abc570203aee6b1e46"
+  },
+  "findings": [
+    "Hash traversal405-413 retains only selected membership IDs before pass1; pass1 Member construction437 is conditional on that frozen set.",
+    "All-row membership duplicate check436 and heldout/quarantine/adjudicated/protected indexes438-441 remain outside selected-only construction.",
+    "Production uses original hash traversal plus exactly two metadata passes; metadata/source hashes and fixed caps remain bound.",
+    "Memory cap187 retains the triggering sample; row_failure193 reuses it; diagnostics append195-215 before refusal216; Run390 resets the trigger.",
+    "Failure119 reports observed peak or null with zero successful samples, never inventing a measured zero.",
+    "Validator144-155 invokes distinct frozen baseline/candidate sources, verifies their source hashes and compares the three actual output files.",
+    "Independent rehash of actual C-only outputs in all four order/size comparisons matches both the recorded pins and the frozen baseline.",
+    "Source review and fixture evidence pass within the assigned scope; no unresolved defect found in that scope."
+  ],
+  "fixture_review": {
+    "orders": [
+      "records_before_edges",
+      "edges_before_records"
+    ],
+    "all_row_memberships": [
+      11,
+      8203
+    ],
+    "selected_memberships": 8,
+    "observed_full_member_max": 8,
+    "metadata_passes": 2,
+    "byte_equal_output_pairs": 12,
+    "recorded_children": 13,
+    "recorded_exit0": 8,
+    "recorded_expected_exit1": 5,
+    "recorded_cleanup_failures": 0,
+    "recorded_timeouts": 0,
+    "observed_candidate_peaks_bytes": [
+      122040320,
+      122269696,
+      129880064,
+      129400832
+    ],
+    "cap_fixture": {
+      "rows": 64,
+      "membership_ids": 64,
+      "full_members": 8,
+      "selected_ids": 8,
+      "triggering_private_bytes": 103948288,
+      "synthetic_threshold_bytes": 1,
+      "production_threshold_unchanged": true
+    }
+  },
+  "production_bounds": {
+    "private_bytes": 536870912,
+    "process_bytes": 536870912,
+    "job_bytes": 536870912,
+    "wall_seconds": 900,
+    "priority": "BelowNormal",
+    "compute_parallelism": 1,
+    "output_bytes": 67108864,
+    "total_input_bytes": 2415919104,
+    "hidden_child": true,
+    "captured_streams": true,
+    "marker_override": false
+  },
+  "superseded_evidence": {
+    "old_equality_8c956c": "INVALID: baseline/candidate both routed to candidate; preserved and not used",
+    "old_retention_e0b957c4": "NOT_A_REVIEW_TARGET",
+    "old_cap_fixture": "EXPORT_SIZE did not establish cap snapshot failure; corrected red-v2 used",
+    "handoff_1557Z": "4-byte null, not evidence; corrected1558Z used"
+  },
+  "limitations": [
+    "Reviewer did not execute fixtures, production code, Python or GPU work; recorded executions and actual output bytes were inspected independently.",
+    "Synthetic fixtures do not prove the full export fits512MiB/900s; fresh production preflight and Leo's explicit one-run release remain prerequisites.",
+    "PASS is not launch authorization, production success, admitted data, consumer acceptance, PR/issue completion, or a general process-custody approval."
+  ],
+  "next": {
+    "owner": "niko",
+    "action": "fresh immediate preflight, then Leo one-run release; one invocation with no automatic retry. Preserve exact reviewed bytes through the assigned PR route. Vera membership review and actual consumer load remain separate."
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "niko.selected_catalog_projection.prediction_schema_validation.v2",
+  "observed_utc": "2026-10-09T15:56:20.3728468Z",
+  "fixture_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T155619Z-75dc97d39c554004b2a7a8ba121bdadb",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705_v2.cs",
+  "source_sha256": "90fea10d7a01057d86655a19f7b59d9b560c7aadb92848ca78ff1aad2ddce1de",
+  "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run_selected_projection_preselected_leo74705.ps1",
+  "runner_sha256": "34a19f9c0012c788147b08003726c5a5bd4073b686306a6a2a8d192bbd7ccd78",
+  "real_prediction_path": "A:\\handoff-1581\\head-hour-20261009\\prediction.json",
+  "real_prediction_bytes": 17617,
+  "real_prediction_sha256": "386aea69b20ae9c162e284775d96a70b2a7a65d02a048453f8cb15a78480435c",
+  "real_prediction_key_audit_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\prediction-key-audit-leo74156-20261009T0639Z.json",
+  "real_prediction_result": {
+    "passed": true,
+    "exception_type": null,
+    "exception_message": null,
+    "input_bytes_read": 17617,
+    "export_path": "A:/ember-staging/h25-union-admission-20261005c/export.json",
+    "export_sha256": "cfe8feddb472393e53e36b67b8696166cd453eb826de37af5c8eb590de38e933",
+    "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "dataset_id_count": 8
+  },
+  "missing_key_path": "identity.input_binding.tokenizer_sha256",
+  "missing_fixture_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T155619Z-75dc97d39c554004b2a7a8ba121bdadb\\prediction-missing-input-tokenizer.json",
+  "missing_fixture_bytes": 17531,
+  "missing_fixture_sha256": "382ec654f52ff746ec86527060b510422ecaaf58c16bc949af74e2bcdc828119",
+  "missing_result": {
+    "passed": false,
+    "exception_type": "System.Collections.Generic.KeyNotFoundException",
+    "exception_message": "PREDICTION_KEY_MISSING:identity.input_binding.tokenizer_sha256",
+    "input_bytes_read": 17531,
+    "export_path": null,
+    "export_sha256": null,
+    "tokenizer_sha256": null,
+    "dataset_id_count": null
+  },
+  "mismatch_paths": [
+    "identity.input_binding.tokenizer_sha256",
+    "identity.data.tokenizer_sha256"
+  ],
+  "mismatch_fixture_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T155619Z-75dc97d39c554004b2a7a8ba121bdadb\\prediction-tokenizer-digest-mismatch.json",
+  "mismatch_fixture_bytes": 17617,
+  "mismatch_fixture_sha256": "734bad425e7a5debe81a7da913dff08fe34ab4c2defc778534ad65dd09784f6f",
+  "mismatch_fixture_data_tokenizer_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "mismatch_result": {
+    "passed": false,
+    "exception_type": "System.InvalidOperationException",
+    "exception_message": "PREDICTION_TOKENIZER_MISMATCH:identity.input_binding.tokenizer_sha256!=identity.data.tokenizer_sha256",
+    "input_bytes_read": 17617,
+    "export_path": null,
+    "export_sha256": null,
+    "tokenizer_sha256": null,
+    "dataset_id_count": null
+  },
+  "export_content_opened": false,
+  "assertions": {
+    "real_bound_prediction_read_succeeds": true,
+    "real_prediction_export_path_matches_binding": true,
+    "real_prediction_export_sha_is_valid": true,
+    "real_prediction_tokenizer_matches_input_binding": true,
+    "real_prediction_data_tokenizer_matches": true,
+    "real_prediction_has_eight_dataset_ids": true,
+    "real_prediction_read_exact_bytes": true,
+    "missing_input_binding_tokenizer_refuses": true,
+    "missing_error_names_exact_key_path": true,
+    "missing_fixture_input_bytes_read_exact": true,
+    "mismatched_tokenizer_refuses": true,
+    "mismatch_error_names_both_paths": true,
+    "mismatch_fixture_input_bytes_read_exact": true,
+    "export_content_not_opened": true
+  },
+  "passed": true
+}

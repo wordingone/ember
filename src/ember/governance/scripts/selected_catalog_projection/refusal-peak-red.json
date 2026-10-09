@@ -1,0 +1,17 @@
+{
+  "schema": "niko.refusal_peak_validation.v1",
+  "status": "RED_REFUSAL_PEAK_CONTRACT",
+  "observed_utc": "2026-10-09T15:41:20.3384736Z",
+  "refusal_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records\\run-refusal.json",
+  "refusal_sha256": "4dd9c4e032fd07215f7aaa793e6020ed880b633d570e6f0e757995e85cfb6951",
+  "expect_no_sample": false,
+  "checks": {
+    "peak_field_present": false,
+    "sample_count_field_present": false,
+    "refusal_not_accepted": true,
+    "original_exception_retained": true,
+    "successful_sample_recorded": false,
+    "measured_peak_positive": false,
+    "peak_covers_reported_samples": false
+  }
+}
