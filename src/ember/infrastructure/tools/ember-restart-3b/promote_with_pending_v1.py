@@ -12,7 +12,12 @@ Spec (JSON, closed): repo_root, receipts_root, published_checkpoint_root, hour_r
 score_receipt, score_receipt_sha256, and exactly one of next={training_job_purpose, run_id} or blocker. The score receipt is checked here with
 post_hour_promotion_gate.cadence_problems (scorer-v12 receipt with scores for exactly expected_child on the frozen plan, bytes hashing to the cited
 digest) BEFORE any move, so a head cannot advance on a header, a wrong digest, another child or another plan. The only declared override is the optional
-score_plan_sha256: a scored-pair run scores on its own frozen entry's plan and its route names that plan. Outcome codes:
+score_plan_sha256: a scored-pair run scores on its own frozen entry's plan and its route names that plan. That plan carries its provenance in
+score_plan_binding {entry[, entry_sha256]}: the frozen prelaunch entry must hash to the scored_pair_binding_sha256 that the RUN's frozen identity holds. The
+mover reads that identity itself: <hour_result_path's directory>/prediction.json (bytes hashing to the hour result's prediction_sha256) carries `identity`, a
+RETENTION_ELIGIBLE_EXPERIMENT identity with the digest. A caller-named entry_sha256 is only compared with it and refused on disagreement; it is never the
+anchor. The entry must name the declared plan and the head being advanced from. A plan other than the cadence plan with no binding, with no readable run
+identity, or with a binding that does not match is refused before any move. Outcome codes:
   0 PROMOTED_AND_RECORDED         pointer == expected_child AND the pending readback equals the requested record exactly: {'next_identity': {purpose, run_id}}
                                   for next, or {'blocker': <the requested text>} for blocker (a missing or stale record is never that blocker)
   4 REFUSED_BEFORE_MOVE           prevalidation, the head CAS, or the published-child check refused; pointer and pending bytes identical to before (asserted).
@@ -40,7 +45,14 @@ SPEC_FIELDS = {'repo_root', 'receipts_root', 'published_checkpoint_root', 'hour_
                'score_receipt', 'score_receipt_sha256'}
 # The one declared override of the cadence's frozen plan: a scored-pair run scores on its own frozen entry's plan, so its route may name that plan here.
 # Nothing else about the check changes (schema, scorer marker, scores, exact child, digest).
-SPEC_OPTIONAL = {'next', 'blocker', 'snapshot', 'score_plan_sha256'}
+SPEC_OPTIONAL = {'next', 'blocker', 'snapshot', 'score_plan_sha256', 'score_plan_binding'}
+# A declared plan other than the cadence plan is accepted only with its provenance: the frozen prelaunch scored-pair entry whose bytes hash to the digest the
+# RUN's identity froze (scored_pair_binding_sha256), read by this mover from the child's custody (prediction.json, bound by the hour result), never from the
+# caller. The plan must be that entry's own episode plan and the entry's parent must be the head being advanced from.
+PLAN_BINDING_KEYS = {'entry'}
+PLAN_BINDING_OPTIONAL = {'entry_sha256'}
+SCORED_PAIR_PURPOSE = 'RETENTION_ELIGIBLE_EXPERIMENT'
+PREDICTION_FILENAME = 'prediction.json'
 HERE = Path(__file__).resolve().parent
 
 
@@ -64,6 +76,76 @@ SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'c
 SNAPSHOT_KEYS = {'expected_genesis', 'custody_parent', *SNAPSHOT_OPTIONAL_STRINGS}
 
 
+def run_identity(spec):
+    """(identity, None) for the RUN's frozen scored-pair identity, or (None, why) when the standalone path cannot read one. The identity is read here, from
+    the published child's custody: <hour_result_path's directory>/prediction.json, whose bytes must hash to the hour result's prediction_sha256, holds
+    `identity`. The hour result itself must sit in the published child's own custody directory (next to published_checkpoint_root) and name that child's
+    manifest digest, so a caller cannot supply a separate self-consistent receipt group for the same child."""
+    hour = Path(spec['hour_result_path'])
+    root = Path(spec['published_checkpoint_root'])
+    try:
+        in_custody = hour.resolve(strict=True).parent == root.resolve(strict=True).parent
+        hour_doc = json.loads(hour.read_bytes())
+        raw = (hour.parent / PREDICTION_FILENAME).read_bytes()
+        prediction = json.loads(raw)
+        derived_child = _sha(root / 'checkpoint-manifest.json')
+    except (OSError, ValueError) as error:
+        return None, f'no run identity can be read from the child custody ({type(error).__name__}): a plan other than the cadence plan is refused'
+    # The hour result and the prediction beside it must be the published child's OWN custody, not a self-consistent group the caller points at: the hour
+    # result sits next to the published child root (the measurement directory the hour wrote) and names that child's manifest digest.
+    if not in_custody:
+        return None, 'the hour result is not in the own custody directory of the published child (next to published_checkpoint_root): a foreign receipt group is refused'
+    if not isinstance(hour_doc, dict) or hour_doc.get('child_manifest_sha256') != derived_child:
+        return None, 'the hour result does not name the manifest digest of the published child: it is the receipt of another child'
+    if not isinstance(hour_doc, dict) or not isinstance(prediction, dict) or hour_doc.get('prediction_sha256') != hashlib.sha256(raw).hexdigest():
+        return None, f'{PREDICTION_FILENAME} in the child custody does not hash to the hour result\'s prediction_sha256: a plan other than the cadence plan is refused'
+    identity = prediction.get('identity')
+    if not isinstance(identity, dict) or identity.get('training_job_purpose') != SCORED_PAIR_PURPOSE:
+        return None, f'the run identity is not a {SCORED_PAIR_PURPOSE} identity: it froze no scored-pair entry, so a plan other than the cadence plan is refused'
+    digest = identity.get('scored_pair_binding_sha256')
+    if not isinstance(digest, str) or re.fullmatch(r'[0-9a-f]{64}', digest) is None:
+        return None, 'the run identity carries no sha256 scored_pair_binding_sha256'
+    return identity, None
+
+
+def plan_binding_problem(spec):
+    """Why the declared score plan has no provenance (None = the cadence plan, or the plan of a frozen entry bound as above). Reads bytes only."""
+    declared, binding = spec.get('score_plan_sha256'), spec.get('score_plan_binding')
+    if declared is None and binding is None:
+        return None
+    if declared is None:
+        return 'score_plan_binding names no score_plan_sha256 to bind'
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import post_hour_promotion_gate as cadence  # noqa: E402
+    import scored_pair_entry as entry_mod  # noqa: E402
+    if binding is None:
+        if declared == cadence.CADENCE_PLAN_SHA256:
+            return None
+        return ('a declared score_plan_sha256 other than the cadence plan has no frozen-entry provenance: the frozen plan must come with '
+                'score_plan_binding {entry} (the prelaunch entry whose digest the run identity froze)')
+    if (not isinstance(binding, dict) or not PLAN_BINDING_KEYS <= set(binding) <= PLAN_BINDING_KEYS | PLAN_BINDING_OPTIONAL
+            or not isinstance(binding['entry'], str) or not binding['entry']
+            or ('entry_sha256' in binding and (not isinstance(binding['entry_sha256'], str) or re.fullmatch(r'[0-9a-f]{64}', binding['entry_sha256']) is None))):
+        return 'score_plan_binding must be {entry: path[, entry_sha256: 64-hex]}'
+    identity, problem = run_identity(spec)
+    if problem is not None:
+        return problem
+    digest = identity[entry_mod.IDENTITY_DIGEST_FIELD]
+    if 'entry_sha256' in binding and binding['entry_sha256'] != digest:
+        return (f'the caller-named entry_sha256 {binding["entry_sha256"][:8]} is not the scored_pair_binding_sha256 {digest[:8]} that the run identity froze: '
+                'a self-consistent foreign entry is not this run\'s entry')
+    try:
+        entry = entry_mod.load_frozen_binding({entry_mod.IDENTITY_DIGEST_FIELD: digest}, Path(binding['entry']))
+    except entry_mod.ScoredPairRefusal as error:
+        return f'the frozen entry behind the declared plan is refused: {error}'
+    if entry['bindings']['episode_plan_sha256'] != declared:
+        return f'the declared score plan {str(declared)[:8]} is not the frozen plan of its entry {entry["bindings"]["episode_plan_sha256"][:8]}'
+    if entry['parent_manifest_sha256'] != spec.get('expected_parent'):
+        return 'the frozen entry names a different parent than the head being advanced from'
+    return None
+
+
 def promote(spec, *, pending, sch, row, ruling, snapshot=None):
     extra = set(spec) - SPEC_FIELDS - SPEC_OPTIONAL
     missing = SPEC_FIELDS - set(spec)
@@ -79,6 +161,11 @@ def promote(spec, *, pending, sch, row, ruling, snapshot=None):
     if str(HERE) not in sys.path:
         sys.path.insert(0, str(HERE))
     import post_hour_promotion_gate as cadence  # noqa: E402
+    provenance = plan_binding_problem(spec)
+    if provenance is not None:
+        out = {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'score plan has no frozen-entry provenance: ' + provenance}
+        row(kind='refuse_before_move', **{k: v for k, v in out.items() if k != 'code'})
+        return out
     problems = cadence.cadence_problems(spec['expected_child'], Path(spec['score_receipt']), spec['score_receipt_sha256'],
                                         plan_sha256=spec.get('score_plan_sha256', cadence.CADENCE_PLAN_SHA256))
     if problems:

@@ -117,7 +117,17 @@ class ScoredPairChainTests(unittest.TestCase):
         self.entry_path.write_bytes(json.dumps(entry, sort_keys=True).encode())
         if identity_digest:
             self.identity['scored_pair_binding_sha256'] = sha(self.entry_path.read_bytes())
+            for ck in (self.ctl, self.trt):
+                self.write_child_identity(ck)
         return self.entry_path
+
+    def write_child_identity(self, ck):
+        """The published child's custody holds the run's frozen identity: prediction.json beside the hour result, named by its prediction_sha256 (the head mover reads the digest from here, never from the caller)."""
+        hour_result = Path(ck['hr'])
+        raw = json.dumps({'identity': {'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT',
+                                       'scored_pair_binding_sha256': self.identity['scored_pair_binding_sha256']}}, sort_keys=True).encode()
+        (hour_result.parent / 'prediction.json').write_bytes(raw)
+        hour_result.write_bytes(json.dumps({'name': hour_result.parent.name, 'child_manifest_sha256': ck['manifest'], 'prediction_sha256': sha(raw)}).encode())
 
     def scored(self, role, loss, **binding_overrides):
         self.scored_dir.mkdir(exist_ok=True)
@@ -240,6 +250,7 @@ class ScoredPairChainTests(unittest.TestCase):
         self.assertEqual(spec['score_receipt'], str(self.scored_dir / 'treatment-scored.json'))
         self.assertEqual(spec['score_receipt_sha256'], sha((self.scored_dir / 'treatment-scored.json').read_bytes()))
         self.assertEqual(spec['score_plan_sha256'], PLAN)                  # the entry's own frozen plan: the single declared binding, named in the PR body
+        self.assertEqual(spec['score_plan_binding'], {'entry': str(self.entry_path)})   # and its provenance
         self.assertEqual(self.ptr_sha(), self.pointer_before)
 
     def test_the_head_mover_refuses_a_missing_header_only_mismatched_or_wrong_plan_receipt_before_any_move_deliberate_red(self):

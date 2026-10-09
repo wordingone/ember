@@ -31,6 +31,7 @@ import continuity_snapshot as snap  # noqa: E402
 import continuity_snapshot_hook as hook  # noqa: E402
 import post_hour_promotion_gate as cadence  # noqa: E402
 import promote_with_pending_v1 as promote_module  # noqa: E402
+import scored_pair_entry as entry_mod  # noqa: E402
 import training_continuity_ledger as ledger  # noqa: E402
 import training_lineage_ancestry as ancestry  # noqa: E402
 
@@ -320,12 +321,140 @@ class PromoteIntegrationTests(Fixture):
         self.refused_before_any_move({**self.spec(), **self.score_fields(plan='a' * 64, name='other-plan.json')}, 'frozen plan')
         self.refused_before_any_move({**self.spec(), **self.score_fields(child=self.b_sha, name='other-head.json')}, 'different checkpoint')
 
+    def write_run_identity(self, digest, *, purpose='RETENTION_ELIGIBLE_EXPERIMENT', bind_hour_result=True):
+        """The run's frozen identity as the child custody holds it: <hour result dir>/prediction.json carries `identity`, and the hour result names the file's sha256."""
+        identity = {'training_job_purpose': purpose}
+        if digest is not None:
+            identity['scored_pair_binding_sha256'] = digest
+        raw = json.dumps({'identity': identity}, sort_keys=True).encode()
+        (self.hour_result.parent / 'prediction.json').write_bytes(raw)
+        hour = json.loads(self.hour_result.read_text(encoding='utf-8'))
+        hour['prediction_sha256'] = hashlib.sha256(raw).hexdigest() if bind_hour_result else '0' * 64
+        self.hour_result.write_text(json.dumps(hour))
+
+    def frozen_entry(self, plan='a' * 64, *, parent=None, mutate=None, name='plan-entry.json'):
+        """A closed prelaunch scored-pair entry for `plan` written to disk; returns (path, sha256 of its bytes)."""
+        entry = {'schema': entry_mod.ENTRY_SCHEMA, 'run_id': 'r1',
+                 'bindings': {key: (plan if key == 'episode_plan_sha256' else 'c' * 64) for key in entry_mod.COMMON_BINDING_KEYS},
+                 'metric': {'name': 'heldout_loss', 'path': 'arms.fresh.mean_nll'}, 'parent_manifest_sha256': parent or self.b_sha,
+                 'promote': {'repo_root': str(self.root), 'receipts_root': str(self.root), 'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'x'}}
+        if mutate is not None:
+            mutate(entry)
+        path = self.root / name
+        raw = json.dumps(entry, sort_keys=True).encode()
+        path.write_bytes(raw)
+        return path, hashlib.sha256(raw).hexdigest()
+
+    def frozen_plan_binding(self, plan='a' * 64, *, parent=None, mutate=None, digest=None, name='plan-entry.json'):
+        """A prelaunch entry for `plan` on disk AND the run identity that froze its digest (`digest` overrides what the run froze); returns the spec binding {entry}."""
+        path, entry_digest = self.frozen_entry(plan, parent=parent, mutate=mutate, name=name)
+        self.write_run_identity(digest or entry_digest)
+        return {'entry': str(path)}
+
     def test_the_one_declared_plan_override_admits_exactly_that_plan_control(self):
-        self.refused_before_any_move({**self.spec(), **self.score_fields(plan='b' * 64, name='not-the-declared.json'), 'score_plan_sha256': 'a' * 64}, 'frozen plan')
-        self.refused_before_any_move({**self.spec(), 'score_plan_sha256': 'not-a-sha'}, 'not a sha256')
-        spec = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        self.refused_before_any_move({**self.spec(), **self.score_fields(plan='b' * 64, name='not-the-declared.json'), 'score_plan_sha256': 'a' * 64,
+                                      'score_plan_binding': self.frozen_plan_binding('a' * 64)}, 'frozen plan')
+        self.refused_before_any_move({**self.spec(), 'score_plan_sha256': 'not-a-sha', 'score_plan_binding': self.frozen_plan_binding('a' * 64)}, 'not the frozen plan')
+        spec = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64,
+                'score_plan_binding': self.frozen_plan_binding('a' * 64)}
         out, pending, _ = self.run_promote(spec)
         self.assertEqual((out['code'], len(pending.calls)), (0, 1))
+
+    def test_a_declared_plan_with_no_frozen_entry_provenance_is_refused_before_any_move_deliberate_red(self):
+        """Ash (a): a caller-supplied score_plan_sha256 other than the cadence plan, with no frozen-entry provenance, used to be accepted on the standalone path."""
+        spec = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        rows = self.refused_before_any_move(spec, 'no frozen-entry provenance')
+        self.assertEqual([row['kind'] for row in rows], ['refuse_before_move'])
+        # the cadence plan itself needs no binding (no override is being declared)
+        out, pending, _ = self.run_promote({**self.spec(), 'score_plan_sha256': cadence.CADENCE_PLAN_SHA256})
+        self.assertEqual((out['code'], len(pending.calls)), (0, 1))
+
+    def test_a_plan_binding_that_does_not_match_its_frozen_entry_is_refused_before_any_move_deliberate_red(self):
+        declared = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        cases = {
+            'entry bytes differ from the digest the run froze': lambda: self.frozen_plan_binding('a' * 64, digest='0' * 64),
+            'entry is for another plan': lambda: self.frozen_plan_binding('d' * 64),
+            'entry parent is not the head being advanced from': lambda: self.frozen_plan_binding('a' * 64, parent='e' * 64),
+            'entry is not the closed prelaunch schema': lambda: self.frozen_plan_binding('a' * 64, mutate=lambda entry: entry.update(per_arm={'x': 1})),
+        }
+        for name, make in cases.items():
+            with self.subTest(name):
+                self.refused_before_any_move({**declared, 'score_plan_binding': make()}, 'no frozen-entry provenance')
+        self.write_run_identity('a' * 64)
+        for name, binding in {'not an object': 'x', 'extra key': {'entry': 'y', 'x': 1}, 'missing entry': {'entry_sha256': 'a' * 64}, 'entry not a path': {'entry': 7},
+                              'digest not hex': {'entry': 'y', 'entry_sha256': 'z' * 64}, 'entry unreadable': {'entry': str(self.root / 'none.json')}}.items():
+            with self.subTest(name):
+                self.refused_before_any_move({**declared, 'score_plan_binding': binding}, 'no frozen-entry provenance')
+        self.refused_before_any_move({**self.spec(), 'score_plan_binding': self.frozen_plan_binding('a' * 64)}, 'no score_plan_sha256')
+
+    def test_a_self_consistent_foreign_entry_is_refused_before_any_move_and_the_genuine_entry_is_accepted_deliberate_red(self):
+        """The digest must come from the RUN's frozen identity. A valid foreign entry B (same parent, same plan, its own correct digest) must not pass for run A."""
+        declared = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        genuine, genuine_digest = self.frozen_entry('a' * 64, name='entry-A.json')
+        foreign, foreign_digest = self.frozen_entry('a' * 64, mutate=lambda entry: entry.update(run_id='someone-else'), name='entry-B.json')
+        self.assertNotEqual(genuine_digest, foreign_digest)
+        self.write_run_identity(genuine_digest)                                    # the run froze entry A
+        # B named with its own matching digest: the old self-consistency check passed this
+        rows = self.refused_before_any_move({**declared, 'score_plan_binding': {'entry': str(foreign), 'entry_sha256': foreign_digest}}, 'not the scored_pair_binding_sha256')
+        self.assertEqual([row['kind'] for row in rows], ['refuse_before_move'])
+        # B named alone: its bytes do not hash to the digest the run froze
+        self.refused_before_any_move({**declared, 'score_plan_binding': {'entry': str(foreign)}}, 'no frozen-entry provenance')
+        # genuine A: accepted, with or without the optional caller digest
+        for binding in ({'entry': str(genuine)}, {'entry': str(genuine), 'entry_sha256': genuine_digest}):
+            out, pending, _ = self.run_promote({**declared, 'score_plan_binding': binding})
+            self.assertEqual((out['code'], len(pending.calls)), (0, 1), out)
+            self.assertFalse(self.out.exists() and False)
+            if self.out.exists():
+                self.out.unlink()
+
+    def foreign_receipt_group(self, *, claimed_child=None, name='foreign'):
+        """A whole self-consistent group for the SAME parent and plan elsewhere: its own entry B, prediction.json carrying B's digest, and an hour result that
+        hashes that prediction. Returns (hour_result_path, binding)."""
+        folder = self.root / name
+        folder.mkdir()
+        entry_path, digest = self.frozen_entry('a' * 64, mutate=lambda entry: entry.update(run_id='someone-else'), name=f'{name}-entry.json')
+        raw = json.dumps({'identity': {'training_job_purpose': 'RETENTION_ELIGIBLE_EXPERIMENT', 'scored_pair_binding_sha256': digest}}, sort_keys=True).encode()
+        (folder / 'prediction.json').write_bytes(raw)
+        hour = folder / 'hour-result.json'
+        hour.write_text(json.dumps({'child_manifest_sha256': claimed_child or self.c_sha, 'parent_manifest_sha256': self.b_sha, 'applied_positions': 50,
+                                    'prediction_sha256': hashlib.sha256(raw).hexdigest()}))
+        return hour, {'entry': str(entry_path), 'entry_sha256': digest}
+
+    def test_a_foreign_receipt_group_for_the_same_child_is_refused_before_any_move_and_the_genuine_group_is_accepted_deliberate_red(self):
+        """The hour result path is caller-supplied, so the identity must be anchored to the published child's own custody, not to whatever self-consistent
+        hour-result + prediction + entry group the caller names (same parent, declared plan, a valid score receipt for the genuine child)."""
+        declared = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        genuine = self.frozen_plan_binding('a' * 64)                                  # the child's own custody: <root>/hour-result.json beside the published root
+        hour, binding = self.foreign_receipt_group()
+        rows = self.refused_before_any_move({**declared, 'hour_result_path': str(hour), 'score_plan_binding': binding}, 'foreign receipt group')
+        self.assertEqual([row['kind'] for row in rows], ['refuse_before_move'])
+        hour, binding = self.foreign_receipt_group(claimed_child='f' * 64, name='foreign-other-child')
+        self.refused_before_any_move({**declared, 'hour_result_path': str(hour), 'score_plan_binding': binding}, 'foreign receipt group')
+        # an hour result in the child's own directory that names another child is another child's receipt
+        genuine_hour = json.loads(self.hour_result.read_text(encoding='utf-8'))
+        self.hour_result.write_text(json.dumps({**genuine_hour, 'child_manifest_sha256': 'f' * 64}))
+        self.refused_before_any_move({**declared, 'score_plan_binding': genuine}, 'another child')
+        self.hour_result.write_text(json.dumps(genuine_hour))
+        out, pending, _ = self.run_promote({**declared, 'score_plan_binding': genuine})                      # control: the genuine group
+        self.assertEqual((out['code'], len(pending.calls)), (0, 1), out)
+
+    def test_no_readable_run_identity_refuses_any_non_cadence_plan_before_any_move_deliberate_red(self):
+        declared = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        path, digest = self.frozen_entry('a' * 64)
+        binding = {'entry': str(path), 'entry_sha256': digest}
+        prediction = self.hour_result.parent / 'prediction.json'
+        if prediction.exists():
+            prediction.unlink()
+        self.refused_before_any_move({**declared, 'score_plan_binding': binding}, 'no run identity can be read')         # no identity file in the custody
+        self.write_run_identity(digest, bind_hour_result=False)
+        self.refused_before_any_move({**declared, 'score_plan_binding': binding}, 'does not hash to the hour result')   # file not bound by the hour result
+        self.write_run_identity(digest, purpose='CONTINUE_TRAINING')
+        self.refused_before_any_move({**declared, 'score_plan_binding': binding}, 'froze no scored-pair entry')          # a lineage identity froze none
+        self.write_run_identity(None)
+        self.refused_before_any_move({**declared, 'score_plan_binding': binding}, 'no sha256 scored_pair_binding_sha256')
+        self.write_run_identity(digest)
+        out, pending, _ = self.run_promote({**declared, 'score_plan_binding': binding})                                   # control: the same inputs with the identity restored
+        self.assertEqual((out['code'], len(pending.calls)), (0, 1), out)
 
     def test_a_refusal_is_recorded_in_the_ledger_with_its_reason(self):
         spec = {**self.spec(), **self.score_fields(scores=False, name='header-only.json')}
