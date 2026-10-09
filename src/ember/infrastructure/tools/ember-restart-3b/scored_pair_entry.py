@@ -240,7 +240,11 @@ def finalize_scored_pair(identity: Mapping[str, Any], *, entry_path: Path, custo
     spec = {'repo_root': promote['repo_root'], 'receipts_root': promote['receipts_root'], 'ledger': promote['ledger'],
             'published_checkpoint_root': publication[role]['published_checkpoint_root'],
             'hour_result_path': publication[role]['hour_result_path'],
-            'expected_parent': entry['parent_manifest_sha256'], 'expected_child': records[role]['child_manifest_sha256']}
+            'expected_parent': entry['parent_manifest_sha256'], 'expected_child': records[role]['child_manifest_sha256'],
+            # The head mover re-checks the eligible arm's own score receipt (row 20). This route scores on the plan its frozen entry binds, so that plan is
+            # the one declared binding passed through; the cadence plan is not assumed.
+            'score_receipt': publication[role]['receipt'], 'score_receipt_sha256': publication[role]['receipt_sha256'],
+            'score_plan_sha256': entry['bindings']['episode_plan_sha256']}
     spec['next' if 'next' in promote else 'blocker'] = promote['next' if 'next' in promote else 'blocker']
     out['promotion'] = promote_fn(spec, ruling=ruling)
     return out

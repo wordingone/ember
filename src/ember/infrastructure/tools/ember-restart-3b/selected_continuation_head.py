@@ -39,11 +39,12 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SCHEMA = 'ember-selected-continuation-head-v1'
 POINTER_FILENAME = 'selected-continuation-head.json'
@@ -65,6 +66,10 @@ _POINTER_FIELDS = {
 }
 LOCK_SUFFIX = '.lock'
 LOCK_TIMEOUT_SECONDS = 60.0
+# Files a writer of this directory stages and renames (_write_pointer_atomically here, write_pending_continuation in pending_continuation.py).
+# 'next-segment.json' is pending_continuation.FILENAME; a test compares the two so they cannot drift.
+STAGED_BASE_NAMES = (POINTER_FILENAME, CANDIDATE_FILENAME, 'next-segment.json')
+_STAGED_NAME = re.compile(r'^\.(?P<base>.+)\.(?P<pid>[0-9]+)\.(?P<token>[0-9a-f]{32})\.tmp$')
 _SELF_DIR = Path(__file__).resolve().parent
 
 
@@ -103,15 +108,83 @@ def pointer_path(receipts_root: Path) -> Path:
     return Path(receipts_root) / POINTER_FILENAME
 
 
+_ERROR_INVALID_PARAMETER = 87    # OpenProcess for a pid that does not exist
+_STILL_ACTIVE = 259
+
+
+def _windows_pid_state(pid: int, kernel32: Any, last_error: Callable[[], int], c_ulong: Any = None, byref: Any = None, c_void_p: Any = None) -> str:
+    """'dead' only when Windows PROVES the process is gone (no such pid, or an exit code other than STILL_ACTIVE); 'alive' when it is running;
+    'unknown' when it cannot be inspected (access denied, a failing exit-code query). Only 'dead' lets the sweep delete a staged file."""
+    import ctypes
+    c_ulong, byref, c_void_p = c_ulong or ctypes.c_ulong, byref or ctypes.byref, c_void_p or ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return 'dead' if last_error() == _ERROR_INVALID_PARAMETER else 'unknown'
+    try:
+        code = c_ulong()
+        if not kernel32.GetExitCodeProcess(c_void_p(handle), byref(code)):
+            return 'unknown'
+        return 'alive' if code.value == _STILL_ACTIVE else 'dead'
+    finally:
+        kernel32.CloseHandle(c_void_p(handle))
+
+
+def _pid_alive(pid: int) -> bool:
+    """False only when the writer is PROVEN gone; an uninspectable process counts as alive so its staged file is retained."""
+    if pid <= 0:
+        return False
+    if os.name == 'nt':
+        import ctypes
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        return _windows_pid_state(pid, kernel32, ctypes.get_last_error) != 'dead'
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def sweep_stale_staging(directory: Path) -> list[str]:
+    """Remove the staged temp files a CRASHED writer of this directory left behind (issue #2119 row 6b).
+
+    A writer that dies inside the publish never reaches its `finally`, so `.<base>.<pid>.<token>.tmp` stays. Only a file matching this module's own
+    staging pattern, whose base is one of STAGED_BASE_NAMES and whose writer pid is no longer alive, is removed; a live writer's staged file, the
+    sweeper's own pid, and any other name are left alone. Returns the names removed. Called under the pointer lock by every writer."""
+    removed: list[str] = []
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return removed
+    for name in names:
+        match = _STAGED_NAME.match(name)
+        if match is None or match.group('base') not in STAGED_BASE_NAMES:
+            continue
+        pid = int(match.group('pid'))
+        if pid == os.getpid() or _pid_alive(pid):
+            continue
+        try:
+            os.unlink(Path(directory) / name)
+            removed.append(name)
+        except OSError:
+            pass
+    return sorted(removed)
+
+
 @contextlib.contextmanager
 def _pointer_lock(target_path: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
     """Hold an OS-level exclusive lock on a sibling lock file for the WHOLE read-compare-replace.
 
     atomic_replace_durable protects only the write; two writers that both read the same current
     value would each pass the compare and the second replace would overwrite the newer head. The
-    lock serialises every advance and seed, so the compare re-reads under it. The lock file is
-    persistent and never deleted: the OS releases the byte-range lock when its holder dies, so a
-    leftover file with no holder never blocks (probed by attempting the lock, not by existence).
+    lock serialises every advance and seed, so the compare re-reads under it. The OS releases the
+    byte-range lock when its holder dies, so a leftover file with no holder never blocks (probed by
+    attempting the lock, not by existence). Row 6b: under the lock every writer first sweeps the
+    staged temp files a crashed writer left (sweep_stale_staging), and on Windows removes the idle
+    lock file once released, so a crash during publish followed by the next writer leaves nothing
+    but the pointer (and the pending record).
     """
     lock_path = target_path.parent / (target_path.name + LOCK_SUFFIX)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,16 +217,29 @@ def _pointer_lock(target_path: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
                     raise TimeoutError(f'could not lock {lock_path} within {timeout} s')
                 time.sleep(0.02)
         try:
+            sweep_stale_staging(target_path.parent)
             yield
         finally:
             release()
+    if os.name == 'nt':
+        # Nobody holds it now. Windows refuses to delete a file another process has open, so a writer that opened it a moment ago keeps it;
+        # on POSIX an unlink would race a waiting flock, so there the persistent file stays.
+        try:
+            os.unlink(lock_path)
+        except OSError:
+            pass
 
 
 def load_selected_continuation_head(path: Path) -> dict[str, Any]:
     """Read and closed-schema-validate the pointer. Every field is checked -- the caller's own
     claim about the file's contents is never trusted, matching gen_readme_status.load_current_
     subject's discipline for the sibling authority this reuses the pattern from."""
-    payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    return parse_selected_continuation_head(Path(path).read_bytes())
+
+
+def parse_selected_continuation_head(raw: bytes) -> dict[str, Any]:
+    """The same closed-schema validation over bytes the caller already read, so one load can bind every later read to ONE generation of the pointer."""
+    payload = json.loads(raw.decode('utf-8'))
     if not isinstance(payload, dict) or set(payload) != _POINTER_FIELDS:
         raise ValueError('selected continuation head fields are not closed')
     if payload.get('schema') != SCHEMA:

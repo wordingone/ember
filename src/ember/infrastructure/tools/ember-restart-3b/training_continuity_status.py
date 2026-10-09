@@ -236,6 +236,8 @@ def training_continuity_status(
     lineage_record: Mapping[str, Any] | None = None, gpu_lease: Mapping[str, Any] | None = None,
     claim_predicate_path: Path | None = None, pending_receipts_root: Path | None = None,
     claim_segments: list[Mapping[str, Any]] | None = None,
+    gpu_owner: Mapping[str, Any] | None = None, measurement_section: Mapping[str, Any] | None = None,
+    postponement: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Issue #2119 section 6's status record: composes the functions above for one lineage.
 
@@ -246,6 +248,10 @@ def training_continuity_status(
     walk), claim-budget-eligible positions (UNDEFINED until the frozen predicate exists), last
     learning measurement or pending, GPU owner and purpose, diagnostic occupancy and postponement,
     and the next segment or its blocker -- one call, one dict, no field computed twice.
+
+    Row 7 producer sections (continuity_sources): `gpu_owner`, `measurement_section` and `postponement` are ready-made section dicts that replace what
+    `gpu_lease`, `measurement` and the ledger-derived allowance would say when the caller read the live sources; each is mutually exclusive with its
+    older input, and each may say UNKNOWN with its reason.
 
     When an hour result is given, `lineage_record` is required and its head must be that hour's child:
     the walk and the hour result are two views of one checkpoint, and a mismatch refuses."""
@@ -258,6 +264,10 @@ def training_continuity_status(
         raise ValueError('a lineage ancestry record needs the hour result of the same head')
     lineage_sha = (hour_result['child_manifest_sha256'] if hour_result is not None
                    else GENESIS_SENTINEL)
+    if gpu_owner is not None and gpu_lease is not None:
+        raise ValueError('pass gpu_owner or gpu_lease, not both')
+    if measurement_section is not None and measurement is not None:
+        raise ValueError('pass measurement_section or measurement, not both')
     if pending_receipts_root is not None:
         if next_identity is not None or next_blocker is not None:
             raise ValueError('the pending record supplies the next segment; do not also pass next_identity or next_blocker')
@@ -269,11 +279,12 @@ def training_continuity_status(
         'lineage': lineage_status(lineage_record),
         'claim_budget_eligible': claim_budget_eligible_status(
             claim_predicate_path, lineage_record=lineage_record, claim_segments=claim_segments),
-        'gpu_owner': gpu_owner_status(gpu_lease),
+        'gpu_owner': dict(gpu_owner) if gpu_owner is not None else gpu_owner_status(gpu_lease),
         'checkpoint': selected_checkpoint_status(hour_result),
-        'learning_measurement': last_learning_measurement_status(measurement),
+        'learning_measurement': (dict(measurement_section) if measurement_section is not None
+                                 else last_learning_measurement_status(measurement)),
         'purpose': current_purpose_status(current_identity),
-        'diagnostic_allowance': diagnostic_allowance_status(
-            custody_parent=custody_parent, lineage_sha=lineage_sha, policy=policy, now=now),
+        'diagnostic_allowance': {**diagnostic_allowance_status(
+            custody_parent=custody_parent, lineage_sha=lineage_sha, policy=policy, now=now), **(dict(postponement) if postponement else {})},
         'next_segment': next_segment_status(next_identity=next_identity, blocker=next_blocker),
     }
