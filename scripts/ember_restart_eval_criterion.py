@@ -4,11 +4,9 @@
 """Capability verdict for the local evaluator scorers, from a frozen protocol only.
 
 A scorer never states PASSED or FAILED on its own. With a protocol, the verdict comes from
-admission() below. The trusted capability-evaluation verifier loads THIS file (bound by
-the sha256 it pins) and recomputes the same fields from the recounted predictions, and
-contract.py compares every field, so a scorer and the verifier cannot disagree silently;
-tests/test_ember_restart_eval_verifier_agreement.py runs the real verifier and contract
-check on positive, negative-margin, tampered and wrong-population cases.
+admission() below. Trusted-verifier recomputation of these fields (pinning this file by
+sha256) is a separate follow-up change; until it lands, nothing outside the scorers and
+the execution preflight reads them.
 Without a protocol the score is DIAGNOSTIC: metrics only, no criterion_result, never
 admissible.
 

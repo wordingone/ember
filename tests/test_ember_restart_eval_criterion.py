@@ -293,3 +293,32 @@ def test_a_category_uses_its_own_count_for_the_bound(tmp_path):
 def test_malformed_categories_refuse(tmp_path, bad):
     with pytest.raises(ValueError, match="categories"):
         crit.verdict_fields(_protocol(tmp_path, _criterion(categories=[bad])), CID, {"exact_match": 1.0}, 2)
+
+
+def test_lower_is_better_category_over_its_ceiling_fails(tmp_path):
+    # Category WER 0.4 against a 0.2 ceiling must FAIL even when the composite is under its ceiling.
+    criterion = {"criterion_id": "ember-3b-audio-capability-v1", "metric": "word_error_rate",
+                 "direction": "lower_is_better", "statistic": {"kind": "point"},
+                 "comparator": {"kind": "max_value", "value": 0.3},
+                 "categories": [{"name": "noisy", "metric": "word_error_rate:noisy", "count_metric": "count:noisy",
+                                 "reference": _pinned(tmp_path, "ref-noisy.json", 0.2), "reference_factor": 1.0}]}
+    crit.check_criterion(criterion, "ember-3b-audio-capability-v1")
+    over = crit.admission({"word_error_rate": 0.25, "word_error_rate:noisy": 0.4, "count:noisy": 10},
+                            30, criterion, tmp_path)
+    assert over["criterion_result"] == "FAILED"
+    assert over["category_margins"]["noisy"] == pytest.approx(-0.2)
+    under = crit.admission({"word_error_rate": 0.25, "word_error_rate:noisy": 0.15, "count:noisy": 10},
+                             30, criterion, tmp_path)
+    assert under["criterion_result"] == "PASSED" and under["category_margins"]["noisy"] == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize("metric", sorted(crit.NON_BERNOULLI))
+def test_audio_units_get_no_wilson_bound(tmp_path, metric):
+    criterion = {"criterion_id": "ember-3b-audio-capability-v1", "metric": metric,
+                 "direction": "higher_is_better",
+                 "statistic": {"kind": "lower_confidence_bound", "level": 0.95, "method": "wilson_one_sided"},
+                 "comparator": {"kind": "min_value", "value": 0.1}, "categories": []}
+    crit.check_criterion(criterion, "ember-3b-audio-capability-v1")
+    metrics = {"word_error_rate": 0.2, "weighted_recall": 0.9, "weighted_fpr": 0.1}
+    result = crit.admission(metrics, 50, criterion, tmp_path)
+    assert result["criterion_result"] == "UNDETERMINED" and result["admission_margin"] is None
