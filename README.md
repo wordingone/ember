@@ -28,6 +28,8 @@ with native reasoning and structured tool use. Designed, implemented, executed, 
 independently reproduced, and admitted are different maturity states; documentation never upgrades
 one into another.
 
+The canonical main model family is CIA-3B. Its actual selected checkpoint architecture is CIA3-R1-N61; measured inventory and exact digest belong in [CONTINUITY](docs/domains/governance/authority/CONTINUITY.md). The earlier sparse-v2 decoder is the retired comparison/recovery reference. Selection does not establish qualification. See the [native-operation contract](docs/domains/governance/operator/native-operation-contract-v1.json) for explicit CURRENT/FRESH identity and acceptance boundaries.
+
 ## First-reader facts
 
 - Ember is the complete clean-genesis sovereign foundation-intelligence project: the local
@@ -135,6 +137,11 @@ These checks require no credentials, weights, or GPU and grant no model capabili
 public replay set.
 
 ## Current truth and roadmap
+
+The canonical research family is CIA-3B. [The model configuration index](configs/README.md) identifies CIA3-R1-N61 and labels v2 as a historical comparison/recovery reference. [Continuity](docs/domains/governance/authority/CONTINUITY.md) binds dated selected-head evidence and its verification limits.
+
+The [adopted native-operation contract](docs/domains/governance/operator/native-operation-contract-v1.json) defines CURRENT/FRESH selection, corpus resolution and owned operation outcomes. Launch, consumer and evaluation receipts establish which operations and model claims have actually been demonstrated.
+
 
 <a id="ember.claim.mutable-state-owner"></a>
 Exact mutable state lives in

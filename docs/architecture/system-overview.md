@@ -6,6 +6,12 @@ architecture assigns every current path and public interface to one of eight dom
 interface describes the destination boundary; it is not evidence that the implementation or an
 admitted model already exists.
 
+## Canonical model and execution identity
+
+The canonical main model family is CIA-3B. Its current selected manifest declares CIA3-R1-N61; the actual selected manifest digest and parameter inventory are recorded in [continuity](../domains/governance/authority/CONTINUITY.md). The implementation entry point is src/ember/model/ember_v0_decoder.py::CIADecoder, with causal routing in ember_v0_routing.py and the CIA hour consumer in src/ember/infrastructure/tools/ember-restart-3b/cia_hour.py.
+
+The historical directory name does not select a decoder. ember-sparse-3b-v2 / UnifiedDecoder is the retired comparison and recovery reference. Its weights, token credit and receipts keep their own lineage. CURRENT or FRESH operation must resolve the exact model, checkpoint, architecture, source, configuration and data bindings in the [adopted native-operation contract](../domains/governance/operator/native-operation-contract-v1.json). Selection and parameter inventory do not establish native capability qualification.
+
 ## Domains
 
 - Model owns model configuration, parameter structure, and tokenizer authority.

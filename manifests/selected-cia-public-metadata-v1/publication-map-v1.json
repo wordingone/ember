@@ -1,0 +1,49 @@
+{
+  "schema": "ember-selected-cia-metadata-publication-map-v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "created_utc": "2026-10-09T13:46:36.2565831-07:00",
+  "disposition": "Leo76274",
+  "semantics": "Generation and lint bind complete original local manifest and pointer bytes. Sanitized copies are reference metadata only; differing copy hashes never substitute for original selected identity. Original bytes remain private; original hashes are public.",
+  "sanitization": "Remove exactly two machine-local path fields; remaining parsed values preserved. JSON serialization changes byte identity.",
+  "entries": [
+    {
+      "original_sha256": "c3105614dbb1ea2722a9e0bb36bd856735349a512129d232e1970cedde086523",
+      "original_bytes": 480,
+      "original_bytes_published": false,
+      "sanitized_copy_path": "manifests/selected-cia-public-metadata-v1/selected-pointer.sanitized.json",
+      "sanitized_copy_bytes": 314,
+      "sanitized_copy_sha256": "c042dcf313d702789234563bb42ae12455c78ded55d7fab0857281d64b138972",
+      "fields_removed": [
+        {
+          "json_pointer": "/hour_result_path",
+          "reason": "machine_local_absolute_path",
+          "original_value_sha256": "e6832c844bd6aadde677d1c9a74cab3db7ea782a3a6d7705b49633d7258fb9cc"
+        }
+      ],
+      "prepared_copy_bytes": 320,
+      "prepared_copy_sha256": "1f81fb8e753a1907b8d2e22d208f23c8cd4da1224234cebb62fb90f26c03243b"
+    },
+    {
+      "original_sha256": "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0",
+      "original_bytes": 148056,
+      "original_bytes_published": false,
+      "sanitized_copy_path": "manifests/selected-cia-public-metadata-v1/checkpoint-manifest.sanitized.json",
+      "sanitized_copy_bytes": 199298,
+      "sanitized_copy_sha256": "b95f90f50a20f3698726ca9d26bbd6a41f0c97647899325e204528c47bf7bb5d",
+      "fields_removed": [
+        {
+          "json_pointer": "/lineage/parent_checkpoint",
+          "reason": "machine_local_absolute_path",
+          "original_value_sha256": "00ca9ef06cbaa3748a25b8ce318e8e40f5646226b34228a85a45797e576a1907"
+        }
+      ],
+      "prepared_copy_bytes": 205935,
+      "prepared_copy_sha256": "cfd9079b77185877e46620daf5ed3c61e84c625ed22d87c54b28a56cfc4fb544"
+    }
+  ],
+  "publication_byte_transform": "Prepared CRLF reference JSON copies normalized to LF before staging. Parsed metadata unchanged. Exact prepared and published copy hashes and lengths are both retained."
+}

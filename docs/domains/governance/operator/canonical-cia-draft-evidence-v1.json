@@ -1,0 +1,256 @@
+{
+  "schema": "ember-canonical-cia-draft-evidence-v1",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "publication_direction": "Leo76805: draft publication by16:15PDT independent of the unexecuted CLI delta"
+  },
+  "created_utc": "2026-10-09T15:53:52.9933903-07:00",
+  "publication_state": "DRAFT_SOURCE_AND_HISTORICAL_EVIDENCE_CURRENT_EXECUTION_PENDING",
+  "original_packet": {
+    "sha256": "eb078642039dacf8a4f2e46fc357c4eff5eac8191a220ee540d88545e8545025",
+    "bytes": 10897,
+    "created_utc": "2026-10-09T13:10:59.619507-07:00",
+    "file_count": 17,
+    "bytes_published": false,
+    "reason": "Private absolute paths omitted; exact original packet hash and source pins retained"
+  },
+  "current_source_packet": {
+    "sha256": "16ba42d9fc44329b43ca6cf3ebbeab2b6372f8221bb1fd94ab624a9500da15a9",
+    "bytes": 14120,
+    "created_utc": "2026-10-09T13:47:25.7259866-07:00",
+    "file_count": 20,
+    "bytes_published": false
+  },
+  "historical_execution": {
+    "start_utc": "2026-10-09T20:05:24.1355066Z",
+    "end_utc": "2026-10-09T20:05:24.9825649Z",
+    "exit_code": 0,
+    "cleanup_verified": true,
+    "tests_passed": 18,
+    "actual_full_metadata_green": true,
+    "valid_wrong_architecture_schema": true,
+    "wrong_architecture_refusal": "CANONICAL_SUBJECT_ARCHITECTURE_MISMATCH",
+    "hard_memory_cap_claimed": false
+  },
+  "historical_execution_limit": "The18-test execution predates writer and CLI deltas. It does not establish acceptance of current26 tests or current writer.",
+  "writer_boundary": {
+    "original_writer_sha256": "a8e4a60250908c404264c5c0ec065302126b1238884fa9816263648812bff67c",
+    "current_writer_sha256": "bada20332114e4aa76d420d9e2d9a8045ffdc475bc3086120b80ea9d432a7bdc",
+    "current_regression_source_sha256": "39ab9b5219932c87d78cb34ab759fd0febaa6210d2205d0e10b8f16109fa9ad9",
+    "defect": "Ordinary JSON decoding loses repeated fields before schema validation. Original CLI boundary could accept conflicting duplicate fields.",
+    "prepared_repair": "Explicit v2 candidate schema selects strict bounded original-byte decoding before dictionary conversion; historical v1 behavior retained.",
+    "regression_cases": [
+      "test_writer_cli_duplicate_digest_target_unchanged",
+      "test_writer_cli_duplicate_architecture_target_unchanged",
+      "test_writer_cli_duplicate_root_target_unchanged"
+    ],
+    "source_review_handles": [
+      "Jude76288",
+      "Kai76300"
+    ],
+    "source_review_is_runtime": false,
+    "current_tests_authored": 26,
+    "current_tests_executed": false,
+    "standalone_cli_cases_prepared": 5,
+    "standalone_cli_cases_executed": false,
+    "release_condition": "Actual Eli owner window-close mail, marker absence, current resource declaration and normal host review"
+  },
+  "selected_identity": {
+    "pointer_sha256": "c3105614dbb1ea2722a9e0bb36bd856735349a512129d232e1970cedde086523",
+    "actual_full_manifest_sha256": "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0",
+    "architecture_revision": "CIA3-R1-N61",
+    "unique_allocated_served_trainable": 3082539008,
+    "episode_update_support": 701964288,
+    "independently_qualified": false
+  },
+  "public_metadata_semantics": "Sanitized reference metadata is mapped to private originals. Copy hashes cannot substitute for original full-byte generation and lint bindings.",
+  "scope": "Canonical CIA documentation, subject lint/generator/writer source and reference metadata. No checkpoint payload, training run, optimizer consumption or fresh data admission.",
+  "review_state": "Vera single draft publication review requested; runtime and CI results pending",
+  "new_admitted_positions": 0,
+  "checkpoint_acceptance": "UNDETERMINED",
+  "current_source_files": [
+    {
+      "path": "README.md",
+      "current_bytes": 11391,
+      "current_sha256": "c75ab80e44aa26a21ab257378b669f75488a9606aaf373b1397f6df6cb6b5c7a",
+      "original_packet_sha256": "c75ab80e44aa26a21ab257378b669f75488a9606aaf373b1397f6df6cb6b5c7a",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 11391,
+      "published_sha256": "c75ab80e44aa26a21ab257378b669f75488a9606aaf373b1397f6df6cb6b5c7a"
+    },
+    {
+      "path": "configs/README.md",
+      "current_bytes": 1162,
+      "current_sha256": "0e6814d543238f2083771ab201793082bd22719894d2bc7c5abffb8dc2ff8520",
+      "original_packet_sha256": "0e6814d543238f2083771ab201793082bd22719894d2bc7c5abffb8dc2ff8520",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 1162,
+      "published_sha256": "0e6814d543238f2083771ab201793082bd22719894d2bc7c5abffb8dc2ff8520"
+    },
+    {
+      "path": "docs/domains/governance/authority/CONTINUITY.md",
+      "current_bytes": 134063,
+      "current_sha256": "be673538861a61218d1a939cf95baf96a6677f000cf7659b1c8111a56eeedc51",
+      "original_packet_sha256": "be673538861a61218d1a939cf95baf96a6677f000cf7659b1c8111a56eeedc51",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 134063,
+      "published_sha256": "be673538861a61218d1a939cf95baf96a6677f000cf7659b1c8111a56eeedc51"
+    },
+    {
+      "path": "docs/domains/governance/authority/GOAL.md",
+      "current_bytes": 24241,
+      "current_sha256": "369e62ad28351b9d16ac7a72d89c0baf7d30cf00dc3393596df67171966e29a6",
+      "original_packet_sha256": "369e62ad28351b9d16ac7a72d89c0baf7d30cf00dc3393596df67171966e29a6",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 24241,
+      "published_sha256": "369e62ad28351b9d16ac7a72d89c0baf7d30cf00dc3393596df67171966e29a6"
+    },
+    {
+      "path": "docs/architecture/system-overview.md",
+      "current_bytes": 3416,
+      "current_sha256": "5073c401025126e357757407ff649a840602a823f5f222323828f301776f4f21",
+      "original_packet_sha256": "5073c401025126e357757407ff649a840602a823f5f222323828f301776f4f21",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 3416,
+      "published_sha256": "5073c401025126e357757407ff649a840602a823f5f222323828f301776f4f21"
+    },
+    {
+      "path": "docs/domains/governance/anatomy/03_MODEL_ARCHITECTURE.md",
+      "current_bytes": 6324,
+      "current_sha256": "24f96e181e51561c13a8e2acee3708be583a09f1883524fc147f56b635d7aa45",
+      "original_packet_sha256": "24f96e181e51561c13a8e2acee3708be583a09f1883524fc147f56b635d7aa45",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 6324,
+      "published_sha256": "24f96e181e51561c13a8e2acee3708be583a09f1883524fc147f56b635d7aa45"
+    },
+    {
+      "path": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
+      "current_bytes": 5588,
+      "current_sha256": "ceb6ed8e9bdcd33ab1d1282e2b29cf9a0e8da46d90f8a5bacb7558c02e5c49a8",
+      "original_packet_sha256": "ceb6ed8e9bdcd33ab1d1282e2b29cf9a0e8da46d90f8a5bacb7558c02e5c49a8",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 5588,
+      "published_sha256": "ceb6ed8e9bdcd33ab1d1282e2b29cf9a0e8da46d90f8a5bacb7558c02e5c49a8"
+    },
+    {
+      "path": "docs/domains/governance/design/the-actual-stack.md",
+      "current_bytes": 17056,
+      "current_sha256": "833ca05721fc7014f696fc672a6b18585faccd613915010812c4f52063ea78be",
+      "original_packet_sha256": "833ca05721fc7014f696fc672a6b18585faccd613915010812c4f52063ea78be",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 17056,
+      "published_sha256": "833ca05721fc7014f696fc672a6b18585faccd613915010812c4f52063ea78be"
+    },
+    {
+      "path": "docs/domains/governance/operator/native-operation-contract-v1.json",
+      "current_bytes": 16659,
+      "current_sha256": "981089a3d408aaf76181353c6c052479c1dc0bb358caf2fe6aa2fba1378db22b",
+      "original_packet_sha256": "981089a3d408aaf76181353c6c052479c1dc0bb358caf2fe6aa2fba1378db22b",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 16659,
+      "published_sha256": "981089a3d408aaf76181353c6c052479c1dc0bb358caf2fe6aa2fba1378db22b"
+    },
+    {
+      "path": "docs/domains/governance/operator/native-operation-publication-map-v1.json",
+      "current_bytes": 694,
+      "current_sha256": "fee9b052391e34a20c1f79b7f60dea74d94ef7b9ac2e16458631c5662f13297b",
+      "original_packet_sha256": "fee9b052391e34a20c1f79b7f60dea74d94ef7b9ac2e16458631c5662f13297b",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 694,
+      "published_sha256": "fee9b052391e34a20c1f79b7f60dea74d94ef7b9ac2e16458631c5662f13297b"
+    },
+    {
+      "path": "docs/domains/governance/operator/canonical-architecture-subject.md",
+      "current_bytes": 3110,
+      "current_sha256": "206460b03cd3d0ff6fae8e7bf982bde4837c97a82e7b6951259694adb448be62",
+      "original_packet_sha256": "99970d200f5d81ec8a5f3688773ad943432f36188f1a5c29b2bf134b5771a97c",
+      "relation": "prepared_source_delta_not_executed",
+      "published_bytes": 3110,
+      "published_sha256": "206460b03cd3d0ff6fae8e7bf982bde4837c97a82e7b6951259694adb448be62"
+    },
+    {
+      "path": "manifests/ember-current-subject-v2.json",
+      "current_bytes": 392,
+      "current_sha256": "9d7dd52b87f844803e046d8e24c2aacce1ec54a97e34dcd38d9996a6e9841c46",
+      "original_packet_sha256": "9d7dd52b87f844803e046d8e24c2aacce1ec54a97e34dcd38d9996a6e9841c46",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 392,
+      "published_sha256": "9d7dd52b87f844803e046d8e24c2aacce1ec54a97e34dcd38d9996a6e9841c46"
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_subject_architecture.py",
+      "current_bytes": 5833,
+      "current_sha256": "ebf6a2bc4eabf0ba8085faa6ddc54bea2181959e318fd0ee500859fa278eeec9",
+      "original_packet_sha256": "ebf6a2bc4eabf0ba8085faa6ddc54bea2181959e318fd0ee500859fa278eeec9",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 5833,
+      "published_sha256": "ebf6a2bc4eabf0ba8085faa6ddc54bea2181959e318fd0ee500859fa278eeec9"
+    },
+    {
+      "path": "src/ember/governance/scripts/tests/test_selected_subject_architecture.py",
+      "current_bytes": 4689,
+      "current_sha256": "77b99378d6a68a45e6249c831773cd9b5778d84b4998f3852ceb7e12753087d6",
+      "original_packet_sha256": "77b99378d6a68a45e6249c831773cd9b5778d84b4998f3852ceb7e12753087d6",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 4689,
+      "published_sha256": "77b99378d6a68a45e6249c831773cd9b5778d84b4998f3852ceb7e12753087d6"
+    },
+    {
+      "path": "src/ember/governance/scripts/tests/test_selected_subject_architecture_integration.py",
+      "current_bytes": 9891,
+      "current_sha256": "39ab9b5219932c87d78cb34ab759fd0febaa6210d2205d0e10b8f16109fa9ad9",
+      "original_packet_sha256": "974a00768c9580cd05f0ad9ae4e9e8df65c9128e4a205f064b40149c19f77a71",
+      "relation": "prepared_source_delta_not_executed",
+      "published_bytes": 9891,
+      "published_sha256": "39ab9b5219932c87d78cb34ab759fd0febaa6210d2205d0e10b8f16109fa9ad9"
+    },
+    {
+      "path": "src/ember/governance/scripts/gen_readme_status.py",
+      "current_bytes": 54652,
+      "current_sha256": "de029cbbab1e2818b6df0de423afde7cddcdb6492f934ebeacef93a1e73d6281",
+      "original_packet_sha256": "de029cbbab1e2818b6df0de423afde7cddcdb6492f934ebeacef93a1e73d6281",
+      "relation": "unchanged_from_original_packet",
+      "published_bytes": 54652,
+      "published_sha256": "de029cbbab1e2818b6df0de423afde7cddcdb6492f934ebeacef93a1e73d6281"
+    },
+    {
+      "path": "src/ember/governance/scripts/update_current_subject.py",
+      "current_bytes": 20549,
+      "current_sha256": "bada20332114e4aa76d420d9e2d9a8045ffdc475bc3086120b80ea9d432a7bdc",
+      "original_packet_sha256": "a8e4a60250908c404264c5c0ec065302126b1238884fa9816263648812bff67c",
+      "relation": "prepared_source_delta_not_executed",
+      "published_bytes": 20549,
+      "published_sha256": "bada20332114e4aa76d420d9e2d9a8045ffdc475bc3086120b80ea9d432a7bdc"
+    },
+    {
+      "path": "manifests/selected-cia-public-metadata-v1/selected-pointer.sanitized.json",
+      "current_bytes": 320,
+      "current_sha256": "1f81fb8e753a1907b8d2e22d208f23c8cd4da1224234cebb62fb90f26c03243b",
+      "original_packet_sha256": null,
+      "relation": "added_public_reference_metadata",
+      "published_bytes": 314,
+      "published_sha256": "c042dcf313d702789234563bb42ae12455c78ded55d7fab0857281d64b138972"
+    },
+    {
+      "path": "manifests/selected-cia-public-metadata-v1/checkpoint-manifest.sanitized.json",
+      "current_bytes": 205935,
+      "current_sha256": "cfd9079b77185877e46620daf5ed3c61e84c625ed22d87c54b28a56cfc4fb544",
+      "original_packet_sha256": null,
+      "relation": "added_public_reference_metadata",
+      "published_bytes": 199298,
+      "published_sha256": "b95f90f50a20f3698726ca9d26bbd6a41f0c97647899325e204528c47bf7bb5d"
+    },
+    {
+      "path": "manifests/selected-cia-public-metadata-v1/publication-map-v1.json",
+      "current_bytes": 2158,
+      "current_sha256": "04e811a598c4b88d7a2a92c3d7688b2bdef6e233b66e13481bb43ca21304f224",
+      "original_packet_sha256": null,
+      "relation": "added_public_reference_metadata",
+      "published_bytes": 2586,
+      "published_sha256": "64f3a293ec413ba3949f0c503fa7edbd4f93f9eb07c1498771b35224b55a3602"
+    }
+  ],
+  "publication_transform": "Three public reference metadata JSON files differ from prepared source packet16ba42d9 solely by LF normalization and the explicit prepared-to-published byte mapping. All prepared originals are preserved privately. Executable source unchanged."
+}
