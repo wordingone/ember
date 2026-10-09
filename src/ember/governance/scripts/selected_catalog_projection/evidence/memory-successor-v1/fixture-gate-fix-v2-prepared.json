@@ -1,0 +1,51 @@
+{
+  "schema": "niko.memory_fixture_gate_fix.v1",
+  "status": "PREPARED_NOT_EXECUTED",
+  "source_changed": false,
+  "runner_changed": false,
+  "scope": "One separator deletion in EventWaitHandle name; versioned helper references and exclusive fresh fixture roots/receipt names. No substantive test or cap changes.",
+  "files": [
+    {
+      "old_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-boundary.ps1",
+      "old_sha256": "1aeb7cd49c4dc5acd65568c45ad83d26ad087f6c3926c2784e9ea8f23172cba4",
+      "new_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-boundary-v2.ps1",
+      "new_sha256": "d32aa82bd850f6dc190e96903def3111cc7651b4959e97f0e926d8c50823e37b",
+      "new_bytes": 6144,
+      "ast_errors": 0
+    },
+    {
+      "old_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-baseline-v1.ps1",
+      "old_sha256": "e51fa4d6b938d1b10b35a74d25b8f0c87b65f8707c884e1d525d0953d92d2d9f",
+      "new_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-baseline-v2.ps1",
+      "new_sha256": "a18aedfc51f9535a5ed45a88e002f30049b0e12ac872b45bfa484cf65d39719f",
+      "new_bytes": 18179,
+      "ast_errors": 0
+    },
+    {
+      "old_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-scale-v1.ps1",
+      "old_sha256": "06ec395460e25f0bdc337ef7fadcdf9c201ebd7cc3fc9a655deff6dbf655726a",
+      "new_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-scale-v2.ps1",
+      "new_sha256": "40a621307ea9721149506d704c60801d1151f53c7c625c8c017a3e8c99f916d0",
+      "new_bytes": 6879,
+      "ast_errors": 0
+    },
+    {
+      "old_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-suite-v1.ps1",
+      "old_sha256": "bcef191b0f33b182038285593d2b9dc2c5d7cac210343520e08f467c69ba064c",
+      "new_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-suite-v2.ps1",
+      "new_sha256": "771e3cab5347f2608113d57d62e5528b1950ae4221033574281a1a1e07920c99",
+      "new_bytes": 4075,
+      "ast_errors": 0
+    },
+    {
+      "old_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-memory-suite-controller-v1.ps1",
+      "old_sha256": "a9193d6fbe89b9d999d1391887e1dcf4d6c16800522daf506fad39cf5c0c1172",
+      "new_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-memory-suite-controller-v2.ps1",
+      "new_sha256": "ec64c667301c7ddf54af3c2ceae50bd5de32f4bd3c235d39f456c5c8c11d6412",
+      "new_bytes": 7599,
+      "ast_errors": 0
+    }
+  ],
+  "automatic_retry": false,
+  "release_required": "Leo explicitly releases exactly one corrected suite replay; previous once-only failure remains preserved."
+}

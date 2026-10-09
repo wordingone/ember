@@ -1,0 +1,20 @@
+{
+  "exit_code": 0,
+  "timed_out": false,
+  "cleanup_verified": true,
+  "child_pid": 46784,
+  "start_utc": "2026-10-09T18:21:06.8756116Z",
+  "end_utc": "2026-10-09T18:21:08.7328094Z",
+  "stdout": "{\"status\":\"PASS_R1_BOUNDARY_ONLY\",\"receipt\":\"C:\\\\Users\\\\Admin\\\\.codex\\\\visualizations\\\\2026\\\\10\\\\01\\\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\\\boundary-validation-v1.json\",\"bytes\":10961,\"sha256\":\"64932efc08d349187b21e57d82a79b94058e7a611d953a91f157758e596734b9\",\"assertions\":22}\r\n",
+  "stderr": "",
+  "active_job_processes": 0,
+  "process_memory_limit_bytes": 536870912,
+  "job_memory_limit_bytes": 536870912,
+  "schema": "niko.terminal_budget_r1.controller_terminal.v1",
+  "controller_elapsed_seconds": 2.2526419,
+  "whole_wall_within90_seconds": true,
+  "status": "PASS_R1_BOUNDARY_CONTROLLER",
+  "Python": false,
+  "production": false,
+  "automatic_retry": false
+}

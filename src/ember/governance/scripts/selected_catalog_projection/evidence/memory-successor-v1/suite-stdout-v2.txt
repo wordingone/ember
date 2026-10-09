@@ -1,0 +1,3 @@
+SUITE_RECEIPT=C:\Users\Admin\.codex\visualizations\2026\10\01\01a0f8e5-f04d-7141-af6f-51c1dac8a822\1581-preselected-membership-leo74705-20261009T1530Z\memory-suite-validation-v2.json
+SUITE_RECEIPT_SHA256=2e702828e73daca85cba4bdaae895a227a313de17ba285f9cfa289df0bfbea87
+SUITE_STATUS=PASS_MEMORY_SUCCESSOR_SYNTHETIC_ONLY

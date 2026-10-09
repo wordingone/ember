@@ -1,0 +1,81 @@
+{
+  "schema": "ember.kai.bounded_source_review.v1",
+  "scope": "Aggregate selected-membership count: terminal-receipt output-budget repair only",
+  "decision": "PASS_SCOPED_R1",
+  "reviewer": "kai",
+  "prior_review": {
+    "sha256": "e63a39969db7e243b776d0cd6a4d3812a4130abb8b8788ee7fa044dcac2b5a04",
+    "retained": "All earlier memory lifetime, source validation, real-byte pair and scale-fixture findings remain unchanged; the single terminal-output budget defect is resolved by this delta."
+  },
+  "source_pins": {
+    "selected_projection_memory_r1_cs": {
+      "bytes": 68236,
+      "sha256": "43f93066866ad44d9e2ec8fe06888d6d914321a3a18aa969affb5aaa5670a390"
+    },
+    "run_selected_projection_memory_v1_ps1": {
+      "bytes": 7338,
+      "sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52"
+    },
+    "binding_memory_r1_json": {
+      "bytes": 13082,
+      "sha256": "8cd5c9311d7518e74e3b534da4e7aa18e88a4cf62b958fa1e8d6be2906ebbda6"
+    },
+    "run_command_memory_r1_ps1": {
+      "bytes": 25918,
+      "sha256": "4a8629dc5928c110bffbdc2b4b0b02e897a5342832c29712a8eec078390dc702"
+    }
+  },
+  "terminal_budget": {
+    "root_limit_bytes": 134217728,
+    "reserved_bytes": 8192,
+    "reservation_sha256": "0ace1e1d248552ef7c10eb951d56907c6f4da6f20025ddb1d61d3f8994fa5cb3",
+    "findings": [
+      "The command accounts for both preflight UTF-8 bytes and terminal reservation before either write.",
+      "The driver verifies the exact reservation before reading inputs and again before result promotion; success and refusal output counts include it.",
+      "Completion replaces the same fixed-length reservation and verifies its hash, length and unchanged root occupancy before reporting persistence.",
+      "Oversized terminal content yields a bounded explicit FAIL record; failed persistence or readback cannot report PASS."
+    ]
+  },
+  "executed_fixture": {
+    "root": "C:/Users/Admin/.codex/visualizations/2026/10/01/01a0f8e5-f04d-7141-af6f-51c1dac8a822/1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z",
+    "handoff_sha256": "8bc83674868068a1fa19bb3f878317599b7bcf473bf129faf518bd5ef654f3c7",
+    "boundary_receipt": {
+      "bytes": 10961,
+      "sha256": "64932efc08d349187b21e57d82a79b94058e7a611d953a91f157758e596734b9",
+      "individual_assertions": 22,
+      "all_individual_assertions_pass": true,
+      "aggregate_all_pass_field_present": false
+    },
+    "controller_terminal": {
+      "bytes": 974,
+      "sha256": "c375b8a49bcfd5e8da963e2b7a26432874ac5f90275f92126700114d12fefd22",
+      "pid": 46784,
+      "exit_code": 0,
+      "cleanup_verified": true,
+      "job_active_processes": 0
+    },
+    "outer_terminal": {
+      "bytes": 923,
+      "sha256": "32f80af795655beb50912055babe7e8a109873ef29a341defb5ceca8c01105fa",
+      "pid": 47592,
+      "exit_code": 0,
+      "cleanup_verified": true,
+      "job_active_processes": 0
+    },
+    "end_utc": "2026-10-09T18:21:08.8994251Z",
+    "observed_phase_peak_private_bytes": 118452224,
+    "assertion_examples": [
+      "Predecessor root overrun reproduced: 131072 to 132432 bytes.",
+      "Actual bounded writer success and refusal at exactly 131072 bytes retain unchanged root size after terminal completion.",
+      "One additional payload byte refuses with CAP_OUTPUT.",
+      "Absent, truncated and modified reservations are rejected.",
+      "Oversized terminal record produces bounded failure; sharing violation leaves pending state and rejects acceptance."
+    ]
+  },
+  "boundary": "Fixture executed command AST budget functions and actual C# bounded-output/verifier routines. It did not execute the full production catalog or launcher; tiny terminal cases are explicitly simulations.",
+  "limitations": [
+    "Abrupt process death may leave a torn terminal file; no atomic crash-recovery claim is made. A terminal file alone does not replace outer process/job/cleanup evidence.",
+    "A scoped source and boundary-fixture PASS does not establish production count success, admitted supply, consumer loading, public CI or issue completion."
+  ],
+  "next_owner_action": "Niko may proceed under the existing one-production-attempt authorization only when the current owner window, marker, exact input and source pins, resources and host controls permit. Preserve prior OOM and fixture history. No automatic retry or additional review round is introduced."
+}
