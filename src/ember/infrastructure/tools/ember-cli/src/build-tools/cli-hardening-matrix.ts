@@ -380,7 +380,7 @@ function parseArgs(argv: string[]): { receiptPath: string } {
 if (import.meta.main) {
   const { receiptPath } = parseArgs(process.argv.slice(2));
   const sourceRoot = resolve(import.meta.dir, "..");
-  const repositoryRoot = resolve(sourceRoot, "..", "..", "..");
+  const repositoryRoot = resolve(sourceRoot, "..", "..", "..", "..", "..", "..");
   const result = runHardeningMatrix({
     repositoryRoot,
     sourceRoot,

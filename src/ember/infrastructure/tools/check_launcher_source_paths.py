@@ -12,8 +12,11 @@ master could not start Ember. This check fails at review time instead.
 Runtime STATE paths are deliberately not flagged: tools/ember-cli/state/ is a state
 root that a writer (serving_registry.py) and its readers agree on, not a source path.
 
-Usage: check_launcher_source_paths.py [ROOT]          scan tracked code under ROOT
-       check_launcher_source_paths.py --text FILE...  scan the given files (reds)
+Usage: check_launcher_source_paths.py [--staged] [ROOT]  scan tracked code under ROOT
+       check_launcher_source_paths.py --text FILE...     scan the given files (reds)
+--staged reads the git INDEX bytes (what a commit lands), as repo-guard's REPO_GUARD_SCOPE=staged
+requires; otherwise the working-tree bytes of the tracked files. Every git child is created with
+no console window and its exit status and streams are checked.
 Exit 0 = clean, 1 = stale path found, 2 = usage/IO error.
 """
 from __future__ import annotations
@@ -76,20 +79,52 @@ def scan_text(path: str, text: str) -> list[str]:
     return hits
 
 
-def tracked_code(root: Path) -> list[Path]:
-    out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=False)
+def _hidden() -> dict:
+    """Creation flags for a child with no console window (Windows); empty elsewhere."""
+    if sys.platform != "win32":
+        return {}
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = 0  # SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": startup}
+
+
+def _git(root: Path, args: list[str], stdin: bytes | None = None) -> bytes:
+    feed = {"input": stdin} if stdin is not None else {"stdin": subprocess.DEVNULL}
+    out = subprocess.run(["git", "-C", str(root), *args], capture_output=True, check=False, **feed, **_hidden())
     if out.returncode != 0:
-        raise OSError(f"git ls-files failed rc={out.returncode}: {out.stderr.decode(errors='replace')[:200]}")
+        raise OSError(f"git {args[0]} failed rc={out.returncode}: {out.stderr.decode(errors='replace')[:200]}")
+    return out.stdout
+
+
+def tracked_code(root: Path) -> list[str]:
     files = []
-    for rel in out.stdout.decode("utf-8").split("\0"):
+    for rel in _git(root, ["ls-files", "-z"]).decode("utf-8").split("\0"):
         if not rel or Path(rel).suffix.lower() not in CODE_SUFFIXES:
             continue
         name = Path(rel).name
         # Tests may name old paths to prove they are refused; this file names them as rules.
         if ".test." in name or name.startswith("test_") or name == Path(__file__).name:
             continue
-        files.append(root / rel)
+        files.append(rel)
     return files
+
+
+def staged_bytes(root: Path, rels: list[str]) -> dict[str, bytes]:
+    """Index bytes of each path, read in one `git cat-file --batch` child."""
+    if not rels:
+        return {}
+    raw = _git(root, ["cat-file", "--batch"], stdin="".join(f":{rel}\n" for rel in rels).encode("utf-8"))
+    result, offset = {}, 0
+    for rel in rels:
+        end = raw.index(b"\n", offset)
+        header = raw[offset:end].split()
+        if len(header) != 3 or header[1] != b"blob":
+            raise OSError(f"git cat-file: no staged blob for {rel}")
+        size = int(header[2])
+        result[rel] = raw[end + 1:end + 1 + size]
+        offset = end + 1 + size + 1
+    return result
 
 
 def main(argv: list[str]) -> int:
@@ -98,15 +133,23 @@ def main(argv: list[str]) -> int:
             if len(argv) < 2:
                 print("usage: --text FILE...", file=sys.stderr)
                 return 2
-            paths = [Path(p) for p in argv[1:]]
-            label = {p: str(p) for p in paths}
+            texts = {p: Path(p).read_text(encoding="utf-8", errors="replace") for p in argv[1:]}
         else:
-            root = Path(argv[0] if argv else ".").resolve()
-            paths = tracked_code(root)
-            label = {p: p.relative_to(root).as_posix() for p in paths}
+            staged = argv[:1] == ["--staged"]
+            rest = argv[1:] if staged else argv
+            if len(rest) > 1:
+                print("usage: [--staged] [ROOT]", file=sys.stderr)
+                return 2
+            root = Path(rest[0] if rest else ".").resolve()
+            rels = tracked_code(root)
+            if staged:
+                texts = {rel: data.decode("utf-8", errors="replace") for rel, data in staged_bytes(root, rels).items()}
+            else:
+                texts = {rel: (root / rel).read_text(encoding="utf-8", errors="replace") for rel in rels}
+        paths = list(texts)
         hits = []
-        for p in paths:
-            hits += scan_text(label[p], p.read_text(encoding="utf-8", errors="replace"))
+        for label, text in texts.items():
+            hits += scan_text(label, text)
     except OSError as exc:
         print(f"LAUNCHER_SOURCE_PATHS_ERROR {exc}", file=sys.stderr)
         return 2

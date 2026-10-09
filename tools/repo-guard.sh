@@ -455,7 +455,11 @@ fi
 # A clean checkout of master could not start Ember because the launcher joined
 # tools\ember-cli\src after the sources moved under src/ember/. Runtime state paths
 # (tools/ember-cli/state/) are not flagged.
-LAUNCHER_PATHS_OUT="$(bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_launcher_source_paths.py" "$KERNEL_ROOT" 2>&1)"
+# The checker is trusted kernel code; the bytes it judges are the SUBJECT tree, and under
+# REPO_GUARD_SCOPE=staged the subject INDEX (what lands), like the governed-entry check.
+LAUNCHER_PATHS_SCOPE=()
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then LAUNCHER_PATHS_SCOPE=(--staged); fi
+LAUNCHER_PATHS_OUT="$(bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_launcher_source_paths.py" "${LAUNCHER_PATHS_SCOPE[@]}" "$SUBJECT_ROOT" 2>&1)"
 LAUNCHER_PATHS_RC=$?
 if [ "$LAUNCHER_PATHS_RC" -eq 0 ]; then
   ok "launcher-paths" "$(printf '%s' "$LAUNCHER_PATHS_OUT" | head -1)"

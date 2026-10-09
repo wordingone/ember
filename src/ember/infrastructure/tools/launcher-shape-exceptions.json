@@ -7,8 +7,8 @@
   "exceptions": [
     {
       "path": "src/ember/infrastructure/tools/check_launcher_source_paths.py",
-      "sha256": "f3583e88c83ac94bec54059a664859961834cf6af63a1e3a87f2fe8e02b3b9df",
-      "reason": "review-time path lint (#1116). Its only child process is a read-only `git ls-files` to enumerate tracked files; it never starts, selects or dispatches a run."
+      "sha256": "78b715180653d15a45ff2af9320118539ec2f7184ecb18997d8fc5d1f1e34c0c",
+      "reason": "review-time path lint (#1116). Its only child processes are read-only `git ls-files` and `git cat-file --batch` (index bytes under --staged), created with CREATE_NO_WINDOW and a hidden STARTUPINFO; it never starts, selects or dispatches a run."
     },
     {
       "path": "scripts/headless-python.ps1",
