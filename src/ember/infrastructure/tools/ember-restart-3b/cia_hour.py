@@ -740,7 +740,7 @@ def validate_continuation(runner, identity):
         raise ValueError('continuation requires a completed separate governed hour')
     for key in ('source_commit', 'source_sha256', 'config_sha256', 'data', 'seed', 'support',
                 'optimizer', 'geometry', 'batch_documents', 'input_binding', 'gpu_uuid', 'hour',
-                'production_mixture', 'checkpoint_probe', 'execution_mode', 'local_routing_mode'):
+                'production_mixture', 'checkpoint_probe', 'execution_mode', 'local_routing_mode', 'parameter_dump'):
         if prior.get(key) != identity.get(key):
             raise ValueError('continuation source hour identity differs: ' + key)
     if runner.attention_selection(prior) != runner.attention_selection(identity):
@@ -751,23 +751,40 @@ def validate_continuation(runner, identity):
         raise ValueError('continuation source hour experiment plan differs')
     outcome_path = root.parent/'operator/operator-outcome.json'
     outcome = json.loads(outcome_path.read_bytes())
-    if (outcome['run_id'] != prior['run_id'] or outcome['success'] is not True
-            or outcome['daemon_cleanup_verified'] is not True
-            or outcome['measurement_files']['hour-result.json'] != request['source_hour_result_sha256']):
-        raise ValueError('continuation hour native outcome differs')
-    for name in ('owned.json', 'disk.json', 'worker-terminal.json', 'rows.jsonl'):
-        if runner.file_sha256(root/name) != outcome['measurement_files'][name]:
-            raise ValueError('continuation hour terminal bytes differ')
-    owned = json.loads((root/'owned.json').read_bytes())
-    disk = json.loads((root/'disk.json').read_bytes())
-    terminal = json.loads((root/'worker-terminal.json').read_bytes())
-    if (owned['status'] != 'completed' or owned['returncode'] != 0 or owned['cleanup_verified'] is not True
-            or owned.get('supervisor_failure') is not None
-            or disk['outcome'] != 'COMPLETED' or disk['stop_reason'] is not None
-            or disk['runner_exit_code'] != 0 or disk['child_exit_code'] != 0
-            or disk['operating_reserve_breaches'] != []
-            or terminal['status'] != 'completed'):
-        raise ValueError('continuation source hour did not complete its resource envelope')
+    import declared_pause
+    # Issue #2115 outcome class `terminated_in_declared_pause`: reachable only when the source identity pinned a declared pause
+    # and the worker entered it and never exited it. Every other hour takes the clean-completion branch below, unchanged.
+    paused = declared_pause.pause_declaration(prior) is not None and (root/declared_pause.ENTERED).is_file()         and not (root/declared_pause.EXITED).exists()
+    if paused:
+        if outcome['run_id'] != prior['run_id'] or outcome['daemon_cleanup_verified'] is not True:
+            raise ValueError('continuation hour native outcome differs')
+        owned = json.loads((root/'owned.json').read_bytes())
+        disk = json.loads((root/'disk.json').read_bytes())
+        if (owned['cleanup_verified'] is not True or owned.get('supervisor_failure') is not None
+                or disk['stop_reason'] is not None or disk['outcome'] == 'STOPPED_BY_BUDGET'
+                or disk['operating_reserve_breaches'] != []):
+            raise ValueError('continuation source hour did not complete its resource envelope')
+        physical_positions = declared_pause.validate_terminated_source(
+            runner, root, prior, hour, request['source_hour_result_sha256'])
+    else:
+        if (outcome['run_id'] != prior['run_id'] or outcome['success'] is not True
+                or outcome['daemon_cleanup_verified'] is not True
+                or outcome['measurement_files']['hour-result.json'] != request['source_hour_result_sha256']):
+            raise ValueError('continuation hour native outcome differs')
+        for name in ('owned.json', 'disk.json', 'worker-terminal.json', 'rows.jsonl'):
+            if runner.file_sha256(root/name) != outcome['measurement_files'][name]:
+                raise ValueError('continuation hour terminal bytes differ')
+        owned = json.loads((root/'owned.json').read_bytes())
+        disk = json.loads((root/'disk.json').read_bytes())
+        terminal = json.loads((root/'worker-terminal.json').read_bytes())
+        if (owned['status'] != 'completed' or owned['returncode'] != 0 or owned['cleanup_verified'] is not True
+                or owned.get('supervisor_failure') is not None
+                or disk['outcome'] != 'COMPLETED' or disk['stop_reason'] is not None
+                or disk['runner_exit_code'] != 0 or disk['child_exit_code'] != 0
+                or disk['operating_reserve_breaches'] != []
+                or terminal['status'] != 'completed'):
+            raise ValueError('continuation source hour did not complete its resource envelope')
+        physical_positions = terminal['applied_positions']
     rows = [json.loads(line) for line in (root/'rows.jsonl').read_bytes().splitlines()]
     geometry = identity['geometry']
     count = geometry['sequence_length'] * geometry['documents_per_step']
@@ -778,7 +795,7 @@ def validate_continuation(runner, identity):
                    or type(row['applied_positions']) is not int or row['applied_positions'] != count for row in rows)
             or sum(row['applied_positions'] for row in rows) != hour['applied_positions']):
         raise ValueError('continuation source hour rows differ')
-    verify_continuation_accounting(runner, root, hour, prior, terminal['applied_positions'])
+    verify_continuation_accounting(runner, root, hour, prior, physical_positions)
     if hour.get('continuation') is None:
         raise ValueError('continuation requires the independently bound next-update reference')
     descriptor = hour['continuation']
@@ -821,8 +838,10 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
     expected = source['reference']['before']
     if before != expected:
         raise ValueError('fresh continuation restore differs from the hour terminal')
+    import declared_pause
     reproduced = next_update_reference(runner, model, optimizer, inventory, identity, source['pack'],
-        source['child'], before, device, applied)
+        source['child'], before, device, applied,
+        dump_path=custody / declared_pause.DUMP_REPRODUCED if declared_pause.dump_declared(identity) else None)
     reproduced.update(restored_from=source['hour_binding']['terminal_checkpoint'],
         hour_binding_sha256=source['hour']['continuation']['hour_binding_sha256'],
         reference_sha256=source['hour']['continuation']['reference_sha256'],
@@ -838,7 +857,7 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
 
 
 def next_update_reference(runner, model, optimizer, inventory, identity, pack, child,
-                          terminal_state, device, applied):
+                          terminal_state, device, applied, dump_path=None):
     """Execute one uncredited auxiliary update from the published terminal state."""
     cursor = child['data_cursor']
     if pack['cursor_before'] != dict(shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
@@ -869,6 +888,10 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
         present = sorted(name for name, parameter in inventory.items() if parameter.grad is not None)
         if not present:
             raise ValueError('continuation observed no participating gradients')
+        if dump_path is not None:
+            # Issue #2115: the post-update parameters that carry optimizer state, written before the published state is restored.
+            import declared_pause
+            declared_pause.dump_updated_parameters(dump_path, optimizer, inventory)
         next_cursor = dict(shard=str(pack['cursor_after']['shard_index']),
             record_index=pack['cursor_after']['token_offset'], global_step=cursor['global_step']+1,
             tokens_seen=cursor['tokens_seen']+positions)
@@ -908,8 +931,10 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
     try:
         next_pack = prepared['packs'].next_pack()
         runner._write_new(custody / 'continuation-next-pack.json', next_pack)
+        import declared_pause
         reference = next_update_reference(runner, model, optimizer, inventory, identity, next_pack,
-                                          child, terminal_state, device, applied)
+                                          child, terminal_state, device, applied,
+                                          dump_path=custody / declared_pause.DUMP_LIVE if declared_pause.dump_declared(identity) else None)
     finally:
         # S+1 is never published. Restore S even when the reference step refuses.
         try:
@@ -946,6 +971,14 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     probe = hour['schema'] == 'checkpoint-probe-v1'
     learning = hour['schema'] == 'learning-comparison-v1'
     snapshots, paused = [], 0.0
+    import declared_pause
+    pause = declared_pause.pause_declaration(identity)
+    if pause is not None:
+        # The worker's own physical-position tally is recorded in the pause marker (a killed worker never writes worker-terminal.json).
+        tally, real_applied = [0], applied
+        def applied(count):
+            tally[0] += count
+            real_applied(count)
     # BEGIN hour-model-build (mirrors build_hour_model; the verify-tail test compares the two texts)
     model = CIADecoder(architecture_config=config, **runner.decoder_kwargs(identity)).materialize_cpu(seed=identity['seed'])
     first = prepared['first']
@@ -1132,11 +1165,15 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
         complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
         parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id']))
+    pause_started = time.perf_counter()
+    if pause is not None and pause['position'] == 'after-witness':
+        declared_pause.enter_pause(custody, identity, position='after-witness', physical_positions=tally[0])
+    pause_seconds = time.perf_counter() - pause_started if pause is not None and pause['position'] == 'after-witness' else 0.0
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
-    restore_finished = time.perf_counter()
+    restore_finished = time.perf_counter() - pause_seconds   # the declared hold is not restore time
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('hour source changed during execution')
-    governed_wall = time.perf_counter() - started
+    governed_wall = time.perf_counter() - started - pause_seconds
     energy_binding = energy.end()
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
@@ -1163,6 +1200,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         prediction_sha256=binding['launch']['prediction_sha256'],
         energy=energy_binding,
         continuation=continuation,
+        **({} if pause is None else dict(declared_pause=dict(identity['declared_pause'], excluded_from_wall_seconds=pause_seconds))),
         production_mixture_validation=prepared['mixture_validation'],
         learning_snapshots=snapshots if learning else None,
         learning_snapshot_pause_seconds=paused if learning else None,
@@ -1199,4 +1237,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             hour_result_sha256=runner.file_sha256(custody / 'hour-result.json'),
             expected_parent_checkpoint_manifest_sha256=expected_parent)
         runner.tail_stamp(custody, 'pointer_cas')
+    if pause is not None and pause['position'] == 'after-hour-result':
+        # Everything above is durable (hour result, candidate pointer, continuation reference, dumps). Hold the declared seconds.
+        declared_pause.enter_pause(custody, identity, position='after-hour-result', physical_positions=tally[0])
 
