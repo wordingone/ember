@@ -78,6 +78,7 @@ SUBJECT_END_MARKER = "<!-- CURRENT-SUBJECT-END -->"
 CONTINUITY_STATUS_PATH = os.path.join(ROOT, "manifests", "ember-training-continuity-status-v1.json")
 CONTINUITY_BEGIN_MARKER = "<!-- CONTINUITY-STATUS-BEGIN -->"
 CONTINUITY_END_MARKER = "<!-- CONTINUITY-STATUS-END -->"
+UNKNOWN_STATUS = "UNKNOWN"   # a live source that could not be read says so, with its reason (issue 2119 row 7)
 CONTINUITY_SNAPSHOT_SCHEMA = "ember-training-continuity-snapshot-v1"
 CONTINUITY_STATUS_SCHEMA = "ember-training-continuity-status-v2"  # training_continuity_status.STATUS_SCHEMA; a test compares the two
 CONTINUITY_CANDIDATE_AUDIT_SCHEMA = "ember-lineage-candidate-audit-v1"  # lineage_candidate_audit.SCHEMA; a test compares the two
@@ -677,10 +678,13 @@ def load_continuity_status(path):
         _closed(gpu, {"status", "owner", "run_id", "training_job_purpose"}, "gpu_owner")
         for name in ("owner", "run_id", "training_job_purpose"):
             _text(gpu[name], f"gpu_owner.{name}", nullable=True)
+    elif isinstance(gpu, dict) and gpu.get("status") == UNKNOWN_STATUS:
+        _closed(gpu, {"status", "reason"}, "gpu_owner")
+        _text(gpu["reason"], "gpu_owner.reason")
     else:
         _closed(gpu, {"status"}, "gpu_owner")
-        if gpu["status"] != "not_reported":
-            raise ValueError("continuity status gpu_owner.status must be held or not_reported")
+        if gpu["status"] not in {"not_reported", "free"}:
+            raise ValueError("continuity status gpu_owner.status must be held, free, UNKNOWN or not_reported")
     checkpoint = _closed(status["checkpoint"], {"child_manifest_sha256", "parent_manifest_sha256", "last_hour_applied_positions"}, "checkpoint")
     if _digest_or_genesis(checkpoint["child_manifest_sha256"], "checkpoint.child_manifest_sha256") != head:
         raise ValueError("continuity snapshot head differs from the status checkpoint child")
@@ -692,16 +696,26 @@ def load_continuity_status(path):
         _closed(measurement, {"status", "measurement"}, "learning_measurement")
         if not isinstance(measurement["measurement"], dict):
             raise ValueError("continuity status learning_measurement.measurement must be an object")
+    elif isinstance(measurement, dict) and measurement.get("status") == UNKNOWN_STATUS:
+        _closed(measurement, {"status", "reason"}, "learning_measurement")
+        _text(measurement["reason"], "learning_measurement.reason")
     else:
         _closed(measurement, {"status"}, "learning_measurement")
         if measurement["status"] != "pending":
-            raise ValueError("continuity status learning_measurement.status must be measured or pending")
+            raise ValueError("continuity status learning_measurement.status must be measured, pending or UNKNOWN")
     purpose = _closed(status["purpose"], {"training_job_purpose", "run_id"}, "purpose")
     for name in ("training_job_purpose", "run_id"):
         _text(purpose[name], f"purpose.{name}", nullable=True)
-    allowance = _closed(status["diagnostic_allowance"], {
+    allowance_keys = {
         "diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds",
-        "max_postponement_seconds", "at_occupancy_limit", "at_postponement_limit"}, "diagnostic_allowance")
+        "max_postponement_seconds", "at_occupancy_limit", "at_postponement_limit"}
+    if isinstance(status["diagnostic_allowance"], dict) and "postponed" in status["diagnostic_allowance"]:
+        allowance_keys = allowance_keys | {"postponed", "postponement_reason"}
+    allowance = _closed(status["diagnostic_allowance"], allowance_keys, "diagnostic_allowance")
+    if "postponed" in allowance:
+        if allowance["postponed"] is not True and allowance["postponed"] != UNKNOWN_STATUS:
+            raise ValueError("continuity status diagnostic_allowance.postponed must be true or UNKNOWN")
+        _text(allowance["postponement_reason"], "diagnostic_allowance.postponement_reason")
     for name in ("diagnostic_occupancy_seconds", "max_diagnostic_occupancy_seconds", "postponement_seconds", "max_postponement_seconds"):
         if (isinstance(allowance[name], bool) or not isinstance(allowance[name], (int, float))
                 or not math.isfinite(allowance[name]) or allowance[name] < 0):
@@ -759,11 +773,24 @@ def render_continuity_status_block(payload):
     if measurement["status"] == "measured":
         measure_line = (f"- Last learning measurement (bound to `{checkpoint['child_manifest_sha256']}`): "
                         f"`{json.dumps(measurement['measurement'], sort_keys=True, separators=(',', ':'))}`.")
+    elif measurement["status"] == UNKNOWN_STATUS:
+        measure_line = f"- Last learning measurement: **UNKNOWN** ({measurement['reason']})."
     else:
         measure_line = "- Last learning measurement: pending."
     gpu = status["gpu_owner"]
-    gpu_line = ("- GPU owner: not reported." if gpu["status"] == "not_reported" else
-                f"- GPU owner: `{gpu['owner']}`, run `{gpu['run_id']}`, purpose `{gpu['training_job_purpose']}`.")
+    if gpu["status"] == "not_reported":
+        gpu_line = "- GPU owner: not reported."
+    elif gpu["status"] == "free":
+        gpu_line = "- GPU owner: free (no window marker and no training process)."
+    elif gpu["status"] == UNKNOWN_STATUS:
+        gpu_line = f"- GPU owner: **UNKNOWN** ({gpu['reason']})."
+    else:
+        gpu_line = f"- GPU owner: `{gpu['owner']}`, run `{gpu['run_id']}`, purpose `{gpu['training_job_purpose']}`."
+    if "postponed" in allowance:
+        hold_line = ("- Training postponed: **UNKNOWN**" if allowance["postponed"] == UNKNOWN_STATUS else "- Training postponed: yes")
+        hold_line += f" ({allowance['postponement_reason']})."
+    else:
+        hold_line = None
     purpose = status["purpose"]
     if nxt["status"] == "blocked":
         next_line = f"- Next segment: blocked: {nxt['blocker']}"
@@ -788,6 +815,7 @@ def render_continuity_status_block(payload):
         f"- Diagnostic occupancy `{allowance['diagnostic_occupancy_seconds']}` of `{allowance['max_diagnostic_occupancy_seconds']}` s "
         f"(at limit: `{str(allowance['at_occupancy_limit']).lower()}`); postponement `{allowance['postponement_seconds']}` of "
         f"`{allowance['max_postponement_seconds']}` s (at limit: `{str(allowance['at_postponement_limit']).lower()}`).",
+        *([hold_line] if hold_line else []),
         next_line,
         CONTINUITY_END_MARKER,
     ])

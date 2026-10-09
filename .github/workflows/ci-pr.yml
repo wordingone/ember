@@ -126,7 +126,7 @@ jobs:
       - name: Verify generated continuity status
         run: python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status
       - name: Run continuity page, snapshot hook and candidate audit regressions
-        run: python -B -m pytest -p no:cacheprovider -q tests/ember_restart_model/test_issue2119_continuity_page.py tests/ember_restart_model/test_issue2119_snapshot_hook.py tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py tests/ember_restart_model/test_issue2119_continuity_page_live.py
+        run: python -B -m pytest -p no:cacheprovider -v tests/ember_restart_model/test_issue2119_continuity_page.py tests/ember_restart_model/test_issue2119_snapshot_hook.py tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py tests/ember_restart_model/test_issue2119_continuity_page_live.py tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py tests/ember_restart_model/test_issue2119_fresh_session_head_load.py tests/ember_restart_model/test_issue2119_publish_crash_sweep.py tests/ember_restart_model/test_issue2119_pending_continuation_cli.py tests/ember_restart_model/test_issue2119_continuity_sources.py
       - name: Verify canonical documentation information system
         run: |
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py tests/domain-governance/test_readme_where_things_are.py

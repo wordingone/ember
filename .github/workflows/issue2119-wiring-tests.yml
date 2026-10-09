@@ -5,9 +5,8 @@ name: issue2119-wiring-tests
 
 # Runs the issue 2119 head-wiring test files on ubuntu-latest with the job log naming every test (pytest -v). The files are the 02B tool tests:
 # the cadence gate, the fresh-session load, the publish crash sweep, the pending-continuation CLI and the continuity status sources, plus the page
-# files ci-pr already runs. The guard skips the job ONLY when none of the five new files is in the tree (the base, so this workflow can merge before
-# they do; the four page files are already on master). Once any new file is present, all nine must be, each must collect tests, the collected total
-# must equal WIRING_EXPECTED_TESTS, and the run must end with exactly that many passed and no skipped, deselected, xfailed, xpassed, failed or error.
+# files ci-pr already runs. All nine files must be present (a missing file fails the job; there is no skip), each must collect tests, the collected
+# total must equal WIRING_EXPECTED_TESTS, and the run must end with exactly that many passed and no skipped, deselected, xfailed, xpassed, failed or error.
 # Changing the count needs a new reviewed workflow edit.
 
 on:
@@ -56,24 +55,15 @@ jobs:
       - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0" "huggingface_hub==1.22.0" "tokenizers==0.22.2" "numpy==2.2.6"
       - run: python -m pip install "torch==2.13.0" --index-url https://download.pytorch.org/whl/cpu
       - run: python -m pip install --editable .
-      - name: Guard that the new wiring test files are all absent (base) or all present with the exact collected count
+      - name: Guard that all nine wiring test files are present with the exact collected count
         run: |
           set -euo pipefail
           all="$WIRING_NEW_FILES $WIRING_PAGE_FILES"
-          new_present=""
           absent=""
-          for file in $WIRING_NEW_FILES; do
-            if test -f "$file"; then new_present="$new_present $file"; fi
-          done
           for file in $all; do
             if ! test -f "$file"; then absent="$absent $file"; fi
           done
-          if test -z "$new_present"; then
-            echo "none of the new wiring test files is in this tree (the base): nothing to run"
-            echo "WIRING_RUN=no" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          if test -n "$absent"; then echo "new wiring test files are present but these listed files are missing:$absent"; exit 1; fi
+          if test -n "$absent"; then echo "these listed wiring test files are missing:$absent"; exit 1; fi
           python -B -m pytest --collect-only -q -p no:cacheprovider $all > collected.txt
           for file in $all; do
             count="$(grep -c "^${file}::" collected.txt || true)"
@@ -83,13 +73,11 @@ jobs:
           total="$(grep -Ec '^tests/[^ ]+::' collected.txt || true)"
           echo "collected total=$total expected=$WIRING_EXPECTED_TESTS"
           test "$total" -eq "$WIRING_EXPECTED_TESTS"
-          echo "WIRING_RUN=yes" >> "$GITHUB_ENV"
       - name: Run the issue 2119 wiring tests (each test named in the log); no skip, deselect, xfail or error is accepted
         run: |
           set -euo pipefail
-          if test "$WIRING_RUN" != "yes"; then echo "nothing to run"; exit 0; fi
           python -B -m pytest -v -rs -p no:cacheprovider $WIRING_NEW_FILES $WIRING_PAGE_FILES | tee run.txt
           summary="$(grep -E '^=+ .* in [0-9.]+s' run.txt | tail -1)"
           echo "summary: $summary"
-          echo "$summary" | grep -Eq "^=+ ${WIRING_EXPECTED_TESTS} passed( |,)"
+          echo "$summary" | grep -Eq "^=+ ${WIRING_EXPECTED_TESTS} passed in [0-9.]+s"
           if echo "$summary" | grep -Eq 'skipped|deselected|xfailed|xpassed|failed|error'; then echo "a test was skipped, deselected or did not pass"; exit 1; fi
