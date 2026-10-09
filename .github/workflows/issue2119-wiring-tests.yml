@@ -6,8 +6,9 @@ name: issue2119-wiring-tests
 # Runs the issue 2119 head-wiring test files on ubuntu-latest with the job log naming every test (pytest -v). The files are the 02B tool tests:
 # the cadence gate, the fresh-session load, the publish crash sweep, the pending-continuation CLI and the continuity status sources, plus the page
 # files ci-pr already runs. All nine files must be present (a missing file fails the job; there is no skip), each must collect tests, the collected
-# total must equal WIRING_EXPECTED_TESTS, and the run must end with exactly that many passed and no skipped, deselected, xfailed, xpassed, failed or error.
-# Changing the count needs a new reviewed workflow edit.
+# total must equal the expected count, and the run must end with exactly that many passed and no skipped, deselected, xfailed, xpassed, failed or error.
+# The file list and the expected count are read from tests/ember_restart_model/issue2119_wiring_manifest.json (EMBER-02B), so a test and its count change in one reviewed edit.
+# The nine existing files stay a fixed REQUIRED floor written in this workflow: the manifest may add files, it cannot drop one.
 
 on:
   pull_request:
@@ -31,18 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      WIRING_EXPECTED_TESTS: "196"
-      WIRING_NEW_FILES: >-
-        tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py
-        tests/ember_restart_model/test_issue2119_fresh_session_head_load.py
-        tests/ember_restart_model/test_issue2119_publish_crash_sweep.py
-        tests/ember_restart_model/test_issue2119_pending_continuation_cli.py
-        tests/ember_restart_model/test_issue2119_continuity_sources.py
-      WIRING_PAGE_FILES: >-
-        tests/ember_restart_model/test_issue2119_continuity_page.py
-        tests/ember_restart_model/test_issue2119_snapshot_hook.py
-        tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py
-        tests/ember_restart_model/test_issue2119_continuity_page_live.py
+      WIRING_MANIFEST: tests/ember_restart_model/issue2119_wiring_manifest.json
+      # The mandatory floor: the nine existing suites. The manifest may add files and set the exact count; it cannot drop one of these.
+      WIRING_REQUIRED: "tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py tests/ember_restart_model/test_issue2119_fresh_session_head_load.py tests/ember_restart_model/test_issue2119_publish_crash_sweep.py tests/ember_restart_model/test_issue2119_pending_continuation_cli.py tests/ember_restart_model/test_issue2119_continuity_sources.py tests/ember_restart_model/test_issue2119_continuity_page.py tests/ember_restart_model/test_issue2119_snapshot_hook.py tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py tests/ember_restart_model/test_issue2119_continuity_page_live.py"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -58,7 +50,14 @@ jobs:
       - name: Guard that all nine wiring test files are present with the exact collected count
         run: |
           set -euo pipefail
-          all="$WIRING_NEW_FILES $WIRING_PAGE_FILES"
+          test -f "$WIRING_MANIFEST" || { echo "the wiring manifest is missing: $WIRING_MANIFEST"; exit 1; }
+          python -B -c 'import json,sys; m=json.load(open(sys.argv[1], encoding="utf-8")); listed=set(m["new_files"]+m["page_files"]); gone=[f for f in sys.argv[2:] if f not in listed]; print("required wiring test files absent from the manifest: "+" ".join(gone)) if gone else None; sys.exit(1 if gone else 0)' "$WIRING_MANIFEST" $WIRING_REQUIRED
+          all="$(python -B -c 'import json,sys; m=json.load(open(sys.argv[1], encoding="utf-8")); assert m["schema"]=="ember-issue2119-wiring-manifest-v1"; print(" ".join(m["new_files"]+m["page_files"]))' "$WIRING_MANIFEST")"
+          expected="$(python -B -c 'import json,sys; m=json.load(open(sys.argv[1], encoding="utf-8")); print(int(m["expected_tests"]))' "$WIRING_MANIFEST")"
+          test -n "$all"
+          test "$expected" -ge 1
+          echo "WIRING_ALL=$all" >> "${GITHUB_ENV:-/dev/null}"
+          echo "WIRING_EXPECTED_TESTS=$expected" >> "${GITHUB_ENV:-/dev/null}"
           absent=""
           for file in $all; do
             if ! test -f "$file"; then absent="$absent $file"; fi
@@ -71,12 +70,12 @@ jobs:
             test "$count" -ge 1
           done
           total="$(grep -Ec '^tests/[^ ]+::' collected.txt || true)"
-          echo "collected total=$total expected=$WIRING_EXPECTED_TESTS"
-          test "$total" -eq "$WIRING_EXPECTED_TESTS"
+          echo "collected total=$total expected=$expected"
+          test "$total" -eq "$expected"
       - name: Run the issue 2119 wiring tests (each test named in the log); no skip, deselect, xfail or error is accepted
         run: |
           set -euo pipefail
-          python -B -m pytest -v -rs -p no:cacheprovider $WIRING_NEW_FILES $WIRING_PAGE_FILES | tee run.txt
+          python -B -m pytest -v -rs -p no:cacheprovider $WIRING_ALL | tee run.txt
           summary="$(grep -E '^=+ .* in [0-9.]+s' run.txt | tail -1)"
           echo "summary: $summary"
           echo "$summary" | grep -Eq "^=+ ${WIRING_EXPECTED_TESTS} passed in [0-9.]+s"
