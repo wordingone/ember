@@ -10,4 +10,9 @@ def test_scores_checkpoint_answers_against_frozen_reasoning_references():
   references.write_text('{"id":"r1","answer":"42"}\n{"id":"r2","answer":"red"}\n');predictions.write_text('{"id":"r1","answer":"42"}\n{"id":"r2","answer":"blue"}\n')
   manifest.write_text(json.dumps({'result':'PREFLIGHT_ONLY','benchmark_id':'local-reasoning','benchmark_version':'1','references_sha256':hashlib.sha256(references.read_bytes()).hexdigest()}))
   r=subprocess.run([sys.executable,str(SCRIPT),'--frozen-reasoning-manifest',str(manifest),'--references',str(references),'--predictions',str(predictions),'--score-output',str(score)],text=True,capture_output=True);assert r.returncode==0,r.stderr
-  payload=json.loads(score.read_text());assert payload['metrics']=={'exact_match':.5} and payload['sample_count']==2 and ((payload.get('evaluation_role') is None and __import__('pytest').skip('evaluation_role absent: scorer adjudication PR (#1947 PR-2) not merged; remove this skip in PR-3')) or (payload['evaluation_role']=='diagnostic' and 'criterion_result' not in payload))
+  payload=json.loads(score.read_text());assert payload['metrics']=={'exact_match':.5} and payload['sample_count']==2 and (('evaluation_role' not in payload and __import__('pytest').skip('evaluation_role absent: scorer adjudication PR (#1947 PR-2) not merged; remove this skip in PR-3')) or (payload['evaluation_role']=='diagnostic' and 'criterion_result' not in payload))
+def test_a_present_null_evaluation_role_is_asserted_not_skipped():
+ # the skip fires only when the key is ABSENT; a present null must reach the assertion and fail it
+ payload={'metrics':{'exact_match':.5},'sample_count':2,'evaluation_role':None}
+ verdict=('evaluation_role' not in payload and __import__('pytest').skip('unreachable: key present')) or (payload['evaluation_role']=='diagnostic' and 'criterion_result' not in payload)
+ assert verdict is False
