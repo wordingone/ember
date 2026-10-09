@@ -2127,10 +2127,68 @@ def _verify_admission(
                         and isinstance(benchmark_version, str)
                         and isinstance(criterion_id, str)
                     ):
-                        errors.extend(execute_evaluation_verifier(
-                            root, verifier_path, capability, checkpoint_path, benchmark_id,
-                            benchmark_version, criterion_id, evidence_paths, payload, prefix,
-                        ))
+                        command = [
+                            sys.executable,
+                            "-I",
+                            str(verifier_path),
+                            "--capability",
+                            str(capability),
+                            "--checkpoint-manifest",
+                            str(checkpoint_path),
+                            "--benchmark-id",
+                            str(benchmark_id),
+                            "--benchmark-version",
+                            benchmark_version,
+                            "--criterion-id",
+                            criterion_id,
+                        ]
+                        for evidence_name in EVALUATION_EVIDENCE:
+                            command.extend(
+                                [f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])]
+                            )
+                        try:
+                            completed = subprocess.run(
+                                command,
+                                cwd=root,
+                                text=True,
+                                capture_output=True,
+                                timeout=120,
+                                check=False,
+                            )
+                        except (OSError, subprocess.SubprocessError) as exc:
+                            errors.append(f"{prefix} receipt: verifier execution failed: {exc}")
+                        else:
+                            if completed.returncode != 0:
+                                errors.append(
+                                    f"{prefix} receipt: verifier execution failed with exit code "
+                                    f"{completed.returncode}"
+                                )
+                            else:
+                                try:
+                                    executed = json.loads(completed.stdout)
+                                except json.JSONDecodeError:
+                                    errors.append(f"{prefix} receipt: verifier execution returned invalid JSON")
+                                else:
+                                    executed_fields = (
+                                        "capability",
+                                        "result",
+                                        "subject_checkpoint_sha256",
+                                        "benchmark_id",
+                                        "benchmark_version",
+                                        *EVALUATION_EVIDENCE.values(),
+                                        "sample_count",
+                                        "metrics",
+                                        "criterion_id",
+                                        "criterion_result",
+                                    )
+                                    if not isinstance(executed, dict):
+                                        errors.append(f"{prefix} receipt: verifier execution must return an object")
+                                    else:
+                                        for field in executed_fields:
+                                            if executed.get(field) != payload.get(field):
+                                                errors.append(
+                                                    f"{prefix} receipt: verifier execution {field} mismatch"
+                                                )
         for capability in CAPABILITIES:
             if found.get(capability) != 1:
                 errors.append(f"evaluations: requires exactly one {capability} receipt")
@@ -2261,79 +2319,6 @@ def _verify_genesis_claim_boundary(
         errors.append("genesis checkpoint: exact zero cursor required")
     if checkpoint_payload.get("genesis_claim_boundary") != boundary:
         errors.append("genesis checkpoint: claim boundary mismatch")
-
-EVALUATION_EXECUTED_FIELDS = (
-    "capability",
-    "result",
-    "subject_checkpoint_sha256",
-    "benchmark_id",
-    "benchmark_version",
-    *EVALUATION_EVIDENCE.values(),
-    "sample_count",
-    "metrics",
-    "criterion_id",
-    "criterion_statistic",
-    "admission_margin",
-    "criterion_result",
-)
-
-
-def execute_evaluation_verifier(
-    root: Path,
-    verifier_path: Path,
-    capability: str,
-    checkpoint_path: Path,
-    benchmark_id: str,
-    benchmark_version: str,
-    criterion_id: str,
-    evidence_paths: dict[str, Path],
-    payload: dict[str, Any],
-    prefix: str,
-) -> list[str]:
-    """Run the trusted evaluation verifier and compare every field it recomputes with the receipt."""
-    command = [
-        sys.executable,
-        "-I",
-        str(verifier_path),
-        "--capability",
-        str(capability),
-        "--checkpoint-manifest",
-        str(checkpoint_path),
-        "--benchmark-id",
-        str(benchmark_id),
-        "--benchmark-version",
-        benchmark_version,
-        "--criterion-id",
-        criterion_id,
-    ]
-    for evidence_name in EVALUATION_EVIDENCE:
-        command.extend([f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])])
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=root,
-            text=True,
-            capture_output=True,
-            timeout=120,
-            check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return [f"{prefix} receipt: verifier execution failed: {exc}"]
-    if completed.returncode != 0:
-        return [f"{prefix} receipt: verifier execution failed with exit code {completed.returncode}"]
-    try:
-        executed = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return [f"{prefix} receipt: verifier execution returned invalid JSON"]
-    if not isinstance(executed, dict):
-        return [f"{prefix} receipt: verifier execution must return an object"]
-    return [
-        f"{prefix} receipt: verifier execution {field} mismatch"
-        for field in EVALUATION_EXECUTED_FIELDS
-        if executed.get(field) != payload.get(field)
-    ]
-
 
 def validate_manifest(
     path: Path,

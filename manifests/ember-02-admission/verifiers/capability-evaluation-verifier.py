@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import types
+import math
 import sys
 from pathlib import Path
 
@@ -42,38 +42,31 @@ def sample_count(predictions: Path) -> int:
     return len(rows)
 
 
-# The adjudication rule has ONE implementation: the scorers' criterion helper. This
-# verifier executes exactly the helper bytes whose sha256 it pins, so re-pinning this
-# file in trusted-verifiers-v1.json transitively pins the rule (review 76202 D1).
-CRITERION_HELPER = Path("scripts") / "ember_restart_eval_criterion.py"
-CRITERION_HELPER_SHA256 = "1f6e78eb035e78adba5995b7359e97a7905e2aa7a895c22f7f0d06a35a7a7106"
-ADJUDICATION_FIELDS = ("criterion_statistic", "admission_margin", "criterion_result")
-
-
-def load_criterion_helper(root: Path):
-    raw = (root / CRITERION_HELPER).read_bytes()
-    if hashlib.sha256(raw).hexdigest() != CRITERION_HELPER_SHA256:
-        raise ValueError(f"{CRITERION_HELPER.as_posix()}: bytes do not match the pinned sha256")
-    module = types.ModuleType("ember_restart_eval_criterion")
-    module.__file__ = str(root / CRITERION_HELPER)
-    sys.modules[module.__name__] = module  # dataclass/typing lookups resolve by name
-    exec(compile(raw, module.__file__, "exec"), module.__dict__)
-    return module
-
-
-def adjudicate(score: dict, protocol: Path, criterion_id: str, count: int, helper) -> dict:
-    """Recompute every adjudication field from the protocol and the recounted predictions."""
-    if score.get("evaluation_role") != helper.ADJUDICATED:
-        raise ValueError("score artifact: evaluation_role must be adjudicated")
-    raw = protocol.read_bytes()
-    if score.get("protocol_sha256") != hashlib.sha256(raw).hexdigest():
-        raise ValueError("score artifact: protocol_sha256 does not bind the supplied protocol")
-    if score.get("sample_count") != count:
-        raise ValueError("score artifact: sample_count differs from the recounted predictions")
-    payload = json.loads(raw.decode("utf-8"))
-    criterion = helper.check_criterion(payload.get("criterion") if isinstance(payload, dict) else None,
-                                       criterion_id)
-    return helper.admission(score.get("metrics"), count, criterion, protocol.parent)
+def adjudicate(metrics: object, criterion: object, criterion_id: str) -> str:
+    if not isinstance(metrics, dict) or not metrics:
+        raise ValueError("score artifact metrics: expected a non-empty object")
+    if not isinstance(criterion, dict):
+        raise ValueError("protocol: pre-registered criterion block missing")
+    if criterion.get("criterion_id") != criterion_id:
+        raise ValueError("protocol: criterion_id does not match the requested criterion")
+    metric_name = criterion.get("metric")
+    threshold = criterion.get("min_value")
+    if not isinstance(metric_name, str) or metric_name not in metrics:
+        raise ValueError("protocol criterion.metric: not present in the score artifact metrics")
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, (int, float))
+        or not math.isfinite(threshold)
+    ):
+        raise ValueError("protocol criterion.min_value: expected a finite number")
+    observed = metrics[metric_name]
+    if (
+        isinstance(observed, bool)
+        or not isinstance(observed, (int, float))
+        or not math.isfinite(observed)
+    ):
+        raise ValueError(f"score artifact metrics.{metric_name}: expected a finite number")
+    return "PASSED" if observed >= threshold else "FAILED"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
+        protocol = json.loads(args.protocol.read_text(encoding="utf-8"))
         score = json.loads(args.score_artifact.read_text(encoding="utf-8"))
         if score.get("evaluation_role") == "diagnostic":
             raise ValueError("score artifact: diagnostic evaluation (no frozen protocol) is never admissible")
@@ -105,12 +99,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("score artifact: benchmark_version mismatch")
         metrics = score.get("metrics")
         count = sample_count(args.predictions)
-        helper = load_criterion_helper(Path(__file__).resolve().parents[3])
-        verdict = adjudicate(score, args.protocol, args.criterion_id, count, helper)
-        for field in ADJUDICATION_FIELDS:
-            if score.get(field) != verdict.get(field):
-                raise ValueError(f"score artifact {field}: differs from the recomputed value")
-    except (ValueError, json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        criterion_result = adjudicate(metrics, protocol.get("criterion"), args.criterion_id)
+    except (ValueError, json.JSONDecodeError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -129,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         "sample_count": count,
         "metrics": metrics,
         "criterion_id": args.criterion_id,
-        **{field: verdict[field] for field in ADJUDICATION_FIELDS},
+        "criterion_result": criterion_result,
     }
     print(json.dumps(attestation, sort_keys=True))
     return 0

@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json
 import subprocess
@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[2] / "scripts" / "ember_restart_eval_terminal_bench.py"
+SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_terminal_bench.py"
 
 
 def test_rejects_harbor_outcome_image_that_does_not_match_frozen_manifest():

@@ -1,10 +1,10 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02A
+# workstream_id: EMBER-02C
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import json, subprocess, sys, tempfile
 from pathlib import Path
 
-SCRIPT=Path(__file__).resolve().parents[2]/"scripts"/"ember_restart_eval_mmmu.py"
+SCRIPT=Path(__file__).resolve().parents[1]/"scripts"/"ember_restart_eval_mmmu.py"
 
 def test_converts_central_json_list_predictions_to_private_upstream_shape():
  with tempfile.TemporaryDirectory() as tmp:
