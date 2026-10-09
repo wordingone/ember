@@ -244,7 +244,9 @@ def finalize_scored_pair(identity: Mapping[str, Any], *, entry_path: Path, custo
             # The head mover re-checks the eligible arm's own score receipt (row 20). This route scores on the plan its frozen entry binds, so that plan is
             # the one declared binding passed through; the cadence plan is not assumed.
             'score_receipt': publication[role]['receipt'], 'score_receipt_sha256': publication[role]['receipt_sha256'],
-            'score_plan_sha256': entry['bindings']['episode_plan_sha256']}
+            'score_plan_sha256': entry['bindings']['episode_plan_sha256'],
+            # The provenance of that plan: the frozen entry and the digest the identity froze for it (load_frozen_binding already proved they agree).
+            'score_plan_binding': {'entry': str(entry_path)}}
     spec['next' if 'next' in promote else 'blocker'] = promote['next' if 'next' in promote else 'blocker']
     out['promotion'] = promote_fn(spec, ruling=ruling)
     return out
