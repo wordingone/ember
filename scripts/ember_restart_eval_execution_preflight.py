@@ -26,6 +26,12 @@ def main():
  if role=='diagnostic':
   if 'criterion_result' in score:p.error('diagnostic evaluator score must not carry a criterion_result')
  elif role!='adjudicated' or score.get('criterion_result') not in ('PASSED','FAILED','UNDETERMINED') or score.get('protocol_sha256')!=protocol:p.error('evaluator score must be diagnostic, or adjudicated against the supplied protocol with an explicit criterion_result')
+ elif score['criterion_result']=='UNDETERMINED':
+  if score.get('admission_margin') is not None or score.get('criterion_statistic') is not None:p.error('UNDETERMINED evaluator score must carry no margin or statistic')
+ else:
+  # The result must follow from the margin it carries (review 76202 D1); the verifier recomputes both.
+  mg,st=score.get('admission_margin'),score.get('criterion_statistic')
+  if any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) for v in (mg,st)) or (mg>=0)!=(score['criterion_result']=='PASSED'):p.error('adjudicated evaluator score must carry a finite margin and statistic consistent with its criterion_result')
  if a.capability=='text' and score.get('predictions_sha256')!=predictions_sha256:p.error('text score source hashes do not bind supplied evidence')
  if a.benchmark_id=='audiobench':
   if a.closed_run_artifact is None:p.error('AudioBench preflight requires closed run artifact')
@@ -34,7 +40,7 @@ def main():
  if not isinstance(count,int) or isinstance(count,bool) or count!=len(rows):p.error('evaluator sample_count must be an exact integer match for canonical rows')
  metrics=score.get('metrics')
  if not isinstance(metrics,dict) or not metrics or any(isinstance(v,bool)or not isinstance(v,(int,float))or not math.isfinite(v)for v in metrics.values()):p.error('score artifact must contain non-empty finite numeric metrics')
- payload={'result':'PREFLIGHT_ONLY','admission':'NOT_ELIGIBLE','capability':a.capability,'subject_checkpoint_sha256':checkpoint,'benchmark_id':a.benchmark_id,'benchmark_version':a.benchmark_version,'split_sha256':split,'harness_sha256':sha256(a.harness_artifact),'protocol_sha256':protocol,'predictions_sha256':predictions_sha256,'score_artifact_sha256':score_artifact_sha256,'sample_count':count,'metrics':metrics,'criterion_id':expected,'evaluation_role':role,'criterion_result':score.get('criterion_result')}
+ payload={'result':'PREFLIGHT_ONLY','admission':'NOT_ELIGIBLE','capability':a.capability,'subject_checkpoint_sha256':checkpoint,'benchmark_id':a.benchmark_id,'benchmark_version':a.benchmark_version,'split_sha256':split,'harness_sha256':sha256(a.harness_artifact),'protocol_sha256':protocol,'predictions_sha256':predictions_sha256,'score_artifact_sha256':score_artifact_sha256,'sample_count':count,'metrics':metrics,'criterion_id':expected,'evaluation_role':role,'criterion_result':score.get('criterion_result'),'criterion_statistic':score.get('criterion_statistic'),'admission_margin':score.get('admission_margin')}
  a.output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.output.parent,delete=False)as h:h.write(json.dumps(payload,sort_keys=True)+'\n');tmp=h.name
  os.replace(tmp,a.output)

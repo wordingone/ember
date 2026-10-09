@@ -3,10 +3,12 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Capability verdict for the local evaluator scorers, from a frozen protocol only.
 
-A scorer never states PASSED or FAILED on its own. With a protocol, the verdict is the
-rule the trusted capability-evaluation verifier applies to the protocol's pre-registered
-`criterion` block, so the score artifact and the verifier's re-adjudication agree by
-construction (tests/test_ember_restart_eval_criterion.py runs both on the same inputs).
+A scorer never states PASSED or FAILED on its own. With a protocol, the verdict comes from
+admission() below. The trusted capability-evaluation verifier loads THIS file (bound by
+the sha256 it pins) and recomputes the same fields from the recounted predictions, and
+contract.py compares every field, so a scorer and the verifier cannot disagree silently;
+tests/test_ember_restart_eval_verifier_agreement.py runs the real verifier and contract
+check on positive, negative-margin, tampered and wrong-population cases.
 Without a protocol the score is DIAGNOSTIC: metrics only, no criterion_result, never
 admissible.
 
@@ -32,7 +34,9 @@ bound and max_value (statistic <= value). Every adjudicated score also carries
 admission_margin = statistic - bar (bar - statistic for max_value) and the statistic itself;
 PASSED iff admission_margin >= 0. A reference or chance artifact is a JSON object
 {"value": <finite number>} whose bytes hash to the pinned sha256. wilson_one_sided applies
-only to a metric that is a fraction of sample_count items in [0, 1].
+only to a metric that is a fraction of sample_count independent items in [0, 1]; a bound
+on a NON_BERNOULLI metric (WER, weighted recall/FPR and their derivations) is UNDETERMINED.
+The criterion key set is closed: any other field (e.g. a legacy min_value) is refused.
 """
 from __future__ import annotations
 
@@ -48,6 +52,13 @@ ADJUDICATED = "adjudicated"
 DIRECTIONS = ("higher_is_better", "lower_is_better")
 METHODS = ("wilson_one_sided",)
 HEX64 = re.compile(r"[0-9a-f]{64}")
+CRITERION_KEYS = ("metric", "direction", "statistic", "comparator", "categories")
+# Metrics that are NOT a fraction of independent Bernoulli items: WER is edits/words over
+# transcripts (and 1-WER can be negative); recall and FPR are weighted over mixtures. A
+# Wilson bound in these units is unsupported, so a bound on them is UNDETERMINED until a
+# pre-declared dependence-aware statistic exists (review 76202 D2).
+NON_BERNOULLI = frozenset({"word_error_rate", "quality_one_minus_wer",
+                           "weighted_recall", "weighted_fpr", "discrimination_j"})
 
 
 def _finite(value: object, where: str) -> float:
@@ -78,9 +89,14 @@ def check_criterion(criterion: object, criterion_id: str) -> dict:
         raise ValueError("protocol: pre-registered criterion block missing")
     if criterion.get("criterion_id") != criterion_id:
         raise ValueError("protocol: criterion_id does not match the requested criterion")
-    for key in ("metric", "direction", "statistic", "comparator", "categories"):
+    for key in CRITERION_KEYS:
         if key not in criterion:
             raise ValueError(f"protocol criterion.{key}: required")
+    # Closed key set: a legacy field such as min_value would let an older reader reach a
+    # different verdict on the same protocol (review 76202 D1).
+    extra = sorted(set(criterion) - {"criterion_id", *CRITERION_KEYS})
+    if extra:
+        raise ValueError(f"protocol criterion: unknown field(s) {extra}")
     categories = criterion["categories"]
     if not isinstance(categories, list):
         raise ValueError("protocol criterion.categories: expected a list (empty when the criterion has none)")
@@ -195,6 +211,11 @@ def admission(metrics: object, sample_count: int, criterion: dict, protocol_dir:
     name = criterion["metric"]
     if name not in metrics:
         return _undetermined(f"score metrics.{name}: absent")
+    bound = criterion["statistic"]["kind"] != "point"
+    unsupported = [m for m in (name, *(c["metric"] for c in criterion["categories"])) if m in NON_BERNOULLI]
+    if bound and unsupported:
+        return _undetermined(f"score metrics.{unsupported[0]}: no dependence-aware confidence statistic "
+                             "is declared for this metric's units; a Wilson bound does not apply")
     observed = _finite(metrics[name], f"score metrics.{name}")
     value = statistic_value(observed, sample_count, criterion["statistic"])
     comparator = criterion["comparator"]
@@ -217,7 +238,10 @@ def admission(metrics: object, sample_count: int, criterion: dict, protocol_dir:
         stat = statistic_value(_finite(metrics[category["metric"]], f"score metrics.{category['metric']}"),
                                int(count), criterion["statistic"])
         reference = _pinned_value(category["reference"], protocol_dir, f"protocol {where}.reference")
-        category_margins[category["name"]] = stat - category["reference_factor"] * reference
+        bar = category["reference_factor"] * reference
+        # Same orientation as the composite: a lower_is_better category passes only at or under its ceiling.
+        category_margins[category["name"]] = (bar - stat if criterion["direction"] == "lower_is_better"
+                                              else stat - bar)
     overall = min([margin, *category_margins.values()])
     out = {"criterion_statistic": value, "composite_margin": margin, "admission_margin": overall,
            "criterion_result": "PASSED" if overall >= 0 else "FAILED"}
