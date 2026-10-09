@@ -1,0 +1,42 @@
+{
+  "schema": "kai.selected_projection_memory_delta_review.v1",
+  "reviewed_local": "2026-10-09 10:52 America/Los_Angeles",
+  "review_scope": "One review of Niko75327 C packet under Leo75330; helpers within same review under Leo75358, owner verified outputs.",
+  "verdict": "REDO_OUTPUT_ROOT_TERMINAL_BUDGET",
+  "handoff_sha256": "297c4ec25849dcafb8ce363f52e30d3c14b6c4aa521c96cb7cf8b06f1ab470fa",
+  "manifest_sha256": "173040d29b2693659dce8df7287e17ae9e616344de8b8589eb22c7d2af250ac8",
+  "all_35_inputs_match": true,
+  "pinned_bytes": 857702,
+  "production_pins": {
+    "source": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+    "runner": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+    "binding": "12f0d33d1849687578f2bed4ca6cb7c4e510b9d38b2987b511460efbfad07793",
+    "command": "b55e0f5bd1547c0092766f98e4a3234a6201302d1e1d8a865c1250feb21b464b"
+  },
+  "finding": {
+    "id": "R1",
+    "priority": 2,
+    "summary": "Terminal receipt write is outside the enforced root byte budget.",
+    "location": "run-command-memory-v1.ps1:255-279, especially unconditional WriteAllText at279; selected_projection_memory_v1.cs:118-122,606-610",
+    "mechanism": "The source permits BaseBytes+WrittenBytes <= 134217728 and then promotes staging. The same root contains run-terminal-memory-v1.json, written afterward by the parent with no root-budget reserve or byte check. A successful or refused stream can leave less free root budget than this nonempty terminal document, so this write can exceed the hard 128MiB root cap. No actual cap overrun is claimed; this is a source-level reachable boundary defect.",
+    "history": "The parent write pattern also exists in the predecessor command; it is not a regression attributed to the memory algorithm. The current scoped run still promises a hard whole-root cap.",
+    "requested_repair": "Make final terminal evidence fit within the same hard root cap, including success, source refusal and staging retention. Reserve a bounded terminal allowance before allowing payload writes and enforce actual encoded terminal length/root budget before writing, or an equivalent explicit bounded design. Keep useful terminal failure evidence without a cap increase, automatic retry, deletion, alternate output destination or weakening input/validation checks.",
+    "validation": "One narrow C-only boundary check of a nearly full output budget must show no cap excess and an explicit terminal outcome, on both completion and refusal paths. Recheck changed budget/terminal code and pins only; do not repeat the accepted scale/lifetime/byte suite unless an actual change affects it. Any new execution retains Leo's applicable authorization, limits and host review."
+  },
+  "accepted_evidence": [
+    "Global membership duplicate/totality checks and all four leakage intersections precede release; Scan body exactly unchanged by native old/new comparison.",
+    "Frozen final scalar counts survive; dead dictionaries and earlier diagnostic delegates are nulled; post-release zero index counts describe references, not GC reclamation.",
+    "Receipt dictionary capacity uses the pass1 receipt-kind row upper bound; duplicate receipt rows and object totality behavior remain preserved.",
+    "Output ordinal order, field schema, default JSON escaping and LF agree with baseline; helper hashed 24 actual small output files for all12 equal artifact pairs in four comparisons with independent baseline d37e880d and candidate ea307831.",
+    "Source uses64KiB serializer/file buffers and rejects any stream write above1MiB; file hashes/lengths, pass hashes/counts and final input/resource predicates precede same-volume promotion.",
+    "Scale130578 selected members,293852 global membership IDs,130103 selected SHAs completed PID46164 exit0, cleanup true, active job0,10:25:18.8723481–10:25:42.4281071AM. Sampled private424632320B; held phase job peak426741760B; scale cumulative229192846B within256MiB.",
+    "Existing duplicate/no-sample binding/private threshold/private observer failure/tokenizer negatives retain their specific rejection evidence. They do not test output-root terminal budgeting."
+  ],
+  "limits": [
+    "Synthetic IDs24 Unicode characters/24–25UTF8 bytes;4096 receipt rows and one receipt link per object. Long strings, extensive escaping and greater receipt fanout/cardinality remain uncovered.",
+    "No production memory fit, accepted real catalog projection, admission, new stock, capability or issue completion follows.",
+    "Original fixture helper refusal and one corrected replay remain frozen. No projection/test run was executed by Kai or these review helpers.",
+    "Original production marker-absence rule remains in the reviewed command; Git publication waits owner window close under Niko75360/Leo75359."
+  ],
+  "next_owner": "Niko repairs R1 within Leo's scope; Kai rechecks R1 only. No production release from this REDO."
+}

@@ -1,0 +1,122 @@
+{
+  "schema": "niko.cap_failure_snapshot.synthetic.v1",
+  "status": "PASS",
+  "observed_utc": "2026-10-09T17:25:11.3988044Z",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\selected_projection_memory_v1.cs",
+  "source_sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+  "test_threshold_bytes": 1,
+  "production_cap_bytes": 536870912,
+  "test_scope": "C-only real Scan row check at64; fixture callback lowers only synthetic binding; separate direct diagnostic cap; no production input/run",
+  "checks": {
+    "row_guard_CAP_PRIVATE": true,
+    "row_failure_snapshot_retained": true,
+    "row_failure_index_counts": true,
+    "row_failure_private_observation_above_cap": true,
+    "direct_cap_snapshot_retained": true,
+    "direct_guard_CAP_PRIVATE": true,
+    "measured_peak_retained": true,
+    "production_source_not_lowered": true
+  },
+  "row_refusal_diagnostics": {
+    "runtime_phase_observations": [],
+    "final_validation_index_counts": null,
+    "unaccepted_staging_root": "",
+    "error_type": "System.Reflection.TargetInvocationException",
+    "reason_code": "System.InvalidOperationException",
+    "stack_trace": "System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.\r\n ---> System.InvalidOperationException: CAP_PRIVATE:metadata_row\r\n   at NikoSelectedProjection.Runner.Check(Binding b, Stopwatch sw, Int64 bytes, String where, Boolean markerCheckpoint)\r\n   at NikoSelectedProjection.Runner.Scan(FileStream fs, Binding b, Stopwatch sw, Int64& total, Boolean hashPass, Boolean rootOrderGate, Action`1 onRow, ScanState s, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   --- End of inner exception stack trace ---\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Run(String input)",
+    "a_input_bytes_read": 0,
+    "private_bytes_peak_observed": 96346112,
+    "private_usage_sample_count": 2,
+    "exception_chain": [
+      {
+        "type": "System.Reflection.TargetInvocationException",
+        "message": "Exception has been thrown by the target of an invocation.",
+        "hresult": -2146232828,
+        "stack_trace": "   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Run(String input)"
+      },
+      {
+        "type": "System.InvalidOperationException",
+        "message": "CAP_PRIVATE:metadata_row",
+        "hresult": -2146233079,
+        "stack_trace": "   at NikoSelectedProjection.Runner.Check(Binding b, Stopwatch sw, Int64 bytes, String where, Boolean markerCheckpoint)\r\n   at NikoSelectedProjection.Runner.Scan(FileStream fs, Binding b, Stopwatch sw, Int64& total, Boolean hashPass, Boolean rootOrderGate, Action`1 onRow, ScanState s, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      }
+    ],
+    "diagnostic_snapshots": [
+      {
+        "checkpoint": "row_failure",
+        "pass_name": "pass1",
+        "pass_rows": 64,
+        "private_usage_bytes": 96346112,
+        "membership_id_set_count": 64,
+        "retained_member_object_count": 8,
+        "selected_membership_id_count": 8,
+        "selected_dataset_membership_link_count": 0,
+        "heldout_hash_index_count": 0,
+        "quarantine_hash_index_count": 0,
+        "adjudicated_hash_index_count": 0,
+        "protected_evaluation_hash_index_count": 0,
+        "seen_version_edge_index_count": 0,
+        "candidate_type_index_count": 0,
+        "selected_sha_index_count": 0,
+        "sha_dataset_index_count": 0,
+        "object_index_count": 0,
+        "object_id_value_count": 0,
+        "receipt_link_index_count": 0,
+        "receipt_link_value_count": 0,
+        "receipt_sha_index_count": 0,
+        "receipt_row_index_count": 0
+      }
+    ]
+  },
+  "direct_refusal_diagnostics": {
+    "runtime_phase_observations": [],
+    "final_validation_index_counts": null,
+    "unaccepted_staging_root": "",
+    "error_type": "System.Reflection.TargetInvocationException",
+    "reason_code": "System.InvalidOperationException",
+    "stack_trace": "System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.\r\n ---> System.InvalidOperationException: CAP_PRIVATE:diagnostic_snapshot:direct_cap\r\n   at NikoSelectedProjection.Runner.CaptureDiagnosticSnapshot(String checkpoint, ScanState state, Int64 maxPrivate, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   --- End of inner exception stack trace ---\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Direct()",
+    "a_input_bytes_read": 0,
+    "private_bytes_peak_observed": 96989184,
+    "private_usage_sample_count": 1,
+    "exception_chain": [
+      {
+        "type": "System.Reflection.TargetInvocationException",
+        "message": "Exception has been thrown by the target of an invocation.",
+        "hresult": -2146232828,
+        "stack_trace": "   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Direct()"
+      },
+      {
+        "type": "System.InvalidOperationException",
+        "message": "CAP_PRIVATE:diagnostic_snapshot:direct_cap",
+        "hresult": -2146233079,
+        "stack_trace": "   at NikoSelectedProjection.Runner.CaptureDiagnosticSnapshot(String checkpoint, ScanState state, Int64 maxPrivate, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+      }
+    ],
+    "diagnostic_snapshots": [
+      {
+        "checkpoint": "direct_cap",
+        "pass_name": "pass1",
+        "pass_rows": 64,
+        "private_usage_bytes": 96989184,
+        "membership_id_set_count": 64,
+        "retained_member_object_count": 8,
+        "selected_membership_id_count": 8,
+        "selected_dataset_membership_link_count": 0,
+        "heldout_hash_index_count": 0,
+        "quarantine_hash_index_count": 0,
+        "adjudicated_hash_index_count": 0,
+        "protected_evaluation_hash_index_count": 0,
+        "seen_version_edge_index_count": 0,
+        "candidate_type_index_count": 0,
+        "selected_sha_index_count": 0,
+        "sha_dataset_index_count": 0,
+        "object_index_count": 0,
+        "object_id_value_count": 0,
+        "receipt_link_index_count": 0,
+        "receipt_link_value_count": 0,
+        "receipt_sha_index_count": 0,
+        "receipt_row_index_count": 0
+      }
+    ]
+  }
+}
