@@ -126,7 +126,13 @@ jobs:
       - name: Verify generated continuity status
         run: python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status
       - name: Run continuity page, snapshot hook and candidate audit regressions
-        run: python -B -m pytest -p no:cacheprovider -v tests/ember_restart_model/test_issue2119_continuity_page.py tests/ember_restart_model/test_issue2119_snapshot_hook.py tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py tests/ember_restart_model/test_issue2119_continuity_page_live.py tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py tests/ember_restart_model/test_issue2119_fresh_session_head_load.py tests/ember_restart_model/test_issue2119_publish_crash_sweep.py tests/ember_restart_model/test_issue2119_pending_continuation_cli.py tests/ember_restart_model/test_issue2119_continuity_sources.py
+        run: |
+          set -euo pipefail
+          WIRING_REQUIRED="tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py tests/ember_restart_model/test_issue2119_fresh_session_head_load.py tests/ember_restart_model/test_issue2119_publish_crash_sweep.py tests/ember_restart_model/test_issue2119_pending_continuation_cli.py tests/ember_restart_model/test_issue2119_continuity_sources.py tests/ember_restart_model/test_issue2119_continuity_page.py tests/ember_restart_model/test_issue2119_snapshot_hook.py tests/ember_restart_model/test_issue2119_lineage_candidate_audit.py tests/ember_restart_model/test_issue2119_continuity_page_live.py"
+          python -B -c 'import json,sys; m=json.load(open(sys.argv[1], encoding="utf-8")); listed=set(m["new_files"]+m["page_files"]); gone=[f for f in sys.argv[2:] if f not in listed]; print("required wiring test files absent from the manifest: "+" ".join(gone)) if gone else None; sys.exit(1 if gone else 0)' tests/ember_restart_model/issue2119_wiring_manifest.json $WIRING_REQUIRED
+          files="$(python -B -c 'import json; m=json.load(open("tests/ember_restart_model/issue2119_wiring_manifest.json", encoding="utf-8")); print(" ".join(m["new_files"]+m["page_files"]))')"
+          test -n "$files"
+          python -B -m pytest -p no:cacheprovider -v $files
       - name: Verify canonical documentation information system
         run: |
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py tests/domain-governance/test_readme_where_things_are.py
