@@ -190,6 +190,21 @@ class CadenceTests(GateFixture):
         cadence = self.receipt()['cadence']
         self.assertEqual((cadence['requested'], cadence['problems'], cadence['score_receipt_sha256']), (True, [], digest))
 
+    def test_a_pass_prints_an_explicit_cadence_verdict_and_a_refusal_never_does_DELIBERATE_RED(self):
+        """Row 20: the pass is visible on its own line and in the receipt; it is not inferred from the exit code of whatever status follows it."""
+        path, digest = self.score()
+        code, out = self.advance(path, digest)
+        self.assertEqual(code, gate.EXIT_NO_PROMOTION_PATH)
+        passed = [json.loads(line) for line in out.splitlines() if line.startswith('{"') and json.loads(line).get('status') == 'CADENCE_PASSED']
+        self.assertEqual(len(passed), 1, out)
+        self.assertEqual((passed[0]['advance_child'], passed[0]['score_receipt_sha256'], passed[0]['plan_sha256'], passed[0]['declaration_sha256_enforced']),
+                         (self.CHILD, digest, gate.CADENCE_PLAN_SHA256, gate.CADENCE_DECLARATION_SHA256))
+        self.assertEqual(self.receipt()['cadence']['verdict'], 'PASS')
+        code, out = self.advance(None, None)
+        self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)
+        self.assertNotIn('CADENCE_PASSED', out)
+        self.assertEqual(self.receipt()['cadence']['verdict'], 'REFUSED')
+
     def test_a_missing_receipt_refuses_the_advance_DELIBERATE_RED(self):
         code, out = self.advance(None, None)
         self.assertEqual(code, gate.EXIT_CADENCE_REFUSED)

@@ -144,7 +144,13 @@ def main(argv=None, *, cli_main=None) -> int:
     if args.advance_child is not None:
         problems = cadence_problems(args.advance_child, args.score_receipt, args.score_receipt_sha256, args.cadence_declaration)
         cadence = {'requested': True, 'advance_child': args.advance_child, 'score_receipt': str(args.score_receipt) if args.score_receipt else None,
-                   'score_receipt_sha256': args.score_receipt_sha256, 'problems': problems}
+                   'score_receipt_sha256': args.score_receipt_sha256, 'problems': problems, 'verdict': 'REFUSED' if problems else 'PASS',
+                   'declaration_sha256_enforced': CADENCE_DECLARATION_SHA256, 'declaration_bytes_checked': args.cadence_declaration is not None}
+        if not problems:
+            # An explicit verdict line, so a pass is visible in the output and not inferred from whichever status follows it (row 20).
+            print(json.dumps({'status': 'CADENCE_PASSED', 'advance_child': args.advance_child, 'score_receipt_sha256': args.score_receipt_sha256,
+                              'plan_sha256': CADENCE_PLAN_SHA256, 'declaration_sha256_enforced': CADENCE_DECLARATION_SHA256,
+                              'declaration_bytes_checked': args.cadence_declaration is not None}, sort_keys=True))
         if problems:
             _write_receipt(args.custody, {'status': 'CADENCE_REFUSED', 'cadence': cadence,
                                           'reason': 'the declared cadence (a8ffe5a5) requires a scorer-v12 receipt for this child before any head advance; the head stays where it is'})
