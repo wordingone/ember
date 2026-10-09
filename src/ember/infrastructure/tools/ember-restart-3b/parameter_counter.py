@@ -1696,10 +1696,65 @@ def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_byte
 _cia_parent_snapshot = _cia_operation_snapshot(_cia_parent_snapshot_reopened, _SELF_SOURCE_SHA256)
 
 
-def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None):
-    """Derive one mechanical transition from reopened parent state and child bytes."""
-    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','optimizer_identity','placement'):
+CIA_LR_TRANSITION_KIND = 'ember-cia-lr-only-after-restore-v1'
+
+
+def _cia_lr_transition_shape(transition):
+    """Closed shape of the one recorded optimizer transition: a learning-rate-only change after a parent restore."""
+    if (type(transition) is not dict
+            or set(transition) != {'kind', 'from_lr', 'to_lr', 'parent_manifest_sha256', 'transition_step'}
+            or transition['kind'] != CIA_LR_TRANSITION_KIND
+            or any(type(transition[name]) is not float or not 0.0 < transition[name] < 1.0 for name in ('from_lr', 'to_lr'))
+            or transition['from_lr'] == transition['to_lr']
+            or type(transition['parent_manifest_sha256']) is not str
+            or len(transition['parent_manifest_sha256']) != 64
+            or any(c not in '0123456789abcdef' for c in transition['parent_manifest_sha256'])
+            or type(transition['transition_step']) is not int or transition['transition_step'] < 0):
+        raise ValueError('CIA optimizer transition is not the closed learning-rate-only record')
+    return transition
+
+
+def _cia_optimizer_identity_at_lr(identity, lr):
+    """The identity with every learning-rate field replaced; refuses an identity that carries any other lr-like state."""
+    import copy
+    moved = copy.deepcopy(identity)
+    slots = [moved['defaults']] + [group['hyperparameters'] for group in moved['param_groups']]
+    for slot in slots:
+        if 'initial_lr' in slot or type(slot.get('lr')) is not float:
+            raise ValueError('CIA optimizer learning rate is not a single plain float per group')
+        slot['lr'] = lr
+    return moved
+
+
+def _cia_optimizer_lrs(identity):
+    return {identity['defaults']['lr']} | {group['hyperparameters']['lr'] for group in identity['param_groups']}
+
+
+def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None,
+                              optimizer_transition=None):
+    """Derive one mechanical transition from reopened parent state and child bytes.
+
+    The optimizer identity must be equal across the transition, except that a recorded learning-rate-only transition
+    (the child lineage's own record, like owner_update_counts) admits a child whose every learning-rate field is the
+    declared to_lr while the parent's every field is the declared from_lr and nothing else in the identity differs."""
+    recorded_transition = optimizer_transition
+    if recorded_transition is None:
+        recorded_transition = child.get('lineage', {}).get('optimizer_transition')
+    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','placement'):
         if child.get(name) != parent.get(name): raise ValueError('CIA parent and child '+name+' differ')
+    if recorded_transition is None:
+        if child.get('optimizer_identity') != parent.get('optimizer_identity'):
+            raise ValueError('CIA parent and child optimizer_identity differ')
+    else:
+        _cia_lr_transition_shape(recorded_transition)
+        if (recorded_transition['parent_manifest_sha256'] != parent['checkpoint_manifest_sha256']
+                or recorded_transition['transition_step'] != parent['data_cursor']['global_step']):
+            raise ValueError('CIA optimizer transition names another parent manifest or step than the reopened parent')
+        if (_cia_optimizer_lrs(parent['optimizer_identity']) != {recorded_transition['from_lr']}
+                or _cia_optimizer_lrs(child['optimizer_identity']) != {recorded_transition['to_lr']}
+                or child['optimizer_identity'] != _cia_optimizer_identity_at_lr(
+                    parent['optimizer_identity'], recorded_transition['to_lr'])):
+            raise ValueError('CIA optimizer transition differs from the parent and child optimizer identities')
     old, new = parent['data_cursor'], child['data_cursor']
     if any(type(cursor.get(name)) is not int or cursor[name] < 0
            for cursor in (old,new) for name in ('global_step','tokens_seen')):
@@ -1742,7 +1797,9 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
                 or recorded_counts != owner_update_counts):
             raise ValueError('recorded per-owner update counts differ from reopened optimizer clocks')
     return {**({'owner_update_counts': owner_update_counts} if sparse else {}),
-        'schema_version':'ember-cia-first-descendant-v2' if sparse else 'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
+        **({'optimizer_transition': dict(recorded_transition)} if recorded_transition is not None else {}),
+        'schema_version':('ember-cia-first-descendant-v3' if recorded_transition is not None else
+                          'ember-cia-first-descendant-v2' if sparse else 'ember-cia-first-descendant-v1'),'parent_checkpoint':str(parent_root),
         'parent_manifest_sha256':parent['checkpoint_manifest_sha256'],
         'parent_counter_receipt_sha256':parent['_parent_counter_receipt_sha256'],
         'step_delta':step_delta,'token_delta':token_delta,'updated_parameters':updated,

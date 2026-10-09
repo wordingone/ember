@@ -917,6 +917,40 @@ def expected_optimizer(identity):
     return expected
 
 
+def check_fixed_optimizer(identity):
+    """The constructed optimizer is always the one fixed definition. A learning-rate change is never made by editing
+    identity['optimizer'] (the loader would refuse the parent's optimizer identity); it is the declared
+    optimizer_transition, applied after the parent restore."""
+    optimizer_transition(identity)
+    if canonical(identity['optimizer']) != canonical(expected_optimizer(identity)):
+        raise ValueError('fixed optimizer definition differs')
+
+
+LR_TRANSITION_KIND = 'ember-cia-lr-only-after-restore-v1'
+LR_TRANSITION_TARGETS = (0.0001,)
+
+
+def optimizer_transition(identity):
+    """The one admitted optimizer change after a chained restore: learning rate only, from the fixed 1e-3 to a pinned target.
+    The optimizer is still CONSTRUCTED from the fixed definition (so the loader's identity check against the parent
+    holds); the change is applied after the parent restore and before graph capture, and is recorded in the child
+    manifest lineage. Returns None when the identity carries no transition."""
+    if 'optimizer_transition' not in identity:
+        return None
+    if 'parent_checkpoint' not in identity:
+        raise ValueError('an optimizer transition is the pinned learning-rate-only change of a chained hour')
+    return check_lr_transition_declaration(identity['optimizer_transition'], expected_optimizer(identity)['lr'])
+
+
+def check_lr_transition_declaration(value, constructed_lr):
+    if (type(value) is not dict
+            or set(value) != {'kind', 'from_lr', 'to_lr'} or value['kind'] != LR_TRANSITION_KIND
+            or type(value['from_lr']) is not float or type(value['to_lr']) is not float
+            or value['from_lr'] != constructed_lr or value['to_lr'] not in LR_TRANSITION_TARGETS):
+        raise ValueError('an optimizer transition is the pinned learning-rate-only change of a chained hour')
+    return value
+
+
 def optimizer_kwargs(definition):
     """Constructor arguments from a validated definition. The fused flag is forwarded exactly when declared, so the
     executed optimizer is the one the identity names; an identity-only admission would measure ordinary AdamW."""
@@ -1133,8 +1167,11 @@ def verify_tail_mode(identity):
     if 'verify_tail' not in identity:
         return False
     value = identity['verify_tail']
-    if not isinstance(value, dict) or set(value) != VERIFY_TAIL_KEYS:
-        raise ValueError('verify_tail binds exactly the lost custody, its run id, the witness digest and the child manifest digest')
+    if not isinstance(value, dict) or set(value) not in (VERIFY_TAIL_KEYS, VERIFY_TAIL_KEYS | {'optimizer_transition'}):
+        raise ValueError('verify_tail binds exactly the lost custody, its run id, the witness digest and the child manifest digest '
+                         '(and, for a lost hour that changed the learning rate, the declared optimizer_transition of that hour)')
+    if 'optimizer_transition' in value:
+        check_lr_transition_declaration(value['optimizer_transition'], expected_optimizer(identity)['lr'])
     if (not isinstance(identity.get('hour'), dict) or identity['hour'].get('schema') != 'governed-hour-v1'
             or any(key in identity for key in ('continuation', 'checkpoint_probe', 'parent_checkpoint', 'trajectory', 'measurement'))):
         raise ValueError('verify_tail requires the completed governed hour and no continuation, probe, parent or trajectory')
@@ -1283,11 +1320,12 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources', 'training_job_purpose'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker', 'verify_tail'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'optimizer_transition', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker', 'verify_tail'}:
         raise ValueError('measurement identity fields differ')
     if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
             or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
         raise ValueError('a chained parent checkpoint binds a governed hour by root and manifest digest')
+    optimizer_transition(identity)
     execution_mode(identity)
     trajectory, hour, measurement = trajectory_mode(identity), hour_mode(identity), measurement_mode(identity)
     tail = verify_tail_mode(identity)
@@ -1357,8 +1395,7 @@ def prepare_execution(prediction):
             or any(type(value) is not int or not 0 <= value < 25 for value in experts)
             or experts != sorted(set(experts))):
         raise ValueError('measurement expert support is outside its fixed bound')
-    if canonical(identity['optimizer']) != canonical(expected_optimizer(identity)):
-        raise ValueError('fixed optimizer definition differs')
+    check_fixed_optimizer(identity)
     prepared = (load_hour_module().prepare_inputs(sys.modules[__name__], identity['data'], identity['geometry'],
                     image_start=load_hour_module().chained_image_start(sys.modules[__name__], identity))
                 if hour else prepare_measurement_inputs(identity['data'], identity['geometry'])
