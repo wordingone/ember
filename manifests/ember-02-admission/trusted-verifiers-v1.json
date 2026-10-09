@@ -3,7 +3,7 @@
   "verifiers": [
     {
       "path": "verifiers/parameter-realization-verifier.py",
-      "sha256": "f490f807a901c30d90e7e7b67b271c7e7fc7bca8088267aacd7197500dec5e59",
+      "sha256": "62da3135b1fa07ff236d119570daa1a3bf66bcb7748be6b68e2d3dfd0a2633cc",
       "evidence_classes": [
         "parameter_realization"
       ],
@@ -11,7 +11,7 @@
     },
     {
       "path": "verifiers/tokenizer-freeze-verifier.py",
-      "sha256": "924decebfd2d97f873f21eca583f29d50868cd49a89f39cc025ef5a90d442afe",
+      "sha256": "3e1044bac31a8fb497323d4d64589fbd9071abac6b98eee15344b2d80e9780db",
       "evidence_classes": [
         "tokenizer_freeze"
       ],
@@ -19,7 +19,7 @@
     },
     {
       "path": "verifiers/training-data-verifier.py",
-      "sha256": "0354fbd33ccb2a85b169fd0363ef922787d50935959f95469979ae868de1c978",
+      "sha256": "82f70831aa204b8e265e15eb3bd9eff72e2fea5365a6fe42611ad892610dbb40",
       "evidence_classes": [
         "training_data"
       ],
@@ -27,7 +27,7 @@
     },
     {
       "path": "verifiers/sufficient-pretraining-verifier.py",
-      "sha256": "7874023f1e7c0327a55f70cc3a4993fa352d555624759904bc540a8da3b27065",
+      "sha256": "1d6884b2d8ad52b31891320899e874ca1eb21cfe7e14e468572dc4b5f93b830f",
       "evidence_classes": [
         "sufficient_pretraining"
       ],
@@ -37,7 +37,7 @@
     },
     {
       "path": "verifiers/capability-evaluation-verifier.py",
-      "sha256": "d5f58e7b16669f99af8b693f46a9289e79b89f1f5c9d77467b61d881c150c038",
+      "sha256": "54b8c4f70420ada8aa7fe855a92d708a0e746f12fb3027c708cd3fc301d3e3be",
       "evidence_classes": [
         "evaluation"
       ],

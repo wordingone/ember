@@ -2098,6 +2098,8 @@ def _verify_admission(
                 criterion_id = CAPABILITY_CRITERIA.get(capability)
                 if payload.get("criterion_id") != criterion_id:
                     errors.append(f"{prefix} receipt: capability criterion mismatch")
+                if payload.get("evaluation_role") == "diagnostic":
+                    errors.append(f"{prefix} receipt: diagnostic evaluation (no frozen protocol) is never admissible")
                 if payload.get("criterion_result") != "PASSED":
                     errors.append(f"{prefix} receipt: capability criterion must be PASSED")
                 verifier = trusted_verifiers.get(payload.get("verifier_sha256"))

@@ -862,6 +862,24 @@ def test_admission_rejects_failed_capability_criterion(tmp_path: Path):
     )
 
 
+def test_admission_rejects_diagnostic_capability_receipt(tmp_path: Path):
+    test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
+    manifest_path = tmp_path / "run.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    evaluation = manifest["evaluations"][0]
+    receipt_path = tmp_path / evaluation["receipt_path"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["evaluation_role"] = "diagnostic"
+    evaluation["sha256"] = _write_json(receipt_path, receipt)
+    _write_json(manifest_path, manifest)
+    result = _rerun_admission(tmp_path)
+    assert result.returncode == 1
+    assert any(
+        "diagnostic evaluation (no frozen protocol) is never admissible" in error
+        for error in json.loads(result.stdout)["errors"]
+    )
+
+
 def test_admission_rejects_tampered_score_artifact(tmp_path: Path):
     test_owned_admission_binds_sufficient_pretraining_evals_and_cli(tmp_path)
     manifest = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
