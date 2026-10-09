@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-CONTRACT = REPO_ROOT / "scripts" / "ember_restart" / "contract.py"
+CONTRACT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "contract.py"
 REGISTRY = REPO_ROOT / "manifests" / "ember-02-admission" / "trusted-verifiers-v1.json"
 
 CONSUMED_EVIDENCE_CLASSES = {

@@ -91,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         protocol = json.loads(args.protocol.read_text(encoding="utf-8"))
         score = json.loads(args.score_artifact.read_text(encoding="utf-8"))
+        if score.get("evaluation_role") == "diagnostic":
+            raise ValueError("score artifact: diagnostic evaluation (no frozen protocol) is never admissible")
         if score.get("benchmark_id") != args.benchmark_id:
             raise ValueError("score artifact: benchmark_id mismatch")
         if score.get("benchmark_version") != args.benchmark_version:
