@@ -6,8 +6,9 @@
 import argparse,hashlib,json,math,os,sys,tempfile
 from pathlib import Path
 
-sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0,str(Path(__file__).resolve().parent.parent/"src"/"ember"/"governance"/"scripts"))
 from ember_restart.prediction_contract import ContractError,load_predictions
+from ember_restart_eval_criterion import verdict_fields
 
 def _canonical(value):
  return json.dumps(value,sort_keys=True,separators=(',',':'))
@@ -48,7 +49,7 @@ def _closed_run(run):
  return rows,metrics
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--canonical-predictions',required=True,type=Path);p.add_argument('--run-artifact',required=True,type=Path);p.add_argument('--score-output',required=True,type=Path);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--canonical-predictions',required=True,type=Path);p.add_argument('--run-artifact',required=True,type=Path);p.add_argument('--score-output',required=True,type=Path);p.add_argument('--protocol',type=Path);a=p.parse_args()
  if a.score_output.exists():p.error('score output must not pre-exist')
  try:
   envelope=load_predictions(a.canonical_predictions);run=json.loads(a.run_artifact.read_text());rows,metrics=_closed_run(run)
@@ -60,7 +61,8 @@ def main():
   output=row['output'];runrow=by_id[row['id']]
   if output.get('kind')!='transcript' or hashlib.sha256(output['text'].encode()).hexdigest()!=runrow['transcript_sha256']:
    p.error('canonical transcript does not bind closed mixture evidence')
- payload={'criterion_id':'ember-3b-audio-capability-v1','criterion_result':'FAILED','metrics':metrics,'sample_count':len(rows),'predictions_sha256':hashlib.sha256(a.canonical_predictions.read_bytes()).hexdigest(),'run_artifact_sha256':hashlib.sha256(a.run_artifact.read_bytes()).hexdigest(),'upstream':'closed AudioBench rows bound to canonical predictions'}
+ payload={'criterion_id':'ember-3b-audio-capability-v1','metrics':metrics,'sample_count':len(rows),'predictions_sha256':hashlib.sha256(a.canonical_predictions.read_bytes()).hexdigest(),'run_artifact_sha256':hashlib.sha256(a.run_artifact.read_bytes()).hexdigest(),'upstream':'closed AudioBench rows bound to canonical predictions'}
+ payload.update(verdict_fields(a.protocol, payload['criterion_id'], payload['metrics'], payload['sample_count']))
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile('w',encoding='utf-8',dir=a.score_output.parent,delete=False)as handle:
   handle.write(_canonical(payload)+'\n');temporary=handle.name

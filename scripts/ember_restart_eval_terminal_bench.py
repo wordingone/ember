@@ -10,6 +10,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from ember_restart_eval_criterion import verdict_fields
 
 
 HASH = re.compile(r"[0-9a-f]{64}")
@@ -38,6 +39,7 @@ def main() -> int:
     parser.add_argument("--frozen-task-manifest", required=True, type=Path)
     parser.add_argument("--harbor-task-results", required=True, type=Path)
     parser.add_argument("--score-output", required=True, type=Path)
+    parser.add_argument("--protocol", type=Path)
     arguments = parser.parse_args()
     try:
         frozen = _load(arguments.frozen_task_manifest, "frozen task manifest")
@@ -63,7 +65,9 @@ def main() -> int:
             passed += item["status"] == "passed"
         if observed != [task["task_id"] for task in tasks]:
             raise ValueError("Harbor results must preserve exact frozen task order")
-        _atomic(arguments.score_output, {"metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "criterion_result": "FAILED", "frozen_task_manifest_sha256": hashlib.sha256(arguments.frozen_task_manifest.read_bytes()).hexdigest(), "upstream": "digest-bound local Harbor task-outcome records"})
+        payload = {"metrics": {"task_success_rate": passed / len(tasks)}, "sample_count": len(tasks), "criterion_id": "ember-3b-tool-capability-v1", "frozen_task_manifest_sha256": hashlib.sha256(arguments.frozen_task_manifest.read_bytes()).hexdigest(), "upstream": "digest-bound local Harbor task-outcome records"}
+        payload.update(verdict_fields(arguments.protocol, payload["criterion_id"], payload["metrics"], payload["sample_count"]))
+        _atomic(arguments.score_output, payload)
     except ValueError as error:
         parser.error(str(error))
     return 0

@@ -5,6 +5,7 @@
 """Run cached MMMU's local exact scorer; never emits a central receipt."""
 import argparse, ast, json, subprocess, sys, tempfile, os
 from pathlib import Path
+from ember_restart_eval_criterion import verdict_fields
 
 def upstream_predictions(path: Path) -> dict[str,object]:
  value=json.loads(path.read_text(encoding="utf-8"))
@@ -17,7 +18,7 @@ def upstream_predictions(path: Path) -> dict[str,object]:
  return converted
 
 def main()->int:
- p=argparse.ArgumentParser();p.add_argument("--mmmu-root",required=True,type=Path);p.add_argument("--answers",required=True,type=Path);p.add_argument("--predictions",required=True,type=Path);p.add_argument("--score-output",required=True,type=Path);p.add_argument("--timeout-seconds",type=int,default=120);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument("--mmmu-root",required=True,type=Path);p.add_argument("--answers",required=True,type=Path);p.add_argument("--predictions",required=True,type=Path);p.add_argument("--score-output",required=True,type=Path);p.add_argument('--protocol',type=Path);p.add_argument("--timeout-seconds",type=int,default=120);a=p.parse_args()
  if a.score_output.exists():p.error("score output must not pre-exist")
  if not 1<=a.timeout_seconds<=120:p.error("timeout seconds must be between 1 and 120")
  try: answers=json.loads(a.answers.read_text(encoding="utf-8"));converted=upstream_predictions(a.predictions)
@@ -34,7 +35,8 @@ def main()->int:
  try: aggregate=ast.literal_eval(run.stdout.strip().splitlines()[-1]);overall=aggregate["Overall"];num=int(overall["num"]);accuracy=float(overall["acc"])
  except (ValueError,SyntaxError,KeyError,IndexError,TypeError):p.error("MMMU scorer returned an invalid aggregate")
  if num<=0 or num!=len(converted):p.error("MMMU scorer did not cover the frozen prediction set")
- payload={"metrics":{"accuracy":accuracy},"sample_count":num,"criterion_id":"ember-3b-image-capability-v1","criterion_result":"FAILED","upstream":"MMMU exact multiple-choice local scorer"}
+ payload={"metrics":{"accuracy":accuracy},"sample_count":num,"criterion_id":"ember-3b-image-capability-v1","upstream":"MMMU exact multiple-choice local scorer"}
+ payload.update(verdict_fields(a.protocol, payload['criterion_id'], payload['metrics'], payload['sample_count']))
  a.score_output.parent.mkdir(parents=True,exist_ok=True)
  with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=a.score_output.parent,prefix=a.score_output.name+".",suffix=".tmp",delete=False) as h:h.write(json.dumps(payload,sort_keys=True)+"\n");temp=Path(h.name)
  os.replace(temp,a.score_output);return 0
