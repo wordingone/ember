@@ -1,0 +1,149 @@
+{
+  "schema": "niko.selected_catalog_projection.binding.v2",
+  "status": "PREPARED_NOT_EXECUTED",
+  "prediction_path": "A:\\handoff-1581\\head-hour-20261009\\prediction.json",
+  "prediction_bytes": 17617,
+  "prediction_sha256": "386aea69b20ae9c162e284775d96a70b2a7a65d02a048453f8cb15a78480435c",
+  "export_path": "A:\\ember-staging\\h25-union-admission-20261005c\\export.json",
+  "expected_export_sha256_from": "prediction.identity.production_mixture.catalog_export_sha256",
+  "owner_reported_export_bytes": 724333331,
+  "max_export_bytes": 805306368,
+  "max_total_bytes_read": 2415919104,
+  "max_metadata_passes": 2,
+  "max_wall_seconds": 900,
+  "max_private_bytes": 536870912,
+  "max_output_bytes": 67108864,
+  "min_C_free_bytes": 161061273600,
+  "marker_path": "B:\\M\\avir\\leo\\state\\gpu-window-open",
+  "tenant_declaration_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\TENANT_DECLARATION_DISABLED_MARKER_MUST_BE_ABSENT.md",
+  "tenant_declaration_key": "niko_1581_marker_up_rejected",
+  "tenant_command_sha_key": "niko_1581_marker_up_rejected_command_sha256",
+  "max_tenant_declaration_bytes": 65536,
+  "marker_policy": "For this successor, the production preflight requires the GPU-window marker absent. No tenant override is configured. Any marker present at a later checkpoint fails closed; the declaration path is intentionally nonexistent and is not read while the marker is absent.",
+  "marker_checkpoints": [
+    "preflight",
+    "before_prediction",
+    "after_prediction_hash",
+    "before_export_pass",
+    "after each 1 MiB export read",
+    "after_hash",
+    "after_root_order_check",
+    "after_pass1",
+    "after_pass2",
+    "before_output",
+    "each output_write",
+    "before_receipt"
+  ],
+  "command_sha256_binding": "Self-hash the exact command file at launch and pass it to the child; it is intentionally not stored in this binding because the command pins this binding SHA.",
+  "priority": "BelowNormal",
+  "compute_parallelism": 1,
+  "python": false,
+  "gpu": false,
+  "network": false,
+  "A_or_B_writes": false,
+  "retries": 0,
+  "parser_max_depth": 64,
+  "direct_metadata_scalar_limit_bytes": 4096,
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705_v2.cs",
+  "source_sha256": "90fea10d7a01057d86655a19f7b59d9b560c7aadb92848ca78ff1aad2ddce1de",
+  "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run_selected_projection_preselected_leo74705.ps1",
+  "runner_sha256": "34a19f9c0012c788147b08003726c5a5bd4073b686306a6a2a8d192bbd7ccd78",
+  "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-command-preselected-leo74705-v2.ps1",
+  "output_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z",
+  "output_files": [
+    "selected_projection_preselected_leo74705_v2.cs",
+    "run_selected_projection_preselected_leo74705.ps1",
+    "binding-preselected-leo74705-v2.json",
+    "run-command-preselected-leo74705-v2.ps1",
+    "validate-preselection-v2.ps1",
+    "validate-cap-snapshot.ps1",
+    "validate-refusal-peak.ps1",
+    "synthetic-preselection-red/preselection-red.json",
+    "synthetic-preselection-green-v2/preselection-validation.json",
+    "cap-snapshot-red-v2.json",
+    "cap-snapshot-green.json",
+    "retention-binding-validation.json",
+    "run/selected-memberships.jsonl",
+    "run/selected-objects.jsonl",
+    "run/summary.json",
+    "run/run-receipt.json",
+    "run-refusal.json"
+  ],
+  "gate": "Existing hash pass verifies exact export digest, captures root keys/arrays and selected membership IDs from version_membership edges before metadata. Only records and edges top-level arrays are accepted; an extra array refuses before pass1. Both root orders supported.",
+  "count_units": "Logical source records and edges are counted once. Per-pass observations are reported separately and must not be added to logical rows. Per-kind counts include selected_rows, excluded_rows and nonselected_rows; excluded and nonselected are the same unmatched subset and overlap exactly, so do not sum all three. evaluation_object edges are nonselected from the projection but remain global leakage context. Membership row occurrences and unique membership IDs, and selected object rows and unique object digests, are separate measures.",
+  "selected_record_predicates": {
+    "dataset_version": "id in the eight frozen dataset IDs",
+    "membership": "id reached from selected dataset version_membership edges",
+    "immutable_object": "sha256 in the selected membership digest set",
+    "receipt": "sha256 referenced by a selected object_receipt edge"
+  },
+  "selected_edge_predicates": {
+    "version_membership": "from_id in the eight frozen dataset IDs",
+    "object_receipt": "from object digest in the selected digest set",
+    "other_edge_kinds": "nonselected from the selected projection; global leakage context remains counted separately"
+  },
+  "metadata_order_strategy": "Existing hash traversal preselects selected membership IDs from direct edge fields without materializing record rows. Pass1 keeps every membership ID in an ID-only duplicate set, creates full Member values only for preselected IDs throughout pass1, and updates leakage indexes from every row. Pass2 resolves selected objects/receipt links/receipts. Same two metadata passes; no extra export traversal.",
+  "same_open_handle": "FileShare.Read handle held and rewound across three export passes",
+  "stream_buffer_initial_bytes": 1048576,
+  "stream_buffer_max_bytes": 536870912,
+  "launch_guard": "The production command has a fixed 536870912-byte literal and no cap override path. One Job Object sets both ProcessMemoryLimit and JobMemoryLimit to 536870912 bytes (512 MiB), kill-on-close; runner guard binding is also 536870912 bytes, BelowNormal priority, one compute thread, 900 seconds.",
+  "output_cap_measurement": "Count every file recursively under output_root at preflight, then planned files and receipt bytes; max_output_bytes applies to all files under the root, including retained historical pins.",
+  "output_cap_includes": [
+    "every file recursively under output_root, including retained synthetic validation receipts",
+    "all source, runner, binding, command and validation script pins in this C-only task root",
+    "all production run outputs and run-refusal.json"
+  ],
+  "negative_fixtures": [
+    {
+      "id": "D1_runner_crlf_literal",
+      "input": "runner path literal contains embedded CRLF",
+      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
+    },
+    {
+      "id": "D1_binding_digest_crlf_literal",
+      "input": "binding digest literal contains embedded CRLF",
+      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
+    },
+    {
+      "id": "D2_job_assign_refused",
+      "input": "Job Object cannot be assigned to the gated child",
+      "expected": "gate remains closed; terminate by retained handle; bounded wait and cleanup status"
+    },
+    {
+      "id": "D3_records_edges_extra",
+      "input": "top-level arrays records, edges, extra",
+      "expected": "ROOT_ARRAY_UNKNOWN before metadata pass1"
+    },
+    {
+      "id": "marker_up_command_sha_missing",
+      "input": "marker present and declaration has no command SHA field",
+      "expected": "GPU_TENANT_DECLARATION_MISSING before input read"
+    },
+    {
+      "id": "marker_up_command_sha_mismatch",
+      "input": "marker present and declaration command SHA differs",
+      "expected": "GPU_TENANT_COMMAND_SHA_MISMATCH before input read"
+    },
+    {
+      "id": "marker_up_command_sha_match",
+      "input": "marker present and declaration runner, binding and command SHA all match",
+      "expected": "tenant check accepted; continue only under all other caps"
+    }
+  ],
+  "source_review": "Leo74482/74612/74705 approve hash preselection, selected-only full Member values through pass1, all-row duplicate/leakage checks and diagnostics. Kai74753 identified missing cap-failure snapshot; successor preserves triggering PrivateUsage and scalar index counts before refusing. One Kai review of these successor bytes is pending.",
+  "owner_ack": "Prior one-shot production invocation is terminal and consumed. Any additional real-data invocation remains conditional on Kai PASS, a fresh immediate preflight, and Leo one-run release. No retry.",
+  "conditional_runtime": "Exactly one production invocation after immediate fresh preflight: marker absent, C free at least 150 GiB, prediction size and SHA match, export metadata length matches without reading export content, output root under 64 MiB, binding/source/runner/command pins match, process and job caps each 536870912 bytes, runner private guard 536870912 bytes, 900 seconds, BelowNormal, one compute thread. No retry after any invocation refusal.",
+  "prediction_schema_change": "Read identity.input_binding.tokenizer_sha256; read identity.data.tokenizer_sha256 and refuse if they differ, naming both full paths; missing required property errors name the exact full JSON path. Prediction input is unchanged. Projection predicates, caps, resource guards, and marker semantics are unchanged.",
+  "validation_plan": "C-only rejected-source red reproduces11/12 full Members, final small/stress both-order fixtures enforce eight full Members through pass1 against11/8203 all-ID populations, distinct frozen baseline outputs/counts equal, duplicate outside slice refuses, measured/unknown refusal peak checks. Separate cap red/green uses real Scan row64 and direct snapshot with synthetic binding threshold1; production512MiB unchanged. Static binding checks cap pins/hidden child/no override/final gate before Process.Start. Production unexecuted.",
+  "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\binding-preselected-leo74705-v2.json",
+  "process_memory_limit_bytes": 536870912,
+  "job_memory_limit_bytes": 536870912,
+  "private_usage_observer": "GetProcessMemoryInfo.PrivateUsage",
+  "private_usage_poll_rows": 64,
+  "final_launch_gate_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\final-launch-gate-preselected-leo74705-v2.json",
+  "private_usage_test_contract": "Observer fixture exercises measured baseline plus1MiB with16MiB real allocation,64-row polling and invalid handle. Cap-snapshot fixture lowers only a synthetic Binding to1 byte at row64 after valid start, validates refusal snapshot/counts and direct diagnostic cap. Neither threshold exists in production binding/command.",
+  "command_line": "pwsh.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-command-preselected-leo74705-v2.ps1",
+  "retention_policy": "Only preselected membership IDs retain full Member objects THROUGH pass1 and pass2. All-row ID-only set preserves duplicate rejection. Global heldout/quarantine/adjudicated/protected-evaluation indexes update from all rows.",
+  "retention_diagnostics": "Run/refusal receipts carry PrivateUsage/index counts at each hash/metadata pass boundary and every4096 rows. CAP_PRIVATE from row Check caches the triggering sample; row_failure uses it without another query and appends bounded scalar counts before cap refusal. Direct diagnostic cap also appends before throwing. Peak is maximum successful sample; no successful sample means null, not zero.",
+  "diagnostic_snapshot_interval_rows": 4096
+}

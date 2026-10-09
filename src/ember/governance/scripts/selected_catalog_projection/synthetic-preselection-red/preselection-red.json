@@ -1,0 +1,169 @@
+{
+  "schema": "niko.selected_catalog_projection.preselection_validation.v1",
+  "status": "RED_EXPECTED_SELECTED_ONLY_RETENTION_VIOLATION",
+  "observed_utc": "2026-10-09T15:36:37.8940263Z",
+  "rejected_source_sha256": "e0b957c4249b38b582cff073b2dcff9ca7dca1ee0f5dca5c851905352c4cf335",
+  "rejected_runner_sha256": "b4263969012c7d2fe05d3ae33c31e61a976b6c704ea0e2f2e733bac418d3b654",
+  "clean_cases": [
+    {
+      "order": "records_before_edges",
+      "retained_during_pass1": 11,
+      "retained_before_prune": 11,
+      "required_maximum": 8,
+      "selected_only_bound_passes": false
+    },
+    {
+      "order": "edges_before_records",
+      "retained_during_pass1": 11,
+      "retained_before_prune": 11,
+      "required_maximum": 8,
+      "selected_only_bound_passes": false
+    }
+  ],
+  "duplicate_cases": [
+    {
+      "order": "records_before_edges",
+      "failure_snapshot": {
+        "checkpoint": "row_failure",
+        "pass_name": "pass1",
+        "pass_rows": 4133,
+        "private_usage_bytes": 114462720,
+        "membership_id_set_count": 12,
+        "retained_member_object_count": 12,
+        "selected_membership_id_count": 0,
+        "selected_dataset_membership_link_count": 0,
+        "heldout_hash_index_count": 1,
+        "quarantine_hash_index_count": 2,
+        "adjudicated_hash_index_count": 1,
+        "protected_evaluation_hash_index_count": 0,
+        "seen_version_edge_index_count": 0,
+        "candidate_type_index_count": 2,
+        "selected_sha_index_count": 0,
+        "sha_dataset_index_count": 0,
+        "object_index_count": 0,
+        "object_id_value_count": 0,
+        "receipt_link_index_count": 0,
+        "receipt_link_value_count": 0,
+        "receipt_sha_index_count": 0,
+        "receipt_row_index_count": 0
+      },
+      "required_maximum": 8,
+      "selected_only_bound_passes": false
+    },
+    {
+      "order": "edges_before_records",
+      "failure_snapshot": {
+        "checkpoint": "row_failure",
+        "pass_name": "pass1",
+        "pass_rows": 4150,
+        "private_usage_bytes": 114466816,
+        "membership_id_set_count": 12,
+        "retained_member_object_count": 12,
+        "selected_membership_id_count": 8,
+        "selected_dataset_membership_link_count": 8,
+        "heldout_hash_index_count": 1,
+        "quarantine_hash_index_count": 2,
+        "adjudicated_hash_index_count": 1,
+        "protected_evaluation_hash_index_count": 1,
+        "seen_version_edge_index_count": 8,
+        "candidate_type_index_count": 2,
+        "selected_sha_index_count": 0,
+        "sha_dataset_index_count": 0,
+        "object_index_count": 0,
+        "object_id_value_count": 0,
+        "receipt_link_index_count": 0,
+        "receipt_link_value_count": 0,
+        "receipt_sha_index_count": 0,
+        "receipt_row_index_count": 0
+      },
+      "required_maximum": 8,
+      "selected_only_bound_passes": false
+    }
+  ],
+  "run_evidence": [
+    {
+      "exit_code": 0,
+      "timed_out": false,
+      "cleanup_verified": true,
+      "child_pid": 45472,
+      "stdout": "COMPLETE_SELECTED_CATALOG_PROJECTION\r\nC:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges\\run\r\n",
+      "stderr": "",
+      "run_dir": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges\\run",
+      "refusal_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges\\run-refusal.json",
+      "fixture": {
+        "case_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges",
+        "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges\\binding.json",
+        "binding_sha256": "0a983534a24e3cd5048c15ea3d2a4fda59d08cfd1b51deee592a7d7bddfc58f1",
+        "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-records_before_edges\\synthetic-command.pin",
+        "command_sha256": "519d673b22ff5092e55ca52b913e36cbdb15148e78e049068415552fe3e3a265",
+        "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-source-e0b957c4.cs",
+        "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-runner-b4263969.ps1",
+        "root_order": "records_before_edges",
+        "duplicate_unselected": false
+      }
+    },
+    {
+      "exit_code": 1,
+      "timed_out": false,
+      "cleanup_verified": true,
+      "child_pid": 40788,
+      "stdout": "",
+      "stderr": "REFUSED:System.InvalidOperationException\r\n",
+      "run_dir": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-records_before_edges\\run",
+      "refusal_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-records_before_edges\\run-refusal.json",
+      "fixture": {
+        "case_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-records_before_edges",
+        "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-records_before_edges\\binding.json",
+        "binding_sha256": "4434c6641c161b1a6543042f099c80493941f6c120906f87ccb51cbefd1c4ec1",
+        "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-records_before_edges\\synthetic-command.pin",
+        "command_sha256": "519d673b22ff5092e55ca52b913e36cbdb15148e78e049068415552fe3e3a265",
+        "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-source-e0b957c4.cs",
+        "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-runner-b4263969.ps1",
+        "root_order": "records_before_edges",
+        "duplicate_unselected": true
+      }
+    },
+    {
+      "exit_code": 0,
+      "timed_out": false,
+      "cleanup_verified": true,
+      "child_pid": 42888,
+      "stdout": "COMPLETE_SELECTED_CATALOG_PROJECTION\r\nC:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records\\run\r\n",
+      "stderr": "",
+      "run_dir": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records\\run",
+      "refusal_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records\\run-refusal.json",
+      "fixture": {
+        "case_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records",
+        "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records\\binding.json",
+        "binding_sha256": "f2b92762703fe3f342b6e8e2eb438dd009cd967f77b2536ec23397958a8afd4c",
+        "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-edges_before_records\\synthetic-command.pin",
+        "command_sha256": "519d673b22ff5092e55ca52b913e36cbdb15148e78e049068415552fe3e3a265",
+        "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-source-e0b957c4.cs",
+        "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-runner-b4263969.ps1",
+        "root_order": "edges_before_records",
+        "duplicate_unselected": false
+      }
+    },
+    {
+      "exit_code": 1,
+      "timed_out": false,
+      "cleanup_verified": true,
+      "child_pid": 45300,
+      "stdout": "",
+      "stderr": "REFUSED:System.InvalidOperationException\r\n",
+      "run_dir": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records\\run",
+      "refusal_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records\\run-refusal.json",
+      "fixture": {
+        "case_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records",
+        "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records\\binding.json",
+        "binding_sha256": "4c0d036e049e406d264853d5786370ddeef57af4391007b06efb704c06ca5245",
+        "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-preselection-red\\red-rejected-duplicate-edges_before_records\\synthetic-command.pin",
+        "command_sha256": "519d673b22ff5092e55ca52b913e36cbdb15148e78e049068415552fe3e3a265",
+        "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-source-e0b957c4.cs",
+        "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\rejected-runner-b4263969.ps1",
+        "root_order": "edges_before_records",
+        "duplicate_unselected": true
+      }
+    }
+  ]
+}
