@@ -129,7 +129,10 @@ class ScoredPairChainTests(unittest.TestCase):
                     'frozen_declaration_sha256': DECL, 'scorer_sha256': SCORER, 'tokenizer_sha256': TOKENIZER}
         bindings.update(binding_overrides)
         path = self.scored_dir / f'{role}-scored.json'
-        path.write_text(json.dumps({'schema': 'ember-2119-child-episode-nll-v1', 'bindings': bindings, 'arms': {'fresh': {'mean_nll': loss}}}), encoding='utf-8')
+        # a real scorer-v12 receipt: label, and one measured row per episode (the head mover refuses a header without scores)
+        fresh = {'mean_nll': loss} if getattr(self, 'header_only', False) else {'episodes': 2, 'mean_nll': loss, 'total_nll': loss * 2048, 'targets': 2048, 'per_episode': [{'shard_index': 0, 'token_offset': 0, 'loss_sum': loss * 1024, 'targets': 1024}, {'shard_index': 0, 'token_offset': 1024, 'loss_sum': loss * 1024, 'targets': 1024}]}
+        path.write_text(json.dumps({'schema': 'ember-2119-child-episode-nll-v1', 'label': 'scorer v12 fixture', 'bindings': bindings,
+                                    'arms': {'fresh': fresh}}), encoding='utf-8')
         return path, ckpt_receipt
 
     def publish(self, *, control_loss=2.0, treatment_loss=1.5, unpublished=(), scored_overrides=None, tweak=None):
@@ -213,6 +216,57 @@ class ScoredPairChainTests(unittest.TestCase):
         self.assertEqual(arms['treatment']['source_receipt_sha256'], sha((self.scored_dir / 'treatment-scored.json').read_bytes()))
         self.assertEqual(self.outcome_rows(), [])      # an eligible descendant charges no occupancy (the pointer advance is its record)
         self.assertTrue((self.custody / self.runner.OUTCOME_RECORDED_FILENAME).is_file())
+
+    # ---- row 20 at the head mover: the route passes its eligible arm's score receipt and the head mover re-checks it before any move ----
+    def captured_promote_spec(self):
+        """The spec this route hands the head mover, captured without moving anything (the outcome marker is left for a later real call)."""
+        seen = []
+        entry_mod.finalize_scored_pair(self.identity, entry_path=self.entry_path, custody=self.custody, parent=self.rr, runner=self.runner,
+                                       promote_fn=lambda spec, *, ruling: seen.append(spec) or {'code': 'captured'}, ruling='63996')
+        return seen[0]
+
+    def assert_refused_with_head_unchanged(self, spec, needle):
+        rows_before = len(self.rows)
+        out = self.promote_fn(spec, ruling='63996')
+        self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), out)
+        self.assertIn(needle, out['why'])
+        self.assertEqual(self.ptr_sha(), self.pointer_before)                  # the selected head did not move
+        self.assertEqual(sch.current_head_sha256(self.rr), self.start['manifest'])
+        self.assertFalse(any(row.get('kind') == 'intent' for row in self.rows[rows_before:]))     # and no intent row: refused before the move began
+
+    def test_the_route_passes_the_eligible_arms_receipt_and_its_one_declared_plan(self):
+        self.real_order(control_loss=2.0, treatment_loss=1.5)
+        spec = self.captured_promote_spec()
+        self.assertEqual(spec['score_receipt'], str(self.scored_dir / 'treatment-scored.json'))
+        self.assertEqual(spec['score_receipt_sha256'], sha((self.scored_dir / 'treatment-scored.json').read_bytes()))
+        self.assertEqual(spec['score_plan_sha256'], PLAN)                  # the entry's own frozen plan: the single declared binding, named in the PR body
+        self.assertEqual(self.ptr_sha(), self.pointer_before)
+
+    def test_the_head_mover_refuses_a_missing_header_only_mismatched_or_wrong_plan_receipt_before_any_move_deliberate_red(self):
+        self.real_order(control_loss=2.0, treatment_loss=1.5)
+        spec = self.captured_promote_spec()
+        for name in ('score_receipt', 'score_receipt_sha256'):
+            self.assert_refused_with_head_unchanged({k: v for k, v in spec.items() if k != name}, 'spec not closed')
+        self.assert_refused_with_head_unchanged({**spec, 'score_receipt_sha256': '0' * 64}, 'do not hash')
+        self.assert_refused_with_head_unchanged({**spec, 'score_plan_sha256': 'c' * 64}, 'frozen plan')
+        header = self.root / 'header-only.json'
+        body = json.loads((self.scored_dir / 'treatment-scored.json').read_text(encoding='utf-8'))
+        body['arms'] = {'fresh': {'mean_nll': 1.5}}
+        header.write_bytes(json.dumps(body).encode())
+        self.assert_refused_with_head_unchanged({**spec, 'score_receipt': str(header), 'score_receipt_sha256': sha(header.read_bytes())}, 'carries no scores')
+        body['bindings']['checkpoint_manifest_sha256'] = self.ctl['manifest']
+        body['arms'] = {'fresh': {'episodes': 2, 'mean_nll': 1.5, 'per_episode': [1, 2]}}
+        other = self.root / 'other-head.json'
+        other.write_bytes(json.dumps(body).encode())
+        self.assert_refused_with_head_unchanged({**spec, 'score_receipt': str(other), 'score_receipt_sha256': sha(other.read_bytes())}, 'different checkpoint')
+
+    def test_a_route_run_whose_receipt_carries_no_scores_finalizes_but_never_moves_the_head_deliberate_red(self):
+        self.header_only = True
+        self.real_order(control_loss=2.0, treatment_loss=1.5)
+        out = self.run_chain()
+        self.assertEqual((out['promotion']['code'], out['promotion']['status']), (4, 'REFUSED_BEFORE_MOVE'))
+        self.assertIn('carries no scores', out['promotion']['why'])
+        self.assertEqual(self.ptr_sha(), self.pointer_before)
 
     def test_a_control_win_promotes_the_control_child_not_the_treatment(self):
         self.real_order(control_loss=1.5, treatment_loss=2.0)

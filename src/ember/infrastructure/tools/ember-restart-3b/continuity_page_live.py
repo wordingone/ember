@@ -8,12 +8,13 @@ The page is CURRENT only when ALL hold; otherwise its first line is a red STALE 
 readable) is shown beneath it labelled "last snapshot, NOT current". An old fact is never shown as current:
   1. the snapshot is readable and valid;
   2. the live selected head is readable and equals the snapshot's head;
-  3. every named receipt exists and is not newer than the snapshot's `captured_at`.
+  3. every named receipt exists and is not newer than the snapshot's `captured_at`;
+  4. no source named as ABSENT at capture exists now (a marker, measurement or hold record that appears after the snapshot).
 
   freshness(...)            -> {'state': 'CURRENT'|'STALE', 'reasons': [...], ...}
   render_live_page(...)     -> markdown text
   generate_live_page(...)   -> writes the page atomically; returns the verdict
-  python continuity_page_live.py --snapshot S --receipts-root R --out PAGE [--receipt FILE ...]   (exit 0 CURRENT, 1 STALE; the page is written either way)
+  python continuity_page_live.py --snapshot S --receipts-root R --out PAGE [--receipt FILE ...] [--absent FILE ...]   (exit 0 CURRENT, 1 STALE; the page is written either way)
 
 Triggered by `continuity_snapshot_hook.publish_snapshot` (spec key `page_path`) at the same publication boundary that writes the
 snapshot, i.e. after the hour-end pointer advance.
@@ -51,7 +52,8 @@ def _fingerprint(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def _evaluate(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path]) -> tuple[dict[str, Any], Any, str | None]:
+def _evaluate(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path],
+              absent_paths: Iterable[Path] = ()) -> tuple[dict[str, Any], Any, str | None]:
     """Return (verdict, validated snapshot object or None, content fingerprint of the bytes that were validated or None). Never raises."""
     reasons: list[str] = []
     verdict: dict[str, Any] = {'snapshot_head': None, 'live_head': None, 'captured_at': None, 'newest_receipt_utc': None}
@@ -91,6 +93,9 @@ def _evaluate(snapshot_path: Path, *, live_head: Callable[[], str], receipt_path
         reasons.append(f'live selected head unreadable ({type(error).__name__})')
     if verdict['snapshot_head'] and verdict['live_head'] and verdict['snapshot_head'] != verdict['live_head']:
         reasons.append(f"snapshot describes head {verdict['snapshot_head']} but the live selected head is {verdict['live_head']}")
+    for path in absent_paths:   # named at capture as absent: its appearing means the snapshot's UNKNOWN / no-window answer is no longer the live one
+        if os.path.lexists(path):
+            reasons.append(f'source appeared after the snapshot: {Path(path).name}')
     newest = None
     for path in receipt_paths:
         try:
@@ -109,9 +114,9 @@ def _evaluate(snapshot_path: Path, *, live_head: Callable[[], str], receipt_path
     return verdict, validated, fingerprint
 
 
-def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path]) -> dict[str, Any]:
+def freshness(snapshot_path: Path, *, live_head: Callable[[], str], receipt_paths: Iterable[Path], absent_paths: Iterable[Path] = ()) -> dict[str, Any]:
     """Compare the snapshot with the live head and the newest receipts. Never raises: every unreadable input is a STALE reason."""
-    return _evaluate(snapshot_path, live_head=live_head, receipt_paths=receipt_paths)[0]
+    return _evaluate(snapshot_path, live_head=live_head, receipt_paths=receipt_paths, absent_paths=absent_paths)[0]
 
 
 def _go_stale(verdict: dict[str, Any], reason: str) -> None:
@@ -154,7 +159,7 @@ def render_live_page(snapshot_path: Path, verdict: dict[str, Any], *, generated_
     return '\n'.join(lines) + '\n'
 
 
-def generate_live_page(*, snapshot_path: Path, receipts_root: Path | None, out_path: Path, receipt_paths: Iterable[Path] = (),
+def generate_live_page(*, snapshot_path: Path, receipts_root: Path | None, out_path: Path, receipt_paths: Iterable[Path] = (), absent_paths: Iterable[Path] = (),
                        current_head: Callable[[], str] | None = None, now: float | None = None) -> dict[str, Any]:
     """Write `out_path` (atomic replace, LF) and return the verdict. The pointer file is always among the receipts compared."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -166,7 +171,7 @@ def generate_live_page(*, snapshot_path: Path, receipts_root: Path | None, out_p
         current_head = lambda: selected_continuation_head.current_head_sha256(Path(receipts_root))  # noqa: E731
     if receipts_root is not None:
         receipts.append(selected_continuation_head.pointer_path(Path(receipts_root)))
-    verdict, validated, fingerprint = _evaluate(snapshot_path, live_head=current_head, receipt_paths=receipts)
+    verdict, validated, fingerprint = _evaluate(snapshot_path, live_head=current_head, receipt_paths=receipts, absent_paths=[Path(path) for path in absent_paths])
     block = None
     if validated is not None:
         try:
@@ -210,9 +215,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--receipts-root', required=True)
     parser.add_argument('--out', required=True)
     parser.add_argument('--receipt', action='append', default=[])
+    parser.add_argument('--absent', action='append', default=[], help='a source that did not exist when the snapshot was captured; the page is STALE once it does')
     args = parser.parse_args(argv)
     verdict = generate_live_page(snapshot_path=Path(args.snapshot), receipts_root=Path(args.receipts_root), out_path=Path(args.out),
-                                 receipt_paths=[Path(item) for item in args.receipt])
+                                 receipt_paths=[Path(item) for item in args.receipt], absent_paths=[Path(item) for item in args.absent])
     print(json.dumps(verdict, sort_keys=True))
     return 0 if verdict['state'] == 'CURRENT' else 1
 

@@ -9,7 +9,10 @@ It is used between hours only, on ruling's ruling mail (--ruling=ID); the hour i
   python promote_with_pending_v1.py SPEC.json --ruling=ID
 
 Spec (JSON, closed): repo_root, receipts_root, published_checkpoint_root, hour_result_path, expected_parent, expected_child, ledger,
-and exactly one of next={training_job_purpose, run_id} or blocker. Outcome codes:
+score_receipt, score_receipt_sha256, and exactly one of next={training_job_purpose, run_id} or blocker. The score receipt is checked here with
+post_hour_promotion_gate.cadence_problems (scorer-v12 receipt with scores for exactly expected_child on the frozen plan, bytes hashing to the cited
+digest) BEFORE any move, so a head cannot advance on a header, a wrong digest, another child or another plan. The only declared override is the optional
+score_plan_sha256: a scored-pair run scores on its own frozen entry's plan and its route names that plan. Outcome codes:
   0 PROMOTED_AND_RECORDED         pointer == expected_child AND the pending readback equals the requested record exactly: {'next_identity': {purpose, run_id}}
                                   for next, or {'blocker': <the requested text>} for blocker (a missing or stale record is never that blocker)
   4 REFUSED_BEFORE_MOVE           prevalidation, the head CAS, or the published-child check refused; pointer and pending bytes identical to before (asserted).
@@ -18,7 +21,7 @@ and exactly one of next={training_job_purpose, run_id} or blocker. Outcome codes
   7 LATE_WRITE_FAILURE            pointer moved, the pending write failed or its readback differs from the requested record: NO rollback claimed; the
                                   next-segment read is whatever the readback says (BLOCKED when missing/stale); mail ruling (review 63367 P2-5)
   6 MOVED_TO_UNEXPECTED_HEAD      pointer is not expected_child after a clean return
-  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path][, page_path]}: the head moved and the pending record is exact, but
+  8 PROMOTED_SNAPSHOT_FAILED      optional spec key snapshot={expected_genesis, custody_parent[, snapshot_path][, page_path][, gpu_window_marker][, measurement_receipt][, hold_record]}: the head moved and the pending record is exact, but
                                   the continuity page snapshot (continuity_snapshot_hook) was not written; rerun continuity_snapshot_hook.py, do not repeat the move
 Run with the window marker absent (python).
 """
@@ -33,7 +36,12 @@ import re
 import sys
 from pathlib import Path
 
-SPEC_FIELDS = {'repo_root', 'receipts_root', 'published_checkpoint_root', 'hour_result_path', 'expected_parent', 'expected_child', 'ledger'}
+SPEC_FIELDS = {'repo_root', 'receipts_root', 'published_checkpoint_root', 'hour_result_path', 'expected_parent', 'expected_child', 'ledger',
+               'score_receipt', 'score_receipt_sha256'}
+# The one declared override of the cadence's frozen plan: a scored-pair run scores on its own frozen entry's plan, so its route may name that plan here.
+# Nothing else about the check changes (schema, scorer marker, scores, exact child, digest).
+SPEC_OPTIONAL = {'next', 'blocker', 'snapshot', 'score_plan_sha256'}
+HERE = Path(__file__).resolve().parent
 
 
 def _sha(path):
@@ -51,21 +59,37 @@ def make_row(ledger):
 
 
 # the hook already accepts these; the production caller whitelisted four of them, so a real hour could not bind the frozen claim predicate or a ruling
-SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id', 'refusal_receipt')
+SNAPSHOT_OPTIONAL_STRINGS = ('snapshot_path', 'page_path', 'claim_predicate', 'candidate_record', 'ruling_log', 'ruling_id', 'refusal_receipt',
+                             'gpu_window_marker', 'measurement_receipt', 'hold_record')
 SNAPSHOT_KEYS = {'expected_genesis', 'custody_parent', *SNAPSHOT_OPTIONAL_STRINGS}
 
 
 def promote(spec, *, pending, sch, row, ruling, snapshot=None):
-    extra = set(spec) - SPEC_FIELDS - {'next', 'blocker', 'snapshot'}
+    extra = set(spec) - SPEC_FIELDS - SPEC_OPTIONAL
     missing = SPEC_FIELDS - set(spec)
     if extra or missing or ('next' in spec) == ('blocker' in spec):
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': f'spec not closed: missing={sorted(missing)} extra={sorted(extra)} next-xor-blocker={("next" in spec) != ("blocker" in spec)}'}
     if not ruling:
         return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'no --ruling (no self-granted advance)'}
+    # Row 20 enforced at the head mover itself, not only in the dispatch gate: "a missing score receipt means no advance". The receipt must be a scorer-v12
+    # receipt with scores, for exactly expected_child, on the frozen plan (or the one plan the caller declares), and hash to the cited digest. Refused before
+    # the intent row, the pointer read and any move, so the selected head and the pending record stay as they were.
+    if not all(isinstance(spec[name], str) and spec[name] for name in ('score_receipt', 'score_receipt_sha256')):
+        return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'score_receipt and score_receipt_sha256 must be non-empty strings: a missing score receipt means no advance'}
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import post_hour_promotion_gate as cadence  # noqa: E402
+    problems = cadence.cadence_problems(spec['expected_child'], Path(spec['score_receipt']), spec['score_receipt_sha256'],
+                                        plan_sha256=spec.get('score_plan_sha256', cadence.CADENCE_PLAN_SHA256))
+    if problems:
+        out = {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'score receipt refused: ' + '; '.join(problems), 'score_receipt': spec['score_receipt'],
+               'score_receipt_sha256': spec['score_receipt_sha256']}
+        row(kind='refuse_before_move', **{k: v for k, v in out.items() if k != 'code'})
+        return out
     if 'snapshot' in spec:
         shot = spec['snapshot']
         if snapshot is None or not isinstance(shot, dict) or set(shot) - SNAPSHOT_KEYS or not {'expected_genesis', 'custody_parent'} <= set(shot):
-            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path][, claim_predicate][, candidate_record][, ruling_log][, ruling_id][, refusal_receipt]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
+            return {'code': 4, 'status': 'REFUSED_BEFORE_MOVE', 'why': 'snapshot spec must be {expected_genesis, custody_parent[, snapshot_path][, page_path][, claim_predicate][, candidate_record][, ruling_log][, ruling_id][, refusal_receipt][, gpu_window_marker][, measurement_receipt][, hold_record]} with a snapshot writer; refused before the move so a bad spec cannot land after it'}
         # Values, not just keys: a None or non-string path would raise inside the writer after the head moved.
         if (not isinstance(shot['expected_genesis'], str) or not re.fullmatch(r'[0-9a-f]{64}', shot['expected_genesis'])
                 or not isinstance(shot['custody_parent'], str) or not shot['custody_parent']

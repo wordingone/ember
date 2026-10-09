@@ -29,6 +29,7 @@ if str(MODULE_DIR) not in sys.path:
 import claim_accounting as ca  # noqa: E402
 import continuity_snapshot as snap  # noqa: E402
 import continuity_snapshot_hook as hook  # noqa: E402
+import post_hour_promotion_gate as cadence  # noqa: E402
 import promote_with_pending_v1 as promote_module  # noqa: E402
 import training_continuity_ledger as ledger  # noqa: E402
 import training_lineage_ancestry as ancestry  # noqa: E402
@@ -44,6 +45,32 @@ def write_manifest(root: Path, name: str, *, tokens: int, step: int, parent: Pat
                       'data_cursor': {'tokens_seen': tokens, 'global_step': step}}, sort_keys=True).encode()
     (directory / ancestry.MANIFEST_NAME).write_bytes(raw)
     return directory, hashlib.sha256(raw).hexdigest()
+
+
+
+def bad_score_rows():
+    """Scorer-v12 arms.fresh shapes that carry no usable scored rows. Each is refused by name (review finding 1; the first is the reviewer's pinned counterexample)."""
+    row = {'loss_sum': 4608.0, 'targets': 1024}
+    good = {'episodes': 2, 'total_nll': 9216.0, 'targets': 2048, 'mean_nll': 4.5, 'per_episode': [dict(row), dict(row)]}
+    def with_rows(first, **over):
+        return dict(good, per_episode=[first, dict(row)], **over)
+    return {
+        'rows with no scored values': {'episodes': 2, 'mean_nll': 4.5, 'per_episode': [{}, {}]},
+        'rows with no scored values and consistent totals': dict(good, per_episode=[{}, {}]),
+        'nan loss_sum': with_rows(dict(row, loss_sum=float('nan'))),
+        'infinite loss_sum': with_rows(dict(row, loss_sum=float('inf'))),
+        'negative loss_sum': with_rows(dict(row, loss_sum=-1.0)),
+        'string loss_sum': with_rows(dict(row, loss_sum='4608.0')),
+        'target count 0': with_rows(dict(row, targets=0), targets=1024),
+        'fractional target count': with_rows(dict(row, targets=1024.5)),
+        'boolean target count': with_rows(dict(row, targets=True)),
+        'row is not an object': dict(good, per_episode=[4.5, 4.5]),
+        'mean disagrees with the rows': dict(good, mean_nll=9.0),
+        'total_nll disagrees with the rows': dict(good, total_nll=100.0),
+        'arm targets disagree with the rows': dict(good, targets=2049),
+        'no total_nll': {key: value for key, value in good.items() if key != 'total_nll'},
+        'no arm targets': {key: value for key, value in good.items() if key != 'targets'},
+    }
 
 
 class Fixture(unittest.TestCase):
@@ -62,6 +89,17 @@ class Fixture(unittest.TestCase):
         self.env = patch.dict(os.environ, {ledger.LEDGER_ROOT_ENV: str(self.root)})
         self.env.start()
         self.addCleanup(self.env.stop)
+
+    def score_fields(self, *, child=None, plan=None, scores=True, name='score-receipt.json', fresh_override=None):
+        """A scorer-v12 receipt for `child` (default the fixture child) on the cadence plan, written and cited by digest, the way the head mover re-checks it."""
+        fresh = {'episodes': 2, 'total_nll': 7168.0, 'targets': 2048, 'mean_nll': 3.5, 'per_episode': [{'loss_sum': 3481.6, 'targets': 1024}, {'loss_sum': 3686.4, 'targets': 1024}]}
+        body = {'schema': cadence.CADENCE_SCORE_SCHEMA, 'label': 'child-episode-nll scorer v12 fixture',
+                'bindings': {'episode_plan_sha256': plan or cadence.CADENCE_PLAN_SHA256, 'checkpoint_manifest_sha256': child or self.c_sha},
+                'arms': {'fresh': fresh_override if fresh_override is not None else fresh if scores else {'mean_nll': 3.5}}}
+        path = self.root / name
+        raw = json.dumps(body, sort_keys=True).encode()
+        path.write_bytes(raw)
+        return {'score_receipt': str(path), 'score_receipt_sha256': hashlib.sha256(raw).hexdigest()}
 
     def publish(self, **overrides):
         args = dict(head_directory=self.c, hour_result_path=self.hour_result, expected_genesis_manifest_sha256=self.g_sha,
@@ -232,7 +270,7 @@ class PromoteIntegrationTests(Fixture):
         shot = {'expected_genesis': self.g_sha, 'custody_parent': str(self.custody), 'snapshot_path': str(self.out), **snapshot_overrides}
         return {'repo_root': str(self.root), 'receipts_root': str(self.root), 'published_checkpoint_root': str(self.c),
                 'hour_result_path': str(self.hour_result), 'expected_parent': self.b_sha, 'expected_child': self.c_sha,
-                'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'no admitted mixture bound yet', 'snapshot': shot}
+                'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'no admitted mixture bound yet', 'snapshot': shot, **self.score_fields()}
 
     def run_promote(self, spec, *, pending=None, writer=hook.publish_from_spec):
         rows = []
@@ -240,6 +278,60 @@ class PromoteIntegrationTests(Fixture):
         out = promote_module.promote(spec, pending=pending, sch=FakeHeads(self.root, self.c_sha), row=lambda **fields: rows.append(fields),
                                      ruling='66882', snapshot=writer)
         return out, pending, rows
+
+    def refused_before_any_move(self, spec, needle):
+        out, pending, rows = self.run_promote(spec)
+        self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), out)
+        self.assertIn(needle, out['why'])
+        self.assertEqual(pending.calls, [])                                 # the head mover was never reached: the selected head and the pending record are as they were
+        self.assertFalse(any(row['kind'] in ('intent', 'promote_outcome') for row in rows), rows)
+        self.assertFalse(self.out.exists())                                 # and no snapshot was written
+        return rows
+
+    def test_a_missing_score_receipt_means_no_advance_deliberate_red(self):
+        for fields in (('score_receipt',), ('score_receipt_sha256',), ('score_receipt', 'score_receipt_sha256')):
+            spec = self.spec()
+            for name in fields:
+                del spec[name]
+            self.refused_before_any_move(spec, 'spec not closed')
+        spec = self.spec()
+        spec['score_receipt'] = ''
+        self.refused_before_any_move(spec, 'non-empty strings')
+        spec = self.spec()
+        spec['score_receipt'] = str(self.root / 'no-such-receipt.json')
+        self.refused_before_any_move(spec, 'unreadable')
+
+    def test_a_header_only_score_receipt_is_refused_before_any_move_deliberate_red(self):
+        spec = {**self.spec(), **self.score_fields(scores=False, name='header-only.json')}
+        self.refused_before_any_move(spec, 'carries no scores')
+
+    def test_a_receipt_whose_rows_carry_no_valid_scored_values_is_refused_before_any_move_deliberate_red(self):
+        for name, fresh in bad_score_rows().items():
+            with self.subTest(name):
+                spec = {**self.spec(), **self.score_fields(fresh_override=fresh, name='bad-rows.json')}
+                self.refused_before_any_move(spec, 'carries no scores')
+
+    def test_a_receipt_that_does_not_hash_to_the_cited_digest_is_refused_deliberate_red(self):
+        spec = self.spec()
+        spec['score_receipt_sha256'] = '0' * 64
+        self.refused_before_any_move(spec, 'do not hash')
+
+    def test_a_receipt_scored_on_another_plan_or_for_another_head_is_refused_deliberate_red(self):
+        self.refused_before_any_move({**self.spec(), **self.score_fields(plan='a' * 64, name='other-plan.json')}, 'frozen plan')
+        self.refused_before_any_move({**self.spec(), **self.score_fields(child=self.b_sha, name='other-head.json')}, 'different checkpoint')
+
+    def test_the_one_declared_plan_override_admits_exactly_that_plan_control(self):
+        self.refused_before_any_move({**self.spec(), **self.score_fields(plan='b' * 64, name='not-the-declared.json'), 'score_plan_sha256': 'a' * 64}, 'frozen plan')
+        self.refused_before_any_move({**self.spec(), 'score_plan_sha256': 'not-a-sha'}, 'not a sha256')
+        spec = {**self.spec(), **self.score_fields(plan='a' * 64, name='declared-plan.json'), 'score_plan_sha256': 'a' * 64}
+        out, pending, _ = self.run_promote(spec)
+        self.assertEqual((out['code'], len(pending.calls)), (0, 1))
+
+    def test_a_refusal_is_recorded_in_the_ledger_with_its_reason(self):
+        spec = {**self.spec(), **self.score_fields(scores=False, name='header-only.json')}
+        rows = self.refused_before_any_move(spec, 'carries no scores')
+        self.assertEqual([row['kind'] for row in rows], ['refuse_before_move'])
+        self.assertIn('carries no scores', rows[0]['why'])
 
     def test_a_clean_move_writes_the_snapshot_and_records_it(self):
         out, pending, rows = self.run_promote(self.spec())
@@ -304,6 +396,69 @@ class PromoteIntegrationTests(Fixture):
             out, pending, rows = self.run_promote(self.spec(**{field: bad}))
             self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (field, bad))
             self.assertEqual((pending.calls, rows), ([], []), (field, bad))
+
+    def test_the_row_7_producer_keys_pass_the_production_caller_to_the_writer(self):
+        # the hook accepts these three; the caller's whitelist once refused them, so no real hour could bind a live source
+        keys = {'gpu_window_marker': str(self.root / 'gpu-window-open'), 'measurement_receipt': str(self.root / 'episode-nll.json'),
+                'hold_record': str(self.root / 'training-hold.json')}
+        seen = []
+
+        def writer(spec):
+            seen.append(spec)
+            return {'status': 'WRITTEN'}
+        out, pending, _ = self.run_promote(self.spec(**keys), writer=writer)
+        self.assertEqual(out['code'], 0)
+        self.assertEqual(len(pending.calls), 1)
+        self.assertEqual({name: seen[0][name] for name in keys}, keys)
+
+    def test_the_live_page_tracks_every_existing_producer_input_not_only_the_hour_result_deliberate_red(self):
+        import continuity_page_live
+        from unittest import mock
+        sources = {name: self.root / f'{name}.src' for name in ('gpu_window_marker', 'measurement_receipt', 'hold_record')}
+        for path in sources.values():
+            path.write_text('x', encoding='utf-8')
+        absent = str(self.root / 'absent-hold.json')
+        captured = {}
+
+        def fake_page(**kwargs):
+            captured.update(kwargs)
+            return {'state': 'CURRENT', 'reasons': []}
+        with mock.patch.object(continuity_page_live, 'generate_live_page', fake_page):
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in sources.items()}))
+            tracked = {Path(path) for path in captured['receipt_paths']}
+            self.assertEqual(tracked, {self.hour_result, *sources.values()})           # a changed hold, measurement or marker makes the page STALE
+            captured.clear()
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), hold_record=absent))
+            # an absent named source stays a named dependency with its captured absence (review finding 2): UNKNOWN in the status now, STALE once it appears
+            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})
+            self.assertEqual({Path(path) for path in captured['absent_paths']}, {Path(absent)})
+
+    def test_every_absent_named_source_is_passed_with_its_captured_absence_and_none_when_all_exist_deliberate_red(self):
+        import continuity_page_live
+        from unittest import mock
+        names = ('gpu_window_marker', 'measurement_receipt', 'hold_record')
+        captured = {}
+
+        def fake_page(**kwargs):
+            captured.update(kwargs)
+            return {'state': 'CURRENT', 'reasons': []}
+        with mock.patch.object(continuity_page_live, 'generate_live_page', fake_page):
+            absent = {name: self.root / f'{name}.absent' for name in names}
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in absent.items()}))
+            self.assertEqual({Path(path) for path in captured['absent_paths']}, set(absent.values()))
+            self.assertEqual({Path(path) for path in captured['receipt_paths']}, {self.hour_result})
+            captured.clear()
+            for path in absent.values():
+                path.write_text('x', encoding='utf-8')
+            self.run_promote(self.spec(page_path=str(self.root / 'p.md'), **{name: str(path) for name, path in absent.items()}))
+            self.assertEqual(list(captured['absent_paths']), [])
+
+    def test_a_non_string_or_empty_producer_key_refuses_before_any_move_deliberate_red(self):
+        for field in ('gpu_window_marker', 'measurement_receipt', 'hold_record'):
+            for bad in (None, '', 7):
+                out, pending, rows = self.run_promote(self.spec(**{field: bad}))
+                self.assertEqual((out['code'], out['status']), (4, 'REFUSED_BEFORE_MOVE'), (field, bad))
+                self.assertEqual((pending.calls, rows), ([], []), (field, bad))
 
     def test_a_writer_that_raises_after_the_move_still_records_the_outcome_and_is_code_8(self):
         def raising_writer(spec):
@@ -383,7 +538,7 @@ class PromoteBindingTests(Fixture):
                 'claim_predicate': str(self.predicate), 'ruling_log': str(self.log), 'ruling_id': 'ep-1', 'refusal_receipt': str(self.receipt), **bindings}
         return {'repo_root': str(self.root), 'receipts_root': str(self.receipts), 'published_checkpoint_root': str(self.c),
                 'hour_result_path': str(self.hour_result), 'expected_parent': self.b_sha, 'expected_child': self.c_sha,
-                'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'no admitted mixture bound yet', 'snapshot': shot}
+                'ledger': str(self.root / 'promote-ledger.jsonl'), 'blocker': 'no admitted mixture bound yet', 'snapshot': shot, **self.score_fields()}
 
     def run_promote(self, spec):
         rows = []

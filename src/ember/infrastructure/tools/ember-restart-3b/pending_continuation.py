@@ -183,3 +183,39 @@ def read_pending_continuation(receipts_root: Path, *, current_head_sha256: str) 
     if record['status'] == BLOCKED:
         return {'blocker': record['blocker']}
     return {'next_identity': {'training_job_purpose': record['training_job_purpose'], 'run_id': record['run_id']}}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The lawful command-line writer and reader (row 15). `write` records the next segment, or its blocker, for the CURRENT head only: it goes through
+    write_pending_continuation (the pointer lock, a head re-read under it, a closed-schema record, an atomic replace) and never moves the pointer.
+    `read` prints what a fresh interpreter sees for the head (default: the live pointer's head). Exit 0 done, 3 refused."""
+    import argparse
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    write = sub.add_parser('write')
+    write.add_argument('--receipts-root', required=True, type=Path)
+    write.add_argument('--head', required=True, help='the lineage head the record is for; refused unless it is the pointer\'s current head')
+    write.add_argument('--purpose')
+    write.add_argument('--run-id')
+    write.add_argument('--blocker')
+    read = sub.add_parser('read')
+    read.add_argument('--receipts-root', required=True, type=Path)
+    read.add_argument('--head', help='default: the pointer\'s current head')
+    args = parser.parse_args(argv)
+    try:
+        if args.command == 'write':
+            record = write_pending_continuation(args.receipts_root, lineage_checkpoint_manifest_sha256=args.head,
+                                                training_job_purpose=args.purpose, run_id=args.run_id, blocker=args.blocker)
+            print(json.dumps({'status': 'WRITTEN', 'record': record, 'path': str(pending_path(args.receipts_root))}, sort_keys=True))
+        else:
+            head = args.head or head_pointer.current_head_sha256(args.receipts_root)
+            print(json.dumps({'head': head, 'read': read_pending_continuation(args.receipts_root, current_head_sha256=head)}, sort_keys=True))
+    except (PendingContinuationRefusal, ValueError) as error:
+        print(json.dumps({'status': 'REFUSED', 'error': f'{type(error).__name__}: {error}'}, sort_keys=True))
+        return 3
+    return 0
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main())
