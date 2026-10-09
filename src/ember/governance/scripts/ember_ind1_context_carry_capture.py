@@ -69,7 +69,7 @@ GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(EXEC_ROOT), "ember-goalforge")
 )
 
-EMBER_CLI_SRC = os.path.join(EXEC_ROOT, "tools", "ember-cli", "src")
+EMBER_CLI_SRC = os.path.join(EXEC_ROOT, "src", "ember", "infrastructure", "tools", "ember-cli", "src")
 EMBER_EXE = os.path.join(EMBER_CLI_SRC, "ember-cured.exe")
 PTY_DRIVER = os.path.join(EXEC_ROOT, "scripts", "ember_surface2_pty_driver.cjs")
 STUB_SERVER = os.path.join(EXEC_ROOT, "scratch", "ind1ctx", "stub_chat_server.cjs")

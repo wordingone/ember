@@ -451,6 +451,19 @@ else
   printf '%s\n' "$GOVERNED_ENTRY_OUT" | sed 's/^/      /'
 fi
 
+# ---- 3c2. launcher source paths: no repo-root join to a pre-move location (#1116)
+# A clean checkout of master could not start Ember because the launcher joined
+# tools\ember-cli\src after the sources moved under src/ember/. Runtime state paths
+# (tools/ember-cli/state/) are not flagged.
+LAUNCHER_PATHS_OUT="$(bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_launcher_source_paths.py" "$KERNEL_ROOT" 2>&1)"
+LAUNCHER_PATHS_RC=$?
+if [ "$LAUNCHER_PATHS_RC" -eq 0 ]; then
+  ok "launcher-paths" "$(printf '%s' "$LAUNCHER_PATHS_OUT" | head -1)"
+else
+  fail "launcher-paths" "source path joined at a pre-move location (rc $LAUNCHER_PATHS_RC)"
+  printf '%s\n' "$LAUNCHER_PATHS_OUT" | sed 's/^/      /' | head -30
+fi
+
 # ---- 3d. launcher-shape: nothing outside the daemon starts a run ---------
 # The check above is about NAMING the training entry, which is deliberately
 # broad and catches prose and manifests as well as code. This one is about

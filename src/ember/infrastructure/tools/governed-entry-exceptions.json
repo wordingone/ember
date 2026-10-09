@@ -23,7 +23,7 @@
     },
     {
       "path": "src/ember/governance/scripts/ember_surface2_capture.py",
-      "sha256": "f6f1cade0194b2bacfecf4badb134bcb22c50818b6bcf06657e9cc1877a6d920",
+      "sha256": "ce07519bbafeb4060b546f0d24f9a67b33893238dc14091b79b80d53868c7a00",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

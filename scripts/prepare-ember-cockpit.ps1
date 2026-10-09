@@ -339,7 +339,7 @@ if ($env:EMBER_LAUNCH_LIBRARY_ONLY -eq "1") { return }
 $launcherLease = $null
 try {
     $repositoryRoot = Split-Path -Parent $PSScriptRoot
-    $sourceRoot = Join-Path $repositoryRoot "tools\ember-cli\src"
+    $sourceRoot = Join-Path $repositoryRoot "src\ember\infrastructure\tools\ember-cli\src"
     $entrypoint = Join-Path $sourceRoot "entrypoints\main.ts"
     $package = Join-Path $sourceRoot "package.json"
     $lock = Join-Path $sourceRoot "bun.lock"
@@ -370,7 +370,7 @@ try {
     $dependenciesReady = Test-Path -LiteralPath (Join-Path $sourceRoot "node_modules\react\package.json") -PathType Leaf
     if (-not $dependenciesReady) {
         # THE ONE REMAINING IN-TREE WRITE, and it is deliberate. Installing populates
-        # tools/ember-cli/src/node_modules/ inside the certified tree; a census running
+        # src/ember/infrastructure/tools/ember-cli/src/node_modules/ inside the certified tree; a census running
         # concurrently WILL red. This is a one-time preparation step, not steady state:
         # once dependencies exist, launches perform no in-tree writes and the cockpit can
         # stay up across certifications, which is the acceptance this issue claims.

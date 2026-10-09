@@ -86,7 +86,7 @@ async function main(): Promise<void> {
   const launchRoot = resolve(process.argv[6] ?? repoRoot);
   if (!existsSync(binary) || !/^[0-9a-f]{40}$/u.test(implementationCommit) ||
       !existsSync(join(launchRoot, "docs", "domains", "governance", "authority", "GOAL.md")) ||
-      !existsSync(join(launchRoot, "tools", "ember-cli"))) {
+      !existsSync(join(launchRoot, "src", "ember", "infrastructure", "tools", "ember-cli"))) {
     throw new Error("usage: pointer-conpty-smoke.ts <compiled-binary> <out-dir> <implementation-commit> [PAUSE|START] [installed-source-root]");
   }
   mkdirSync(outDir, { recursive: true });

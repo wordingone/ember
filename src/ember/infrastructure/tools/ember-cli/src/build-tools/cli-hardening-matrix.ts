@@ -259,7 +259,7 @@ function requireCleanSource(repositoryRoot: string): void {
 }
 
 function assertExpectedRoots(repositoryRoot: string, sourceRoot: string): void {
-  const expected = resolve(repositoryRoot, "tools", "ember-cli", "src");
+  const expected = resolve(repositoryRoot, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
   if (resolve(sourceRoot).toLowerCase() !== expected.toLowerCase()) {
     throw new Error("hardening source root is not the canonical Ember CLI source");
   }
