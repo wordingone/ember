@@ -90,7 +90,8 @@ def main() -> int:
     if references.keys() != predictions.keys():
         parser.error("predictions must exactly cover the frozen reference ids")
     correct = sum(references[key] == predictions[key] for key in references)
-    payload = {"criterion_id": "ember-3b-text-capability-v1", "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
+    # benchmark_id/version are read by the trusted verifier; the frozen manifest above binds both.
+    payload = {"criterion_id": "ember-3b-text-capability-v1", "benchmark_id": manifest["benchmark_id"], "benchmark_version": manifest["benchmark_version"], "metrics": {"exact_match": correct / len(references)}, "sample_count": len(references), "references_sha256": references_sha256, "predictions_sha256": predictions_sha256, "frozen_text_manifest_sha256": manifest_sha256, "upstream": "deterministic local frozen-answer scorer"}
     payload.update(verdict_fields(arguments.protocol, payload['criterion_id'], payload['metrics'], payload['sample_count']))
     arguments.score_output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=arguments.score_output.parent, delete=False) as handle:
