@@ -540,8 +540,11 @@ def _child_calls_missing_boundary(path: Path) -> list[str]:
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in {"run", "Popen"}
                 and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"):
-            keywords = {k.arg for k in node.keywords}
-            if not {"creationflags", "timeout"} <= keywords:
+            keywords = {k.arg: k.value for k in node.keywords}
+            flags, timeout = keywords.get("creationflags"), keywords.get("timeout")
+            # Values, not names: a literal 0 opens a console, a literal None never times out.
+            if (flags is None or (isinstance(flags, ast.Constant) and not flags.value)
+                    or timeout is None or (isinstance(timeout, ast.Constant) and timeout.value is None)):
                 missing.append(f"{path.name}:{node.lineno}")
     return missing
 
@@ -552,10 +555,27 @@ def test_every_child_in_these_suites_is_hidden_and_bounded():
     assert [m for path in BOUNDARY_FILES for m in _child_calls_missing_boundary(path)] == []
 
 
-def test_the_boundary_guard_sees_a_bare_child(tmp_path):
+@pytest.mark.parametrize("keywords", ["capture_output=True", "creationflags=0, timeout=60",
+                                      "creationflags=HIDDEN, timeout=None", "creationflags=HIDDEN"])
+def test_the_boundary_guard_sees_a_bare_or_unbounded_child(tmp_path, keywords):
     bare = tmp_path / "bare.py"
-    bare.write_text("import subprocess, sys\nsubprocess.run([sys.executable], capture_output=True)\n", encoding="utf-8")
+    bare.write_text(f"import subprocess, sys\nsubprocess.run([sys.executable], {keywords})\n", encoding="utf-8")
     assert _child_calls_missing_boundary(bare) == ["bare.py:2"]
+
+
+def test_the_boundary_guard_admits_a_hidden_bounded_child(tmp_path):
+    ok = tmp_path / "ok.py"
+    ok.write_text("import subprocess, sys\nsubprocess.run([sys.executable], creationflags=HIDDEN, timeout=60)\n",
+                  encoding="utf-8")
+    assert _child_calls_missing_boundary(ok) == []
+
+
+def test_the_text_exact_child_starts_through_the_mandatory_wrapper():
+    import ast
+    tree = ast.parse(BOUNDARY_FILES[2].read_text(encoding="utf-8"))
+    calls = {ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    assert {"owned_children.run_one", "owned_children.python_argv"} <= calls
+    assert not any(c.startswith("subprocess.") for c in calls), calls
 
 
 def test_reasoning_partial_category_membership_is_refused(tmp_path):
