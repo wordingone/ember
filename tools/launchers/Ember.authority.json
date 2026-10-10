@@ -4,6 +4,6 @@
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "artifact_path": "tools/launchers/Ember.cmd",
-  "artifact_sha256": "5589fab9cade0133b25488b1be0759f35433d7667260fbd7a4176c67a8cffb94",
+  "artifact_sha256": "a14df0510b1d383f41f1db7917b3c2c3d556feb8efc598430017f00549c49b4f",
   "claim_boundary": "Exact canonical Windows launcher bytes only; this binding grants no run, training, model, capability, or completion authority."
 }
