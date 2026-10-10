@@ -850,7 +850,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       const configPath =
         deps.configPath ?? join(repoRoot, "configs", "ember-restart-3b.json");
       const scriptPath =
-        deps.scriptPath ?? join(repoRoot, "tools", "ember-restart-3b", "launch_packet.py");
+        deps.scriptPath ?? join(repoRoot, "src", "ember", "infrastructure", "tools", "ember-restart-3b", "launch_packet.py");
       // (1) Run the preflight first. It is the only subprocess in default mode;
       // certified execute mode may invoke only the fixed Ember Lab composer below.
       const firstPreflightForSession = !trainPreflightSessions.has(ctx.sessionId);

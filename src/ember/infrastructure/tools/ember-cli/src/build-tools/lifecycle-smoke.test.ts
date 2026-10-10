@@ -490,7 +490,7 @@ describe("compiled lifecycle driver host", () => {
 
     expect(inputs.save).not.toContain(repoRoot);
     expect(inputs.save).toMatch(
-      /--source tools[\\/]ember-cli[\\/]src[\\/]commands[\\/]__fixtures__[\\/]model-identity/,
+      /--source src[\\/]ember[\\/]infrastructure[\\/]tools[\\/]ember-cli[\\/]src[\\/]commands[\\/]__fixtures__[\\/]model-identity/,
     );
   });
 });

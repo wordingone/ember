@@ -61,11 +61,11 @@ GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(EXEC_ROOT), "ember-goalforge")
 )
 
-CORE_DIR = os.path.join(EXEC_ROOT, "tools", "ember-cli", "src", "core")
+CORE_DIR = os.path.join(EXEC_ROOT, "src", "ember", "infrastructure", "tools", "ember-cli", "src", "core")
 REPL_SCRIPT = os.path.join(CORE_DIR, "ember-world-state-repl.ts")
 ADAPTER_SCRIPT = os.path.join(CORE_DIR, "ember-world-state.ts")
 MEMBRANE_SCRIPT = os.path.join(CORE_DIR, "encounter-membrane.ts")
-COMMAND_SCRIPT = os.path.join(EXEC_ROOT, "tools", "ember-cli", "src", "commands", "world-state.ts")
+COMMAND_SCRIPT = os.path.join(EXEC_ROOT, "src", "ember", "infrastructure", "tools", "ember-cli", "src", "commands", "world-state.ts")
 
 PTY_DRIVER = os.path.join(EXEC_ROOT, "scripts", "ember_surface2_pty_driver.cjs")
 THIS_SCRIPT = os.path.abspath(__file__)

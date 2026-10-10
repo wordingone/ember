@@ -406,7 +406,7 @@ async function main(): Promise<void> {
   // Bun as the BUILDER only (the same role it plays for every other build in this repo); the
   // ConPTY driving above stays entirely under this Node process, which is the part that needed
   // the runtime switch.
-  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const sourceRoot = join(repoRoot, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
   const bunExecutable = resolveBunExecutable();
   const rebuildTemp = mkdtempSync(join(tmpdir(), "ember-verify-251-rebuild-"));
   const rebuiltBinary = join(rebuildTemp, "ember.exe");

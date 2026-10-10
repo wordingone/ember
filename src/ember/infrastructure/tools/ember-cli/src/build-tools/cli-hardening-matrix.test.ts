@@ -25,7 +25,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), "ember-cli-hardening-"));
   roots.push(root);
   const repositoryRoot = join(root, "repo");
-  const sourceRoot = join(repositoryRoot, "tools", "ember-cli", "src");
+  const sourceRoot = join(repositoryRoot, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
   const receiptPath = join(root, "receipt", "receipt.json");
   const executable = join(root, "bun.exe");
   mkdirSync(sourceRoot, { recursive: true });

@@ -64,7 +64,7 @@ def _resolve_ember_restart_3b_root(
     canonical = os.path.join(
         repo_root, "src", "ember", "infrastructure", "tools", "ember-restart-3b"
     )
-    legacy = os.path.join(repo_root, "tools", "ember-restart-3b")
+    legacy = os.path.join(repo_root, "tools", "ember-restart-3b")  # launcher-paths: legacy-fallback
     if os.path.isfile(os.path.join(canonical, marker_filename)):
         return canonical
     return legacy
