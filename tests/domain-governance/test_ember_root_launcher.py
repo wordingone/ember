@@ -543,16 +543,15 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         actual = call_log.read_text(encoding="utf-8").strip()
         match = re.fullmatch(
-            r'cockpit --root "(?P<root>.+\\)" --application "(?P<application>.+)" '
+            r'cockpit --root "(?P<root>[^"]+)" --application "(?P<application>.+)" '
             r'--source-commit "(?P<source_commit>[^"]+)" --state-root "(?P<state_root>.+)"',
             actual,
         )
         self.assertIsNotNone(match, actual)
         assert match is not None
-        self.assertTrue(match.group("root").endswith("\\"))
-        self.assertEqual(
-            canonical(match.group("root").removesuffix("\\")), canonical(root)
-        )
+        # A trailing backslash escapes the closing quote and merges the remaining args (#1116).
+        self.assertFalse(match.group("root").endswith("\\"), actual)
+        self.assertEqual(canonical(match.group("root")), canonical(root))
         self.assertEqual(canonical(match.group("application")), canonical(application))
         self.assertEqual(match.group("source_commit"), source_commit)
         self.assertEqual(canonical(match.group("state_root")), canonical(state_root))
