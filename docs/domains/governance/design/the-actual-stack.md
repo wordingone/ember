@@ -1,5 +1,19 @@
 # The actual stack
 
+## Current CIA research path
+
+CIA-3B is the canonical main family. The checked-in `configs/ember-cia-3b.json` declares `CIA3-R1-N61`, 3,082,539,008 unique parameters, width 1,024 and 24 layers. The selected checkpoint must independently bind the configuration and measured inventory; see [model architecture](../anatomy/03_MODEL_ARCHITECTURE.md) and [continuity](../authority/CONTINUITY.md).
+
+The current CIA decoder entry point is `src/ember/model/ember_v0_decoder.py::CIADecoder`, with causal routing in `ember_v0_routing.py` and the hour consumer in `src/ember/infrastructure/tools/ember-restart-3b/cia_hour.py`. The historical directory name is not a decoder selector. The retained v2 `UnifiedDecoder`, generic inference consumer and borrowed probes have separate identities and acceptance boundaries.
+
+Use source/config hashes with their actual roles. The selected manifest's reported `implementation_source_sha256` has been traced to a `torch.optim.adamw` source hash; that field alone cannot identify CIADecoder. A model implementation hash, optimizer implementation hash, runtime version, checkpoint digest and Git commit must remain separate.
+
+The configuration's global 25 / resident 2 / selected 1 experts describe different capacities. Episode `active_parameters` is an enabled update-support inventory computed from `requires_grad`; it does not measure per-token arithmetic or learned capacity. Actual routing, residency, precision, optimizer placement, throughput and memory require receipts from the executed CIA path.
+
+## Historical v2 stack snapshot
+
+The retained description and arithmetic below apply to the older v2 contract and their named historical receipts. They do not describe the current CIA decoder or its measured runtime. Preserve these records for explicitly authorized comparison and recovery.
+
 Written because the operator read these docs and could not answer basic questions from them: what
 framework, what kernels, what the model actually is. The vocabulary — clean-genesis, verified expert
 accretion, birth floor — describes real things, but a reader has to already know what they mean, and

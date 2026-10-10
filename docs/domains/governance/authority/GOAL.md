@@ -342,6 +342,9 @@ under #2163 is the canonical main architecture and EMBER-02 target. This selects
 the family, not every draft revision. Dimensions, expert counts, routing,
 paging, precision and optimizer choices remain versioned and evidence-driven.
 
+
+The canonical first-reader model surface follows that CIA family selection. Current selected checkpoint architecture, parameter inventory and cursor identity belong in CONTINUITY.md, bound to actual selected manifest bytes. Historical ember-sparse-3b-v2 documentation is explicitly the retired comparison/recovery reference; configuration presence and historical directory names do not select a live decoder.
+
 The target is one evolving owned shared multimodal decoder/core with typed
 modality boundaries and learned causal functional routing. Expert identities
 are global; experts are not permanently named or partitioned by modality.
