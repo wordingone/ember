@@ -322,3 +322,41 @@ def test_audio_units_get_no_wilson_bound(tmp_path, metric):
     metrics = {"word_error_rate": 0.2, "weighted_recall": 0.9, "weighted_fpr": 0.1}
     result = crit.admission(metrics, 50, criterion, tmp_path)
     assert result["criterion_result"] == "UNDETERMINED" and result["admission_margin"] is None
+
+
+def _run_text(tmp_path: Path, manifest_overrides: dict | None = None):
+    references, predictions = tmp_path / "references.jsonl", tmp_path / "predictions.json"
+    manifest, score = tmp_path / "manifest.json", tmp_path / "score.json"
+    references.write_text('{"id":"t1","answer":"yes"}\n{"id":"t2","answer":"no"}\n', encoding="utf-8")
+    identity = {"checkpoint_manifest_sha256": "a" * 64, "model_config_sha256": "b" * 64}
+    predictions.write_text(json.dumps({
+        "schema_version": "ember-owned-predictions-v1", "claim_status": "NON_ADMISSIBLE_RAW_PREDICTIONS", **identity,
+        "tokenizer_sha256": "c" * 64, "inference_implementation_sha256": "d" * 64,
+        "benchmark": {"id": "local-text", "version": "1", "capability": "text", "split_sha256": "e" * 64,
+                      "protocol_sha256": "f" * 64},
+        "decoding": {"strategy": "GREEDY_AUTOREGRESSIVE", "teacher_forcing": False, "max_new_tokens": 1,
+                     "temperature": 0, "top_p": 1, "stop_token_ids": [2]},
+        "rows": [{"id": i, "input_sha256": "0" * 64, "generated_token_ids": [2], "stop_reason": "eos",
+                  "output": {"kind": "text", "text": "yes"}} for i in ("t1", "t2")]}), encoding="utf-8")
+    manifest.write_text(json.dumps({"result": "PREFLIGHT_ONLY", "benchmark_id": "local-text", "benchmark_version": "1",
+                                    "references_sha256": hashlib.sha256(references.read_bytes()).hexdigest(), **identity,
+                                    "split_sha256": "e" * 64, "protocol_sha256": "f" * 64,
+                                    **(manifest_overrides or {})}), encoding="utf-8")
+    result = owned_children.run_one(owned_children.python_argv(
+        str(SCRIPTS / "ember_restart_eval_text_exact.py"), "--frozen-text-manifest", str(manifest), "--references",
+        str(references), "--predictions", str(predictions), "--score-output", str(score)), timeout_s=120)
+    assert result.status != "terminated", "scorer child timed out"
+    return result, (json.loads(score.read_text(encoding="utf-8")) if result.returncode == 0 else None)
+
+
+def test_text_scorer_emits_the_benchmark_identity_its_frozen_manifest_binds(tmp_path):
+    """Review 76764 R2: the trusted verifier reads benchmark_id/version from the score; the producer must emit them."""
+    result, score = _run_text(tmp_path)
+    assert result.returncode == 0
+    assert (score["benchmark_id"], score["benchmark_version"]) == ("local-text", "1")
+    assert score["frozen_text_manifest_sha256"] == hashlib.sha256((tmp_path / "manifest.json").read_bytes()).hexdigest()
+
+
+def test_text_scorer_refuses_a_manifest_for_another_benchmark_version(tmp_path):
+    result, score = _run_text(tmp_path, {"benchmark_version": "2"})
+    assert result.returncode != 0 and score is None
