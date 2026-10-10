@@ -85,7 +85,7 @@ from pathlib import Path
 EXEC_ROOT = str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()))
 C14_DIR = os.path.join(EXEC_ROOT, "receipts", "ember-c14-owned-run")
 SURFACE_DIR = os.path.join(EXEC_ROOT, "receipts", "ember-surface2-telemetry")
-EMBER_CLI_SRC = os.path.join(EXEC_ROOT, "tools", "ember-cli", "src")
+EMBER_CLI_SRC = os.path.join(EXEC_ROOT, "src", "ember", "infrastructure", "tools", "ember-cli", "src")
 EMBER_EXE = os.path.join(EMBER_CLI_SRC, "ember-cured.exe")
 PTY_DRIVER = os.path.join(EXEC_ROOT, "scripts", "ember_surface2_pty_driver.cjs")
 

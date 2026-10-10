@@ -1,6 +1,7 @@
 @echo off
 setlocal
 for %%I in ("%~dp0..\..") do set "EMBER_REPO_ROOT=%%~fI\"
+for %%I in ("%~dp0..\..") do set "EMBER_REPO_DIR=%%~fI"
 if not "%~1"=="" (
   echo Ember does not accept arguments. Run tools\launchers\Ember.cmd directly.
   if not defined EMBER_LAUNCH_NONINTERACTIVE pause
@@ -25,7 +26,7 @@ if not defined EMBER_LAB goto prep_failed
 if not defined EMBER_SOURCE_COMMIT goto prep_failed
 if not defined EMBER_STATE_ROOT goto prep_failed
 
-"%EMBER_LAB%" cockpit --root "%EMBER_REPO_ROOT%" --application "%EMBER_APPLICATION%" --source-commit "%EMBER_SOURCE_COMMIT%" --state-root "%EMBER_STATE_ROOT%"
+"%EMBER_LAB%" cockpit --root "%EMBER_REPO_DIR%" --application "%EMBER_APPLICATION%" --source-commit "%EMBER_SOURCE_COMMIT%" --state-root "%EMBER_STATE_ROOT%"
 set "EMBER_EXIT=%ERRORLEVEL%"
 if not "%EMBER_EXIT%"=="0" (
   if not defined EMBER_LAUNCH_NONINTERACTIVE pause

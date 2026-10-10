@@ -719,6 +719,9 @@ async function driveInput(
 export function actionInputs(home: string, _repoRoot: string): Record<Exclude<LifecycleAction, "launch">, string> {
   const saveTarget = join(home, "saved-checkpoint");
   const source = join(
+    "src",
+    "ember",
+    "infrastructure",
     "tools",
     "ember-cli",
     "src",

@@ -499,7 +499,7 @@ export function createAdmitCommand(deps: AdmitCommandDeps = {}): RegistryCommand
       );
       const producerPath =
         deps.producerPath ??
-        join(sourceRoot, "scripts", "ember_admission", "produce_candidate.py");
+        join(sourceRoot, "src", "ember", "governance", "scripts", "ember_admission", "produce_candidate.py");
       const result = runProducer(
         pythonExecutable,
         [

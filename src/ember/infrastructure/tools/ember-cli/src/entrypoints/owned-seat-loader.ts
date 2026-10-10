@@ -573,6 +573,9 @@ export function loadOwnedModelIdentity(
 
   const resolverPath = resolve(
     input.repoRoot,
+    "src",
+    "ember",
+    "governance",
     "scripts",
     "ember_restart",
     "cli_seat.py",

@@ -194,7 +194,7 @@ function Install-StableFiles([string]$Root) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ember-window-placement.ps1") -Destination (Join-Path $Root "ember-window-placement.ps1") -Force
     # A compiled deployment is intentionally git-less. These marker bytes let the existing
     # strict runtime resolver bind state to the installation itself instead of a checkout.
-    New-Item -ItemType Directory -Force -Path (Join-Path $Root "tools\ember-cli") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $Root "src\ember\infrastructure\tools\ember-cli") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $Root "docs\authority") | Out-Null
     try {
         Write-AtomicBytes $canonicalGoal $canonicalGoalBytes

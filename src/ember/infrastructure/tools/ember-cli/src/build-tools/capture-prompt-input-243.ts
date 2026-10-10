@@ -320,7 +320,7 @@ export function rebuildBinaryFromSource(
   repoRoot: string,
   sourceCommit: string,
 ): ReproducibleBuildEvidence {
-  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const sourceRoot = join(repoRoot, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
   const ownedTemp = mkdtempSync(join(tmpdir(), "ember-issue-243-rebuild-"));
   const rebuiltBinary = join(ownedTemp, "ember.exe");
   const builderExecutableSha256Before = sha256(readFileSync(process.execPath));
