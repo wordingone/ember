@@ -790,7 +790,7 @@ def streamed_sources(identity):
 
 TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
 CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'declared_pause.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
     ('cia_hour_energy.py', 'boundary_energy_collector.py'))
@@ -1070,6 +1070,10 @@ def resource_limits(identity):
             # review 67576 basis: a tail rebuilds the hour's model and optimizer (about 1,201 s, segment launch to first step start in the last two hours' stamps)
             # and restores and verifies the child (about 1,505 s, counter to hour result in the hour that completed); wall >= 1.25 x 2,706 s = 3,382 s.
             limits.update(wall_seconds=VERIFY_TAIL_WALL_SECONDS, max_b_write_gib=1)
+        # Issue #2115: a declared pause and the pinned parameter dumps widen the wall and the B write wall by exactly their own amounts.
+        import declared_pause
+        limits.update(wall_seconds=limits['wall_seconds'] + declared_pause.extra_wall_seconds(identity),
+                      max_b_write_gib=limits['max_b_write_gib'] + declared_pause.extra_b_write_gib(identity))
     elif trajectory_mode(identity):
         if trajectory_checkpoint_emission(identity):
             limits.update(wall_seconds=1800, max_b_write_gib=32)
@@ -1283,7 +1287,7 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources', 'training_job_purpose'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker', 'verify_tail'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory', 'hour', 'production_mixture', 'checkpoint_probe', 'measurement', 'local_routing_mode', 'continuation', 'attention_backend', 'attention_recompute', 'training_head', 'experiment_plan', 'parent_checkpoint', 'training_experiment_protocol', 'training_experiment_continuation_rule', 'scored_pair_binding_sha256', 'training_diagnostic_question', 'training_diagnostic_non_advancement_reason', 'training_diagnostic_return_condition', 'training_diagnostic_readiness_blocker', 'verify_tail', 'declared_pause', 'parameter_dump'}:
         raise ValueError('measurement identity fields differ')
     if 'parent_checkpoint' in identity and ('hour' not in identity or not isinstance(identity['parent_checkpoint'], dict)
             or set(identity['parent_checkpoint']) != {'root', 'manifest_sha256'}):
@@ -1304,6 +1308,9 @@ def prepare_execution(prediction):
         # Issue #2119 rows 5/14: the eligibility rule is frozen in the identity (and so in the prediction digest) before launch.
         load_eligibility_module().validate_identity_rule(identity)
     validate_scored_pair_binding(identity)
+    import declared_pause
+    declared_pause.pause_declaration(identity)
+    declared_pause.dump_declared(identity)
     validate_trajectory_resources(identity)
     if hour and not tail:
         # ruling 67506: only a tail that verify_tail_mode has passed (zero steps, no data segment, no probe) skips the training hour's probe and mixture checks.
