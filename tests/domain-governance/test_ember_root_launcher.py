@@ -36,7 +36,7 @@ class EmberRootLauncherTests(unittest.TestCase):
         owner = tempfile.TemporaryDirectory(prefix="ember launcher ")
         root = Path(owner.name) / "Ember Repository With Spaces"
         (root / "scripts").mkdir(parents=True)
-        source = root / "tools" / "ember-cli" / "src"
+        source = root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src"
         (source / "entrypoints").mkdir(parents=True)
         launcher = root / "tools" / "launchers" / "Ember.cmd"
         launcher.parent.mkdir(parents=True)
@@ -141,7 +141,7 @@ class EmberRootLauncherTests(unittest.TestCase):
         result = self.run_launcher(root, runtime)
         self.assertEqual(result.returncode, 0, result.stdout)
         log = (root / "launch.log").read_text(encoding="utf-8")
-        self.assert_logged_cwd(log, root / "tools" / "ember-cli" / "src")
+        self.assert_logged_cwd(log, root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src")
         self.assertIn("args=run entrypoints/main.ts", log)
         self.assertIn("gpu_free=1", log)
         self.assertNotIn("entrypoints\\main.ts", result.stdout)
