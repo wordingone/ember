@@ -588,7 +588,7 @@ describe("owned seat loader", () => {
     });
     expect(observedArgs).toEqual([
       "python-owned",
-      "C:\\repo\\scripts\\ember_restart\\cli_seat.py",
+      "C:\\repo\\src\\ember\\governance\\scripts\\ember_restart\\cli_seat.py",
       "C:\\run.json",
       "--trusted-verifier-registry",
       "C:\\trusted.json",

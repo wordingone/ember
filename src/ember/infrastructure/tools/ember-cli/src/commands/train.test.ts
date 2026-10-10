@@ -1736,7 +1736,7 @@ describe("/train source-byte authority", () => {
       expect(spawns[0]!.args).toEqual([
         path.join(
           worktreeRoot,
-          "tools",
+          "src", "ember", "infrastructure", "tools",
           "ember-restart-3b",
           "launch_packet.py",
         ),
