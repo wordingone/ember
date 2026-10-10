@@ -1,0 +1,73 @@
+{
+  "schema": "niko.selected_catalog_projection.prediction_schema_validation.v2",
+  "observed_utc": "2026-10-09T17:25:14.0728674Z",
+  "fixture_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T172513Z-db5f79046945495daa14cca82a23391a",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\selected_projection_memory_v1.cs",
+  "source_sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+  "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\run_selected_projection_memory_v1.ps1",
+  "runner_sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+  "real_prediction_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-successor-validation-v2\\candidate-records_before_edges-extra0\\prediction.json",
+  "real_prediction_bytes": 1134,
+  "real_prediction_sha256": "736770d6b0c26ee796570a797f9656e83e64167171da9d890afe2e1686d62d64",
+  "real_prediction_key_audit_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\prediction-key-audit-leo74156-20261009T0639Z.json",
+  "real_prediction_result": {
+    "passed": true,
+    "exception_type": null,
+    "exception_message": null,
+    "input_bytes_read": 1134,
+    "export_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-successor-validation-v2\\candidate-records_before_edges-extra0\\export.json",
+    "export_sha256": "3db7091d1a1cc99e179d3430dd6238a5ae61373fe3f8b241984c0abd5ff4cd4d",
+    "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dataset_id_count": 8
+  },
+  "missing_key_path": "identity.input_binding.tokenizer_sha256",
+  "missing_fixture_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T172513Z-db5f79046945495daa14cca82a23391a\\prediction-missing-input-tokenizer.json",
+  "missing_fixture_bytes": 866,
+  "missing_fixture_sha256": "5049447b6621c83482ea89e9b2db02bcb9f3675da54cf33a84fe1f4c3988455a",
+  "missing_result": {
+    "passed": false,
+    "exception_type": "System.Collections.Generic.KeyNotFoundException",
+    "exception_message": "PREDICTION_KEY_MISSING:identity.input_binding.tokenizer_sha256",
+    "input_bytes_read": 866,
+    "export_path": null,
+    "export_sha256": null,
+    "tokenizer_sha256": null,
+    "dataset_id_count": null
+  },
+  "mismatch_paths": [
+    "identity.input_binding.tokenizer_sha256",
+    "identity.data.tokenizer_sha256"
+  ],
+  "mismatch_fixture_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T172513Z-db5f79046945495daa14cca82a23391a\\prediction-tokenizer-digest-mismatch.json",
+  "mismatch_fixture_bytes": 951,
+  "mismatch_fixture_sha256": "49b49e067efcc7c455551e7d08c5d66aec6d3ab3da3b01a68e8e70f77dc13ad5",
+  "mismatch_fixture_data_tokenizer_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "mismatch_result": {
+    "passed": false,
+    "exception_type": "System.InvalidOperationException",
+    "exception_message": "PREDICTION_TOKENIZER_MISMATCH:identity.input_binding.tokenizer_sha256!=identity.data.tokenizer_sha256",
+    "input_bytes_read": 951,
+    "export_path": null,
+    "export_sha256": null,
+    "tokenizer_sha256": null,
+    "dataset_id_count": null
+  },
+  "export_content_opened": false,
+  "assertions": {
+    "real_bound_prediction_read_succeeds": true,
+    "real_prediction_export_path_matches_binding": true,
+    "real_prediction_export_sha_is_valid": true,
+    "real_prediction_tokenizer_matches_input_binding": true,
+    "real_prediction_data_tokenizer_matches": true,
+    "real_prediction_has_eight_dataset_ids": true,
+    "real_prediction_read_exact_bytes": true,
+    "missing_input_binding_tokenizer_refuses": true,
+    "missing_error_names_exact_key_path": true,
+    "missing_fixture_input_bytes_read_exact": true,
+    "mismatched_tokenizer_refuses": true,
+    "mismatch_error_names_both_paths": true,
+    "mismatch_fixture_input_bytes_read_exact": true,
+    "export_content_not_opened": true
+  },
+  "passed": true
+}

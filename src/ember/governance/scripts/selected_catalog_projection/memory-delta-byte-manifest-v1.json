@@ -1,0 +1,265 @@
+{
+  "schema": "niko.selected_catalog_projection.memory_delta_byte_manifest.v1",
+  "status": "C_PACKAGE_PREPARED_GIT_INDEX_UNHELD",
+  "parent_commit": "5509abfcbfde07a7800574c236118767ce42b19b",
+  "repository": "wordingone/ember",
+  "branch": "fix/issue1581-bounded-membership",
+  "pull_request": 2361,
+  "namespace": "src/ember/governance/scripts/selected_catalog_projection",
+  "source_review_required": "Kai one delta recheck",
+  "production_release_required": "Leo after Kai PASS and actual current resource gate",
+  "files": [
+    {
+      "carrier_relative_path": "selected_projection_memory_v1.cs",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\selected_projection_memory_v1.cs",
+      "bytes": 66773,
+      "sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+      "expected_git_blob_oid": "f6583344b0a164050258a3747f805e47289ce8cd"
+    },
+    {
+      "carrier_relative_path": "run_selected_projection_memory_v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\run_selected_projection_memory_v1.ps1",
+      "bytes": 7338,
+      "sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+      "expected_git_blob_oid": "dbfe71a6f8d1301f693f1dade4760f0ab969fde7"
+    },
+    {
+      "carrier_relative_path": "binding-memory-v1.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\binding-memory-v1.json",
+      "bytes": 12107,
+      "sha256": "12f0d33d1849687578f2bed4ca6cb7c4e510b9d38b2987b511460efbfad07793",
+      "expected_git_blob_oid": "b8983c7e29dce8b48c9c844e01cb494190a2f566"
+    },
+    {
+      "carrier_relative_path": "run-command-memory-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\run-command-memory-v1.ps1",
+      "bytes": 19551,
+      "sha256": "b55e0f5bd1547c0092766f98e4a3234a6201302d1e1d8a865c1250feb21b464b",
+      "expected_git_blob_oid": "a67dd3c21d7a6fcb73960f6f343298210892ed9d"
+    },
+    {
+      "carrier_relative_path": "fixture-boundary.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-boundary.ps1",
+      "bytes": 6145,
+      "sha256": "1aeb7cd49c4dc5acd65568c45ad83d26ad087f6c3926c2784e9ea8f23172cba4",
+      "expected_git_blob_oid": "287052d5274820e610a72bf03a225f4d5e284058"
+    },
+    {
+      "carrier_relative_path": "fixture-boundary-v2.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-boundary-v2.ps1",
+      "bytes": 6144,
+      "sha256": "d32aa82bd850f6dc190e96903def3111cc7651b4959e97f0e926d8c50823e37b",
+      "expected_git_blob_oid": "c6f6fcbb1d02b6f650231eaeb832fe7f0bd28174"
+    },
+    {
+      "carrier_relative_path": "run-fixture-script.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-fixture-script.ps1",
+      "bytes": 440,
+      "sha256": "178752557b693cb27a530db51ebb0ec0b967d977126d0574dc3c8825ca603b39",
+      "expected_git_blob_oid": "bd3aef1076320e7222e02441b192f67dcbc813bb"
+    },
+    {
+      "carrier_relative_path": "validate-memory-suite-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-suite-v1.ps1",
+      "bytes": 4072,
+      "sha256": "bcef191b0f33b182038285593d2b9dc2c5d7cac210343520e08f467c69ba064c",
+      "expected_git_blob_oid": "78bb63c3b0e7b1fad83d81f2d40288b812093195"
+    },
+    {
+      "carrier_relative_path": "validate-memory-suite-v2.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-suite-v2.ps1",
+      "bytes": 4075,
+      "sha256": "771e3cab5347f2608113d57d62e5528b1950ae4221033574281a1a1e07920c99",
+      "expected_git_blob_oid": "136e4c86ec0a7acf12e3d7782d994bb84e78143a"
+    },
+    {
+      "carrier_relative_path": "validate-memory-scale-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-scale-v1.ps1",
+      "bytes": 6876,
+      "sha256": "06ec395460e25f0bdc337ef7fadcdf9c201ebd7cc3fc9a655deff6dbf655726a",
+      "expected_git_blob_oid": "0d3ba536bac3d7d1ea96c3c46c7f18caaf0220b9"
+    },
+    {
+      "carrier_relative_path": "validate-memory-scale-v2.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-scale-v2.ps1",
+      "bytes": 6879,
+      "sha256": "40a621307ea9721149506d704c60801d1151f53c7c625c8c017a3e8c99f916d0",
+      "expected_git_blob_oid": "eeb31166acaddd3dde433bd1e775de84365a90e8"
+    },
+    {
+      "carrier_relative_path": "validate-memory-baseline-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-baseline-v1.ps1",
+      "bytes": 18176,
+      "sha256": "e51fa4d6b938d1b10b35a74d25b8f0c87b65f8707c884e1d525d0953d92d2d9f",
+      "expected_git_blob_oid": "97d4fd963f32911cb1488eaf2ed358a85e8e5f5f"
+    },
+    {
+      "carrier_relative_path": "validate-memory-baseline-v2.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-baseline-v2.ps1",
+      "bytes": 18179,
+      "sha256": "a18aedfc51f9535a5ed45a88e002f30049b0e12ac872b45bfa484cf65d39719f",
+      "expected_git_blob_oid": "a2682c35c33e15fb5764f166e4d3713b347dc128"
+    },
+    {
+      "carrier_relative_path": "validate-memory-prediction-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validate-memory-prediction-v1.ps1",
+      "bytes": 10396,
+      "sha256": "89000943b6c15c391ba028c5ac9db7a0966332749503da8f961b70e14df19841",
+      "expected_git_blob_oid": "940473a059aff730d218d3972cb33fa6546ba156"
+    },
+    {
+      "carrier_relative_path": "scale-generator.cs",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\scale-generator.cs",
+      "bytes": 4281,
+      "sha256": "628b7f2115dfc09750e336d445d8f8fa93c7da8da8cd06b3ddcf8bd6ef6a4d8d",
+      "expected_git_blob_oid": "7e0a794422e30d803e5b532e4317e6ff93a8c04f"
+    },
+    {
+      "carrier_relative_path": "run-memory-suite-controller-v1.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-memory-suite-controller-v1.ps1",
+      "bytes": 7599,
+      "sha256": "a9193d6fbe89b9d999d1391887e1dcf4d6c16800522daf506fad39cf5c0c1172",
+      "expected_git_blob_oid": "bc769dd1dc5026df2da20bb46724d31984c1b39d"
+    },
+    {
+      "carrier_relative_path": "run-memory-suite-controller-v2.ps1",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-memory-suite-controller-v2.ps1",
+      "bytes": 7599,
+      "sha256": "ec64c667301c7ddf54af3c2ceae50bd5de32f4bd3c235d39f456c5c8c11d6412",
+      "expected_git_blob_oid": "04663e5ec27906d761bd663fdb290479dbbc955f"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-refusal-v1.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-validation-v1.json",
+      "bytes": 1749,
+      "sha256": "f9b1e844ff294b2c52de2db757fa34937cac77171c4b036ca7970cdd9194ac2a",
+      "expected_git_blob_oid": "7ecb27ec62362b548ddaf2ffa8d944546a859004"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-terminal-refusal-v1.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v1\\terminal.json",
+      "bytes": 928,
+      "sha256": "bef3e2333b8223f6a94f7c29a3fba73435294038b1df718f7d7e267b0fe097e7",
+      "expected_git_blob_oid": "c5bc67d532a69ae3c23122aaee547dd2392cbbce"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-refusal-stdout-v1.txt",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v1\\stdout.txt",
+      "bytes": 306,
+      "sha256": "4892b93aeabf1f40f1ca15892f14a9262dc5f8b83cad2a177f12c90cc8cc6732",
+      "expected_git_blob_oid": "e0e018e5683cfe7ebee114393d15b4a2fcd5a435"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-refusal-stderr-v1.txt",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v1\\stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "expected_git_blob_oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/fixture-gate-fix-v2-prepared.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-gate-fix-v2-prepared.json",
+      "bytes": 3697,
+      "sha256": "6cf9fa0026b5ac3edde23a3966507ea261331828f595d5efa4df8a10ee77cb86",
+      "expected_git_blob_oid": "dff07dca2a288a29d8fab95c7eb91173f6bd3a36"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-validation-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-validation-v2.json",
+      "bytes": 9745,
+      "sha256": "2e702828e73daca85cba4bdaae895a227a313de17ba285f9cfa289df0bfbea87",
+      "expected_git_blob_oid": "ba137696921cc9c877bbf6c36fbf53be07f4ccf6"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-terminal-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v2\\terminal.json",
+      "bytes": 928,
+      "sha256": "1c89ca731a297756bfcddf8049fe65ee131b3080774a4091d0ef6b4efc793cca",
+      "expected_git_blob_oid": "67448113643b41e6f6c24ad2a5be28f269a69e3d"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-stdout-v2.txt",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v2\\stdout.txt",
+      "bytes": 322,
+      "sha256": "f2c768373bc360af2db61ff2c5bf63729ca8bf8f3de2eda918983047b01957b7",
+      "expected_git_blob_oid": "8dcd7bae99e5c8bcdc919d139a2e1411fbec7d4f"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/suite-stderr-v2.txt",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\memory-suite-terminal-v2\\stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "expected_git_blob_oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/baseline-byte-equality-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-successor-validation-v2\\preselection-validation.json",
+      "bytes": 105401,
+      "sha256": "3719f53184049c5fc7b81601832ecc7c10923b3bc905d0fac5ffac1abf05b96c",
+      "expected_git_blob_oid": "ae1ed730dc5123c0d7c615f0225d6589a63a9934"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/cap-snapshot-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\cap-snapshot-memory-v2.json",
+      "bytes": 8874,
+      "sha256": "56ed868350cf62247c44db68bde576b1182e41d5b11c4d48652b744c16b09ad3",
+      "expected_git_blob_oid": "63b189753f838dc51cb341f7af6d878666c9a8b8"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/observer-validation-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\observer-memory-v2.json",
+      "bytes": 1379,
+      "sha256": "2565c9e194fa6c5f56ac864a70f60f7fbe7f0495b71bf724c79363792908b4b8",
+      "expected_git_blob_oid": "b2f439a1a590799edbe148f7335ca0271e4ca332"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/scale-validation-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-scale-v2\\scale-validation.json",
+      "bytes": 3903,
+      "sha256": "a0d8ea1ed3e0b3fa2597668ec5013a3c5fb51df85f974a42c89f000c64daa963",
+      "expected_git_blob_oid": "b5ae1ab137f4406b93aa1a6f928a22a037a1134b"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/scale-binding-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-scale-v2\\projection\\binding.json",
+      "bytes": 2561,
+      "sha256": "258459fca75fe3ffec399a54bd2400820a934b88cd852ad351ab9bd7d379b108",
+      "expected_git_blob_oid": "7d9a29d64e4de0ab1197a1cbf0e5e5fd7cb699ca"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/scale-run-receipt-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-scale-v2\\projection\\run\\run-receipt.json",
+      "bytes": 480093,
+      "sha256": "74ac40912890c3ae4e8baf2c34730f4c2838c23bc4d98fd2bc5bb20c116cca92",
+      "expected_git_blob_oid": "eaaca6ca3c15187000f7545252896ef37ff57765"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/scale-summary-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-scale-v2\\projection\\run\\summary.json",
+      "bytes": 6211,
+      "sha256": "30972fe23c4a0a6d49b9e574b18c40ebb1221d7c9f829f3b9ecfa9206d7cd1f8",
+      "expected_git_blob_oid": "79e6166a40714c23770533ec35640e73de244231"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/scale-phase-observations-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\synthetic-memory-scale-v2\\projection\\run\\phase-observations.json",
+      "bytes": 20118,
+      "sha256": "6d7e7f98e41fa294a35b6982b45b2cd747e0e9b1f059f02480e69cf560129bfc",
+      "expected_git_blob_oid": "d0b7029fafc1b519a47e2c293f6e092587fa1cab"
+    },
+    {
+      "carrier_relative_path": "evidence/memory-successor-v1/prediction-schema-validation-v2.json",
+      "original_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\validation-prediction-schema-20261009T172513Z-db5f79046945495daa14cca82a23391a\\prediction-schema-validation.json",
+      "bytes": 4857,
+      "sha256": "17ad38164e3e856509e0e4fa1aa524bee44b97ae51a7d8a7974f9cc85f0d97df",
+      "expected_git_blob_oid": "31e71b3fcbed020b8dff4ee66bc03c0de6389f03"
+    }
+  ],
+  "file_count": 35,
+  "copied_bytes": 857702.0,
+  "scale_payload_copied": false,
+  "production_payload_copied": false,
+  "new_commit": "UNHELD",
+  "actual_index_verification": "UNHELD",
+  "preserves_all_predecessor_files": true
+}

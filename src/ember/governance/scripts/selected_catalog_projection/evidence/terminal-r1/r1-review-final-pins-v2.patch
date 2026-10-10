@@ -1,0 +1,493 @@
+--- a/selected_projection_memory_v1.cs
++++ b/selected_projection_memory_r1.cs
+@@ -60,6 +60,8 @@
+         public sealed class Binding {
+             public string prediction_path, prediction_sha256, export_path, output_root, marker_path, tenant_declaration_path, tenant_declaration_key, tenant_command_sha_key, command_path, source_path, source_sha256, runner_path, runner_sha256;
+             public long prediction_bytes, owner_reported_export_bytes, max_export_bytes, max_total_bytes_read, max_wall_seconds, max_private_bytes, max_output_bytes, min_C_free_bytes, max_tenant_declaration_bytes;
++            public string terminal_receipt_path,terminal_receipt_reservation_sha256;
++            public long terminal_receipt_reserved_bytes;
+             public int max_metadata_passes;
+             public Binding() {}
+         }
+@@ -112,6 +114,15 @@
+                 if(job.PeakProcess.ToUInt64()>536870912UL||job.PeakJob.ToUInt64()>536870912UL)throw new InvalidOperationException("JOB_PEAK_ABOVE_CAP");
+             } catch(ObserverFailedException) { throw; } catch(Exception e) { throw new ObserverFailedException(e); }
+         }
++        const long TerminalReservationBytes=8192;
++        static void VerifyTerminalReservation(Binding b) {
++            if(b.terminal_receipt_reserved_bytes!=TerminalReservationBytes||!IsSha(b.terminal_receipt_reservation_sha256))throw new InvalidOperationException("TERMINAL_RESERVATION_BINDING");
++            string expected=Path.Combine(b.output_root,"run-terminal-memory-r1.json");
++            if(String.IsNullOrWhiteSpace(b.terminal_receipt_path)||Norm(b.terminal_receipt_path)!=Norm(expected))throw new InvalidOperationException("TERMINAL_RESERVATION_PATH");
++            var info=new FileInfo(expected);
++            if(!info.Exists||info.Length!=TerminalReservationBytes)throw new InvalidOperationException("TERMINAL_RESERVATION_LENGTH");
++            if(Hash(File.ReadAllBytes(expected))!=b.terminal_receipt_reservation_sha256.ToLowerInvariant())throw new InvalidOperationException("TERMINAL_RESERVATION_HASH");
++        }
+         sealed class OutputBudget {
+             public Binding B; public Stopwatch Watch; public long InputBytes,BaseBytes,WrittenBytes;
+             public readonly Dictionary<string,object> Files=new Dictionary<string,object>(StringComparer.Ordinal);
+@@ -495,6 +506,7 @@
+             if(!IsSha(expectedCommandSha)||Norm(b.command_path)!=Norm(commandPath)||Hash(File.ReadAllBytes(b.command_path))!=expectedCommandSha.ToLowerInvariant())throw new InvalidOperationException("COMMAND_HASH");
+             if(Hash(File.ReadAllBytes(b.source_path))!=b.source_sha256.ToLowerInvariant()||Hash(File.ReadAllBytes(b.runner_path))!=b.runner_sha256.ToLowerInvariant())throw new InvalidOperationException("SOURCE_RUNNER_HASH");
+             if(Norm(b.output_root)!=Norm(Path.GetDirectoryName(bindingPath)))throw new InvalidOperationException("OUTPUT_ROOT");
++            VerifyTerminalReservation(b);
+             ActiveBindingSha=expectedBindingSha.ToLowerInvariant();ActiveCommandSha=expectedCommandSha.ToLowerInvariant();
+             var sw=Stopwatch.StartNew();var proc=Process.GetCurrentProcess();if(proc.PriorityClass!=ProcessPriorityClass.BelowNormal)throw new InvalidOperationException("LAUNCH_PRIORITY");
+             if(ObservePrivateUsage()>b.max_private_bytes)throw new InvalidOperationException("CAP_PRIVATE:launch");long total=0;
+@@ -598,7 +610,7 @@
+             WriteDocument(outputBudget,"summary.json",summary);
+             RuntimePhase("after_output_serialization",b);
+             long outBytes=checked(outputBudget.BaseBytes+outputBudget.WrittenBytes);
+-            Check(b,sw,total,"before_receipt",true);var receipt=new{schema="niko.selected_catalog_projection.run_receipt.v2",status="COMPLETE_SELECTED_CATALOG_PROJECTION",prediction_sha256=b.prediction_sha256,prediction_bytes=b.prediction_bytes,export_sha256=exportSha,export_bytes=b.owner_reported_export_bytes,export_top_level_key_order=hs.RootOrder.ToArray(),export_root_array_order=hs.RootArrayOrder.ToArray(),metadata_order_plan=orderPlan,membership_retention_strategy="hash_preselected_ids_only",metadata_passes=2,total_input_bytes_read=total,max_total_bytes_read=b.max_total_bytes_read,private_bytes_peak_observed=PeakPrivate,private_usage_observer="GetProcessMemoryInfo.PrivateUsage",private_usage_poll_rows=PrivateSampleEveryRows,diagnostic_snapshot_interval_rows=4096,diagnostic_snapshots=DiagnosticSnapshots.ToArray(),runtime_phase_observations=RuntimePhases.ToArray(),final_validation_index_counts=FinalValidationCounts,output_artifact_hashes=outputBudget.Files,output_buffer_limit_bytes=1048576,staging_promotion="same-volume Directory.Move after all unchanged final checks",private_usage_sample_count=PrivateSampleCount,max_private_bytes=b.max_private_bytes,runner_elapsed_seconds=sw.Elapsed.TotalSeconds,outer_wall_ceiling_seconds=b.max_wall_seconds,output_bytes_before_receipt=outBytes,max_output_bytes=b.max_output_bytes,marker_absent_at_start=!MarkerPresentAt("preflight"),marker_absent_after_hash=!MarkerPresentAt("after_hash"),marker_absent_after_pass1=!MarkerPresentAt("after_pass1"),marker_absent_after_pass2=!MarkerPresentAt("after_pass2"),marker_declared_at_start=TenantDeclaredAt("preflight"),marker_declared_after_hash=TenantDeclaredAt("after_hash"),marker_declared_after_pass1=TenantDeclaredAt("after_pass1"),marker_declared_after_pass2=TenantDeclaredAt("after_pass2"),marker_present_checkpoints=MarkerObservations.Where(x=>x.marker_present).Select(x=>x.checkpoint).ToArray(),tenant_declared_checkpoints=MarkerObservations.Where(x=>x.declared_tenant).Select(x=>x.checkpoint).ToArray(),tenant_declaration_path=b.tenant_declaration_path,tenant_declaration_sha256_last_observed=LastTenantDeclarationSha,command_sha256=ActiveCommandSha,logical_export_row_counts=logicalCounts,per_kind_export_row_counts=new{records=recordKindCounts,edges=edgeKindCounts},selected_membership_row_occurrences=selectedCount,unique_selected_membership_ids=selectedMemberCount,duplicate_selected_membership_occurrences=selectedCount-selectedMemberCount,unique_selected_object_digests=selectedSha.Count,selected_source_record_rows=selectedRecordRows,excluded_source_record_rows=excludedRecordRows,nonselected_source_record_rows=excludedRecordRows,selected_source_edge_rows=selectedEdgeRows,excluded_source_edge_rows=excludedEdgeRows,nonselected_source_edge_rows=excludedEdgeRows,count_class_semantics="excluded and nonselected overlap exactly; do not add all three. Logical rows count once; pass observations are separate. Global evaluation_object edges remain analysis context.",priority=Process.GetCurrentProcess().PriorityClass.ToString(),compute_parallelism=1,source_sha256=b.source_sha256,binding_sha256=expectedBindingSha,runner_sha256=b.runner_sha256,global_admitted_total="UNKNOWN",current_208="UNKNOWN"};
++            Check(b,sw,total,"before_receipt",true);var receipt=new{schema="niko.selected_catalog_projection.run_receipt.v2",status="COMPLETE_SELECTED_CATALOG_PROJECTION",prediction_sha256=b.prediction_sha256,prediction_bytes=b.prediction_bytes,export_sha256=exportSha,export_bytes=b.owner_reported_export_bytes,export_top_level_key_order=hs.RootOrder.ToArray(),export_root_array_order=hs.RootArrayOrder.ToArray(),metadata_order_plan=orderPlan,membership_retention_strategy="hash_preselected_ids_only",metadata_passes=2,total_input_bytes_read=total,max_total_bytes_read=b.max_total_bytes_read,private_bytes_peak_observed=PeakPrivate,private_usage_observer="GetProcessMemoryInfo.PrivateUsage",private_usage_poll_rows=PrivateSampleEveryRows,diagnostic_snapshot_interval_rows=4096,diagnostic_snapshots=DiagnosticSnapshots.ToArray(),runtime_phase_observations=RuntimePhases.ToArray(),final_validation_index_counts=FinalValidationCounts,output_artifact_hashes=outputBudget.Files,output_buffer_limit_bytes=1048576,terminal_receipt_path=b.terminal_receipt_path,terminal_receipt_reserved_bytes=b.terminal_receipt_reserved_bytes,terminal_receipt_reservation_sha256=b.terminal_receipt_reservation_sha256,terminal_receipt_budget_semantics="same-root pending file counted in BaseBytes; parent finalizes in place without growth",staging_promotion="same-volume Directory.Move after all unchanged final checks",private_usage_sample_count=PrivateSampleCount,max_private_bytes=b.max_private_bytes,runner_elapsed_seconds=sw.Elapsed.TotalSeconds,outer_wall_ceiling_seconds=b.max_wall_seconds,output_bytes_before_receipt=outBytes,max_output_bytes=b.max_output_bytes,marker_absent_at_start=!MarkerPresentAt("preflight"),marker_absent_after_hash=!MarkerPresentAt("after_hash"),marker_absent_after_pass1=!MarkerPresentAt("after_pass1"),marker_absent_after_pass2=!MarkerPresentAt("after_pass2"),marker_declared_at_start=TenantDeclaredAt("preflight"),marker_declared_after_hash=TenantDeclaredAt("after_hash"),marker_declared_after_pass1=TenantDeclaredAt("after_pass1"),marker_declared_after_pass2=TenantDeclaredAt("after_pass2"),marker_present_checkpoints=MarkerObservations.Where(x=>x.marker_present).Select(x=>x.checkpoint).ToArray(),tenant_declared_checkpoints=MarkerObservations.Where(x=>x.declared_tenant).Select(x=>x.checkpoint).ToArray(),tenant_declaration_path=b.tenant_declaration_path,tenant_declaration_sha256_last_observed=LastTenantDeclarationSha,command_sha256=ActiveCommandSha,logical_export_row_counts=logicalCounts,per_kind_export_row_counts=new{records=recordKindCounts,edges=edgeKindCounts},selected_membership_row_occurrences=selectedCount,unique_selected_membership_ids=selectedMemberCount,duplicate_selected_membership_occurrences=selectedCount-selectedMemberCount,unique_selected_object_digests=selectedSha.Count,selected_source_record_rows=selectedRecordRows,excluded_source_record_rows=excludedRecordRows,nonselected_source_record_rows=excludedRecordRows,selected_source_edge_rows=selectedEdgeRows,excluded_source_edge_rows=excludedEdgeRows,nonselected_source_edge_rows=excludedEdgeRows,count_class_semantics="excluded and nonselected overlap exactly; do not add all three. Logical rows count once; pass observations are separate. Global evaluation_object edges remain analysis context.",priority=Process.GetCurrentProcess().PriorityClass.ToString(),compute_parallelism=1,source_sha256=b.source_sha256,binding_sha256=expectedBindingSha,runner_sha256=b.runner_sha256,global_admitted_total="UNKNOWN",current_208="UNKNOWN"};
+             WriteDocument(outputBudget,"run-receipt.json",receipt);
+             Check(b,sw,total,"before_receipt",true);RuntimePhase("before_atomic_promotion",b);
+             WriteDocument(outputBudget,"phase-observations.json",RuntimePhases.ToArray());
+@@ -607,6 +619,7 @@
+             if(actualRootBytes!=checked(outputBudget.BaseBytes+outputBudget.WrittenBytes)||actualRootBytes>b.max_output_bytes)throw new InvalidOperationException("CAP_OUTPUT_FINAL");
+             if(new DriveInfo(Path.GetPathRoot(b.output_root)).AvailableFreeSpace<b.min_C_free_bytes)throw new InvalidOperationException("C_SPACE:promotion");
+             Check(b,sw,total,"before_receipt",true);
++            VerifyTerminalReservation(b);
+             Directory.Move(StagingRoot,runDir);
+             exportFile.Dispose();Console.WriteLine("COMPLETE_SELECTED_CATALOG_PROJECTION");Console.WriteLine(runDir);
+         }
+--- a/run-command-memory-v1.ps1
++++ b/run-command-memory-r1.ps1
+@@ -1,14 +1,93 @@
+ $ErrorActionPreference = 'Stop'
+ if (@($args).Count -ne 0) { throw 'UNEXPECTED_COMMAND_ARGUMENT' }
+ 
+-$runnerPath = 'C:\Users\Admin\.codex\visualizations\2026\10\01\01a0f8e5-f04d-7141-af6f-51c1dac8a822\1581-memory-successor-leo75037-20261009T1718Z\run_selected_projection_memory_v1.ps1'
+-$bindingPath = 'C:\Users\Admin\.codex\visualizations\2026\10\01\01a0f8e5-f04d-7141-af6f-51c1dac8a822\1581-memory-successor-leo75037-20261009T1718Z\binding-memory-v1.json'
+-$bindingSha256 = '12f0d33d1849687578f2bed4ca6cb7c4e510b9d38b2987b511460efbfad07793'
++$runnerPath = 'C:\Users\Admin\.codex\visualizations\2026\10\01\01a0f8e5-f04d-7141-af6f-51c1dac8a822\1581-memory-terminal-r1-leo75391-20261009T1800Z\run_selected_projection_memory_v1.ps1'
++$bindingPath = 'C:\Users\Admin\.codex\visualizations\2026\10\01\01a0f8e5-f04d-7141-af6f-51c1dac8a822\1581-memory-terminal-r1-leo75391-20261009T1800Z\binding-memory-r1.json'
++$bindingSha256 = '8cd5c9311d7518e74e3b534da4e7aa18e88a4cf62b958fa1e8d6be2906ebbda6'
+ $maxWallMilliseconds = 900000
+ $memoryLimitBytes = 536870912
+ $ErrorActionPreference = 'Stop'
+ if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'POWERSHELL7_REQUIRED' }
+ 
++# R1: fixed same-path reservation is counted by every existing root scan.
++function Get-RootBudgetBytes([string]$Root,[long]$Limit) {
++  if($Limit -lt 0){throw 'ROOT_BUDGET_ARGUMENT'}
++  $total=0L
++  foreach($path in [IO.Directory]::EnumerateFiles($Root,'*',[IO.SearchOption]::AllDirectories)){
++    $length=[long]([IO.FileInfo]::new($path)).Length
++    if($length -gt ($Limit-$total)){throw 'CAP_OUTPUT_ROOT'}
++    $total+=$length
++  }
++  return $total
++}
++function Get-PendingTerminalDocument {
++  $encoded=[Text.UTF8Encoding]::new($false).GetBytes('{"schema":"niko.selected_catalog_projection.terminal_reservation.v1","status":"RESERVED_PENDING_UNACCEPTED","reserved_bytes":8192,"result_accepted":false}')
++  $document=[byte[]]::new(8192)
++  [Array]::Fill[byte]($document,32)
++  [Array]::Copy($encoded,0,$document,0,$encoded.Length)
++  return ,$document
++}
++function Initialize-LaunchBudgetRecords([string]$Root,[long]$Limit,[string]$PreflightPath,[byte[]]$PreflightBytes,[string]$TerminalPath,[string]$ExpectedReservationSha) {
++  if([IO.Path]::GetFullPath($TerminalPath) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($Root),'run-terminal-memory-r1.json')){throw 'TERMINAL_RESERVATION_PATH'}
++  if([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($PreflightPath)) -ne [IO.Path]::GetFullPath($Root)){throw 'PREFLIGHT_BUDGET_PATH'}
++  if([IO.File]::Exists($TerminalPath) -or [IO.File]::Exists($PreflightPath)){throw 'LAUNCH_BUDGET_RECORD_EXISTS'}
++  $existing=Get-RootBudgetBytes $Root $Limit
++  $remaining=$Limit-$existing
++  if($remaining -lt 8192 -or $PreflightBytes.LongLength -gt ($remaining-8192)){throw 'CAP_OUTPUT_LAUNCH_RECORDS'}
++  $pending=Get-PendingTerminalDocument
++  $pendingSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($pending)).ToLowerInvariant()
++  if($pendingSha -ne $ExpectedReservationSha){throw 'TERMINAL_RESERVATION_HASH'}
++  $stream=[IO.FileStream]::new($TerminalPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough)
++  try{$stream.Write($pending,0,$pending.Length);$stream.Flush($true)}finally{$stream.Dispose()}
++  $stream=[IO.FileStream]::new($PreflightPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
++  try{$stream.Write($PreflightBytes,0,$PreflightBytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
++  if((Get-FileHash -LiteralPath $TerminalPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedReservationSha -or ([IO.FileInfo]::new($TerminalPath)).Length -ne 8192){throw 'TERMINAL_RESERVATION_READBACK'}
++  if((Get-FileHash -LiteralPath $PreflightPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($PreflightBytes)).ToLowerInvariant()){throw 'PREFLIGHT_READBACK'}
++  [void](Get-RootBudgetBytes $Root $Limit)
++}
++function Complete-TerminalReservation([string]$Root,[long]$Limit,[string]$TerminalPath,[string]$ExpectedReservationSha,[object]$Record) {
++  if([IO.Path]::GetFullPath($TerminalPath) -ne [IO.Path]::Combine([IO.Path]::GetFullPath($Root),'run-terminal-memory-r1.json')){throw 'TERMINAL_RESERVATION_PATH'}
++  $before=Get-RootBudgetBytes $Root $Limit
++  $encoded=[Text.UTF8Encoding]::new($false).GetBytes(($Record|ConvertTo-Json -Depth 8))
++  $degraded=$false
++  if($encoded.LongLength -gt 8192){
++    # Keep actual outcome/custody fields in a bounded failure terminal, never a success claim.
++    $primaryReason=[string]$Record.reason
++    $reasonPrefix=if($primaryReason.Length -gt 256){$primaryReason.Substring(0,256)}else{$primaryReason}
++    $fallback=[ordered]@{
++      schema='niko.selected_catalog_projection.outer_terminal.v1';status='TERMINAL_FAILURE'
++      reason='TERMINAL_RECEIPT_TOO_LARGE';outer_exit_code=125
++      primary_outer_exit_code=$Record.outer_exit_code;child_exit_code=$Record.child_exit_code
++      outer_pid=$Record.outer_pid;child_pid=$Record.child_pid
++      start_utc=$Record.start_utc;end_utc=$Record.end_utc;elapsed_seconds=$Record.elapsed_seconds
++      cleanup_verified=$Record.cleanup_verified;active_job_processes=$Record.active_job_processes
++      primary_reason_prefix=$reasonPrefix;primary_reason_truncated=($primaryReason.Length -gt 256)
++      primary_reason_sha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($primaryReason))).ToLowerInvariant()
++      command_sha256=$Record.command_sha256;binding_sha256=$Record.binding_sha256
++      terminal_receipt_reserved_bytes=8192;max_output_bytes=$Limit;result_accepted=$false
++    }
++    $encoded=[Text.UTF8Encoding]::new($false).GetBytes(($fallback|ConvertTo-Json -Depth 8))
++    $degraded=$true
++  }
++  if($encoded.LongLength -gt 8192){throw 'TERMINAL_FALLBACK_TOO_LARGE'}
++  $document=[byte[]]::new(8192)
++  [Array]::Fill[byte]($document,32)
++  [Array]::Copy($encoded,0,$document,0,$encoded.Length)
++  $expectedFinalSha=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($document)).ToLowerInvariant()
++  $stream=[IO.FileStream]::new($TerminalPath,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None,4096,[IO.FileOptions]::WriteThrough)
++  try{
++    if($stream.Length -ne 8192){throw 'TERMINAL_RESERVATION_LENGTH'}
++    if([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() -ne $ExpectedReservationSha){throw 'TERMINAL_RESERVATION_HASH'}
++    $stream.Position=0
++    $stream.Write($document,0,$document.Length);$stream.Flush($true)
++    $stream.Position=0
++    if($stream.Length -ne 8192 -or [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() -ne $expectedFinalSha){throw 'TERMINAL_RECEIPT_READBACK'}
++  }finally{$stream.Dispose()}
++  $after=Get-RootBudgetBytes $Root $Limit
++  if($after -ne $before){throw 'TERMINAL_ROOT_OCCUPANCY_CHANGED'}
++  return [pscustomobject]@{persisted=$true;degraded=$degraded;encoded_terminal_bytes=$encoded.LongLength;physical_terminal_bytes=8192;sha256=$expectedFinalSha;root_bytes_before=$before;root_bytes_after=$after}
++}
++
+ function Assert-SingleLine([string]$name,[string]$value) {
+   if ([string]::IsNullOrWhiteSpace($value) -or $value -ne $value.Trim() -or $value.Contains("`r") -or $value.Contains("`n")) { throw ('LITERAL_SINGLE_LINE:' + $name) }
+ }
+@@ -34,9 +113,10 @@
+ $productionLimitBytes = 536870912L
+ $taskRoot = [IO.Path]::GetDirectoryName($commandPath)
+ $preflightPath = [IO.Path]::GetFullPath([string]$binding.final_launch_gate_path)
+-$terminalReceiptPath = [IO.Path]::Combine([IO.Path]::GetDirectoryName($preflightPath),'run-terminal-memory-v1.json')
++$terminalReceiptPath = [IO.Path]::Combine([IO.Path]::GetDirectoryName($preflightPath),'run-terminal-memory-r1.json')
+ Assert-SingleLine 'preflightPath' $preflightPath
+ Assert-SingleLine 'terminalReceiptPath' $terminalReceiptPath
++if([long]$binding.terminal_receipt_reserved_bytes -ne 8192 -or [string]$binding.terminal_receipt_path -ne $terminalReceiptPath -or [string]$binding.terminal_receipt_reservation_sha256 -notmatch '^[0-9a-f]{64}$'){throw 'TERMINAL_RESERVATION_BINDING'}
+ if (-not [IO.Directory]::Exists([IO.Path]::GetDirectoryName($preflightPath))) { throw 'PREFLIGHT_PARENT_MISSING' }
+ if (Test-Path -LiteralPath $preflightPath) { throw 'PREFLIGHT_ALREADY_EXISTS' }
+ if (Test-Path -LiteralPath $terminalReceiptPath) { throw 'TERMINAL_RECEIPT_ALREADY_EXISTS' }
+@@ -138,13 +218,7 @@
+   final_launch_gate = $finalLaunchGate
+ }
+ $preflightBytes = [Text.UTF8Encoding]::new($false).GetBytes(($preflightRecord | ConvertTo-Json -Depth 12))
+-$preflightStream = [IO.FileStream]::new($preflightPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,[int]4096,[IO.FileOptions]::WriteThrough)
+-try {
+-  $preflightStream.Write($preflightBytes,0,$preflightBytes.Length)
+-  $preflightStream.Flush($true)
+-} finally {
+-  $preflightStream.Dispose()
+-}
++Initialize-LaunchBudgetRecords $taskRoot ([long]$binding.max_output_bytes) $preflightPath $preflightBytes $terminalReceiptPath ([string]$binding.terminal_receipt_reservation_sha256)
+ if (-not $gateOk) { throw ('FINAL_LAUNCH_GATE_REFUSED:' + (($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object Key) -join ',')) }
+ [Console]::Out.WriteLine("FINAL_LAUNCH_GATE=GO command_sha256=$commandSha256 binding_sha256=$actualBinding private_usage_threshold_bytes=$($binding.max_private_bytes) process_limit_bytes=$($binding.process_memory_limit_bytes) job_limit_bytes=$($binding.job_memory_limit_bytes) c_free_bytes=$cFreeBytes output_root_bytes=$outputRootBytes")
+ [Console]::Out.Flush()
+@@ -273,11 +347,13 @@
+       command_sha256 = $commandSha256
+       binding_sha256 = $actualBinding
+       terminal_receipt_path = $terminalReceiptPath
++      terminal_receipt_reserved_bytes = 8192
++      max_output_bytes = [long]$binding.max_output_bytes
+     }
+     try {
+-      $terminalJson = $terminalRecord | ConvertTo-Json -Depth 8
+-      [IO.File]::WriteAllText($terminalReceiptPath,$terminalJson,[Text.UTF8Encoding]::new($false))
+-      $terminalReceiptPersisted = $true
++      $terminalWrite = Complete-TerminalReservation $taskRoot ([long]$binding.max_output_bytes) $terminalReceiptPath ([string]$binding.terminal_receipt_reservation_sha256) $terminalRecord
++      $terminalReceiptPersisted = [bool]$terminalWrite.persisted
++      if($terminalWrite.degraded){$reason='TERMINAL_RECEIPT_TOO_LARGE';$parentExit=125}
+     } catch {
+       $terminalReceiptPersisted = $false
+       $reason = 'TERMINAL_RECEIPT_WRITE_FAILED'
+--- a/binding-memory-v1.json
++++ b/binding-memory-r1.json
+@@ -1,146 +1,150 @@
+-{
+-  "schema": "niko.selected_catalog_projection.binding.v2",
+-  "status": "PREPARED_NOT_EXECUTED_PRODUCTION_RELEASE_REQUIRED",
+-  "prediction_path": "A:\\handoff-1581\\head-hour-20261009\\prediction.json",
+-  "prediction_bytes": 17617,
+-  "prediction_sha256": "386aea69b20ae9c162e284775d96a70b2a7a65d02a048453f8cb15a78480435c",
+-  "export_path": "A:\\ember-staging\\h25-union-admission-20261005c\\export.json",
+-  "expected_export_sha256_from": "prediction.identity.production_mixture.catalog_export_sha256",
+-  "owner_reported_export_bytes": 724333331,
+-  "max_export_bytes": 805306368,
+-  "max_total_bytes_read": 2415919104,
+-  "max_metadata_passes": 2,
+-  "max_wall_seconds": 900,
+-  "max_private_bytes": 536870912,
+-  "max_output_bytes": 134217728,
+-  "min_C_free_bytes": 161061273600,
+-  "marker_path": "B:\\M\\avir\\leo\\state\\gpu-window-open",
+-  "tenant_declaration_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\TENANT_DISABLED_MARKER_MUST_BE_ABSENT.md",
+-  "tenant_declaration_key": "niko_1581_marker_up_rejected",
+-  "tenant_command_sha_key": "niko_1581_marker_up_rejected_command_sha256",
+-  "max_tenant_declaration_bytes": 65536,
+-  "marker_policy": "For this successor, the production preflight requires the GPU-window marker absent. No tenant override is configured. Any marker present at a later checkpoint fails closed; the declaration path is intentionally nonexistent and is not read while the marker is absent.",
+-  "marker_checkpoints": [
+-    "preflight",
+-    "before_prediction",
+-    "after_prediction_hash",
+-    "before_export_pass",
+-    "after each 1 MiB export read",
+-    "after_hash",
+-    "after_root_order_check",
+-    "after_pass1",
+-    "after_pass2",
+-    "before_output",
+-    "each output_write",
+-    "before_receipt"
+-  ],
+-  "command_sha256_binding": "Self-hash the exact command file at launch and pass it to the child; it is intentionally not stored in this binding because the command pins this binding SHA.",
+-  "priority": "BelowNormal",
+-  "compute_parallelism": 1,
+-  "python": false,
+-  "gpu": false,
+-  "network": false,
+-  "A_or_B_writes": false,
+-  "retries": 0,
+-  "parser_max_depth": 64,
+-  "direct_metadata_scalar_limit_bytes": 4096,
+-  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\selected_projection_memory_v1.cs",
+-  "source_sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+-  "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\run_selected_projection_memory_v1.ps1",
+-  "runner_sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+-  "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\run-command-memory-v1.ps1",
+-  "output_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z",
+-  "output_files": [
+-    "selected_projection_memory_v1.cs",
+-    "run_selected_projection_memory_v1.ps1",
+-    "binding-memory-v1.json",
+-    "run-command-memory-v1.ps1",
+-    "final-launch-gate-memory-v1.json",
+-    "run-terminal-memory-v1.json",
+-    "run/selected-memberships.jsonl",
+-    "run/selected-objects.jsonl",
+-    "run/summary.json",
+-    "run/run-receipt.json",
+-    "run/phase-observations.json",
+-    "run-refusal.json",
+-    "staging-unaccepted/*"
+-  ],
+-  "gate": "Existing hash pass verifies exact export digest, captures root keys/arrays and selected membership IDs from version_membership edges before metadata. Only records and edges top-level arrays are accepted; an extra array refuses before pass1. Both root orders supported.",
+-  "count_units": "Logical source records and edges are counted once. Per-pass observations are reported separately and must not be added to logical rows. Per-kind counts include selected_rows, excluded_rows and nonselected_rows; excluded and nonselected are the same unmatched subset and overlap exactly, so do not sum all three. evaluation_object edges are nonselected from the projection but remain global leakage context. Membership row occurrences and unique membership IDs, and selected object rows and unique object digests, are separate measures.",
+-  "selected_record_predicates": {
+-    "dataset_version": "id in the eight frozen dataset IDs",
+-    "membership": "id reached from selected dataset version_membership edges",
+-    "immutable_object": "sha256 in the selected membership digest set",
+-    "receipt": "sha256 referenced by a selected object_receipt edge"
+-  },
+-  "selected_edge_predicates": {
+-    "version_membership": "from_id in the eight frozen dataset IDs",
+-    "object_receipt": "from object digest in the selected digest set",
+-    "other_edge_kinds": "nonselected from the selected projection; global leakage context remains counted separately"
+-  },
+-  "metadata_order_strategy": "Existing hash traversal preselects IDs. Every all-row pass1 duplicate/totality check and all four leakage intersections remain. Stream memberships to unaccepted staging; freeze final scalar counts then null phase1 collection/delegate references before pass2. Pre-size selected object/receipt dictionaries; stream sorted object rows and retain same two metadata pass hashes and kind counts. No additional source pass.",
+-  "same_open_handle": "FileShare.Read handle held and rewound across three export passes",
+-  "stream_buffer_initial_bytes": 1048576,
+-  "stream_buffer_max_bytes": 536870912,
+-  "launch_guard": "The production command has a fixed 536870912-byte literal and no cap override path. One Job Object sets both ProcessMemoryLimit and JobMemoryLimit to 536870912 bytes (512 MiB), kill-on-close; runner guard binding is also 536870912 bytes, BelowNormal priority, one compute thread, 900 seconds.",
+-  "output_cap_measurement": "All files in fresh C production root plus checked streamed writes. Validation fixtures remain in their existing sibling root. No output payload copy; staging is promoted using same-volume Directory.Move only after exact hashes/counts and final predicates.",
+-  "output_cap_includes": [
+-    "four pinned source/runner/binding/command files",
+-    "all production gate/terminal/refusal artifacts",
+-    "unaccepted staging files or accepted run files including phase observations"
+-  ],
+-  "negative_fixtures": [
+-    {
+-      "id": "D1_runner_crlf_literal",
+-      "input": "runner path literal contains embedded CRLF",
+-      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
+-    },
+-    {
+-      "id": "D1_binding_digest_crlf_literal",
+-      "input": "binding digest literal contains embedded CRLF",
+-      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
+-    },
+-    {
+-      "id": "D2_job_assign_refused",
+-      "input": "Job Object cannot be assigned to the gated child",
+-      "expected": "gate remains closed; terminate by retained handle; bounded wait and cleanup status"
+-    },
+-    {
+-      "id": "D3_records_edges_extra",
+-      "input": "top-level arrays records, edges, extra",
+-      "expected": "ROOT_ARRAY_UNKNOWN before metadata pass1"
+-    },
+-    {
+-      "id": "marker_up_command_sha_missing",
+-      "input": "marker present and declaration has no command SHA field",
+-      "expected": "GPU_TENANT_DECLARATION_MISSING before input read"
+-    },
+-    {
+-      "id": "marker_up_command_sha_mismatch",
+-      "input": "marker present and declaration command SHA differs",
+-      "expected": "GPU_TENANT_COMMAND_SHA_MISMATCH before input read"
+-    },
+-    {
+-      "id": "marker_up_command_sha_match",
+-      "input": "marker present and declaration runner, binding and command SHA all match",
+-      "expected": "tenant check accepted; continue only under all other caps"
+-    }
+-  ],
+-  "source_review": "Leo74482/74612/74705 approve hash preselection, selected-only full Member values through pass1, all-row duplicate/leakage checks and diagnostics. Kai74753 identified missing cap-failure snapshot; successor preserves triggering PrivateUsage and scalar index counts before refusing. One Kai review of these successor bytes is pending.",
+-  "owner_ack": "Prior one-shot production invocation is terminal and consumed. Any additional real-data invocation remains conditional on Kai PASS, a fresh immediate preflight, and Leo one-run release. No retry.",
+-  "conditional_runtime": "Exactly one production invocation after immediate fresh preflight: marker absent, C free at least 150 GiB, prediction size and SHA match, export metadata length matches without reading export content, output root under 64 MiB, binding/source/runner/command pins match, process and job caps each 536870912 bytes, runner private guard 536870912 bytes, 900 seconds, BelowNormal, one compute thread. No retry after any invocation refusal.",
+-  "prediction_schema_change": "Read identity.input_binding.tokenizer_sha256; read identity.data.tokenizer_sha256 and refuse if they differ, naming both full paths; missing required property errors name the exact full JSON path. Prediction input is unchanged. Projection predicates, caps, resource guards, and marker semantics are unchanged.",
+-  "validation_plan": "C-only rejected-source red reproduces11/12 full Members, final small/stress both-order fixtures enforce eight full Members through pass1 against11/8203 all-ID populations, distinct frozen baseline outputs/counts equal, duplicate outside slice refuses, measured/unknown refusal peak checks. Separate cap red/green uses real Scan row64 and direct snapshot with synthetic binding threshold1; production512MiB unchanged. Static binding checks cap pins/hidden child/no override/final gate before Process.Start. Production unexecuted.",
+-  "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\binding-memory-v1.json",
+-  "process_memory_limit_bytes": 536870912,
+-  "job_memory_limit_bytes": 536870912,
+-  "private_usage_observer": "GetProcessMemoryInfo.PrivateUsage",
+-  "private_usage_poll_rows": 64,
+-  "final_launch_gate_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\final-launch-gate-memory-v1.json",
+-  "private_usage_test_contract": "Observer fixture exercises measured baseline plus1MiB with16MiB real allocation,64-row polling and invalid handle. Cap-snapshot fixture lowers only a synthetic Binding to1 byte at row64 after valid start, validates refusal snapshot/counts and direct diagnostic cap. Neither threshold exists in production binding/command.",
+-  "command_line": "pwsh.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-command-preselected-leo74705-v2.ps1",
+-  "retention_policy": "Full Member values are hash-preselected IDs only THROUGH pass1. After membership serialization and global checks, release all pass1 collection references/delegates, preserve final count evidence separately from live zero counts.",
+-  "retention_diagnostics": "Run/refusal receipts carry PrivateUsage/index counts at each hash/metadata pass boundary and every4096 rows. CAP_PRIVATE from row Check caches the triggering sample; row_failure uses it without another query and appends bounded scalar counts before cap refusal. Direct diagnostic cap also appends before throwing. Peak is maximum successful sample; no successful sample means null, not zero.",
+-  "diagnostic_snapshot_interval_rows": 4096,
+-  "memory_successor_authority": "Leo75005/75037, Kai one delta recheck then Leo at most one production release. Current fixture permission is not production permission."
++{
++  "schema": "niko.selected_catalog_projection.binding.v2",
++  "status": "R1_PREPARED_NOT_EXECUTED_BOUNDARY_FIXTURE_AND_KAI_RECHECK_REQUIRED",
++  "prediction_path": "A:\\handoff-1581\\head-hour-20261009\\prediction.json",
++  "prediction_bytes": 17617,
++  "prediction_sha256": "386aea69b20ae9c162e284775d96a70b2a7a65d02a048453f8cb15a78480435c",
++  "export_path": "A:\\ember-staging\\h25-union-admission-20261005c\\export.json",
++  "expected_export_sha256_from": "prediction.identity.production_mixture.catalog_export_sha256",
++  "owner_reported_export_bytes": 724333331,
++  "max_export_bytes": 805306368,
++  "max_total_bytes_read": 2415919104,
++  "max_metadata_passes": 2,
++  "max_wall_seconds": 900,
++  "max_private_bytes": 536870912,
++  "max_output_bytes": 134217728,
++  "min_C_free_bytes": 161061273600,
++  "marker_path": "B:\\M\\avir\\leo\\state\\gpu-window-open",
++  "tenant_declaration_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\TENANT_DISABLED_MARKER_MUST_BE_ABSENT.md",
++  "tenant_declaration_key": "niko_1581_marker_up_rejected",
++  "tenant_command_sha_key": "niko_1581_marker_up_rejected_command_sha256",
++  "max_tenant_declaration_bytes": 65536,
++  "marker_policy": "For this successor, the production preflight requires the GPU-window marker absent. No tenant override is configured. Any marker present at a later checkpoint fails closed; the declaration path is intentionally nonexistent and is not read while the marker is absent.",
++  "marker_checkpoints": [
++    "preflight",
++    "before_prediction",
++    "after_prediction_hash",
++    "before_export_pass",
++    "after each 1 MiB export read",
++    "after_hash",
++    "after_root_order_check",
++    "after_pass1",
++    "after_pass2",
++    "before_output",
++    "each output_write",
++    "before_receipt"
++  ],
++  "command_sha256_binding": "Self-hash the exact command file at launch and pass it to the child; it is intentionally not stored in this binding because the command pins this binding SHA.",
++  "priority": "BelowNormal",
++  "compute_parallelism": 1,
++  "python": false,
++  "gpu": false,
++  "network": false,
++  "A_or_B_writes": false,
++  "retries": 0,
++  "parser_max_depth": 64,
++  "direct_metadata_scalar_limit_bytes": 4096,
++  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\selected_projection_memory_r1.cs",
++  "source_sha256": "43f93066866ad44d9e2ec8fe06888d6d914321a3a18aa969affb5aaa5670a390",
++  "runner_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\run_selected_projection_memory_v1.ps1",
++  "runner_sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
++  "command_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\run-command-memory-r1.ps1",
++  "output_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z",
++  "output_files": [
++    "selected_projection_memory_v1.cs",
++    "run_selected_projection_memory_v1.ps1",
++    "binding-memory-v1.json",
++    "run-command-memory-v1.ps1",
++    "final-launch-gate-memory-v1.json",
++    "run-terminal-memory-v1.json",
++    "run/selected-memberships.jsonl",
++    "run/selected-objects.jsonl",
++    "run/summary.json",
++    "run/run-receipt.json",
++    "run/phase-observations.json",
++    "run-refusal.json",
++    "staging-unaccepted/*"
++  ],
++  "gate": "Existing hash pass verifies exact export digest, captures root keys/arrays and selected membership IDs from version_membership edges before metadata. Only records and edges top-level arrays are accepted; an extra array refuses before pass1. Both root orders supported.",
++  "count_units": "Logical source records and edges are counted once. Per-pass observations are reported separately and must not be added to logical rows. Per-kind counts include selected_rows, excluded_rows and nonselected_rows; excluded and nonselected are the same unmatched subset and overlap exactly, so do not sum all three. evaluation_object edges are nonselected from the projection but remain global leakage context. Membership row occurrences and unique membership IDs, and selected object rows and unique object digests, are separate measures.",
++  "selected_record_predicates": {
++    "dataset_version": "id in the eight frozen dataset IDs",
++    "membership": "id reached from selected dataset version_membership edges",
++    "immutable_object": "sha256 in the selected membership digest set",
++    "receipt": "sha256 referenced by a selected object_receipt edge"
++  },
++  "selected_edge_predicates": {
++    "version_membership": "from_id in the eight frozen dataset IDs",
++    "object_receipt": "from object digest in the selected digest set",
++    "other_edge_kinds": "nonselected from the selected projection; global leakage context remains counted separately"
++  },
++  "metadata_order_strategy": "Existing hash traversal preselects IDs. Every all-row pass1 duplicate/totality check and all four leakage intersections remain. Stream memberships to unaccepted staging; freeze final scalar counts then null phase1 collection/delegate references before pass2. Pre-size selected object/receipt dictionaries; stream sorted object rows and retain same two metadata pass hashes and kind counts. No additional source pass.",
++  "same_open_handle": "FileShare.Read handle held and rewound across three export passes",
++  "stream_buffer_initial_bytes": 1048576,
++  "stream_buffer_max_bytes": 536870912,
++  "launch_guard": "The production command has a fixed 536870912-byte literal and no cap override path. One Job Object sets both ProcessMemoryLimit and JobMemoryLimit to 536870912 bytes (512 MiB), kill-on-close; runner guard binding is also 536870912 bytes, BelowNormal priority, one compute thread, 900 seconds.",
++  "output_cap_measurement": "All files in fresh C production root plus checked streamed writes. Validation fixtures remain in their existing sibling root. No output payload copy; staging is promoted using same-volume Directory.Move only after exact hashes/counts and final predicates.",
++  "output_cap_includes": [
++    "four pinned source/runner/binding/command files",
++    "all production gate/terminal/refusal artifacts",
++    "unaccepted staging files or accepted run files including phase observations"
++  ],
++  "negative_fixtures": [
++    {
++      "id": "D1_runner_crlf_literal",
++      "input": "runner path literal contains embedded CRLF",
++      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
++    },
++    {
++      "id": "D1_binding_digest_crlf_literal",
++      "input": "binding digest literal contains embedded CRLF",
++      "expected": "LITERAL_SINGLE_LINE before Process.Start; RUN_START absent"
++    },
++    {
++      "id": "D2_job_assign_refused",
++      "input": "Job Object cannot be assigned to the gated child",
++      "expected": "gate remains closed; terminate by retained handle; bounded wait and cleanup status"
++    },
++    {
++      "id": "D3_records_edges_extra",
++      "input": "top-level arrays records, edges, extra",
++      "expected": "ROOT_ARRAY_UNKNOWN before metadata pass1"
++    },
++    {
++      "id": "marker_up_command_sha_missing",
++      "input": "marker present and declaration has no command SHA field",
++      "expected": "GPU_TENANT_DECLARATION_MISSING before input read"
++    },
++    {
++      "id": "marker_up_command_sha_mismatch",
++      "input": "marker present and declaration command SHA differs",
++      "expected": "GPU_TENANT_COMMAND_SHA_MISMATCH before input read"
++    },
++    {
++      "id": "marker_up_command_sha_match",
++      "input": "marker present and declaration runner, binding and command SHA all match",
++      "expected": "tenant check accepted; continue only under all other caps"
++    }
++  ],
++  "source_review": "Kai75389/e63a3996 accepts memory lifetime/global semantics/12 artifact byte pairs/controlled scale within disclosed limits; REDO only R1 terminal accounting. This pin adds only R1 reserve validation plus new bound paths. Leo75391 authorizes one small C-only near-limit fixture after owner window close; Kai rechecks changed budget/terminal code and pins only.",
++  "owner_ack": "Prior one-shot production invocation is terminal and consumed. Any additional real-data invocation remains conditional on Kai PASS, a fresh immediate preflight, and Leo one-run release. No retry.",
++  "conditional_runtime": "Exactly one production invocation after immediate fresh preflight: marker absent, C free at least 150 GiB, prediction size and SHA match, export metadata length matches without reading export content, whole output root at most128MiB including source/runner/binding/command, preflight, 8192-byte terminal reservation and retained staging/refusal, binding/source/runner/command pins match, process and job caps each 536870912 bytes, runner private guard 536870912 bytes, 900 seconds, BelowNormal, one compute thread. No retry after any invocation refusal.",
++  "prediction_schema_change": "Read identity.input_binding.tokenizer_sha256; read identity.data.tokenizer_sha256 and refuse if they differ, naming both full paths; missing required property errors name the exact full JSON path. Prediction input is unchanged. Projection predicates, caps, resource guards, and marker semantics are unchanged.",
++  "validation_plan": "C-only rejected-source red reproduces11/12 full Members, final small/stress both-order fixtures enforce eight full Members through pass1 against11/8203 all-ID populations, distinct frozen baseline outputs/counts equal, duplicate outside slice refuses, measured/unknown refusal peak checks. Separate cap red/green uses real Scan row64 and direct snapshot with synthetic binding threshold1; production512MiB unchanged. Static binding checks cap pins/hidden child/no override/final gate before Process.Start. Production unexecuted.",
++  "binding_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\binding-memory-r1.json",
++  "process_memory_limit_bytes": 536870912,
++  "job_memory_limit_bytes": 536870912,
++  "private_usage_observer": "GetProcessMemoryInfo.PrivateUsage",
++  "private_usage_poll_rows": 64,
++  "final_launch_gate_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\final-launch-gate-memory-r1.json",
++  "private_usage_test_contract": "Observer fixture exercises measured baseline plus1MiB with16MiB real allocation,64-row polling and invalid handle. Cap-snapshot fixture lowers only a synthetic Binding to1 byte at row64 after valid start, validates refusal snapshot/counts and direct diagnostic cap. Neither threshold exists in production binding/command.",
++  "command_line": "pwsh.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\run-command-memory-r1.ps1",
++  "retention_policy": "Full Member values are hash-preselected IDs only THROUGH pass1. After membership serialization and global checks, release all pass1 collection references/delegates, preserve final count evidence separately from live zero counts.",
++  "retention_diagnostics": "Run/refusal receipts carry PrivateUsage/index counts at each hash/metadata pass boundary and every4096 rows. CAP_PRIVATE from row Check caches the triggering sample; row_failure uses it without another query and appends bounded scalar counts before cap refusal. Direct diagnostic cap also appends before throwing. Peak is maximum successful sample; no successful sample means null, not zero.",
++  "diagnostic_snapshot_interval_rows": 4096,
++  "memory_successor_authority": "Leo75005/75037 plus R1-only Leo75391/75425; no scale replay perLeo75362. After owner window close and one small boundary red/green fixture, Kai changed-code/pin recheck; actual PASS releases at most one production attempt under original absent-marker/current resource/host/input gates.",
++  "terminal_receipt_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z\\run-terminal-memory-r1.json",
++  "terminal_receipt_reserved_bytes": 8192,
++  "terminal_receipt_reservation_sha256": "0ace1e1d248552ef7c10eb951d56907c6f4da6f20025ddb1d61d3f8994fa5cb3",
++  "terminal_receipt_budget": "R1: create pending/unaccepted 8192-byte same-path reservation and preflight only after checked whole-root arithmetic; source verifies reservation path/length/hash before input and promotion. Final receipt is padded to8192 bytes, replaced in place with hash/length/readback and unchanged-root verification. Success/refusal/staging remain within134217728 bytes. No alternate destination, cap raise, cleanup or automatic retry."
+ }

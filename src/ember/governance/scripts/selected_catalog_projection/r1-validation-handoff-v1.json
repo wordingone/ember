@@ -1,0 +1,124 @@
+{
+  "schema": "niko.memory_terminal_r1.validation_handoff.v1",
+  "status": "PASS_NARROW_BOUNDARY_KAI_RECHECK_PENDING",
+  "authority": [
+    "Leo75391",
+    "Leo75425",
+    "Leo75526",
+    "Eli75563"
+  ],
+  "pre_read_packet": {
+    "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\r1-pre-read-packet-v1.json",
+    "bytes": 2844,
+    "sha256": "18460c136fd3c49e6f0453ae6b182b9163177d7df56d0862773ccc7ac7a20b6d"
+  },
+  "final_patch": {
+    "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\r1-review-final-pins-v2.patch",
+    "bytes": 47604,
+    "sha256": "1a4cb6821977b1d948fcf6deaac4700ac48aa2b3d8d71ac1bcbd0df40f1fa172"
+  },
+  "product_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z",
+  "product_pins": [
+    {
+      "name": "selected_projection_memory_r1.cs",
+      "bytes": 68236,
+      "sha256": "43f93066866ad44d9e2ec8fe06888d6d914321a3a18aa969affb5aaa5670a390"
+    },
+    {
+      "name": "run_selected_projection_memory_v1.ps1",
+      "bytes": 7338,
+      "sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+      "unchanged": true
+    },
+    {
+      "name": "binding-memory-r1.json",
+      "bytes": 13082,
+      "sha256": "8cd5c9311d7518e74e3b534da4e7aa18e88a4cf62b958fa1e8d6be2906ebbda6"
+    },
+    {
+      "name": "run-command-memory-r1.ps1",
+      "bytes": 25918,
+      "sha256": "4a8629dc5928c110bffbdc2b4b0b02e897a5342832c29712a8eec078390dc702"
+    }
+  ],
+  "unchanged_limits": {
+    "process_job_private_bytes": 536870912,
+    "input_total_bytes": 2415919104,
+    "export_max_bytes": 805306368,
+    "metadata_passes": 2,
+    "wall_seconds": 900,
+    "priority": "BelowNormal",
+    "compute_threads": 1,
+    "C_floor_bytes": 161061273600,
+    "marker_policy": "ABSENT_REQUIRED_NO_TENANT_OVERRIDE"
+  },
+  "production_root_initial_bytes": 114574,
+  "production_root_ceiling_bytes": 134217728,
+  "terminal_reservation_bytes": 8192,
+  "terminal_reservation_sha256": "0ace1e1d248552ef7c10eb951d56907c6f4da6f20025ddb1d61d3f8994fa5cb3",
+  "local_preflight": {
+    "utc": "2026-10-09T18:21:05.4230185Z",
+    "C_free_bytes": 179825618944,
+    "marker_absent": true,
+    "fixture_pins_match": true
+  },
+  "actual_outer": {
+    "pid": 47592,
+    "start_utc": "2026-10-09T18:21:06.0574925Z",
+    "end_utc": "2026-10-09T18:21:08.8994251Z",
+    "exit_code": 0,
+    "cleanup_verified": true,
+    "active_job_processes": 0,
+    "receipt": {
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\r1-outer-terminal-v1\\terminal.json",
+      "bytes": 923,
+      "sha256": "32f80af795655beb50912055babe7e8a109873ef29a341defb5ceca8c01105fa"
+    }
+  },
+  "actual_fixture_child": {
+    "pid": 46784,
+    "start_utc": "2026-10-09T18:21:06.8756116Z",
+    "end_utc": "2026-10-09T18:21:08.7328094Z",
+    "exit_code": 0,
+    "cleanup_verified": true,
+    "active_job_processes": 0,
+    "actual_process_job_caps": 536870912,
+    "controller_elapsed_seconds": 2.2526419,
+    "receipt": {
+      "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\fixture-controller-terminal-v1.json",
+      "bytes": 974,
+      "sha256": "c375b8a49bcfd5e8da963e2b7a26432874ac5f90275f92126700114d12fefd22"
+    }
+  },
+  "boundary_receipt": {
+    "path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\boundary-validation-v1.json",
+    "bytes": 10961,
+    "sha256": "64932efc08d349187b21e57d82a79b94058e7a611d953a91f157758e596734b9",
+    "assertions": 22,
+    "all_pass": true,
+    "elapsed_seconds": 1.2618205,
+    "initial_bytes": 110331,
+    "conservative_cumulative_writer_upper_before_receipt_bytes": 1107282,
+    "occupancy_before_receipt_bytes": 1168429,
+    "max_fixture_bytes": 8388608
+  },
+  "executed_scope": "actual pinned command budget/reservation functions extracted from its AST; actual changed C# reserve verifier and bounded writer compiled/executed, tiny131072-byte roots; terminal statuses are labeled fixture simulations; full production command and catalog pipeline not run",
+  "observed_private_start_bytes": 99848192,
+  "observed_private_end_bytes": 118452224,
+  "max_recorded_phase_process_job_bytes": 118452224,
+  "effective_runtime": "pwsh7.6.5.500/.NET10.0.11/X64",
+  "effective_GC_heap_hard_limit": 402653184,
+  "GC_override_added": false,
+  "old_suite_sha256": "2e702828e73daca85cba4bdaae895a227a313de17ba285f9cfa289df0bfbea87",
+  "accepted_old_memory_evidence_retained": true,
+  "scale_replayed": false,
+  "production_executed": false,
+  "Python": false,
+  "A_B_runtime_reads": false,
+  "automatic_retry": false,
+  "Kai_recheck_scope": "R1 budget/terminal code and these exact four pins only",
+  "release_condition": "Actual Kai PASS under Leo75391, one production attempt only with fresh absent-marker/owner/resource/input/host gates; no production release from this fixture",
+  "public_PR": "https://github.com/wordingone/ember/pull/2361",
+  "new_Git_commit": "UNHELD",
+  "CI_policy_result": "UNHELD; use actual CI repo-policy-gate perLeo75383"
+}
