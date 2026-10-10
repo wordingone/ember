@@ -97,6 +97,8 @@ EVALUATION_EVIDENCE = {
     "inference_implementation": "inference_implementation_sha256",
     "predictions": "predictions_sha256",
     "score_artifact": "score_artifact_sha256",
+    # Frozen reference answers: protected custody, never readable by train readers.
+    "references": "references_sha256",
 }
 BORROWED_FLAGS = (
     "borrowed_weights",
@@ -2040,6 +2042,9 @@ def _verify_admission(
                         evidence_hash = record.get("sha256") if isinstance(record, dict) else None
                         if payload.get(receipt_field) != evidence_hash:
                             errors.append(f"{prefix} receipt: executed evidence {receipt_field} mismatch")
+                if "references" in evidence_paths:
+                    errors.extend(protected_reference_errors(
+                        root, payload.get("references_sha256"), benchmark_id, prefix))
                 sample_count = payload.get("sample_count")
                 if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count <= 0:
                     errors.append(f"{prefix} receipt: executed evidence sample_count must be positive")
@@ -2127,68 +2132,10 @@ def _verify_admission(
                         and isinstance(benchmark_version, str)
                         and isinstance(criterion_id, str)
                     ):
-                        command = [
-                            sys.executable,
-                            "-I",
-                            str(verifier_path),
-                            "--capability",
-                            str(capability),
-                            "--checkpoint-manifest",
-                            str(checkpoint_path),
-                            "--benchmark-id",
-                            str(benchmark_id),
-                            "--benchmark-version",
-                            benchmark_version,
-                            "--criterion-id",
-                            criterion_id,
-                        ]
-                        for evidence_name in EVALUATION_EVIDENCE:
-                            command.extend(
-                                [f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])]
-                            )
-                        try:
-                            completed = subprocess.run(
-                                command,
-                                cwd=root,
-                                text=True,
-                                capture_output=True,
-                                timeout=120,
-                                check=False,
-                            )
-                        except (OSError, subprocess.SubprocessError) as exc:
-                            errors.append(f"{prefix} receipt: verifier execution failed: {exc}")
-                        else:
-                            if completed.returncode != 0:
-                                errors.append(
-                                    f"{prefix} receipt: verifier execution failed with exit code "
-                                    f"{completed.returncode}"
-                                )
-                            else:
-                                try:
-                                    executed = json.loads(completed.stdout)
-                                except json.JSONDecodeError:
-                                    errors.append(f"{prefix} receipt: verifier execution returned invalid JSON")
-                                else:
-                                    executed_fields = (
-                                        "capability",
-                                        "result",
-                                        "subject_checkpoint_sha256",
-                                        "benchmark_id",
-                                        "benchmark_version",
-                                        *EVALUATION_EVIDENCE.values(),
-                                        "sample_count",
-                                        "metrics",
-                                        "criterion_id",
-                                        "criterion_result",
-                                    )
-                                    if not isinstance(executed, dict):
-                                        errors.append(f"{prefix} receipt: verifier execution must return an object")
-                                    else:
-                                        for field in executed_fields:
-                                            if executed.get(field) != payload.get(field):
-                                                errors.append(
-                                                    f"{prefix} receipt: verifier execution {field} mismatch"
-                                                )
+                        errors.extend(execute_evaluation_verifier(
+                            root, verifier_path, capability, checkpoint_path, benchmark_id,
+                            benchmark_version, criterion_id, evidence_paths, payload, prefix,
+                        ))
         for capability in CAPABILITIES:
             if found.get(capability) != 1:
                 errors.append(f"evaluations: requires exactly one {capability} receipt")
@@ -2319,6 +2266,118 @@ def _verify_genesis_claim_boundary(
         errors.append("genesis checkpoint: exact zero cursor required")
     if checkpoint_payload.get("genesis_claim_boundary") != boundary:
         errors.append("genesis checkpoint: claim boundary mismatch")
+
+EVALUATION_EXECUTED_FIELDS = (
+    "capability",
+    "result",
+    "subject_checkpoint_sha256",
+    "benchmark_id",
+    "benchmark_version",
+    *EVALUATION_EVIDENCE.values(),
+    "sample_count",
+    "metrics",
+    "criterion_id",
+    "criterion_statistic",
+    "admission_margin",
+    "criterion_result",
+)
+
+
+PROTECTED_EVAL_REGISTRY = Path("data") / "ember-restart-3b" / "protected-eval-registry-v2.json"
+
+
+PROTECTED_EVAL_REGISTRY_SCHEMA = "ember-protected-eval-registry-v2"
+# The train-side corpus screen; its validator is executed here, never re-implemented, so the
+# evaluation side accepts exactly the registry and custody bindings the train screen refuses.
+TRAIN_SCREEN = Path(__file__).resolve().parents[5] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
+
+
+def protected_reference_errors(root: Path, references_sha256: Any, benchmark_id: Any, prefix: str) -> list[str]:
+    """Frozen references must be a content_sha256 protected identifier of this benchmark's entry in the
+    validated shared registry (custody manifest bytes and evidence re-checked by the train screen)."""
+    try:
+        registry = json.loads((root / PROTECTED_EVAL_REGISTRY).read_text(encoding="utf-8"))
+        if not isinstance(registry, dict) or registry.get("schema_version") != PROTECTED_EVAL_REGISTRY_SCHEMA:
+            raise ValueError("protected evaluation registry schema is invalid")
+        spec = importlib.util.spec_from_file_location("ember_train_screen_text_lab_corpus", TRAIN_SCREEN)
+        screen = sys.modules.get(spec.name) or importlib.util.module_from_spec(spec)
+        if spec.name not in sys.modules:
+            sys.modules[spec.name] = screen  # dataclass/typing lookups resolve by name
+            try:
+                spec.loader.exec_module(screen)
+            except BaseException:
+                sys.modules.pop(spec.name, None)
+                raise
+        screen._protected_identifier_sets(root, registry["protected"])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [f"{prefix} receipt: protected evaluation registry or custody invalid: {exc}"]
+    entry = next((item for item in registry["protected"] if item["benchmark_id"] == benchmark_id), None)
+    values = {i["value"] for i in entry["protected_identifiers"] if i["kind"] == "content_sha256"} if entry else set()
+    if references_sha256 not in values:
+        return [f"{prefix} receipt: references are not a protected identifier of benchmark {benchmark_id}"]
+    return []
+
+
+def execute_evaluation_verifier(
+    root: Path,
+    verifier_path: Path,
+    capability: str,
+    checkpoint_path: Path,
+    benchmark_id: str,
+    benchmark_version: str,
+    criterion_id: str,
+    evidence_paths: dict[str, Path],
+    payload: dict[str, Any],
+    prefix: str,
+) -> list[str]:
+    """Run the trusted evaluation verifier and compare every field it recomputes with the receipt."""
+    command = [
+        sys.executable,
+        "-I",
+        str(verifier_path),
+        "--capability",
+        str(capability),
+        "--checkpoint-manifest",
+        str(checkpoint_path),
+        "--benchmark-id",
+        str(benchmark_id),
+        "--benchmark-version",
+        benchmark_version,
+        "--criterion-id",
+        criterion_id,
+    ]
+    for evidence_name in EVALUATION_EVIDENCE:
+        command.extend([f"--{evidence_name.replace('_', '-')}", str(evidence_paths[evidence_name])])
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=root,
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"{prefix} receipt: verifier execution failed: {exc}"]
+    if completed.returncode != 0:
+        return [f"{prefix} receipt: verifier execution failed with exit code {completed.returncode}"]
+    try:
+        executed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return [f"{prefix} receipt: verifier execution returned invalid JSON"]
+    if not isinstance(executed, dict):
+        return [f"{prefix} receipt: verifier execution must return an object"]
+    errors = [
+        f"{prefix} receipt: verifier execution {field} mismatch"
+        for field in EVALUATION_EXECUTED_FIELDS
+        if executed.get(field) != payload.get(field)
+    ]
+    # Metrics the verifier did not re-score itself are never admissible.
+    if executed.get("metric_verification") != "RESCORED":
+        errors.append(f"{prefix} receipt: metrics are METRIC_REPORTED_UNVERIFIED (not re-scored by the verifier)")
+    return errors
+
 
 def validate_manifest(
     path: Path,
