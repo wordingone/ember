@@ -37,7 +37,7 @@
     },
     {
       "path": "verifiers/capability-evaluation-verifier.py",
-      "sha256": "54b8c4f70420ada8aa7fe855a92d708a0e746f12fb3027c708cd3fc301d3e3be",
+      "sha256": "26256bf4cdae14e52b2f45450b9a6459518d70ee0d449fb5532f801405c11842",
       "evidence_classes": [
         "evaluation"
       ],
