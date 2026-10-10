@@ -455,6 +455,109 @@ def test_reasoning_category_missing_from_the_population_is_undetermined(tmp_path
         "evaluations[0] receipt: metrics are METRIC_REPORTED_UNVERIFIED (not re-scored by the verifier)"]
 
 
+def test_a_reported_unknown_category_that_would_pass_is_never_admitted_while_the_rescore_succeeds(tmp_path):
+    # Review 78811 R1: every row is arith and right, so exact_match and exact_match:arith re-score.
+    # The criterion also reads a geometry category no row carries; the score is forged to report it
+    # (1.0 over 40) so the reported metrics alone give PASSED. The verifier must not admit it.
+    cats = [{"name": n, "metric": f"exact_match:{n}", "count_metric": f"count:{n}",
+             "reference": _pin(tmp_path, f"ref-{n}.json", 0.5), "reference_factor": 0.8} for n in ("arith", "geometry")]
+    criterion = _criterion(tmp_path, reference=0.5, categories=cats)
+    case = Case(tmp_path, ALL_RIGHT, {k: "arith" for k in ALL_RIGHT}, criterion)
+    assert case.run_scorer().returncode == 0
+    score = json.loads(case.score.read_text())
+    assert score["criterion_result"] == "UNDETERMINED" and "exact_match:geometry" not in score["metrics"]
+    control = case.run_verifier()  # unforged: the rescore succeeds, the geometry input stays unverified
+    assert control.returncode == 0, control.stderr
+    assert json.loads(control.stdout)["metric_verification"] == "METRIC_REPORTED_UNVERIFIED"
+    score["metrics"].update({"exact_match:geometry": 1.0, "count:geometry": 40})
+    verdict = helper.admission(score["metrics"], score["sample_count"], helper.check_criterion(criterion, CRITERION),
+                               case.protocol.parent)
+    assert verdict["criterion_result"] == "PASSED"  # the forged report alone would pass
+    score.update({field: verdict[field] for field in ("criterion_statistic", "admission_margin", "criterion_result")})
+    case.score.write_text(json.dumps(score), encoding="utf-8")
+    result = case.run_verifier()
+    assert result.returncode == 1 and "differ from the verifier's re-score" in result.stderr, result.stderr
+    assert case.contract_errors() == ["evaluations[0] receipt: verifier execution failed with exit code 1"]
+
+
+def _text_contract_errors(tmp: Path, benchmark_version: str) -> list[str]:
+    """The real text scorer's output, read by contract.execute_evaluation_verifier (review 78811 R2)."""
+    score, _ = _text_case(tmp)
+    evidence = {"split": tmp / "split.json", "harness": tmp / "harness.json", "protocol": tmp / "protocol.json",
+                "inference_implementation": tmp / "inference.json", "predictions": tmp / "predictions.json",
+                "score_artifact": tmp / "score.json", "references": tmp / "references.jsonl"}
+    receipt = {"capability": "text", "result": "MEASURED", "subject_checkpoint_sha256": _sha(tmp / "checkpoint.json"),
+               "benchmark_id": "local-text", "benchmark_version": benchmark_version,
+               "sample_count": score["sample_count"], "metrics": score["metrics"], "criterion_id": TEXT_CRITERION,
+               "criterion_statistic": score.get("criterion_statistic"), "admission_margin": score.get("admission_margin"),
+               "criterion_result": score["criterion_result"]}
+    for name, field in contract.EVALUATION_EVIDENCE.items():
+        receipt[field] = _sha(evidence[name])
+    return contract.execute_evaluation_verifier(ROOT, VERIFIER, "text", tmp / "checkpoint.json", "local-text",
+                                                benchmark_version, TEXT_CRITERION, evidence, receipt, "evaluations[0]")
+
+
+def test_text_scorer_output_passes_the_contract_verifier(tmp_path):
+    assert _text_contract_errors(tmp_path, "1") == []
+
+
+def test_text_scorer_output_for_another_benchmark_version_is_refused_by_the_contract(tmp_path):
+    assert _text_contract_errors(tmp_path, "2") == [
+        "evaluations[0] receipt: verifier execution failed with exit code 1"]
+
+
+def test_the_eval_registry_is_the_training_authority_registry_and_the_train_screen_refuses_its_references(tmp_path):
+    # Review 78811 R3. (a) The training text authority binds exactly the registry contract.py reads.
+    index = json.loads((ROOT / "data/ember-restart-3b/text-lab-authority-index-v2.json").read_text(encoding="utf-8"))
+    assert Path(index["registry"]["path"]) == contract.PROTECTED_EVAL_REGISTRY
+    real = json.loads((ROOT / contract.PROTECTED_EVAL_REGISTRY).read_text(encoding="utf-8"))
+    assert real["schema_version"] == contract.PROTECTED_EVAL_REGISTRY_SCHEMA
+    # (b) The same reference bytes the evaluation side admits are refused by the executed train screen.
+    case = Case(tmp_path, ALL_RIGHT, None, _criterion(tmp_path, reference=0.5))
+    digest = _sha(case.references)
+    root = _custody_root(tmp_path, {"local-reasoning": digest})
+    assert contract.protected_reference_errors(root, digest, "local-reasoning", "e") == []
+    screen = sys.modules["ember_train_screen_text_lab_corpus"]  # the module contract.py just executed
+    assert Path(screen.__file__).resolve() == contract.TRAIN_SCREEN.resolve()
+    registry = json.loads((root / contract.PROTECTED_EVAL_REGISTRY).read_text(encoding="utf-8"))
+    protected = screen._protected_identifier_sets(root, registry["protected"])["content_sha256"]
+    row = {"source_id": "candidate-x", "domain": screen.DOMAINS[0], "license_spdx": sorted(screen.LICENSES)[0],
+           "content_sha256": digest, "l4_receipt": {}, "split": "train"}
+    with pytest.raises(ValueError, match="source contaminates frozen eval"):
+        screen._validate([row], protected, require_domain_floor=False)
+    # Control: the same row with unregistered bytes passes the contamination check (fails later, on its receipt).
+    with pytest.raises(ValueError, match="source L4 provenance receipt is invalid"):
+        screen._validate([{**row, "content_sha256": "0" * 64}], protected, require_domain_floor=False)
+
+
+BOUNDARY_FILES = (Path(__file__), ROOT / "tests" / "test_ember_restart_eval_criterion.py",
+                  ROOT / "tests" / "domain-governance" / "test_ember_restart_eval_text_exact.py")
+
+
+def _child_calls_missing_boundary(path: Path) -> list[str]:
+    import ast
+    missing = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in {"run", "Popen"}
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"):
+            keywords = {k.arg for k in node.keywords}
+            if not {"creationflags", "timeout"} <= keywords:
+                missing.append(f"{path.name}:{node.lineno}")
+    return missing
+
+
+def test_every_child_in_these_suites_is_hidden_and_bounded():
+    # Review 78811 R4: a direct subprocess child must carry creationflags and a finite timeout;
+    # the text_exact scorer child runs through owned_process.OwnedProcessRunner instead.
+    assert [m for path in BOUNDARY_FILES for m in _child_calls_missing_boundary(path)] == []
+
+
+def test_the_boundary_guard_sees_a_bare_child(tmp_path):
+    bare = tmp_path / "bare.py"
+    bare.write_text("import subprocess, sys\nsubprocess.run([sys.executable], capture_output=True)\n", encoding="utf-8")
+    assert _child_calls_missing_boundary(bare) == ["bare.py:2"]
+
+
 def test_reasoning_partial_category_membership_is_refused(tmp_path):
     case = Case(tmp_path, ALL_RIGHT, {k: "arith" for k in ALL_RIGHT}, _criterion(tmp_path, reference=0.5))
     rows = [json.loads(x) for x in case.references.read_text().splitlines()]
