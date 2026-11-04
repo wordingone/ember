@@ -51,7 +51,7 @@ _POSIX_LOCAL_PATH = re.compile(
 )
 _EXACT_POSIX_LOCAL_PATH = re.compile(
     r"(?s)^(\s*)("
-    r"/(?:(?:home|Users)/[^\s/\"'<>|]+(?:/[^\r\n\"'<>|]*?)?"
+    r"/(?:(?:home|Users)/[^/\r\n\"'<>|]+(?:/[^\r\n\"'<>|]*?)?"
     r"|(?:root|tmp|var/tmp|var/folders|private/tmp|private/var)/[^\r\n\"'<>|]*?)"
     r")(\s*)$"
 )
