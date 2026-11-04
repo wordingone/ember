@@ -146,6 +146,8 @@ tree. Public milestone contracts and certificates live under the
 [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
 
+Data exception: an internal audit ([`receipts/genesis/genesis-audit-20260706.md`](receipts/genesis/genesis-audit-20260706.md)) found earlier training data included FineWeb-Edu, selected by a classifier trained on Llama-3-70B-Instruct annotations; it was later dropped ([`docs/domains/governance/anatomy/14_MODEL_CARD.md`](docs/domains/governance/anatomy/14_MODEL_CARD.md)). The lineage is not certified clean.
+
 ## Documentation routes
 
 - Understand the project: [system overview](docs/architecture/system-overview.md) and
