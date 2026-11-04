@@ -293,10 +293,22 @@ export interface TextProps {
   dimColor?: boolean;
   wrap?: "wrap" | "end" | "truncate" | "truncate-end" | "truncate-middle" | "truncate-start";
   children?: ReactNode;
+  /** Differently styled spans that wrap together as ONE paragraph (a separate Text per span
+   * wraps each span in its own column). The text is the spans joined; children are ignored. */
+  runs?: TextRun[];
+}
+
+export interface TextRun {
+  text: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  dimColor?: boolean;
 }
 
 export function Text({ children, color, backgroundColor, bold, italic, underline,
-                       strikethrough, inverse, dimColor, wrap = "wrap" }: TextProps): React.ReactElement {
+                       strikethrough, inverse, dimColor, wrap = "wrap", runs }: TextProps): React.ReactElement {
   const colorStyle = resolveColor(color);
   const bgStyle    = resolveBgColor(backgroundColor);
   const style: Style = {
@@ -309,10 +321,22 @@ export function Text({ children, color, backgroundColor, bold, italic, underline
     inverse:       inverse       ?? undefined,
     dim:           dimColor      ?? undefined,
   };
+  const runStyles = runs?.map((r) => ({
+    len: Array.from(r.text).length,
+    style: {
+      ...style,
+      ...resolveColor(r.color),
+      bold:      r.bold      ?? style.bold,
+      italic:    r.italic    ?? style.italic,
+      underline: r.underline ?? style.underline,
+      dim:       r.dimColor  ?? style.dim,
+    } as Style,
+  }));
   // Encode style as data attributes for the renderer to read
   return React.createElement("span", {
     "data-text": true,
     "data-style": JSON.stringify(style),
+    "data-runs": runStyles ? JSON.stringify(runStyles) : undefined,
     "data-text-wrap": wrap,
     style: {
       fontWeight:     bold      ? "bold"      : undefined,
@@ -321,7 +345,7 @@ export function Text({ children, color, backgroundColor, bold, italic, underline
       color:          color,
       backgroundColor: backgroundColor,
     } as CSSProperties,
-    children,
+    children: runs ? runs.map((r) => r.text).join("") : children,
   });
 }
 

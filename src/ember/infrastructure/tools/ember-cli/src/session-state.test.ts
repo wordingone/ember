@@ -57,6 +57,7 @@ import {
   getBudgetContinuationCount,
   markPostCompaction,
   consumePostCompaction,
+  consumePostCompactionDetail,
   getPromptId,
   setPromptId,
 } from "./session-state.ts";
@@ -366,6 +367,17 @@ describe("post-compaction flag", () => {
   test("markPostCompaction with no elapsed records 0 (still a real compaction signal)", () => {
     markPostCompaction();
     expect(consumePostCompaction()).toBe(0);
+  });
+
+  test("consumePostCompactionDetail carries the before/after token estimates once", () => {
+    markPostCompaction(4, { tokensBefore: 41200, tokensAfter: 2100 });
+    expect(consumePostCompactionDetail()).toEqual({ elapsedSecs: 4, tokensBefore: 41200, tokensAfter: 2100 });
+    expect(consumePostCompactionDetail()).toBeNull();
+  });
+
+  test("a compaction without token estimates yields a detail with only the elapsed time", () => {
+    markPostCompaction(2);
+    expect(consumePostCompactionDetail()).toEqual({ elapsedSecs: 2 });
   });
 });
 

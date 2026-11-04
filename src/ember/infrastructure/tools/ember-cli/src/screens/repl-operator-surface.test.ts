@@ -13,7 +13,7 @@ import { _deliverKeyEvent } from "../ink/hooks.ts";
 import { getCommands, resetCommandRegistryForTests } from "../command-registry.ts";
 import { getActivityFeedState } from "../services/activity-feed.ts";
 import { ReplScreen } from "../screens/repl.ts";
-import { operatorSurfaceWidth } from "../screens/repl.ts";
+import { OPERATOR_SURFACE_MIN_COLUMNS, operatorSurfaceWidth } from "../screens/repl.ts";
 
 async function flushRepl(): Promise<void> {
   for (let index = 0; index < 5; index++) {
@@ -150,10 +150,12 @@ describe("repl operator surface layout", () => {
       // pane's vertical rules ("│ └────┘ │"). The pre-existing whole-line form would have passed
       // on the outer box alone, i.e. on a pane showing no card at all.
       const cardBorder = /[|│]\s*(\+-{3,}\+|[┌└]─{3,}[┐┘])\s*[|│]/u;
+      // Below OPERATOR_SURFACE_MIN_COLUMNS the pane is deliberately not drawn (#2381 U-50x16).
+      const paneShown = columns >= OPERATOR_SURFACE_MIN_COLUMNS;
       expect({ size: `${columns}x${rows}`, cardTitle: lines.some((line) => cardTitle.test(line)) })
-        .toEqual({ size: `${columns}x${rows}`, cardTitle: true });
+        .toEqual({ size: `${columns}x${rows}`, cardTitle: paneShown });
       expect({ size: `${columns}x${rows}`, cardBorder: lines.some((line) => cardBorder.test(line)) })
-        .toEqual({ size: `${columns}x${rows}`, cardBorder: true });
+        .toEqual({ size: `${columns}x${rows}`, cardBorder: paneShown });
       expect(lines.some((line) => line.includes("TRAINING/LOSS"))).toBe(false);
       if (columns <= 40) {
         // Content may never overwrite the pane's own right border column.
@@ -163,8 +165,8 @@ describe("repl operator surface layout", () => {
           if (rightBorder > 0) expect(line[rightBorder]).toBe("│");
         }
       }
-      expect(lines.some((line) => line.includes("IDLE"))).toBe(true);
-      expect(lines.some((line) => line.includes("ACTIVITY/EVENT"))).toBe(true);
+      expect(lines.some((line) => line.includes("IDLE"))).toBe(paneShown);
+      expect(lines.some((line) => line.includes("ACTIVITY/EVENT"))).toBe(paneShown);
       if (columns >= 60) {
         expect(lines.some((line) => line.includes("SOURCE UNVERIFIED/UNBOUND"))).toBe(false);
       }

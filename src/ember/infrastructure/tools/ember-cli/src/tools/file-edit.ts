@@ -7,15 +7,26 @@
 // computeUnifiedDiff and detectLineEndings from file-write.ts.
 // bundle=Y
 
-import { readFile, writeFile, stat, mkdir } from "fs/promises";
+import { readFile, writeFile, stat } from "fs/promises";
 import { dirname } from "path";
 import { isUnderEmberState } from "../utils/ember-state-root.ts";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { z } from "zod";
 import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
+import { resolveFilePath } from "./file-read.ts";
+import {
+  decodeTextBuffer,
+  describeWriteError,
+  encodeText,
+  fileStateKey,
+  isOutsideCwd,
+  outsideCwdMessage,
+  type TextEncoding,
+} from "./file-text.ts";
 import {
   computeUnifiedDiff,
+  summarizeFileChange,
   detectLineEndings,
   resolveGitDir,
   type HunkPatch,
@@ -146,11 +157,17 @@ async function editFile_(
   },
   ctx: ToolUseContext,
 ): Promise<EditOutput> {
-  const { file_path: filePath, old_string: oldString, new_string: newString } = input;
+  let { old_string: oldString, new_string: newString } = input;
+  const filePath = resolveFilePath(input.file_path, ctx.cwd ?? process.cwd());
   const replaceAllFlag = input.replace_all ?? false;
 
   if (containsTeamMemorySecrets2(newString)) {
     return { error: "Edit rejected: new_string contains team memory secrets." };
+  }
+  if (oldString === "") {
+    return {
+      error: "Edit rejected: old_string is empty. To create a file or replace all of its content, use Write.",
+    };
   }
   if (oldString === newString) {
     return {
@@ -177,36 +194,65 @@ async function editFile_(
     };
   }
 
+  // Editing a file the model never read (or that changed since it read it) replaces text it has
+  // not seen. Same guard as Write (blind test FO-21; Write's is FO-09).
+  if (ctx.readFileState) {
+    const seen = ctx.readFileState.get(fileStateKey(filePath)) as { mtime: number } | undefined;
+    if (!seen) {
+      return {
+        error: `${filePath} has not been read in this session. Read it first, then Edit.`,
+      };
+    }
+    if (seen.mtime !== fileStat.mtimeMs) {
+      return {
+        error: `${filePath} changed on disk since it was last read. Read it again before editing.`,
+      };
+    }
+  }
+
   let originalFile: string;
+  let encoding: TextEncoding;
+  let bom: boolean;
   try {
-    originalFile = await readFile(filePath, "utf-8");
+    // A UTF-16 file (PowerShell output) is edited as text and written back as UTF-16 (FO-34).
+    const decoded = decodeTextBuffer(await readFile(filePath));
+    originalFile = decoded.text;
+    encoding = decoded.encoding;
+    bom = decoded.bom;
   } catch (e) {
     return { error: `Failed to read file: ${filePath}: ${String(e)}` };
   }
 
-  const cachedEntry = ctx.readFileState?.get(filePath) as
-    | { mtime: number; content: string }
-    | undefined;
-  const externallyModified = cachedEntry !== undefined && cachedEntry.mtime !== fileStat.mtimeMs;
+  // Models send old_string with LF line breaks. A CRLF file would never match a
+  // multi-line old_string, so match on LF-normalised text; the original line
+  // ending is restored on write.
+  const originalEnding = detectLineEndings(originalFile);
+  const normalizeEol = originalEnding === "crlf" || originalEnding === "lf";
+  const toLf = (s: string) => (normalizeEol ? s.replace(/\r\n/g, "\n") : s);
+  const workFile = toLf(originalFile);
+  oldString = toLf(oldString);
+  newString = toLf(newString);
+  const notFound = () => {
+    const near = findWithNormalization(workFile, oldString) >= 0
+      ? " A match exists if spaces/tabs are ignored: copy the exact whitespace from a fresh Read."
+      : "";
+    return { error: `old_string not found in file: ${filePath}. Verify the exact text to replace.${near}` };
+  };
 
   if (replaceAllFlag) {
-    const occurrences = countOccurrences(originalFile, oldString);
-    if (occurrences === 0) {
-      const normIdx = findWithNormalization(originalFile, oldString);
-      if (normIdx < 0) {
-        return {
-          error: `old_string not found in file: ${filePath}. Verify the exact text to replace.`,
-        };
-      }
-    }
-    const newContent = replaceAll2(originalFile, oldString, newString);
-    const ending = detectLineEndings(originalFile);
+    const occurrences = countOccurrences(workFile, oldString);
+    if (occurrences === 0) return notFound();
+    const newContent = replaceAll2(workFile, oldString, newString);
+    const ending = originalEnding;
     const finalContent = applyLineEnding2(newContent, ending);
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, finalContent, "utf-8");
+    try {
+      await writeFile(filePath, encodeText(finalContent, encoding, bom));
+    } catch (e) {
+      return { error: describeWriteError(e, filePath) };
+    }
     try {
       const newStat = await stat(filePath);
-      ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
+      ctx.readFileState?.set(fileStateKey(filePath), { mtime: newStat.mtimeMs, content: finalContent });
     } catch {}
     if (isUnderEmberState(filePath)) {
       ctx.dynamicSkillDirTriggers?.add(dirname(filePath));
@@ -224,14 +270,9 @@ async function editFile_(
       ...(gitDiff ? { gitDiff } : {}),
     };
   } else {
-    const occurrences = countOccurrences(originalFile, oldString);
+    const occurrences = countOccurrences(workFile, oldString);
     if (occurrences === 0) {
-      const normIdx = findWithNormalization(originalFile, oldString);
-      if (normIdx < 0) {
-        return {
-          error: `old_string not found in file: ${filePath}. Verify the exact text to replace.`,
-        };
-      }
+      return notFound();
     } else if (occurrences > 1) {
       return {
         error:
@@ -239,22 +280,24 @@ async function editFile_(
           `Provide more context to make the match unique, or use replace_all: true.`,
       };
     }
-    const newContent = originalFile.replace(oldString, newString);
-    const ending = detectLineEndings(originalFile);
+    const idx = workFile.indexOf(oldString);
+    const newContent = workFile.slice(0, idx) + newString + workFile.slice(idx + oldString.length);
+    const ending = originalEnding;
     const finalContent = applyLineEnding2(newContent, ending);
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, finalContent, "utf-8");
+    try {
+      await writeFile(filePath, encodeText(finalContent, encoding, bom));
+    } catch (e) {
+      return { error: describeWriteError(e, filePath) };
+    }
     try {
       const newStat = await stat(filePath);
-      ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
+      ctx.readFileState?.set(fileStateKey(filePath), { mtime: newStat.mtimeMs, content: finalContent });
     } catch {}
     if (isUnderEmberState(filePath)) {
       ctx.dynamicSkillDirTriggers?.add(dirname(filePath));
     }
     const patch = computeUnifiedDiff(originalFile, finalContent);
     const gitDiff = await computeGitDiff2(filePath);
-    // externallyModified is tracked but output shape is unchanged (matches bundle)
-    void externallyModified;
     return {
       filePath,
       oldString,
@@ -302,13 +345,21 @@ export const editTool = Object.assign(
 Perform exact-string replacements on files. The model provides the exact text to find (old_string) and
 replacement text (new_string). Use Read before editing to get the current content.
 - old_string must be unique in the file unless replace_all is true.
-- Empty old_string creates the file (equivalent to Write for a new file).
+- The file must have been Read in this session (and not changed since): editing an unread file is refused.
+- To create a file or replace all of it, use Write.
 - replace_all: true replaces every occurrence.
+- A path outside the working directory needs the operator's approval every time.
 - Absolute paths only.`,
 
     checkPermissions: async (input: EditInput, ctx: ToolUseContext) => {
-      if (isDenied2(input.file_path, ctx)) {
+      const cwd = ctx.cwd ?? process.cwd();
+      const filePath = resolveFilePath(input.file_path, cwd);
+      if (isDenied2(filePath, ctx)) {
         return { behavior: "deny" as const, updatedInput: input, message: "Denied by session rules" };
+      }
+      // Leaving the working directory asks every time, even after "always allow Edit" (FO-22).
+      if (isOutsideCwd(filePath, cwd)) {
+        return { behavior: "ask" as const, updatedInput: input, message: outsideCwdMessage(filePath, cwd) };
       }
       return { behavior: "allow" as const, updatedInput: input };
     },
@@ -330,7 +381,7 @@ replacement text (new_string). Use Read before editing to get the current conten
       return {
         type: "tool_result" as const,
         tool_use_id: toolUseId,
-        content: JSON.stringify(content),
+        content: "filePath" in content ? summarizeFileChange("Edited", content.filePath, content.structuredPatch) : JSON.stringify(content),
       };
     },
 

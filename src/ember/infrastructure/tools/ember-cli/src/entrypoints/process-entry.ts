@@ -8,7 +8,7 @@
 
 import { readFile, writeFile, stat, mkdir } from "fs/promises";
 import { createHash } from "node:crypto";
-import { openSync, closeSync } from "fs";
+import { openSync, closeSync, readFileSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
@@ -33,15 +33,23 @@ import { emberStateRoot } from "../utils/ember-state-root.ts";
 import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
 import { normalizeModelServerUrl } from "../services/api-openai-adapter.ts";
 import { registerManagedModel } from "../services/model-lifecycle.ts";
+import { markSessionShuttingDown, startHealing, superviseServer, type ReadyOutcome } from "../services/server-supervisor.ts";
+import { createProductionServerLeases, reaperMain, REAPER_SUBCOMMAND } from "../services/server-reaper.ts";
+import type { ServerLeases } from "../services/server-lease.ts";
+import { detectDevice } from "../services/model-pull.ts";
+import { buildOpenWeightsSystemPrompt } from "../services/open-weights-system-prompt.ts";
+import { classifyLoadFailure } from "../services/runtime-fetch.ts";
 import type { ModelCapabilityDeclaration } from "../model-config.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 import type { Tool } from "../core/tool-interface.ts";
+import { BYPASS_PERMISSIONS_FLAG } from "../core/headless-permissions.ts";
 import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
 import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { parseOutageMarker, computeEffectiveMarker } from "../services/activity-feed.ts";
 import type { OutageMarker } from "../services/activity-feed.ts";
+import { parseResumeFlags, resolveResumeInit } from "../services/session-resume.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -172,7 +180,13 @@ export interface ModelsJson {
   thinkingFormat?:   string;
   thinkingBudget?:   number;
   autoCompactWindow?: number;
+  /** Share of the context window (0-1, default 0.85) at which the prompt is auto-compacted. */
+  autoCompactFraction?: number;
   samplingParams?:   Record<string, unknown>;
+  /** "open-weights" persists the OPEN_WEIGHTS harness mode for plain launches. */
+  seat?:             string;
+  /** Extra llama-server arguments chosen by `ember pull` (e.g. ["-ngl","99"]). */
+  serverArgs?:       string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +202,10 @@ export interface ServerSpawnOptions {
   maxOutputTokens?: number;
   logPath:          string;
   slotSaveDir?:     string;
+  extraArgs?:       string[];
+  /** #2378: the server lease that decides, at exit, whether this spawned server is stopped (the
+   *  last holder out stops it).  Absent: the exit hooks kill the child unconditionally. */
+  leases?:          ServerLeases | null;
 }
 
 export interface ServerHandle {
@@ -206,14 +224,32 @@ export function getModelsJsonPath(): string {
   return join(getEmberConfigHomeDir(), "models.json");
 }
 
+/** models.json exists but is not usable JSON: the caller must name the file and stop (#2381 R2). */
+export class ModelsJsonInvalidError extends Error {
+  constructor(public readonly path: string, public readonly detail: string) {
+    super(`models.json at ${path} is not valid JSON (${detail}); fix or delete it, or run ember pull`);
+    this.name = "ModelsJsonInvalidError";
+  }
+}
+
 export async function loadModelsJson(path?: string): Promise<ModelsJson | null> {
   const p = path ?? getModelsJsonPath();
+  let raw: string;
   try {
-    const raw = await readFile(p, "utf-8");
-    return JSON.parse(raw) as ModelsJson;
+    raw = await readFile(p, "utf-8");
   } catch {
-    return null;
+    return null; // absent or unreadable: no config
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new ModelsJsonInvalidError(p, e instanceof Error ? e.message : String(e));
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ModelsJsonInvalidError(p, "expected a JSON object");
+  }
+  return parsed as ModelsJson;
 }
 
 export function applyModelsJsonToEnv(cfg: ModelsJson): void {
@@ -222,6 +258,7 @@ export function applyModelsJsonToEnv(cfg: ModelsJson): void {
   if (cfg.thinkingFormat)                   process.env["EMBER_THINKING_FORMAT"]      ??= cfg.thinkingFormat;
   if (cfg.thinkingBudget !== undefined)     process.env["EMBER_THINKING_BUDGET"]      ??= String(cfg.thinkingBudget);
   if (cfg.autoCompactWindow !== undefined)  process.env["EMBER_AUTO_COMPACT_WINDOW"]  ??= String(cfg.autoCompactWindow);
+  if (cfg.autoCompactFraction !== undefined) process.env["EMBER_AUTO_COMPACT_FRACTION"] ??= String(cfg.autoCompactFraction);
   if (cfg.samplingParams !== undefined)     process.env["EMBER_SAMPLING_PARAMS"]      ??= JSON.stringify(cfg.samplingParams);
 }
 
@@ -262,6 +299,16 @@ export interface EndpointResolution {
  * it from config, or an operator-set value could be indistinguishable from
  * one config just wrote.
  */
+/** Where startup notices ("[ember] model seat: ...") go. Machine-read output (--mcp, and
+ * -p/--print, whose stdout is JSON lines) must start with its first JSON line, so notices go to
+ * stderr there (blind test W27: two notice lines broke a JSON-lines reader). */
+export function startupNoticeStream(argv: string[] = process.argv): NodeJS.WriteStream {
+  const args = argv.slice(2);
+  return args[0] === "--mcp" || args.includes("-p") || args.includes("--print")
+    ? process.stderr
+    : process.stdout;
+}
+
 export function describeEndpointResolution(
   modelsCfg: ModelsJson | null,
   envModelUrlBeforeConfigApply: string | undefined,
@@ -440,23 +487,32 @@ export interface CleanupProcess {
  *  `proc` defaults to the global process; injected in tests so the kill-on-exit path can be
  *  driven without registering listeners on — or calling exit() of — the real test runner.
  *  Returns the cleanup fn for direct assertion. */
-export function registerServerCleanup(handle: ServerHandle, proc: CleanupProcess = process): () => void {
-  const cleanup = (): void => handle.kill();
+export function registerServerCleanup(
+  handle: ServerHandle,
+  proc: CleanupProcess = process,
+  leases?: ServerLeases | null,
+): () => void {
+  // #2378: with a lease on this port the exit decision is "last holder out stops the server", so a
+  // second ember instance sharing it keeps it; without one, the unconditional child kill stands.
+  const cleanup = (): void => {
+    markSessionShuttingDown();
+    if (leases?.holding(handle.port)) leases.releaseSync();
+    else handle.kill();
+  };
   proc.on("exit",    cleanup);
   proc.on("SIGINT",  () => { cleanup(); proc.exit(0); });
   proc.on("SIGTERM", () => { cleanup(); proc.exit(0); });
+  proc.on("SIGHUP",  () => { cleanup(); proc.exit(0); });
+  proc.on("SIGBREAK", () => { cleanup(); proc.exit(0); });
   return cleanup;
 }
 
-export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<ServerHandle> {
-  const { binaryPath, modelPath, port, nCtx, mmproj, logPath, slotSaveDir } = opts;
-
-  await rotateLlamaStderrLog(logPath);
-
-  if (slotSaveDir) {
-    await mkdir(slotSaveDir, { recursive: true }).catch(() => {});
-  }
-
+/** The llama-server argument vector for a managed spawn.  Everything `ember pull --calibrate`
+ * recorded in models.json `serverArgs` (KV types, batch sizes, `--parallel 1`, and
+ * `--spec-type draft-mtp` when calibration chose MTP) is passed through verbatim after the
+ * model / port / context flags, so the spawned server runs the configuration that was measured. */
+export function buildLlamaServerArgs(opts: ServerSpawnOptions): string[] {
+  const { modelPath, port, nCtx, mmproj, slotSaveDir } = opts;
   const maxOut = opts.maxOutputTokens ?? Math.min(32768, Math.floor(nCtx / 4));
   const args: string[] = [
     "--model",    modelPath,
@@ -467,6 +523,20 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
   ];
   if (mmproj)      args.push("--mmproj",          mmproj);
   if (slotSaveDir) args.push("--slot-save-path",  slotSaveDir);
+  if (opts.extraArgs?.length) args.push(...opts.extraArgs);
+  return args;
+}
+
+export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<ServerHandle> {
+  const { binaryPath, port, logPath, slotSaveDir } = opts;
+
+  await rotateLlamaStderrLog(logPath);
+
+  if (slotSaveDir) {
+    await mkdir(slotSaveDir, { recursive: true }).catch(() => {});
+  }
+
+  const args = buildLlamaServerArgs(opts);
 
   const logFd = openSync(logPath, "a");
 
@@ -485,7 +555,7 @@ export async function spawnLlamaServer(opts: ServerSpawnOptions): Promise<Server
   });
 
   const handle = makeServerHandle(child, port);
-  registerServerCleanup(handle);
+  registerServerCleanup(handle, process, opts.leases);
   return handle;
 }
 
@@ -590,6 +660,26 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   if (args.length === 0) return false;
   const first = args[0] ?? "";
 
+  if (first === "pull") {
+    const { runPull, parsePullArgs, PULL_USAGE } = await import("../services/model-pull.ts");
+    let pullOptions;
+    try {
+      pullOptions = parsePullArgs(args.slice(1));
+    } catch (err) {
+      process.stderr.write(`ember pull: ${err instanceof Error ? err.message : String(err)}\n\n${PULL_USAGE}\n`);
+      process.exit(2);
+      return true;
+    }
+    if (pullOptions.help) {
+      process.stdout.write(`${PULL_USAGE}\n`);
+      process.exit(0);
+      return true;
+    }
+    const code = await runPull(pullOptions);
+    process.exit(code);
+    return true;
+  }
+
   if (first === "--help" || first === "-h") {
     process.stdout.write(
       `ember-cli ${EMBER_CLI_VERSION} — local-first agentic coding CLI\n` +
@@ -597,11 +687,18 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `Usage:\n` +
       `  ember                          Start the interactive cockpit (default)\n` +
       `  ember -p, --print "<prompt>"   Headless: run one prompt, print result, exit\n` +
+      `                                 With nobody to ask, calls that need approval are refused: deleting files,\n` +
+      `                                 bulk deletes, writes outside the working directory, shell commands that\n` +
+      `                                 connect to a loopback/private address. Reads and work inside the\n` +
+      `                                 working directory are allowed.\n` +
+      `  --dangerously-skip-permissions Headless only: allow those calls too (no approval, no refusal)\n` +
       `  ember <subcommand> [args]      Run a subcommand (see below)\n` +
       `  ember dispatch-governed --manifest <absolute-path>\n` +
       `                                 Submit one governed_vertical manifest to resident Ember Lab\n` +
       `\n` +
       `Options:\n` +
+      `  -c, --continue                 Continue the most recent session in this directory\n` +
+      `  -r, --resume [id]              Continue a session by id (or list them without an id)\n` +
       `  -h, --help                     Show this help and exit\n` +
       `  -v, --version [--json]         Show version and exit\n` +
       `  --diag-startup, --diagnostics  Print startup diagnostics and exit\n` +
@@ -610,6 +707,13 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  --mcp                          Run as an MCP server over stdio\n` +
       `  --daemon-worker                Run as a background daemon worker\n` +
       `  --reference-seat               Explicitly run a borrowed model as REFERENCE_ONLY\n` +
+      `  --open-weights                 Work with an operator-selected non-Ember model (OPEN_WEIGHTS)\n` +
+      `  pull [--auto|<repo>:<quant>]   Fetch a GGUF model that fits this machine and select it\n` +
+      `                                 (then calibrates it; --no-calibrate skips)\n` +
+      `  pull --calibrate               Re-measure context (up to the model's native maximum) / KV type / batch / flash-attn /\n` +
+      `                                 MTP speculation on this GPU; keep the fastest config that recalls a needle at ~90% of\n` +
+      `                                 its context and leaves 1 GiB VRAM free (writes models.json; --skip-recall skips the needle;\n` +
+      `                                 --headroom-mib N changes the 1 GiB; a fit failing only on headroom retries at -ub 256)\n` +
       `  --watch [--interval N]         Ambient observatory: refresh the /cockpit monitor board\n` +
       `                                 every N seconds (default 5) until Ctrl-C\n` +
       `\n` +
@@ -625,6 +729,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       `  EMBER_TRUSTED_VERIFIER_REGISTRY  Independent verifier registry for owned admission\n` +
       `  EMBER_PYTHON          Python executable used for the checked-in admission resolver\n` +
       `  EMBER_REFERENCE_SEAT  Set to 1 for explicit REFERENCE_ONLY automation\n` +
+      `  EMBER_OPEN_WEIGHTS    Set to 1 for OPEN_WEIGHTS mode (or models.json "seat": "open-weights")\n` +
       `  EMBER_API_KEY     API key for the model endpoint (default: local)\n`,
     );
     process.exit(0);
@@ -822,7 +927,10 @@ export function parseHeadlessPrint(argv: string[]): ParseHeadlessPrintResult {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "-p" || arg === "--print") {
-      const next = args[i + 1];
+      // The prompt is the next argument that is not a flag; --dangerously-skip-permissions may sit between.
+      let j = i + 1;
+      while (args[j] === BYPASS_PERMISSIONS_FLAG) j++;
+      const next = args[j];
       if (next !== undefined && !next.startsWith("-")) {
         return { found: true, prompt: next };
       }
@@ -865,6 +973,10 @@ export interface MainOptions {
   /** #159 boot matrix, "backend already running": probed BEFORE spawning. Defaults to a
    *  short real health probe; tests inject a fake to avoid real network I/O. */
   probeExisting?:  (port: number) => Promise<boolean>;
+  /** #2378: the model-server lease (closing ember stops the server it spawned or adopted, once the
+   *  last holder is gone).  undefined = the production lease (Windows); null = disabled. Tests
+   *  inject one built on fake process operations. */
+  serverLeases?:   ServerLeases | null;
   /** #344 GPU-lease awareness: returns the effective planned-outage.json marker, or null
    *  when no training window holds the GPU. Defaults to defaultCheckGpuLease (real file
    *  read); tests inject a fake to avoid touching tools/ember-cli/state/. */
@@ -937,6 +1049,9 @@ export function buildInteractiveReplElement<T extends {
     sessionId: props["sessionId"],
     modelSeat: props["modelSeat"],
     onExit: props["onExit"],
+    // #2383: `--continue` / `--resume` put a recorded session here; dropping it made both flags
+    // start a fresh conversation.
+    ...(props["resume"] !== undefined ? { resume: props["resume"] } : {}),
   });
   return createElement(InkApp, null, repl);
 }
@@ -945,8 +1060,37 @@ export function buildInteractiveReplElement<T extends {
 // main — the fully-wired entry point (called by boot in main.ts)
 // ---------------------------------------------------------------------------
 
+/** The model id an OpenAI-compatible server reports at /v1/models, without a
+ *  ".gguf" suffix; undefined when the server does not answer within 2 s. */
+export async function probeServedModelName(
+  baseUrl: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<string | undefined> {
+  try {
+    const url = baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "") + "/v1/models";
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { data?: Array<{ id?: unknown }> };
+    const id = body.data?.[0]?.id;
+    if (typeof id !== "string" || id.trim() === "") return undefined;
+    // llama.cpp reports the model file path; keep the file name.
+    const base = id.trim().split(/[\\/]/).pop() ?? id.trim();
+    return base.replace(/\.gguf$/i, "");
+  } catch {
+    return undefined;
+  }
+}
+
 export async function main(opts: MainOptions = {}): Promise<void> {
   const rawArgv = opts.argv ?? process.argv;
+
+  // #2378: a compiled binary starts its detached model-server reaper as `<exe> __ember-server-reaper
+  // <port> <leaseDir>` (under `bun run` the reaper is a script and never comes through here).
+  if (rawArgv[2] === REAPER_SUBCOMMAND) {
+    await reaperMain(Number(rawArgv[3]), rawArgv[4] ?? "");
+    (opts.exitFn ?? ((code: number) => { process.exit(code); }))(0);
+    return;
+  }
 
   // issue #196: captured BEFORE applyModelsJsonToEnv's ??= writes below may
   // populate EMBER_MODEL_URL from config -- otherwise the disclosure below
@@ -955,7 +1099,34 @@ export async function main(opts: MainOptions = {}): Promise<void> {
 
   applyAblationBaseline();
 
-  const modelsCfg = await loadModelsJson();
+  let modelsCfg: ModelsJson | null;
+  try {
+    modelsCfg = await loadModelsJson();
+  } catch (err) {
+    process.stderr.write(`[ember] ERROR: ${err instanceof Error ? err.message : String(err)}
+`);
+    (opts.exitFn ?? ((code: number) => { process.exit(code); }))(1);
+    return;
+  }
+  // Quiet governance-path warnings as early as the OPEN_WEIGHTS request is known
+  // (utils/harness-warn.ts); reconfirmed below once the seat is resolved.
+  if (process.env["EMBER_OPEN_WEIGHTS"] === "1" || modelsCfg?.seat === "open-weights") {
+    process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+    // An open-weights seat pointed at a running server by EMBER_MODEL_URL alone has
+    // no name in config: ask the server, so the header and title never read
+    // "unidentified-model" for a model the server reports.
+    if (!process.env["EMBER_MODEL_NAME"] && !modelsCfg?.modelName && !modelsCfg?.model &&
+        envModelUrlBeforeConfigApply) {
+      const served = await probeServedModelName(envModelUrlBeforeConfigApply);
+      if (served) process.env["EMBER_MODEL_NAME"] = served;
+    }
+  }
+  // The classic Windows console (conhost, no Windows Terminal or editor terminal around it) uses
+  // a font without the caret and play glyphs; they show as boxes. Use ASCII stand-ins there.
+  if (process.platform === "win32" && process.stdout.isTTY && !process.env["WT_SESSION"] &&
+      !process.env["TERM_PROGRAM"] && process.env["EMBER_ASCII_GLYPHS"] === undefined) {
+    process.env["EMBER_ASCII_GLYPHS"] = "1";
+  }
   const fastPathArgv = rawArgv.filter(
     (argument, index) => index < 2 || argument !== REFERENCE_SEAT_FLAG,
   );
@@ -1009,8 +1180,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     // reads it -- otherwise the contract always collapses to
     // "unidentified-model" even when the caller knows the identity.
     referenceModelName: process.env["EMBER_MODEL_NAME"] ?? modelsCfg?.modelName ?? modelsCfg?.model,
+    openWeightsEnv: process.env["EMBER_OPEN_WEIGHTS"],
+    openWeightsConfig: modelsCfg?.seat === "open-weights",
   };
   let seatDecision = resolveModelSeat(seatInput);
+  if (seatDecision.seat === "OPEN_WEIGHTS") process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+  else delete process.env["EMBER_OPEN_WEIGHTS_ACTIVE"];
   if (!seatDecision.allowed) {
     try {
       const repoRoot = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
@@ -1085,9 +1260,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     return;
   }
   const argv = seatDecision.argv;
-  const seatBannerStream = argv.slice(2)[0] === "--mcp"
-    ? process.stderr
-    : process.stdout;
+  const seatBannerStream = startupNoticeStream(argv);
 
   // MCP is a machine-facing surface: unlike the interactive cockpit it must
   // refuse an unbound seat before emitting any session traffic.
@@ -1098,7 +1271,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     return;
   }
 
-  if (modelsCfg && seatDecision.seat === "REFERENCE_ONLY") {
+  if (modelsCfg && (seatDecision.seat === "REFERENCE_ONLY" || seatDecision.seat === "OPEN_WEIGHTS")) {
     applyModelsJsonToEnv(modelsCfg);
   }
 
@@ -1124,6 +1297,20 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       "[ember] model seat: REFERENCE_ONLY (" +
         seatDecision.source +
         "); owned completion disabled\n",
+    );
+  } else if (seatDecision.seat === "OPEN_WEIGHTS") {
+    if (!modelContract) {
+      process.stderr.write(
+        "[ember] ERROR: model seat construction produced no contract for an OPEN_WEIGHTS seat\n",
+      );
+      doExitMain(1);
+      return;
+    }
+    process.env["EMBER_MODEL_NAME"] = modelContract.modelName;
+    process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+    seatBannerStream.write(
+      "[ember] model seat: OPEN_WEIGHTS (" + seatDecision.source + "); operator-selected " +
+        "non-Ember model, never presented as owned\n",
     );
   } else if (seatDecision.ownedIdentity) {
     const ownedIdentity = seatDecision.ownedIdentity;
@@ -1237,12 +1424,12 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     const authority = seatDecision.seat === "OWNED_DEVELOPMENT"
       ? "exact NON_ADMISSIBLE development manifest"
       : "admitted checkpoint manifest";
-    process.stdout.write(
+    startupNoticeStream().write(
       "[ember] model endpoint: " + seatDecision.ownedIdentity.endpointUrl +
         " -- bound by " + authority + "; supervised server started lazily on first model interaction\n",
     );
   } else {
-    process.stdout.write(
+    startupNoticeStream().write(
       describeEndpointResolution(modelsCfg, envModelUrlBeforeConfigApply, gpuFreeRequested).text + "\n",
     );
   }
@@ -1259,6 +1446,10 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // string | null: null is the explicit GPU-free signal session-init.ts's `!serverUrl`
   // check relies on (issue #602) -- a real, typed null, not an unsafe cast.
   let serverUrl:    string | null;
+  // OPEN_WEIGHTS: the eagerly spawned server is shown as RESIDENT in the cockpit, with
+  // its VRAM measured as the GPU memory delta across the load (per-process VRAM is N/A
+  // under Windows WDDM).
+  let openWeightsSeat: ModelSeatState | null = null;
   let detectedNCtx: number;
 
   // issue #602: GPU-free is a dedicated branch checked AHEAD of the env-or-config fallback
@@ -1283,7 +1474,18 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       detectedNCtx = modelsCfg?.nCtx ?? 4096;
     } else {
       serverUrl    = externalUrl;
-      detectedNCtx = await detectNCtx(serverUrl).catch(() => modelsCfg?.nCtx ?? 4096);
+      let reachable = true;
+      detectedNCtx = await detectNCtx(serverUrl).catch(() => { reachable = false; return modelsCfg?.nCtx ?? 4096; });
+      if (seatDecision.seat === "OPEN_WEIGHTS" && reachable) {
+        // An operator-run server: resident, but this process cannot attribute VRAM to it.
+        openWeightsSeat = {
+          phase: "RESIDENT",
+          owner: process.env["EMBER_MODEL_NAME"] ?? "open-weights model",
+          endpoint: serverUrl,
+          vramBytes: 0,
+          vramUnmeasured: true,
+        };
+      }
     }
   } else {
     if (seatDecision.seat === "OFFLINE") {
@@ -1298,7 +1500,8 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     // explicitly requested REFERENCE_ONLY seat; owned seats are admitted by
     // the lazy Ember Lab starter on first interaction, while an ordinary
     // unbound interactive boot remains the explicit OFFLINE seat.
-    if (seatDecision.seat !== "REFERENCE_ONLY" && seatDecision.seat !== "OFFLINE" && seatDecision.seat !== null) {
+    if (seatDecision.seat !== "REFERENCE_ONLY" && seatDecision.seat !== "OPEN_WEIGHTS" &&
+        seatDecision.seat !== "OFFLINE" && seatDecision.seat !== null) {
       process.env["EMBER_MODEL_NAME"] = "OFFLINE - no model";
       process.stderr.write(
         "[ember] ERROR: direct model spawn requires a bound Ember Lab identity or explicit reference seat\n",
@@ -1314,11 +1517,31 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       modelsCfg?.model ?? process.env["EMBER_MODEL_PATH"] ?? "model.gguf",
     );
     const mmproj      = modelsCfg?.mmproj ? resolve(exeDir, modelsCfg.mmproj) : undefined;
+    // Vision projector configured: tool-produced images (Computer screenshots)
+    // may be forwarded to the model as image_url parts.
+    if (mmproj) process.env["EMBER_VISION"] = "1";
     const nCtx        = modelsCfg?.nCtx ?? 4096;
-    const logPath     = join(exeDir, "llama_stderr.log");
+    // OPEN_WEIGHTS runs from any directory: keep its server log in EMBER_HOME, not
+    // beside the runtime executable (which for `bun run` is bun's own install dir).
+    const logPath     = seatDecision.seat === "OPEN_WEIGHTS"
+      ? join(getEmberConfigHomeDir(), "llama_stderr.log")
+      : join(exeDir, "llama_stderr.log");
     const slotSaveDir = join(getEmberConfigHomeDir(), "slots");
 
-    const doSpawn         = opts.spawnServer   ?? spawnLlamaServer;
+    const leases          = opts.serverLeases === undefined ? createProductionServerLeases() : opts.serverLeases;
+    const rawSpawn        = opts.spawnServer   ?? spawnLlamaServer;
+    // #2378: every spawn (first, context-ladder retry, supervisor respawn) records the new server in
+    // the lease, so whichever one is alive at exit is the one that gets stopped.
+    const doSpawn         = leases
+      ? async (so: ServerSpawnOptions): Promise<ServerHandle> => {
+          const handle = await rawSpawn({ ...so, leases });
+          const pid = handle.process?.pid;
+          if (typeof pid === "number" && leases.recordSpawned(so.port, pid, so.binaryPath).kind === "held") {
+            leases.installExitHooks();
+          }
+          return handle;
+        }
+      : rawSpawn;
     const doWait          = opts.waitReady     ?? ((p: number, t: number) => waitForServerReady(p, t));
     const doProbeExisting = opts.probeExisting ?? ((p: number) =>
       waitForServerReady(p, 800).then(() => true).catch(() => false));
@@ -1334,9 +1557,26 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     // llama-server already answering on the resolved port is adopted rather than
     // double-spawned (which would otherwise crash on the port bind or silently shadow it).
     if (await doProbeExisting(port)) {
-      process.stdout.write(`[ember] model endpoint: adopting already-running server on port ${port}\n`);
+      startupNoticeStream().write(`[ember] model endpoint: adopting already-running server on port ${port}\n`);
       detectedNCtx = await detectNCtx(serverUrl).catch(() => nCtx);
+      // #2378: record the adopted server as owned (PID, creation time and command line verified) so
+      // closing this ember frees the GPU once no other ember still uses it.
+      const attached = leases ? leases.attachAdopted(port) : null;
+      if (attached?.kind === "held") {
+        leases!.installExitHooks();
+        startupNoticeStream().write(
+          `[ember] model endpoint: server pid ${attached.server.pid} is held by ${attached.holders} ember instance(s); ` +
+            `it is stopped when the last one exits\n`,
+        );
+      } else if (attached && attached.kind !== "unsupported") {
+        const why = attached.kind === "unverified" ? attached.reason : attached.kind === "ambiguous"
+          ? `several processes listen on port ${port}` : `no process found listening on port ${port}`;
+        startupNoticeStream().write(`[ember] model endpoint: not stopping the server on exit (${why})\n`);
+      }
     } else {
+      // #2378: a lease left by a crashed session whose server never answered: stop it (verified PID
+      // only) so the port is free to bind.  A live holder, or a server that answers, is left alone.
+      leases?.reapOnce(port);
       // #159 boot matrix, "bad binary path" / "bad model path": validate BEFORE spawning so
       // either produces one immediate, specific, operator-facing error instead of an uncaught
       // spawn exception (bad binary -- the prior defect) or a silent 240s hang (bad model --
@@ -1351,53 +1591,102 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       }
       if (missing.length > 0) {
         process.stderr.write(`[ember] ERROR: cannot start the model server -- ${missing.join("; ")}\n`);
+        if (seatDecision.seat === "OPEN_WEIGHTS") {
+          process.stderr.write(
+            `[ember] fix: run \`ember pull\` (or Ember-Open pull) to download a model that fits this machine and rewrite models.json; ` +
+              `\`ember pull --dry-run\` shows the choice first.\n`,
+          );
+        }
         doExitMain(1);
         return;
       }
 
-      let serverHandle: ServerHandle;
-      try {
-        serverHandle = await doSpawn({
-          binaryPath: binPath,
-          modelPath,
-          port,
-          nCtx,
-          mmproj,
-          maxOutputTokens: modelsCfg?.maxOutputTokens,
-          logPath,
-          slotSaveDir,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[ember] ERROR: could not start the model server (${msg})\n`);
-        doExitMain(1);
-        return;
-      }
+      const spawnOpts: ServerSpawnOptions = {
+        binaryPath: binPath,
+        modelPath,
+        port,
+        nCtx,
+        mmproj,
+        maxOutputTokens: modelsCfg?.maxOutputTokens,
+        logPath,
+        slotSaveDir,
+        extraArgs: Array.isArray(modelsCfg?.serverArgs)
+          ? modelsCfg.serverArgs.filter((a): a is string => typeof a === "string")
+          : undefined,
+      };
 
       // #159 boot matrix: race the health-wait against the child exiting early (bad model
       // path, port bind failure, or any other fast crash) so a dead process is surfaced
       // immediately instead of waiting the full 240s for it. Defensive `typeof` guard: a
       // test double's `.process` need not be a full EventEmitter -- when it isn't, this
       // falls back to the plain wait exactly as before (no behavior change for those tests).
-      const proc = serverHandle.process as unknown as {
-        once?: (event: string, listener: (...args: unknown[]) => void) => void;
+      const waitReadyFor = async (handle: ServerHandle): Promise<ReadyOutcome> => {
+        const proc = handle.process as unknown as {
+          once?: (event: string, listener: (...args: unknown[]) => void) => void;
+        };
+        const earlyExit: Promise<number | null> | null =
+          typeof proc?.once === "function"
+            ? new Promise<number | null>((resolvePromise) => {
+                proc.once!("exit", (code: unknown) => resolvePromise(typeof code === "number" ? code : null));
+              })
+            : null;
+        return earlyExit
+          ? await Promise.race([
+              doWait(port, 240_000).then((): ReadyOutcome => ({ kind: "ready" })),
+              earlyExit.then((code): ReadyOutcome => ({ kind: "exited", code })),
+            ]).catch((): ReadyOutcome => ({ kind: "timeout" }))
+          : await doWait(port, 240_000)
+              .then((): ReadyOutcome => ({ kind: "ready" }))
+              .catch((): ReadyOutcome => ({ kind: "timeout" }));
       };
-      type ReadyOutcome = { kind: "ready" } | { kind: "exited"; code: number | null } | { kind: "timeout" };
-      const earlyExit: Promise<number | null> | null =
-        typeof proc?.once === "function"
-          ? new Promise<number | null>((resolvePromise) => {
-              proc.once!("exit", (code: unknown) => resolvePromise(typeof code === "number" ? code : null));
-            })
-          : null;
 
-      const readyOutcome: ReadyOutcome = earlyExit
-        ? await Promise.race([
-            doWait(port, 240_000).then((): ReadyOutcome => ({ kind: "ready" })),
-            earlyExit.then((code): ReadyOutcome => ({ kind: "exited", code })),
-          ]).catch((): ReadyOutcome => ({ kind: "timeout" }))
-        : await doWait(port, 240_000)
-            .then((): ReadyOutcome => ({ kind: "ready" }))
-            .catch((): ReadyOutcome => ({ kind: "timeout" }));
+      // OPEN_WEIGHTS self-heal: an early exit (usually out-of-memory for the requested
+      // context) retries with a smaller context instead of exiting, and a server that
+      // dies mid-session is respawned (services/server-supervisor.ts). REFERENCE_ONLY
+      // keeps its exact fail-fast parity behavior.
+      const healing = seatDecision.seat === "OPEN_WEIGHTS";
+      const gpuUsedBytes = (): number | null => {
+        const d = detectDevice();
+        return d.gpuName ? d.vramTotalBytes - d.vramFreeBytes : null;
+      };
+      const gpuBefore = healing ? gpuUsedBytes() : null;
+      let serverHandle: ServerHandle;
+      let readyOutcome: ReadyOutcome;
+      let liveOpts = spawnOpts;
+      try {
+        if (healing) {
+          const healed = await startHealing(spawnOpts, {
+            spawn: doSpawn,
+            waitReady: waitReadyFor,
+            classifyFailure: () => {
+              try { return classifyLoadFailure(readFileSync(logPath, "utf-8").slice(-20000)); }
+              catch { return "other"; }
+            },
+          });
+          if (healed.ok) {
+            serverHandle = healed.handle;
+            liveOpts = healed.opts;
+            readyOutcome = healed.outcome;
+            if (healed.opts.nCtx !== nCtx || healed.opts.mmproj !== mmproj) {
+              process.stdout.write(
+                `[ember] model server recovered with context ${healed.opts.nCtx}` +
+                  (healed.opts.mmproj ? "" : " and no vision projector") + " (see heal.log)\n",
+              );
+            }
+          } else {
+            readyOutcome = healed.outcome;
+            serverHandle = undefined as unknown as ServerHandle;
+          }
+        } else {
+          serverHandle = await doSpawn(spawnOpts);
+          readyOutcome = await waitReadyFor(serverHandle);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[ember] ERROR: could not start the model server (${msg})\n`);
+        doExitMain(1);
+        return;
+      }
 
       if (readyOutcome.kind === "exited") {
         const codeText = readyOutcome.code !== null ? ` (exit code ${readyOutcome.code})` : "";
@@ -1417,10 +1706,39 @@ export async function main(opts: MainOptions = {}): Promise<void> {
       // process; see makeServerHandle above), never a bare pid the unload path has to guess
       // how to kill. Registering only {pid} discarded this handle and made /model unload a
       // no-op kill.
-      registerManagedModel({
-        pid: serverHandle.process.pid!,
-        release: () => serverHandle.kill(),
-      });
+      if (healing) {
+        const gpuAfter = gpuUsedBytes();
+        openWeightsSeat = {
+          phase: "RESIDENT",
+          owner: process.env["EMBER_MODEL_NAME"] ?? "open-weights model",
+          endpoint: serverUrl,
+          vramBytes: gpuBefore !== null && gpuAfter !== null ? Math.max(0, Math.round(gpuAfter - gpuBefore)) : 0,
+        };
+        const supervisor = superviseServer(serverHandle, liveOpts, { spawn: doSpawn, waitReady: waitReadyFor, exitGraceMs: 400,
+          onEvent: (e) => {
+            void import("./session-init.ts").then((m) => {
+              const cur = m.getModelSeatState();
+              if (e.kind === "restarted") m.seedModelSeatState({ ...cur, note: `model server restarted (${e.n}/${e.max})` });
+              else m.seedModelSeatState({ phase: "ABSENT", note: `model server stopped: ${e.reason === "cap" ? `restart limit ${e.max} reached` : "restart failed"}` });
+            }).catch(() => {});
+          } });
+        registerManagedModel({
+          pid: serverHandle.process.pid!,
+          release: () => supervisor.stop(),
+        });
+        if (leases?.holding(port)) {
+          // #2378: exit goes through the lease (last holder out stops the server); the supervisor
+          // only has to stop respawning, and must not kill a server another ember still uses.
+          leases.onBeforeRelease(() => supervisor.detach());
+        } else {
+          process.on("exit", () => supervisor.stop());
+        }
+      } else {
+        registerManagedModel({
+          pid: serverHandle.process.pid!,
+          release: () => serverHandle.kill(),
+        });
+      }
       void serverHandle; // handle held in closure via cleanup hooks
     }
     }
@@ -1484,12 +1802,23 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     const headlessOpts: HeadlessReplOptions = {
       maxTurns: 50,
       userSpecifiedModel: process.env["EMBER_MODEL_NAME"],
+      // Without this flag a headless run refuses calls that need approval (core/headless-permissions.ts).
+      bypassPermissions: argv.includes(BYPASS_PERMISSIONS_FLAG),
     };
 
     // Keep injected and default headless execution on the same structured-tool contract.
-    const tools = opts.builtinToolsFn
+    let tools = opts.builtinToolsFn
       ? await opts.builtinToolsFn()
       : (await import("../tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
+    // MCP servers, plugins and hooks (issues #2375, #2376). A server that fails to start only
+    // costs its own tools; headless waits for the servers to settle so the one prompt sees them.
+    if (!opts.builtinToolsFn && !opts.headlessRunner) {
+      const ext = await import("../extensions/runtime.ts");
+      if (ext.startExtensionsForSession({ cwd: process.cwd() })) {
+        await ext.awaitExtensionsReady(20_000);
+        tools = ext.bindExtensionTools(tools);
+      }
+    }
     let exitCode: number;
     if (opts.headlessRunner) {
       const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
@@ -1535,16 +1864,33 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // resolve the real repo root (env var / cwd-walk / exe-path-walk). If none of those
   // anchors find an Ember checkout, resolveEmberSourceRootOrCwd preserves the typed
   // SourceRootError refusal; the interactive surface never guesses from process.cwd().
-  const interactiveCwd = resolveEmberSourceRootOrCwd({}, "[ember-cli]");
+  // OPEN_WEIGHTS is the general-purpose harness mode: the agent works in the
+  // directory the operator launched it from, not in the Ember checkout.
+  if (openWeightsSeat) sessionMod.seedModelSeatState(openWeightsSeat);
+  const interactiveCwd = seatDecision.seat === "OPEN_WEIGHTS"
+    ? process.cwd()
+    : resolveEmberSourceRootOrCwd({}, "[ember-cli]");
+  const resumeRequest = parseResumeFlags(argv);
+  // MCP servers, plugins and hooks start now (in the background) so they are ready by the first
+  // prompt; the REPL shows any startup problem as a notice (issues #2375, #2376).
+  (await import("../extensions/runtime.ts")).startExtensionsForSession({
+    cwd: interactiveCwd,
+    sessionId: sessionIdForAppRoot(interactiveCwd),
+  });
   const replProps = {
     config: freshInteractiveReplConfig(process.env["EMBER_MODEL_NAME"] ?? "ember"),
     cwd:    interactiveCwd,
     sessionId: sessionIdForAppRoot(interactiveCwd),
-    modelSeat: seatDecision.ownedIdentity
+    modelSeat: openWeightsSeat ?? (seatDecision.ownedIdentity
       ? { phase: "ABSENT" as const, owner: seatDecision.ownedIdentity.modelName }
-      : { phase: "ABSENT" as const },
+      : { phase: "ABSENT" as const }),
     onExit: (): void => { resolveExit(); },
+    // #2373: `--continue` / `--resume <id>` restore a recorded session of this directory.
+    ...(resumeRequest ? { resume: resolveResumeInit(resumeRequest, interactiveCwd) } : {}),
   };
+  if (seatDecision.seat === "OPEN_WEIGHTS") {
+    replProps.config.baseSystemPrompt = buildOpenWeightsSystemPrompt({ cwd: interactiveCwd, platform: process.platform, date: new Date() });
+  }
 
   await frontendShell.launchRepl(
     root,

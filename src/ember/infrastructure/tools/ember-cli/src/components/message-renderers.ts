@@ -17,6 +17,10 @@ import { Markdown } from "./markdown-and-code.ts";
 /** Error text truncation length before expand-on-demand control. */
 export const MAX_API_ERROR_CHARS = 1000;
 
+/** A normal reply is folded only past this length (Ctrl+O unfolds). Folding at the
+ * error-text limit cut ordinary answers off after a few lines. */
+export const MAX_REPLY_CHARS = 20000;
+
 /** Minimum ms to show inline hints before allowing dismiss. */
 export const MIN_HINT_DISPLAY_MS = 700;
 
@@ -210,10 +214,12 @@ export function RedactedThinkingMessage(): React.ReactElement {
 export interface AssistantTextMessageProps {
   text: string;
   isExpanded?: boolean;
+  /** Width of the column this reply lives in; tables wider than it become Header: value lists. */
+  width?: number;
 }
 
 export function AssistantTextMessage(props: AssistantTextMessageProps): React.ReactElement | null {
-  const { text, isExpanded = false } = props;
+  const { text, isExpanded = false, width } = props;
 
   // AC2: empty trimmed content → render nothing
   if (!text.trim()) return null;
@@ -251,9 +257,9 @@ export function AssistantTextMessage(props: AssistantTextMessageProps): React.Re
     return React.createElement(Text, { dimColor: true }, "Interrupted by user.");
   }
 
-  // AC6: error text > MAX_API_ERROR_CHARS → truncate with expand control
-  if (text.length > MAX_API_ERROR_CHARS && !isExpanded) {
-    const truncated = text.slice(0, MAX_API_ERROR_CHARS);
+  // AC6: a very long reply folds behind the Ctrl+O toggle (handled in screens/repl.ts).
+  if (text.length > MAX_REPLY_CHARS && !isExpanded) {
+    const truncated = text.slice(0, MAX_REPLY_CHARS);
     return React.createElement(Box, { flexDirection: "column" },
       React.createElement(Text, null, truncated),
       React.createElement(Text, { dimColor: true }, "… (Ctrl+O to expand)"),
@@ -271,10 +277,13 @@ export function AssistantTextMessage(props: AssistantTextMessageProps): React.Re
   // fix here so any ANSI-bearing message survives the display path intact.
   const hasRawAnsi = text.includes("\x1b");
   return React.createElement(Box, { flexDirection: "row" },
-    React.createElement(Text, { dimColor: true }, BLACK_CIRCLE + " "),
+    React.createElement(Text, null, BLACK_CIRCLE + " "),
     hasRawAnsi
       ? React.createElement(RawAnsi, null, text)
-      : React.createElement(Markdown, { content: text }),
+      : React.createElement(Markdown, {
+          content: text,
+          ...(width !== undefined ? { width: Math.max(1, width - (BLACK_CIRCLE.length + 1)) } : {}),
+        }),
   );
 }
 
@@ -347,23 +356,62 @@ export interface UserTextMessageProps {
   origin?:    "keyboard" | "operator";
 }
 
+/** Background of a user prompt row: the prompt reads as a block, apart from model text. */
+export const USER_PROMPT_BG = "#373737";
+
 export function UserTextMessage({ text, timestamp, brief = false, origin }: UserTextMessageProps): React.ReactElement {
-  const header = React.createElement(Box, { flexDirection: "row" },
-    React.createElement(Text, { bold: true }, "You"),
-    origin === "operator" ? React.createElement(Text, { color: "cyan" }, " [operator]") : null,
-    timestamp ? React.createElement(Text, { dimColor: true }, ` ${timestamp}`) : null,
-  );
-
-  if (brief) {
-    return React.createElement(Box, { flexDirection: "row" },
-      header,
-      React.createElement(Text, null, ` ${text}`),
-    );
-  }
-
+  // Operator 2026-11-03: a prompt is a gray "> " block, as in Claude Code, not a "You" label over
+  // plain text that looks the same as tool output and model text.
+  const tag = origin === "operator" ? React.createElement(Text, { color: "cyan" }, " [operator]") : null;
+  const time = timestamp ? React.createElement(Text, { dimColor: true }, ` ${timestamp}`) : null;
+  const lines = (brief ? text.replace(/\s*\n\s*/g, " ") : text).split("\n");
   return React.createElement(Box, { flexDirection: "column" },
-    header,
-    React.createElement(Text, null, text),
+    ...lines.map((line, i) =>
+      React.createElement(Box, { key: `l${i}`, flexDirection: "row" },
+        React.createElement(Text, { backgroundColor: USER_PROMPT_BG, dimColor: true }, i === 0 ? "> " : "  "),
+        React.createElement(Text, { backgroundColor: USER_PROMPT_BG }, `${line} `),
+        i === 0 ? tag : null,
+        i === 0 ? time : null,
+      ),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ToolCallMessage -- "● Bash(git status)" line above a tool's output
+// ---------------------------------------------------------------------------
+
+const TOOL_ARG_KEYS = ["command", "file_path", "path", "pattern", "url", "query", "description", "prompt"];
+
+/** One-line summary of a tool call's input, as Claude Code shows it: `Bash(ls -la)`. */
+export function summarizeToolInput(input: unknown, max = 100): string {
+  let v = "";
+  if (typeof input === "string") v = input;
+  else if (input && typeof input === "object") {
+    const o = input as Record<string, unknown>;
+    const key = TOOL_ARG_KEYS.find((k) => typeof o[k] === "string" && o[k] !== "")
+      ?? Object.keys(o).find((k) => typeof o[k] === "string");
+    v = key ? String(o[key]) : "";
+  }
+  v = v.replace(/\s*\n\s*/g, " ").trim();
+  return v.length > max ? v.slice(0, max - 1) + "…" : v;
+}
+
+/** Registry names are lowercase wire names; the transcript shows the tool's proper name. */
+const TOOL_DISPLAY_NAMES: Record<string, string> = { todowrite: "TodoWrite" };
+export function toolDisplayName(name: string): string {
+  return TOOL_DISPLAY_NAMES[name.toLowerCase()] ?? name;
+}
+
+export function ToolCallMessage({ name, summary, status }: {
+  name: string; summary: string; status?: "running" | "done" | "error" | "interrupted";
+}): React.ReactElement {
+  const color = status === "error" ? "red" : status === "done" ? "green" : status === "interrupted" ? "yellow" : undefined;
+  return React.createElement(Box, { flexDirection: "row" },
+    React.createElement(Text, { color, dimColor: status === undefined || status === "running" }, BLACK_CIRCLE + " "),
+    React.createElement(Text, { bold: true }, toolDisplayName(name)),
+    summary ? React.createElement(Text, null, `(${summary})`) : null,
+    status === "interrupted" ? React.createElement(Text, { color: "yellow", dimColor: true }, "  [interrupted]") : null,
   );
 }
 
@@ -372,7 +420,7 @@ export function UserTextMessage({ text, timestamp, brief = false, origin }: User
 // ---------------------------------------------------------------------------
 
 export function UserCommandMessage({ command }: { command: string }): React.ReactElement {
-  return React.createElement(Text, { dimColor: true }, `/ ${command}`);
+  return React.createElement(Text, { dimColor: true }, `/${command.replace(/^\/+/, "")}`);
 }
 
 // Issue #530: the former AC11 teammate/task-assignment renderer had no producer,
@@ -491,15 +539,21 @@ export function CompactBoundaryMessage(): React.ReactElement {
 export interface CompactionProgressMessageProps {
   isComplete:  boolean;
   elapsedSecs?: number;
+  /** Estimated prompt tokens before and after the summary replaced the older messages. */
+  tokensBefore?: number;
+  tokensAfter?:  number;
 }
 
 export function CompactionProgressMessage(
   props: CompactionProgressMessageProps,
 ): React.ReactElement {
   if (props.isComplete) {
-    // AC13: "⌁ Crunched for Xs"
+    // AC13: "⌁ Crunched for Xs", plus "· ~A → ~B tokens" when the compaction reported them
+    const tokens = props.tokensBefore !== undefined && props.tokensAfter !== undefined
+      ? ` · ~${Math.round(props.tokensBefore).toLocaleString("en-US")} → ~${Math.round(props.tokensAfter).toLocaleString("en-US")} tokens`
+      : "";
     return React.createElement(Text, null,
-      `${COMPACTION_COMPLETE_PREFIX}${props.elapsedSecs ?? 0}s`,
+      `${COMPACTION_COMPLETE_PREFIX}${props.elapsedSecs ?? 0}s${tokens}`,
     );
   }
   // AC13: during compaction: "Razzle-dazzling…"

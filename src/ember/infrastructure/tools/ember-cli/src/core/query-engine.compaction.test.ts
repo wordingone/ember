@@ -97,8 +97,9 @@ describe("query loop — autocompact wiring", () => {
       generateUuid: () => "u",
     };
 
+    // nCtx 60 puts the ~16 short messages above the 85% threshold (about 51 tokens).
     const engine = new QueryEngine(
-      { getAppState: () => ({}), setAppState: () => {}, initialMessages: initial },
+      { getAppState: () => ({}), setAppState: () => {}, initialMessages: initial, nCtx: 60 },
       testDeps,
     );
     for await (const _ev of engine.submitMessage("new-question")) {
@@ -115,5 +116,132 @@ describe("query loop — autocompact wiring", () => {
       return false;
     });
     expect(hasSummary).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #2372: token-based trigger, /compact, standing instructions
+// ---------------------------------------------------------------------------
+
+const isSummaryRequest = (p: CallModelParams): boolean => p.systemPrompt.includes("Summarize the prior conversation");
+
+function oldConversation(n: number, chars: number): unknown[] {
+  return Array.from({ length: n }, (_, i) => ({
+    role: i % 2 === 0 ? "user" : "assistant",
+    content: [{ type: "text", text: `old-${i} ` + "x".repeat(chars) }],
+  }));
+}
+
+function recordingDeps(summaryText = "CONDENSED-SUMMARY"): { deps: LoopDepsOverrides; calls: CallModelParams[] } {
+  const calls: CallModelParams[] = [];
+  const deps: LoopDepsOverrides = {
+    callModel: async (p: CallModelParams): Promise<ModelResponse> => {
+      calls.push(p);
+      return isSummaryRequest(p)
+        ? { role: "assistant", content: [{ type: "text", text: summaryText }], stop_reason: "end_turn" }
+        : endTurn();
+    },
+    generateUuid: () => "u",
+  };
+  return { deps, calls };
+}
+
+async function drain(engine: QueryEngine, text: string): Promise<void> {
+  for await (const _ev of engine.submitMessage(text)) {
+    // drain
+  }
+}
+
+describe("query engine — token-based auto-compaction (#2372)", () => {
+  it("does not compact below 85% of n_ctx, and compacts once above it", async () => {
+    // 20 messages of ~400 chars is about 2,100 tokens.
+    const below = recordingDeps();
+    const roomy = new QueryEngine(
+      { getAppState: () => ({}), setAppState: () => {}, initialMessages: oldConversation(20, 400), nCtx: 4000 },
+      below.deps,
+    );
+    await drain(roomy, "next");
+    expect(below.calls.filter(isSummaryRequest).length).toBe(0);
+    expect(roomy.getMessages().length).toBeGreaterThan(20);
+
+    const above = recordingDeps();
+    const tight = new QueryEngine(
+      { getAppState: () => ({}), setAppState: () => {}, initialMessages: oldConversation(20, 400), nCtx: 2400 },
+      above.deps,
+    );
+    await drain(tight, "next");
+    expect(above.calls.filter(isSummaryRequest).length).toBe(1);
+    expect(tight.getMessages().length).toBeLessThan(20);
+  });
+
+  it("charges the system prompt toward the threshold", async () => {
+    const { deps, calls } = recordingDeps();
+    const engine = new QueryEngine(
+      {
+        getAppState: () => ({}),
+        setAppState: () => {},
+        initialMessages: oldConversation(20, 400),
+        nCtx: 2800, // messages alone are ~75% of this
+        customSystemPrompt: "S".repeat(1600), // +400 tokens pushes the prompt past 85%
+      },
+      deps,
+    );
+    await drain(engine, "next");
+    expect(calls.filter(isSummaryRequest).length).toBe(1);
+  });
+
+  it("a settled compaction is not repeated on the next turn", async () => {
+    const { deps, calls } = recordingDeps();
+    const engine = new QueryEngine(
+      { getAppState: () => ({}), setAppState: () => {}, initialMessages: oldConversation(20, 400), nCtx: 2400 },
+      deps,
+    );
+    await drain(engine, "one");
+    await drain(engine, "two");
+    expect(calls.filter(isSummaryRequest).length).toBe(1);
+  });
+});
+
+describe("query engine — compact() (the /compact command)", () => {
+  it("folds the conversation into a summary the next turn is built from", async () => {
+    const { deps, calls } = recordingDeps("FACT: the build token is PLUM-42");
+    const engine = new QueryEngine(
+      { getAppState: () => ({}), setAppState: () => {}, initialMessages: oldConversation(6, 40), nCtx: 262144 },
+      deps,
+    );
+    const outcome = await engine.compact("keep every identifier");
+    expect(outcome.status).toBe("compacted");
+    expect(engine.getMessages().length).toBe(1);
+
+    const summaryCall = calls.find(isSummaryRequest)!;
+    expect(summaryCall.systemPrompt).toContain("keep every identifier");
+    expect(summaryCall.maxTokens).toBeGreaterThanOrEqual(4096);
+
+    await drain(engine, "what is the build token?");
+    const turnCall = calls.filter((c) => !isSummaryRequest(c)).pop()!;
+    expect(JSON.stringify(turnCall.messages)).toContain("PLUM-42");
+    expect(JSON.stringify(turnCall.messages)).not.toContain("old-0");
+  });
+
+  it("appends the standing instructions to the summary prompt", async () => {
+    const { deps, calls } = recordingDeps();
+    const engine = new QueryEngine(
+      {
+        getAppState: () => ({}),
+        setAppState: () => {},
+        initialMessages: oldConversation(6, 40),
+        compactInstructions: async () => "ALWAYS-KEEP-TEST-NAMES",
+      },
+      deps,
+    );
+    await engine.compact();
+    expect(calls.find(isSummaryRequest)!.systemPrompt).toContain("ALWAYS-KEEP-TEST-NAMES");
+  });
+
+  it("says so when there is nothing to compact", async () => {
+    const { deps, calls } = recordingDeps();
+    const engine = new QueryEngine({ getAppState: () => ({}), setAppState: () => {} }, deps);
+    expect(await engine.compact()).toEqual({ status: "skipped", reason: "no-conversation" });
+    expect(calls.length).toBe(0);
   });
 });

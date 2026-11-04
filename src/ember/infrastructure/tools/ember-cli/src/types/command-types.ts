@@ -16,6 +16,10 @@ export interface CommandResult {
   /** Process/command exit code for the CLI's caller; absent means success (0).
    * Added for cond3 inc2a (checkpoint-identity fail-closed commands). */
   exitCode?: number;
+  /** A prompt-type command (skill, plugin command, MCP prompt) returns the text to send to
+   * the model as this turn's user message; the REPL runs a model turn with it instead of
+   * only rendering `message`. */
+  prompt?: string;
 }
 
 export interface RegistryCommand {

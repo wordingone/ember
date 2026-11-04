@@ -125,6 +125,9 @@ export const TodoWriteTool = buildTool<TodoWriteInput, unknown>({
       data: {
         oldTodos,
         newTodos,
+        // The list as submitted: newTodos is [] once everything is completed, but the display
+        // still has to show the finished checklist.
+        todos: args.todos,
         verificationNudgeNeeded: verificationNudgeNeeded || undefined,
         message,
       },

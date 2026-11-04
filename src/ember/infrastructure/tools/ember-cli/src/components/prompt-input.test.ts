@@ -17,6 +17,7 @@ import {
   deleteForward,
   moveCursorBy,
   computeInputViewport,
+  computeInputRows,
   promptInputViewportWidth,
   handlePromptInputKey,
 } from "./prompt-input.ts";
@@ -264,5 +265,27 @@ describe("PromptInput — existing behavior unaffected (regression guard)", () =
   it("still renders queued items and overflow count", () => {
     const el = PromptInput({ state: baseState(), queuedItems: ["a", "b", "c", "d"] });
     expect(findTextWhere(el, (s) => s.includes("more"))).toBe(true);
+  });
+});
+
+describe("computeInputRows (multi-line prompt)", () => {
+  it("wraps a long line instead of showing only its tail", () => {
+    const r = computeInputRows("abcdefghij", 10, 4);
+    expect(r.rows.map((x) => x.text)).toEqual(["abcd", "efgh", "ij"]);
+    expect(r.rows[2]!.cursorCol).toBe(2);
+  });
+  it("honours typed newlines and places the cursor on its line", () => {
+    const r = computeInputRows("one\ntwo", 1, 20);
+    expect(r.rows.map((x) => x.text)).toEqual(["one", "two"]);
+    expect(r.rows[0]!.cursorCol).toBe(1);
+    expect(r.rows[1]!.cursorCol).toBeNull();
+    expect(computeInputRows("one\n", 4, 20).rows[1]!.cursorCol).toBe(0);
+  });
+  it("keeps the cursor row visible and counts hidden rows", () => {
+    const text = Array.from({ length: 12 }, (_, i) => `l${i}`).join("\n");
+    const r = computeInputRows(text, text.length, 20, 8);
+    expect(r.rows.length).toBe(8);
+    expect(r.hiddenAbove).toBe(4);
+    expect(r.rows[7]!.cursorCol).not.toBeNull();
   });
 });

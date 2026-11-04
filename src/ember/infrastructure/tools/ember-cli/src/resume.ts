@@ -5,12 +5,14 @@
 
 import type { RegistryCommand, CommandContext, CommandResult } from './types/command-types.ts';
 import type { LogOption } from './types/session-persistence-types.ts';
+import { formatSessionList } from './services/session-resume.ts';
 
 type PickerResult = { type: 'none' } | { type: 'select'; log: LogOption };
 
 interface ResumeDeps {
   getSessions: () => Promise<LogOption[]>;
-  openPicker: (opts: { sessions: LogOption[] }) => Promise<PickerResult>;
+  /** Interactive chooser. When absent, a bare /resume lists the sessions as a message instead. */
+  openPicker?: (opts: { sessions: LogOption[] }) => Promise<PickerResult>;
   onResume: (sessionId: string, log: LogOption) => void | Promise<void | CommandResult>;
   loadFullLog: (log: LogOption) => Promise<LogOption>;
   writeToClipboard: (text: string) => void;
@@ -64,7 +66,7 @@ export async function handleSessionSelect(
     target = await deps.loadFullLog(log);
   }
 
-  await deps.onResume(log.sessionId, target);
+  return (await deps.onResume(log.sessionId, target)) ?? undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,19 +92,33 @@ export const resumeCommand: RegistryCommand = {
     );
     const sessions = deps.filterResumableSessions(basic);
 
-    // Headless search: if args provided, filter by firstPrompt
+    // Headless search: if args provided, pick by list number, id prefix, or first-prompt text
     if (args.trim()) {
       const query = args.trim().toLowerCase();
+      const byNumber = /^\d+$/.test(query) ? sessions[Number(query) - 1] : undefined;
+      if (byNumber) return handleSessionSelect(byNumber, ctx.cwd);
+      const byId = sessions.filter((s) => s.sessionId.toLowerCase().startsWith(query));
+      if (byId.length === 1) return handleSessionSelect(byId[0]!, ctx.cwd);
       const matches = sessions.filter((s) =>
         s.firstPrompt.toLowerCase().includes(query),
       );
       if (matches.length !== 1) {
-        return { type: 'message', message: deps.resumeHelpMessage() };
+        const shown = matches.length > 1 ? matches : sessions;
+        const list = shown.length > 0 ? `\n${formatSessionList(shown)}` : '';
+        return { type: 'message', message: deps.resumeHelpMessage() + list };
       }
       return handleSessionSelect(matches[0]!, ctx.cwd);
     }
 
-    // Interactive picker
+    // Interactive picker; without one, show the list to choose from
+    if (!deps.openPicker) {
+      return {
+        type: 'message',
+        message: sessions.length === 0
+          ? 'No earlier sessions in this directory.'
+          : `${formatSessionList(sessions)}\nResume one with /resume <number|id|text>.`,
+      };
+    }
     const result = await deps.openPicker({ sessions });
     if (result.type === 'select') {
       return handleSessionSelect(result.log, ctx.cwd);

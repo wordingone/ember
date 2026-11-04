@@ -540,6 +540,27 @@ describe("process-entry — AC9: managed server killed on clean exit", () => {
     expect(killed).toBe(1);
     expect(exitCodes).toEqual([0]);             // clean shutdown on signal
   });
+
+  it.each(["SIGHUP", "SIGBREAK"])("registerServerCleanup on console-close %s marks shutdown, kills, exits (#2381)", async (sig) => {
+    const sup = await import("../services/server-supervisor.ts");
+    sup.resetSessionShutdownForTests();
+    let killed = 0;
+    const exitCodes: Array<number | undefined> = [];
+    const handle: ServerHandle = { process: {} as ServerHandle["process"], port: 20000, kill() { killed += 1; } };
+    const listeners: Record<string, (...a: unknown[]) => void> = {};
+    const fakeProc = {
+      on(event: string, listener: (...a: unknown[]) => void) { listeners[event] = listener; return undefined; },
+      exit(code?: number) { exitCodes.push(code); },
+    };
+    registerServerCleanup(handle, fakeProc);
+    expect(typeof listeners[sig]).toBe("function");
+    expect(sup.isSessionShuttingDown()).toBe(false);
+    listeners[sig]!();
+    expect(sup.isSessionShuttingDown()).toBe(true);
+    expect(killed).toBe(1);
+    expect(exitCodes).toEqual([0]);
+    sup.resetSessionShutdownForTests();
+  });
 });
 
 describe("process-entry — AC10: debug-port written to the external state root", () => {
@@ -682,11 +703,55 @@ describe("process-entry — loadModelsJson", () => {
     expect(result?.nCtx).toBe(4096);
   });
 
-  it("returns null for invalid JSON", async () => {
+  it("throws a named error (file + parse error) for invalid JSON instead of silently ignoring it (#2381 R2)", async () => {
     const p = join(tmpDir, "models.json");
-    await writeFile(p, "not json");
-    const result = await loadModelsJson(p);
-    expect(result).toBeNull();
+    await writeFile(p, '{ "binary": "x", "model": ');
+    let err: Error | undefined;
+    try { await loadModelsJson(p); } catch (e) { err = e as Error; }
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(p);
+    expect(err!.message).toContain("is not valid JSON");
+    expect(err!.message).toContain("run ember pull");
+  });
+
+  it("a JSON value that is not an object is also refused", async () => {
+    const p = join(tmpDir, "models.json");
+    await writeFile(p, "[1,2]");
+    await expect(loadModelsJson(p)).rejects.toThrow("not valid JSON");
+  });
+
+  it("main() with a corrupt models.json names the file, exits 1 and never spawns a server (#2381 R2)", async () => {
+    const saved = { h: process.env["EMBER_HOME"], u: process.env["EMBER_MODEL_URL"], n: process.env["EMBER_MODEL_NAME"] };
+    process.env["EMBER_HOME"] = tmpDir;
+    delete process.env["EMBER_MODEL_URL"]; delete process.env["EMBER_MODEL_NAME"];
+    _resetConfigHomeMemo();
+    await writeFile(join(tmpDir, "models.json"), '{ "binary": "x", "model": ');
+    const writes: string[] = [];
+    const orig = process.stderr.write.bind(process.stderr);
+    (process.stderr as unknown as { write: (s: string) => boolean }).write = (s: string) => { writes.push(String(s)); return true; };
+    const codes: number[] = [];
+    let spawns = 0;
+    try {
+      await main({
+        argv: ["node", "ember", "-p", "hello"],
+        spawnServer: async () => { spawns += 1; return makeFakeHandle(29970); },
+        waitReady: async () => {}, probeExisting: async () => false,
+        initFn: async () => {}, getLoopDepsFn: makeFakeDeps,
+        headlessRunner: async () => ({ events: [], exitCode: 0 }),
+        exitFn: (c: number) => { codes.push(c); },
+      });
+    } finally {
+      (process.stderr as unknown as { write: unknown }).write = orig;
+      if (saved.h === undefined) delete process.env["EMBER_HOME"]; else process.env["EMBER_HOME"] = saved.h;
+      if (saved.u !== undefined) process.env["EMBER_MODEL_URL"] = saved.u;
+      if (saved.n !== undefined) process.env["EMBER_MODEL_NAME"] = saved.n;
+      _resetConfigHomeMemo();
+    }
+    expect(codes).toEqual([1]);
+    expect(spawns).toBe(0);
+    const text = writes.join("");
+    expect(text).toContain(join(tmpDir, "models.json"));
+    expect(text).toContain("is not valid JSON");
   });
 });
 

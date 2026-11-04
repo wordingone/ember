@@ -14,6 +14,7 @@ import {
   formatGb,
   formatModelMetrics,
   formatModelSeatState,
+  formatThinkingLevel,
   formatDegradedBannerText,
   DegradedBanner,
   formatOutageBannerText,
@@ -567,5 +568,69 @@ describe("StatusLine — width prop protects the core identity text at narrow wi
     expect(out).toContain("bypass permissions on");
     expect(out).toContain("12k/120k");
     expect(out).toContain("last roundtrip");
+  });
+});
+
+describe("StatusLine -- thinking level (issue #2370)", () => {
+  function mount(thinkingLevel: string | undefined, width?: number) {
+    const chunks: string[] = [];
+    const el = React.createElement(StatusLine, {
+      permissionMode: { mode: "bypass" as const, cycle: () => {} },
+      interrupt: { interrupt: () => {} },
+      taskPanel: { visible: false, toggle: () => {}, tasks: [] },
+      telemetry: {} as any,
+      thinkingLevel,
+      width,
+    } as any);
+    const handle = mountInk(el, { stream: { write(s: string) { chunks.push(s); } }, stdout: { columns: 200, rows: 6 } });
+    handle.unmount();
+    return chunks.join("");
+  }
+
+  it("formats the level as 'thinking: <level>'", () => {
+    expect(formatThinkingLevel("max")).toBe("thinking: max");
+    expect(formatThinkingLevel("off")).toBe("thinking: off");
+  });
+
+  it("shows the level in the bar", () => {
+    expect(mount("medium")).toContain("thinking: medium");
+  });
+
+  it("hides the segment when no level is supplied", () => {
+    expect(mount(undefined)).not.toContain("thinking:");
+  });
+
+  it("is dropped, not clipped, at a very narrow width", () => {
+    const out = mount("high", 12);
+    expect(out).not.toContain("thinking:");
+  });
+});
+
+describe("permission mode label", () => {
+  it("names plan mode instead of folding it into sandbox", () => {
+    expect(statusBarText("plan", false)).toContain("plan mode (read-only)");
+  });
+  it("describes regular mode as approval prompts on an open-weights seat", () => {
+    const prev = process.env["EMBER_OPEN_WEIGHTS_ACTIVE"];
+    process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+    try {
+      expect(statusBarText("regular", false)).toContain("ask before changes");
+    } finally {
+      if (prev === undefined) delete process.env["EMBER_OPEN_WEIGHTS_ACTIVE"]; else process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = prev;
+    }
+  });
+});
+
+describe("model seat note (#2381 R1/R3)", () => {
+  it("a restart notice rides on the seat text", () => {
+    const t = formatModelSeatState({ phase: "RESIDENT", owner: "o", endpoint: "http://x", vramBytes: 1, note: "model server restarted (1/3)" });
+    expect(t).toContain("model seat resident");
+    expect(t).toContain("model server restarted (1/3)");
+  });
+  it("an opened circuit reads absent with the reason, never resident", () => {
+    const t = formatModelSeatState({ phase: "ABSENT", note: "model server stopped: restart limit 3 reached" });
+    expect(t).toContain("model seat absent");
+    expect(t).not.toContain("resident");
+    expect(t).toContain("restart limit 3 reached");
   });
 });

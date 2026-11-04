@@ -53,7 +53,7 @@ export const BYPASS_STATUS_TEXT = `${BYPASS_GLYPH} bypass permissions on`;
 // Types
 // ---------------------------------------------------------------------------
 
-export type PermissionMode = "bypass" | "regular";
+export type PermissionMode = "bypass" | "regular" | "plan";
 
 export interface Task {
   id: string;
@@ -115,6 +115,7 @@ export function cyclePermissionMode(
 
 /** Returns the display glyph for a permission mode. */
 export function modeGlyph(mode: PermissionMode): string {
+  if (mode === "bypass" && process.env["EMBER_ASCII_GLYPHS"] === "1") return ">>";
   return mode === "bypass" ? BYPASS_GLYPH : "○";
 }
 
@@ -128,7 +129,12 @@ export function modeGlyph(mode: PermissionMode): string {
  */
 export function statusBarText(mode: PermissionMode, _tasksVisible: boolean): string {
   const glyph = modeGlyph(mode);
-  const modeLabel = mode === "bypass" ? "bypass permissions on" : "sandbox";
+  // Plan mode was folded into "regular" upstream and shown as "sandbox". On an
+  // open-weights seat, regular mode prompts before each non-read-only tool call.
+  const modeLabel = mode === "bypass" ? "bypass permissions on"
+    : mode === "plan" ? "plan mode (read-only)"
+    : process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1" ? "ask before changes"
+    : "sandbox";
   return `${glyph} ${modeLabel}`;
 }
 
@@ -435,6 +441,11 @@ export function formatGb(n: number): string {
   return n.toFixed(1);
 }
 
+/** Status-bar segment for the thinking level (issue #2370): "thinking: high". */
+export function formatThinkingLevel(level: string): string {
+  return `thinking: ${level}`;
+}
+
 /** Compact bar: "12k/120k · 28t/s · 12.4/24GB" */
 export function formatModelMetrics(m: ModelMetrics): string {
   const ctx  = `${formatTokenCount(m.contextTokens)}/${formatTokenCount(m.maxContextTokens)}`;
@@ -450,8 +461,11 @@ export function formatModelSeatState(state: ModelSeatState): string {
   const admitted = normalizeModelSeatState(state);
   const phase = admitted.phase.toLowerCase();
   const owner = admitted.owner ? ` owner=${admitted.owner}` : "";
-  const vram = admitted.phase === "RESIDENT" ? ` vram=${admitted.vramBytes}` : "";
-  return `model seat ${phase}${owner}${vram}`;
+  const vram = admitted.phase === "RESIDENT"
+    ? (admitted.vramUnmeasured ? " vram=unmeasured" : ` vram=${admitted.vramBytes}`)
+    : "";
+  const note = admitted.note ? ` · ${admitted.note}` : "";
+  return `model seat ${phase}${owner}${vram}${note}`;
 }
 
 export interface ModelMetricsBarProps {
@@ -521,6 +535,8 @@ export interface StatusLineProps {
   telemetry: TelemetryState;
   coordinator?: CoordinatorAgentState;
   effort?: EffortCalloutState;
+  /** Operator-selected thinking level (/effort); absent -> segment hidden. */
+  thinkingLevel?: string;
   /** Current cognitive mode; absent → defaults to "observe". Never blank, never crash. */
   cognitiveMode?: CognitiveMode;
   /** Live inference metrics from the model server; absent → meter hidden. */
@@ -553,6 +569,7 @@ export function StatusLine({
   telemetry,
   coordinator,
   effort,
+  thinkingLevel,
   cognitiveMode,
   modelMetrics,
   modelSeat,
@@ -580,7 +597,9 @@ export function StatusLine({
   // absent/loading/resident visible even in compact mode.
   const modelSeatText = modelSeat != null ? formatModelSeatState(modelSeat) : null;
   const roundtripText = !compact && roundtripAge != null ? formatRoundtripAgeText(roundtripAge, Date.now()) : null;
+  const thinkingText = !compact && thinkingLevel != null ? formatThinkingLevel(thinkingLevel) : null;
   const optionalSegments: StatusBarOptionalSegment[] = [
+    ...(thinkingText != null ? [{ key: "thinking", text: thinkingText }] : []),
     ...(modelMetricsText != null ? [{ key: "metrics", text: modelMetricsText }] : []),
     ...(roundtripText != null ? [{ key: "roundtrip", text: roundtripText }] : []),
   ];
@@ -634,6 +653,13 @@ export function StatusLine({
             React.createElement(Text, { key: "sep", dimColor: true, wrap: "truncate-end" }, SEGMENT_SEPARATOR),
             React.createElement(Text, { key: "text", wrap: "truncate-end" }, text),
           ),
+      // Thinking level (issue #2370): highest-priority decoration, dropped only after the others.
+      thinkingText != null && keptKeys.has("thinking")
+        ? React.createElement(React.Fragment, { key: "thinking" },
+            React.createElement(Text, { key: "tsep", dimColor: true }, SEGMENT_SEPARATOR),
+            React.createElement(Text, { key: "tlevel", color: "magenta", dimColor: true }, thinkingText),
+          )
+        : null,
       // Live model metrics meter — absent when no server is connected, OR dropped first under
       // width pressure so the core identity text above always survives.
       // Neither competitor can show local VRAM/throughput; this scores 0 for them.

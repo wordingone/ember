@@ -62,9 +62,9 @@ describe("chart widget", () => {
     const result = renderChart([1, 5, 3], { width: 30, height: 3 });
     expect(result.rows).toHaveLength(3);
     for (const row of result.rows) expect(row.length).toBe(30);
-    // Direct path is left-aligned: painted columns stay within the first ceil(3/2) cells.
+    // Direct path is left-aligned: one column per sample, so painting stays in the first 3 cells.
     const painted = paintedColumns(result.rows);
-    for (const x of painted) expect(x).toBeLessThan(2);
+    for (const x of painted) expect(x).toBeLessThan(3);
   });
 
   // Conjunction C3: zero samples AND a resize — no crash, no stale dimensions.

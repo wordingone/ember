@@ -18,11 +18,12 @@ import {
   type StylePool,
   type HyperlinkPool,
 } from "../ink/rendering-pipeline.ts";
+import type { TextRun } from "../ink/rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
 import type { BorderStyleName } from "./border-glyphs.ts";
 import { ClickEvent, PointerEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
-import { _setMouseDispatcher } from "./hooks.ts";
+import { _setMouseDispatcher, _setRepaintRequester } from "./hooks.ts";
 import type { SgrMouseEvent } from "./termio.ts";
 import {
   createRendererDiagnosticFromEnv,
@@ -194,6 +195,14 @@ function extractInitialText(props: Props): string | undefined {
   if (props["data-newline"]) {
     const count = typeof props["data-count"] === "number" ? props["data-count"] : 1;
     return "\n".repeat(count);
+  }
+  return undefined;
+}
+
+function extractRuns(props: Props): TextRun[] | undefined {
+  const r = props["data-runs"];
+  if (typeof r === "string") {
+    try { return JSON.parse(r) as TextRun[]; } catch { /* ignore */ }
   }
   return undefined;
 }
@@ -533,7 +542,7 @@ const hostConfig: any = {
     const kind  = inferKind(type, props);
     const style = extractStyle(props);
     const text  = extractInitialText(props);
-    const node  = makeNode(kind, { style, text, textWrap: extractTextWrap(props) });
+    const node  = makeNode(kind, { style, text, textWrap: extractTextWrap(props), runs: extractRuns(props) });
     node.onClick = typeof props["onClick"] === "function"
       ? props["onClick"] as (event: TerminalEvent) => void
       : undefined;
@@ -610,6 +619,7 @@ const hostConfig: any = {
     if (newStyle !== undefined) instance.style = newStyle;
     const newTextWrap = extractTextWrap(nextProps);
     if (newTextWrap !== undefined) instance.textWrap = newTextWrap;
+    if (instance.kind === "text") instance.runs = extractRuns(nextProps);
     const newText = extractInitialText(nextProps);
     if (newText !== undefined) instance.text = newText;
     if (instance.kind === "raw-ansi") {
@@ -804,12 +814,18 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     (event) => dispatchMouseEvent(container, event),
   );
 
+  const removeRepaintRequester = _setRepaintRequester((immediate) => {
+    renderer.invalidate();
+    if (immediate) renderer.render(rootNode as unknown as RenderNode);
+  });
+
   return {
     update(newElement: ReactElement): void {
       _syncRender(newElement);
     },
     unmount(): void {
       removeMouseDispatcher();
+      removeRepaintRequester();
       _syncRender(null);
       renderer.unmount();
     },

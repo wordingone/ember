@@ -62,17 +62,45 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
   return result;
 }
 
-function parseSkillMd(content: string): { frontmatter: Record<string, unknown>; body: string } {
-  if (!content.startsWith('---\n')) {
-    return { frontmatter: {}, body: content };
+/**
+ * Splits a SKILL.md into frontmatter and body. A frontmatter block that cannot be parsed (never
+ * closed, or a line that is not `key: value`) is reported in `error` and its lines are NOT left
+ * in the body, so a broken block never reaches the prompt. A file with no frontmatter at all
+ * reports `error` too (the skill still runs; name and description fall back to the folder name).
+ */
+export function parseSkillMd(rawContent: string): { frontmatter: Record<string, unknown>; body: string; error?: string } {
+  const content = rawContent.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
+  if (!/^---[ \t]*\n/.test(content)) {
+    return { frontmatter: {}, body: content, error: 'no frontmatter found (expected a leading --- block)' };
   }
-  const end = content.indexOf('\n---\n', 4);
-  if (end === -1) {
-    return { frontmatter: {}, body: content };
+  const lines = content.split('\n');
+  let close = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (/^---[ \t]*$/.test(lines[i]!)) { close = i; break; }
   }
-  const yamlStr = content.slice(4, end);
-  const body = content.slice(end + 5);
-  return { frontmatter: parseSimpleYaml(yamlStr), body };
+  const keyLine = /^[A-Za-z_][\w.-]*\s*:/;
+  const okLine = (l: string): boolean => l.trim() === '' || keyLine.test(l) || /^\s+\S/.test(l) || /^\s*#/.test(l);
+  if (close === -1) {
+    // Never closed: drop the leading run of key: value lines so they do not leak into the prompt.
+    let i = 1;
+    while (i < lines.length && lines[i]!.trim() !== '' && okLine(lines[i]!)) i++;
+    return {
+      frontmatter: {},
+      body: lines.slice(i).join('\n').replace(/^\n+/, ''),
+      error: 'frontmatter could not be parsed (the opening --- has no closing ---)',
+    };
+  }
+  const yamlLines = lines.slice(1, close);
+  const body = lines.slice(close + 1).join('\n');
+  const bad = yamlLines.findIndex((l) => !okLine(l));
+  if (bad !== -1) {
+    return {
+      frontmatter: {},
+      body,
+      error: `frontmatter could not be parsed (line ${bad + 2} is not "key: value")`,
+    };
+  }
+  return { frontmatter: parseSimpleYaml(yamlLines.join('\n')), body };
 }
 
 // ---------------------------------------------------------------------------

@@ -172,6 +172,7 @@ export function convertMessagesToOpenAI(
     const toolCalls: OpenAIToolCall[] = [];
     const contentParts: OpenAIContentPart[] = [];
     const toolResults: OpenAIMessage[] = [];
+    const toolImageParts: OpenAIContentPart[] = [];
 
     for (const block of blocks) {
       switch (block.type) {
@@ -208,6 +209,24 @@ export function convertMessagesToOpenAI(
             tool_call_id: block.tool_use_id,
             content,
           });
+          // OpenAI tool messages are text-only: tool-produced images ride in a
+          // following user message (llama-server with --mmproj reads them).
+          // Without a vision projector (EMBER_VISION!=1) they are dropped, as
+          // the server would reject image_url parts outright.
+          const imgs = (block as { images?: Array<{ media_type: string; data: string }> }).images;
+          if (imgs && imgs.length > 0) {
+            if (process.env["EMBER_VISION"] === "1") {
+              for (const im of imgs) {
+                toolImageParts.push({
+                  type: "image_url",
+                  image_url: { url: `data:${im.media_type};base64,${im.data}` },
+                });
+              }
+            } else {
+              toolResults[toolResults.length - 1]!.content =
+                content + " [image omitted: the loaded model has no vision projector]";
+            }
+          }
           break;
         }
 
@@ -226,6 +245,15 @@ export function convertMessagesToOpenAI(
 
     // Emit tool results as separate role:'tool' messages
     result.push(...toolResults);
+    if (toolImageParts.length > 0) {
+      result.push({
+        role: "user",
+        content: [
+          { type: "text", text: "[image(s) returned by the tool call(s) above]" },
+          ...toolImageParts,
+        ],
+      });
+    }
 
     if (toolCalls.length > 0 || contentParts.length > 0) {
       const out: OpenAIMessage = { role: msg.role };
@@ -261,6 +289,16 @@ export function convertFinishReason(
     default:
       return "end_turn";
   }
+}
+
+/**
+ * The line appended to a reply the server stopped with finish_reason "length". Without it the
+ * reply ends mid-sentence and looks finished (blind test W30). `maxTokens` is the output limit
+ * that was sent with the request; it covers the model's hidden reasoning as well as the answer.
+ */
+export function replyCutOffNotice(maxTokens?: number): string {
+  const limit = typeof maxTokens === "number" && maxTokens > 0 ? ` (${maxTokens.toLocaleString("en-US")} tokens, reasoning included)` : "";
+  return `[Reply cut off: it reached the output limit${limit} before the model finished. Ask it to continue, or ask for a shorter answer.]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +425,10 @@ export interface SseParserContext {
   // complete, successful turn -- worse than a visible error, since nothing
   // ever signaled the user or the retry logic that anything went wrong.
   sawFinishReason: boolean;
+  // The finish_reason the server reported ("stop", "tool_calls", "length", ...), or null until
+  // one is seen. "length" means the reply stopped because it ran out of room, not because the
+  // model finished it; that used to be reported as a normal end of turn (blind test W30).
+  finishReason: string | null;
   // D2 token-counts fix (issue #581): captured from a chunk's top-level `usage` object
   // (prompt_tokens/completion_tokens) whenever the server sends one -- commonly the final
   // chunk, which often carries empty `choices` alongside it (checked ahead of the
@@ -408,11 +450,26 @@ export function createSseParserContext(opts: SseParserOptions = {}): SseParserCo
     textBuffer: "",
     toolCallsByIndex: new Map(),
     sawFinishReason: false,
+    finishReason: null,
     usage: null,
   };
 }
 
 const DEFAULT_END_TAG = "</thinking>";
+const INLINE_THINK_OPEN = ["<thinking>", "<think>"];
+
+/** Ends an inline reasoning block at its close tag; anything after the tag is reply text. */
+function splitThinkingEnd(ctx: SseParserContext, endTag: string): void {
+  for (const tag of [endTag, "</think>", "</thinking>"]) {
+    const i = ctx.thinkingBuffer.indexOf(tag);
+    if (i < 0) continue;
+    const after = ctx.thinkingBuffer.slice(i + tag.length);
+    ctx.thinkingBuffer = ctx.thinkingBuffer.slice(0, i);
+    ctx.state = "text";
+    ctx.textBuffer += after.replace(/^\s+/, "");
+    return;
+  }
+}
 
 /**
  * AC5: Processes a single SSE data line through the state machine.
@@ -457,6 +514,8 @@ export async function processSseLine(
   // so it's captured regardless of that chunk's delta shape.
   if (firstChoice && firstChoice["finish_reason"] != null) {
     ctx.sawFinishReason = true;
+    const reason = firstChoice["finish_reason"];
+    if (typeof reason === "string") ctx.finishReason = reason;
   }
 
   // D2 token-counts fix (issue #581): usage lives at the top level of the chunk, not inside a
@@ -486,26 +545,26 @@ export async function processSseLine(
 
   if (typeof content === "string") {
     switch (ctx.state) {
-      case "pre":
-        // If this delta contains the inline <thinking> start marker, enter thinking state.
-        if (content.includes("<thinking>")) {
+      case "pre": {
+        // Hold leading content until it is clearly a reply or an inline reasoning block:
+        // "<think>" (Qwen) or "<thinking>", possibly split across deltas or after whitespace.
+        ctx.textBuffer += content;
+        const lead = ctx.textBuffer.trimStart();
+        const open = INLINE_THINK_OPEN.find((t) => lead.startsWith(t));
+        if (open) {
           ctx.state = "thinking";
-          const afterStart = content.split("<thinking>")[1] ?? "";
-          ctx.thinkingBuffer += afterStart;
-        } else {
-          // Plain content with no thinking tag: treat as text (do not swallow into thinkingBuffer).
+          ctx.thinkingBuffer += lead.slice(open.length);
+          ctx.textBuffer = "";
+          splitThinkingEnd(ctx, endTag);
+        } else if (lead !== "" && !INLINE_THINK_OPEN.some((t) => t.startsWith(lead))) {
           ctx.state = "text";
-          ctx.textBuffer += content;
         }
         break;
+      }
 
       case "thinking":
         ctx.thinkingBuffer += content;
-        if (ctx.thinkingBuffer.includes(endTag)) {
-          const [thinkingDone] = ctx.thinkingBuffer.split(endTag);
-          ctx.thinkingBuffer = thinkingDone ?? "";
-          ctx.state = "text";
-        }
+        splitThinkingEnd(ctx, endTag);
         break;
 
       case "text":
@@ -634,6 +693,8 @@ export function buildOpenAIRequest(opts: {
   toolChoice?: EmberToolChoice;
   maxTokens: number;
   samplingParams?: SamplingParams;
+  /** Chat-template kwargs (issue #2370: enable_thinking / reasoning_effort). */
+  chatTemplateKwargs?: Record<string, unknown>;
 }): OpenAIRequest {
   const req: OpenAIRequest = {
     model: opts.model,
@@ -655,6 +716,10 @@ export function buildOpenAIRequest(opts: {
 
   if (opts.toolChoice) {
     req.tool_choice = convertToolChoice(opts.toolChoice);
+  }
+
+  if (opts.chatTemplateKwargs) {
+    req["chat_template_kwargs"] = opts.chatTemplateKwargs;
   }
 
   // EMBER_THINKING_ENABLE_PARAM — parameter name for enabling thinking

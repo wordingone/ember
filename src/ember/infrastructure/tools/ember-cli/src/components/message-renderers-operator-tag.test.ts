@@ -24,11 +24,10 @@ describe("UserTextMessage — origin tag (ember #165)", () => {
     expect(ser(el)).not.toContain("[operator]");
   });
 
-  it("origin: 'operator' renders a visible [operator] tag alongside the 'You' header", () => {
+  it("origin: 'operator' renders a visible [operator] tag on the prompt row", () => {
     const el = UserTextMessage({ text: "prompt from the pipe", origin: "operator" });
     const s = ser(el);
     expect(s).toContain("[operator]");
-    expect(s).toContain("You");
     expect(s).toContain("prompt from the pipe");
   });
 

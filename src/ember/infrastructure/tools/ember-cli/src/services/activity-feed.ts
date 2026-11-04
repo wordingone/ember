@@ -25,6 +25,7 @@ import { readFile, stat, writeFile, open } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { resolveEmberRepoRootOrCwd } from "../utils/repo-root.ts";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
 import { isHeadlessCapture } from "./headless-capture.ts";
 import { appendLineWithDirs, stripBom } from "../utils/file-operations.ts";
 import type { ActivityFeedLine, ActivityFeedSource } from "../components/activity-feed-pane.ts";
@@ -700,6 +701,18 @@ async function pollTail(
   };
 }
 
+/** True in the harness mode that runs in an arbitrary user project (not an Ember checkout). */
+function isOpenWeightsSession(env: Record<string, string | undefined>): boolean {
+  return env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1" || env["EMBER_OPEN_WEIGHTS"] === "1";
+}
+
+/** The directory for this engine's own files: EMBER_HOME/state in a user's project, else the repo's. */
+export function activityStateDir(repoRoot: string, env: Record<string, string | undefined>): string {
+  return isOpenWeightsSession(env)
+    ? path.join(env["EMBER_HOME"] || getEmberConfigHomeDir(), "state")
+    : path.join(repoRoot, "tools", "ember-cli", "state");
+}
+
 /**
  * Starts the activity-feed engine: a recursive receipts watcher, a flat totality-board watcher,
  * a planned-outage poll, and two tail-polled watchdog logs. If a previous engine is running it
@@ -715,7 +728,11 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     deps.receiptsDir ?? process.env["EMBER_ACTIVITY_RECEIPTS_DIR"] ?? path.join(repoRoot, "receipts");
   const totalityDir =
     deps.totalityDir ?? path.join(repoRoot, "scripts", "ember_totality", "receipts-totality");
-  const cliStateDir = path.join(repoRoot, "tools", "ember-cli", "state");
+  // Where this engine keeps its own state (watermark, ledger, debug log). In a user's project
+  // directory (open-weights mode) the repo root resolves to the project itself, and ember used to
+  // create tools/ember-cli/state/ inside it (blind test S43): state belongs under EMBER_HOME there.
+  // `deps` paths still win, so tests and governed callers are unchanged.
+  const cliStateDir = activityStateDir(repoRoot, deps.env ?? process.env);
   const outageMarkerPath = deps.outageMarkerPath ?? path.join(cliStateDir, "planned-outage.json");
   const restartLogPath =
     deps.restartLogPath ?? path.join(cliStateDir, "liveness-watchdog-restart-log.jsonl");
@@ -723,8 +740,13 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
     deps.watchdogStatePath ?? path.join(cliStateDir, "liveness-watchdog-state.json");
   const ledgerPath = deps.ledgerPath ?? path.join(cliStateDir, "activity-ledger.jsonl");
   const watermarkPath = deps.watermarkPath ?? path.join(cliStateDir, "activity-feed-watermark.json");
-  const tailPollDebugLogPath =
-    deps.tailPollDebugLogPath ?? path.join(cliStateDir, "activity-feed-tailpoll-debug.jsonl");
+  // The #576 tail-poll diagnostic writes a row per poll tick, forever. That is for the Ember repo's
+  // own debugging; in a user's project it is only written when asked for.
+  const tailPollDebugLogPath: string | null =
+    deps.tailPollDebugLogPath
+    ?? (isOpenWeightsSession(deps.env ?? process.env) && (deps.env ?? process.env)["EMBER_ACTIVITY_TAILPOLL_DEBUG"] !== "1"
+      ? null
+      : path.join(cliStateDir, "activity-feed-tailpoll-debug.jsonl"));
   const clock = deps.now ?? Date.now.bind(Date);
 
   // #576: one row per pollTail() tick (not per emitted line) plus one row per
@@ -733,6 +755,7 @@ export function startActivityFeed(deps: ActivityFeedDeps = {}): ActivityFeedHand
   // of inferring it from ledger output after the fact. Best-effort, same discipline as the
   // ledger itself: a logging failure must never take the feed down.
   function logTailPollDiagnostic(entry: Record<string, unknown>): void {
+    if (tailPollDebugLogPath === null) return;
     void appendLineWithDirs(
       tailPollDebugLogPath,
       JSON.stringify({ ts: new Date(clock()).toISOString(), pid: process.pid, ...entry }),

@@ -14,6 +14,8 @@ import {
   upgradeHttpToHttps,
   isPermittedRedirect,
   urlCache,
+  pageCache,
+  partialPageNotice,
 } from './web-tools.ts';
 import type { WebFetchDeps, SearchDeps, WebFetchInput, WebSearchInput, WebSearchOutput } from './web-tools.ts';
 
@@ -107,9 +109,11 @@ function makeFetchDeps(overrides: Partial<WebFetchDeps> = {}): WebFetchDeps {
 // Clear url cache before each test
 beforeEach(() => {
   // Access internal cache and clear it
-  const cache = urlCache as unknown as { map: Map<string, unknown> };
-  if (cache && cache.map instanceof Map) {
-    cache.map.clear();
+  for (const c of [urlCache, pageCache]) {
+    const cache = c as unknown as { map: Map<string, unknown> };
+    if (cache && cache.map instanceof Map) {
+      cache.map.clear();
+    }
   }
 });
 
@@ -345,8 +349,173 @@ describe('WebFetch', () => {
       undefined,
     );
     const data = result.data as { result: string };
-    expect(data.result.length).toBeLessThanOrEqual(100_200); // 100k + short notice
+    expect(data.result.length).toBeLessThanOrEqual(100_600); // 100k + the PARTIAL PAGE line
     expect(data.result).toContain('truncated');
+    expect(data.result).toContain('110,000'); // the full size is stated (W12)
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blind-test findings W12 / W16 / W17 (issue #2381)
+// ---------------------------------------------------------------------------
+
+describe('WebFetch: a cut page says so (W12)', () => {
+  const run = (deps: WebFetchDeps, url = 'https://example.org/big', prompt = 'size?') =>
+    buildWebFetchTool(deps).call({ url, prompt }, makeCtx(), async () => true, undefined)
+      .then((r) => (r.data as { result: string }).result);
+
+  test('partialPageNotice gives the full size, the part read and the share', () => {
+    const n = partialPageNotice(422_279, 12_000);
+    expect(n).toContain('PARTIAL PAGE');
+    expect(n).toContain('422,279');
+    expect(n).toContain('12,000');
+    expect(n).toContain('3%');
+  });
+
+  test('a page over the 100,000-character cap reaches the model cut, and the result starts with the notice', async () => {
+    let seen = 0;
+    const deps = makeFetchDeps({
+      fetchFn: makeFakeFetch(200, 'text/plain', 'y'.repeat(250_000)),
+      secondaryModel: async (content) => { seen = content.length; return { text: 'The page has 3 sections.' }; },
+    });
+    const out = await run(deps);
+    expect(seen).toBe(100_000);
+    expect(out.startsWith('[PARTIAL PAGE (truncated)')).toBe(true);
+    expect(out).toContain('250,000');
+    expect(out).toContain('The page has 3 sections.');
+  });
+
+  test('when the summariser clips again, the notice names what the model actually read', async () => {
+    const deps = makeFetchDeps({
+      fetchFn: makeFakeFetch(200, 'text/plain', 'z'.repeat(50_000)),
+      secondaryModel: async () => ({ text: 'summary', charsRead: 12_000 }),
+    });
+    const out = await run(deps);
+    expect(out).toContain('50,000');
+    expect(out).toContain('first 12,000');
+  });
+
+  test('a preapproved page returned as it is also carries the notice', async () => {
+    const deps = makeFetchDeps({ fetchFn: makeMarkdownFetch('m'.repeat(150_000)) });
+    const out = await run(deps, 'https://docs.python.org/big');
+    expect(out.startsWith('[PARTIAL PAGE (truncated)')).toBe(true);
+    expect(out).toContain('150,000');
+    expect(out.length).toBeLessThanOrEqual(100_600);
+  });
+
+  test('a model failure returns the page start with the notice, not an unmarked cut', async () => {
+    const deps = makeFetchDeps({
+      fetchFn: makeFakeFetch(200, 'text/plain', 'q'.repeat(60_000)),
+      secondaryModel: async () => { throw new Error('model down'); },
+    });
+    const out = await run(deps);
+    expect(out).toContain('PARTIAL PAGE');
+    expect(out).toContain('60,000');
+    expect(out).toContain('model down');
+  });
+
+  test('a page that fit entirely gets no notice', async () => {
+    const deps = makeFetchDeps({
+      fetchFn: makeFakeFetch(200, 'text/plain', 'short page'),
+      secondaryModel: async (c) => ({ text: `ok ${c}`, charsRead: c.length }),
+    });
+    expect(await run(deps)).toBe('ok short page');
+  });
+});
+
+describe('WebFetch: links survive conversion (W16)', () => {
+  test('the final URL is handed to the converter, so relative links come out absolute', async () => {
+    const bases: Array<string | undefined> = [];
+    const deps = makeFetchDeps({
+      fetchFn: makeHtmlFetch('<a href="/docs/x">Docs</a>'),
+      htmlToMarkdown: (html, baseUrl) => { bases.push(baseUrl); return html; },
+    });
+    await buildWebFetchTool(deps).call({ url: 'https://example.org/start/page', prompt: 'links?' }, makeCtx(), async () => true, undefined);
+    expect(bases).toEqual(['https://example.org/start/page']);
+  });
+
+  test('the real converter turns a relative href into an absolute one that reaches the model', async () => {
+    const { htmlToMarkdown } = await import('./services/web-markdown.ts');
+    let seen = '';
+    const deps = makeFetchDeps({
+      fetchFn: makeHtmlFetch('<html><body><p>See <a href="/more/info">more information</a> or <a href="https://other.example/a">other</a>.</p></body></html>'),
+      htmlToMarkdown,
+      secondaryModel: async (content) => { seen = content; return { text: 'ok' }; },
+    });
+    await buildWebFetchTool(deps).call({ url: 'https://example.org/index.html', prompt: 'links?' }, makeCtx(), async () => true, undefined);
+    expect(seen).toContain('[more information](https://example.org/more/info)');
+    expect(seen).toContain('[other](https://other.example/a)');
+  });
+});
+
+describe('WebFetch: a second question about a page is not a second download (W17)', () => {
+  function countingFetch(body: string): { fetchFn: typeof fetch; count: () => number } {
+    let n = 0;
+    const fetchFn = (async () => {
+      n++;
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/plain' } });
+    }) as unknown as typeof fetch;
+    return { fetchFn, count: () => n };
+  }
+
+  test('same page, different prompt: one download, two model calls, two answers', async () => {
+    const { fetchFn, count } = countingFetch('the page');
+    const prompts: string[] = [];
+    const deps = makeFetchDeps({
+      fetchFn,
+      secondaryModel: async (_c, prompt) => { prompts.push(prompt); return { text: `answer to ${prompt}` }; },
+    });
+    const tool = buildWebFetchTool(deps);
+    const call = (prompt: string) =>
+      tool.call({ url: 'https://example.org/p', prompt }, makeCtx(), async () => true, undefined).then((r) => (r.data as { result: string }).result);
+    expect(await call('first question')).toBe('answer to first question');
+    expect(await call('second question')).toBe('answer to second question');
+    expect(prompts).toEqual(['first question', 'second question']);
+    expect(count()).toBe(1);
+  });
+
+  test('same page and same prompt: no second download and no second model call', async () => {
+    const { fetchFn, count } = countingFetch('the page');
+    let modelCalls = 0;
+    const deps = makeFetchDeps({ fetchFn, secondaryModel: async () => { modelCalls++; return { text: 'a' }; } });
+    const tool = buildWebFetchTool(deps);
+    for (let i = 0; i < 3; i++) {
+      await tool.call({ url: 'https://example.org/p', prompt: 'q' }, makeCtx(), async () => true, undefined);
+    }
+    expect(count()).toBe(1);
+    expect(modelCalls).toBe(1);
+  });
+
+  test('a #fragment or a different host-case is the same page', async () => {
+    const { fetchFn, count } = countingFetch('the page');
+    const tool = buildWebFetchTool(makeFetchDeps({ fetchFn }));
+    await tool.call({ url: 'https://example.org/p', prompt: 'a' }, makeCtx(), async () => true, undefined);
+    await tool.call({ url: 'https://example.org/p#section-2', prompt: 'b' }, makeCtx(), async () => true, undefined);
+    await tool.call({ url: 'https://EXAMPLE.org/p', prompt: 'c' }, makeCtx(), async () => true, undefined);
+    expect(count()).toBe(1);
+  });
+
+  test('a different query string is a different page', async () => {
+    const { fetchFn, count } = countingFetch('the page');
+    const tool = buildWebFetchTool(makeFetchDeps({ fetchFn }));
+    await tool.call({ url: 'https://example.org/p?a=1', prompt: 'q' }, makeCtx(), async () => true, undefined);
+    await tool.call({ url: 'https://example.org/p?a=2', prompt: 'q' }, makeCtx(), async () => true, undefined);
+    expect(count()).toBe(2);
+  });
+
+  test('a failed download is not cached', async () => {
+    let n = 0;
+    const fetchFn = (async () => {
+      n++;
+      return n === 1
+        ? new Response('', { status: 503, statusText: 'Service Unavailable', headers: { 'content-type': 'text/plain' } })
+        : new Response('back', { status: 200, headers: { 'content-type': 'text/plain' } });
+    }) as unknown as typeof fetch;
+    const tool = buildWebFetchTool(makeFetchDeps({ fetchFn, secondaryModel: async (c) => ({ text: `got ${c}` }) }));
+    const first = await tool.call({ url: 'https://example.org/flaky', prompt: 'q' }, makeCtx(), async () => true, undefined);
+    expect((first.data as { result: string }).result).toContain('503');
+    const second = await tool.call({ url: 'https://example.org/flaky', prompt: 'q' }, makeCtx(), async () => true, undefined);
+    expect((second.data as { result: string }).result).toBe('got back');
   });
 });
 
@@ -453,5 +622,37 @@ describe('WebSearch', () => {
     const types = events.map((e) => (e as { type: string }).type);
     expect(types).toContain('web_search_start');
     expect(types).toContain('web_search_complete');
+  });
+});
+
+describe('WebFetch blind-test fixes (W13, W21, W23)', () => {
+  test('W23: a file:// URL is refused before anything is read', async () => {
+    let fetched = false;
+    const tool = buildWebFetchTool(makeFetchDeps({ fetchFn: (async () => { fetched = true; return new Response('x'); }) as unknown as typeof fetch }));
+    await expect(tool.call({ url: 'file:///C:/Windows/win.ini', prompt: 'read' }, makeCtx(), async () => true, undefined))
+      .rejects.toThrow(/only http and https/);
+    expect(fetched).toBe(false);
+  });
+
+  test('W21: the turn abort signal reaches the download', async () => {
+    let seen: AbortSignal | undefined;
+    const tool = buildWebFetchTool(makeFetchDeps({
+      fetchFn: (async (_u: string, init?: RequestInit) => {
+        seen = init?.signal ?? undefined;
+        throw Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
+      }) as unknown as typeof fetch,
+    }));
+    const ctx = makeCtx();
+    const r = await tool.call({ url: 'https://example.com/big', prompt: 'x' }, ctx, async () => true, undefined);
+    expect(seen).toBe((ctx as unknown as { abortController: AbortController }).abortController.signal);
+    expect((r.data as { result: string }).result).toContain('cancelled');
+  });
+
+  test('W13: a host name that does not resolve is reported as a DNS failure', async () => {
+    const tool = buildWebFetchTool(makeFetchDeps({
+      fetchFn: (async () => { throw Object.assign(new Error('Unable to connect.'), { code: 'ConnectionRefused' }); }) as unknown as typeof fetch,
+    }));
+    const r = await tool.call({ url: 'https://no-such-host-ember-blindtest.invalid/', prompt: 'x' }, makeCtx(), async () => true, undefined);
+    expect((r.data as { result: string }).result).toContain('could not be found (DNS lookup failed)');
   });
 });

@@ -9,7 +9,7 @@
 
 import { spawn } from "child_process";
 import { stat } from "fs/promises";
-import { join, relative, isAbsolute } from "path";
+import { join, relative, isAbsolute, resolve, sep } from "path";
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
@@ -40,6 +40,19 @@ function toRelativePath(absPath: string, base: string): string {
   const rel = relative(base, absPath);
   if (rel.startsWith("..")) return absPath;
   return rel;
+}
+
+/**
+ * ripgrep prints the path it was given, and Grep gives it an absolute one, so every content line
+ * began with `A:\\long\\project\\dir\\` even for files under the working directory (blind test FO-15).
+ * Lines whose path starts with the working directory lose that prefix; others are left alone.
+ */
+export function relativizeGrepLines(lines: string[], cwd: string): string[] {
+  const base = resolve(cwd);
+  const prefix = base.endsWith(sep) ? base : base + sep;
+  const caseInsensitive = process.platform === "win32";
+  const needle = caseInsensitive ? prefix.toLowerCase() : prefix;
+  return lines.map((l) => ((caseInsensitive ? l.toLowerCase() : l).startsWith(needle) ? l.slice(prefix.length) : l));
 }
 
 // ---------------------------------------------------------------------------
@@ -207,7 +220,11 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
   const rawPath = input.path;
   const headLimit = input.head_limit ?? 250;
   const offset = input.offset ?? 0;
-  const searchPath = rawPath ? expandPath(rawPath) : (ctx.cwd ?? process.cwd());
+  // Absolute, so ripgrep prints absolute paths and a relative `path` is not
+  // joined onto itself ("src" -> "src\\src\\a.py").
+  const searchPath = rawPath
+    ? resolve(ctx.cwd ?? process.cwd(), expandPath(rawPath))
+    : (ctx.cwd ?? process.cwd());
 
   if (isUncPath(searchPath)) {
     return {
@@ -233,6 +250,9 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
     args.push("--glob", excl);
   }
   args.push("--max-columns", "500");
+  // A single-file search otherwise omits the filename ("9" instead of "f:9"),
+  // and count mode then reported zero matches.
+  args.push("--with-filename");
 
   if (input["-i"]) args.push("-i");
   if (input["-o"]) args.push("-o");
@@ -353,6 +373,7 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
     const lines = stdout.split("\n").filter((l) => l.trim().length > 0);
     let totalMatches = 0;
     const fileMatches: string[] = [];
+    const fileCounts: number[] = [];
     for (const line of lines) {
       const colonIdx = line.lastIndexOf(":");
       if (colonIdx < 0) continue;
@@ -362,6 +383,7 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
       if (!isNaN(count)) {
         totalMatches += count;
         fileMatches.push(filePart);
+        fileCounts.push(count);
       }
     }
     const sliced = headLimit > 0
@@ -371,11 +393,14 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
       const absPath = isAbsolute(f) ? f : join(searchPath, f);
       return toRelativePath(absPath, cwd);
     });
+    // The per-file counts were dropped, so the screen showed only file names (blind test FO-51).
+    const countLines = relativized.map((f, i) => `${f}:${fileCounts[offset + i] ?? 0}`);
     return {
       mode: outputMode,
       numFiles: fileMatches.length,
       filenames: relativized,
       numMatches: totalMatches,
+      content: countLines.join("\n"),
       appliedOffset: offset,
     };
   }
@@ -390,14 +415,14 @@ async function runGrep(input: GrepInput, ctx: ToolUseContext): Promise<GrepResul
 
   const fileSet = new Set<string>();
   for (const line of contentLines) {
-    const m = /^([^:]+):\d+:/.exec(line);
+    const m = /^((?:[A-Za-z]:)?[^:]+):\d+:/.exec(line);
     if (m) {
       const absPath = isAbsolute(m[1]) ? m[1] : join(searchPath, m[1]);
       fileSet.add(toRelativePath(absPath, cwd));
     }
   }
 
-  const content = sliced.join("\n");
+  const content = relativizeGrepLines(sliced, cwd).join("\n");
   return {
     mode: outputMode,
     numFiles: fileSet.size,

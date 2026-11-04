@@ -15,6 +15,7 @@
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import {
   referenceSeatModelName,
+  openWeightsModelName,
   resolveModelSeat,
   selectedModelContract,
   type ModelSeatDecision,
@@ -162,6 +163,12 @@ export function renderCustodyStatus(
     const modelName = contract?.modelName ?? referenceSeatModelName(decision.referenceModelName);
     lines.push(`model: ${modelName}`);
     lines.push("structuredOutputs: false (borrowed model; never owned capability)");
+    return lines.join("\n");
+  }
+
+  if (decision.seat === "OPEN_WEIGHTS") {
+    lines.push(`model: ${contract?.modelName ?? openWeightsModelName(decision.referenceModelName)}`);
+    lines.push("structuredOutputs: false (operator-selected non-Ember model; never owned capability)");
     return lines.join("\n");
   }
 

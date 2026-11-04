@@ -15,7 +15,9 @@ import { color, PANEL_BORDER_STYLE } from "./design-system.ts";
 // Constants (spec — preserve exactly)
 // ---------------------------------------------------------------------------
 
-export const MAX_INPUT_CHARS   = 1e4; // 10 000
+// Blind test: a 10 000-character cap silently cut ordinary pastes (a log, a file). 200 000
+// characters is roughly 50k tokens, half the served context; past it the REPL says so.
+export const MAX_INPUT_CHARS   = 200_000;
 export const FAST_HINT_MS      = 5000;
 export const QUEUE_MAX_VISIBLE = 3;
 
@@ -77,7 +79,8 @@ export interface PromptInputActions {
   setText:             (t: string) => void;
   /** Inserts at the current cursor position (mid-line insert when the cursor isn't at the end;
    * ordinary typing keeps the cursor at the end, so this also covers plain append). */
-  insertText:          (ch: string) => void;
+  /** Returns true when the insertion was cut at MAX_INPUT_CHARS. */
+  insertText:          (ch: string) => boolean;
   /** Backspace: removes the character immediately BEFORE the cursor. */
   deleteBackward:      () => void;
   /** Delete key: removes the character immediately AFTER the cursor. */
@@ -86,6 +89,8 @@ export interface PromptInputActions {
   moveCursorRight:     () => void;
   moveCursorHome:      () => void;
   moveCursorEnd:       () => void;
+  /** Moves the cursor to an absolute offset (clamped). */
+  setCursor:           (cursor: number) => void;
   paste:               (text: string) => void;
   stash:               () => void;
   restoreStash:        () => void;
@@ -155,6 +160,8 @@ export function parseInputMode(text: string): ParsedInput {
 }
 
 export function modeGlyph(mode: InputMode): string {
+  // The classic Windows console font has no ❯ and draws a "missing glyph" box (blind test).
+  if (mode === "prompt" && process.env["EMBER_ASCII_GLYPHS"] === "1") return ">";
   return MODE_GLYPHS[mode];
 }
 
@@ -186,6 +193,25 @@ export function applyPaste(current: string, pasted: string): ApplyPasteResult {
 export interface TextCursor {
   text:   string;
   cursor: number;
+}
+
+/** Up/Down inside a multi-line draft: the cursor offset on the line above/below, keeping the
+ *  column where possible; null when already on the first/last line (the key then belongs to
+ *  prompt history). */
+export function cursorLineMove(text: string, cursor: number, dir: -1 | 1): number | null {
+  const c = clampCursor(cursor, text.length);
+  const lineStart = text.lastIndexOf("\n", c - 1) + 1;
+  const col = c - lineStart;
+  if (dir < 0) {
+    if (lineStart === 0) return null;
+    const prevStart = text.lastIndexOf("\n", lineStart - 2) + 1;
+    return Math.min(prevStart + col, lineStart - 1);
+  }
+  const lineEnd = text.indexOf("\n", c);
+  if (lineEnd < 0) return null;
+  const nextStart = lineEnd + 1;
+  const nextEnd = text.indexOf("\n", nextStart);
+  return Math.min(nextStart + col, nextEnd < 0 ? text.length : nextEnd);
 }
 
 export function clampCursor(cursor: number, length: number): number {
@@ -235,6 +261,38 @@ export function computeInputViewport(text: string, cursor: number, width: number
   const maxStart = text.length - w;
   const start    = Math.max(0, Math.min(c - w + 1, maxStart));
   return { visibleText: text.slice(start, start + w), cursorCol: c - start };
+}
+
+export interface InputRow { text: string; cursorCol: number | null }
+export interface InputRows { rows: InputRow[]; hiddenAbove: number; hiddenBelow: number }
+
+/** Wrap the prompt into rows of `width` cells, honouring typed newlines, and keep at
+ * most `maxRows` of them on screen around the cursor. A long prompt used to show
+ * only its last `width` characters on one line. */
+export function computeInputRows(text: string, cursor: number, width: number, maxRows = 8): InputRows {
+  const w = Math.max(1, Math.floor(width));
+  const c = clampCursor(cursor, text.length);
+  const all: InputRow[] = [];
+  let offset = 0;
+  let cursorRow = 0;
+  const lines = text.split("\n");
+  lines.forEach((line, li) => {
+    const chunks = line.length === 0 ? [""] : (line.match(new RegExp(`[\\s\\S]{1,${w}}`, "g")) ?? [""]);
+    // A line that exactly fills its last row still needs a row for a cursor at its end.
+    if (line.length > 0 && line.length % w === 0) chunks.push("");
+    chunks.forEach((chunk, ci) => {
+      const start = offset + ci * w;
+      const isLast = ci === chunks.length - 1;
+      const inRow = c >= start && (c < start + chunk.length || (isLast && c === start + chunk.length));
+      if (inRow) cursorRow = all.length;
+      all.push({ text: chunk, cursorCol: inRow ? c - start : null });
+    });
+    offset += line.length + (li < lines.length - 1 ? 1 : 0);
+  });
+  const n = Math.max(1, Math.floor(maxRows));
+  const first = Math.max(0, Math.min(cursorRow - n + 1, all.length - n));
+  const top = Math.max(0, first);
+  return { rows: all.slice(top, top + n), hiddenAbove: top, hiddenBelow: Math.max(0, all.length - top - n) };
 }
 
 export function computeQueueDisplay(items: string[]): QueueDisplay {
@@ -370,7 +428,12 @@ export function usePromptInput(
   }, [updateTc]);
 
   const insertText = useCallback((ch: string) => {
-    updateTc(prev => insertAtCursor(prev.text, prev.cursor, ch));
+    let cut = false;
+    updateTc(prev => {
+      cut = prev.text.length + ch.length > MAX_INPUT_CHARS;
+      return insertAtCursor(prev.text, prev.cursor, ch);
+    });
+    return cut;
   }, [updateTc]);
 
   const deleteBackwardAction = useCallback(() => {
@@ -395,6 +458,10 @@ export function usePromptInput(
 
   const moveCursorEnd = useCallback(() => {
     updateTc(prev => ({ text: prev.text, cursor: prev.text.length }));
+  }, [updateTc]);
+
+  const setCursor = useCallback((cursor: number) => {
+    updateTc(prev => ({ text: prev.text, cursor: clampCursor(cursor, prev.text.length) }));
   }, [updateTc]);
 
   const paste = useCallback((pastedText: string) => {
@@ -469,6 +536,7 @@ export function usePromptInput(
     moveCursorRight,
     moveCursorHome,
     moveCursorEnd,
+    setCursor,
     paste,
     stash,
     restoreStash,
@@ -537,9 +605,9 @@ export function PromptInput({
       React.createElement(Text, { key: n.id, color: n.kind === "error" ? "red" : "cyan" }, n.message),
     );
   }
-  if (showShimmer) {
-    above.push(React.createElement(Text, { key: "shimmer", dimColor: true }, "…"));
-  }
+  // No separate "…" shimmer row: the spinner line ("Thinking… 3s · Esc to interrupt") already
+  // says work is in progress, and the lone "…" read as a stray character (blind test).
+  void showShimmer;
 
   // Every persistent row owned by the input surface lives inside one closed rounded box.
   const boxChildren: (React.ReactElement | null)[] = [];
@@ -549,24 +617,39 @@ export function PromptInput({
 
   const cursor        = state.cursor ?? state.text.length;
   const availableCols = promptInputViewportWidth(width);
-  const viewport      = computeInputViewport(state.text, cursor, availableCols);
-  const before         = viewport.visibleText.slice(0, viewport.cursorCol);
-  const atCursorChar   = viewport.visibleText[viewport.cursorCol] ?? " ";
-  const after          = viewport.visibleText.slice(viewport.cursorCol + 1);
-  const cursorAtEnd    = viewport.cursorCol === viewport.visibleText.length;
+  const cursorAtEnd   = cursor >= state.text.length;
+  const inputRows     = computeInputRows(state.text, cursor, Math.max(1, availableCols), compact ? 1 : 8);
 
-  boxChildren.push(
-    React.createElement(
-      Box, { key: "input" },
-      React.createElement(Text, { bold: true, color: INPUT_BOX_BORDER_COLOR }, glyph),
-      React.createElement(Text, null, ` ${before}`),
-      React.createElement(Text, { inverse: true }, atCursorChar),
-      after ? React.createElement(Text, null, after) : null,
-      !compact && suggestion && cursorAtEnd
-        ? React.createElement(Text, { dimColor: true }, suggestion)
-        : null,
-    ),
-  );
+  if (inputRows.hiddenAbove > 0) {
+    boxChildren.push(React.createElement(Text, { key: "input-above", dimColor: true }, `  … ${inputRows.hiddenAbove} more line(s) above`));
+  }
+  inputRows.rows.forEach((row, i) => {
+    const prefix = i === 0 && inputRows.hiddenAbove === 0
+      ? React.createElement(Text, { bold: true, color: INPUT_BOX_BORDER_COLOR }, glyph)
+      : React.createElement(Text, null, " ");
+    if (row.cursorCol === null) {
+      boxChildren.push(React.createElement(Box, { key: `input-${i}` }, prefix, React.createElement(Text, null, ` ${row.text}`)));
+      return;
+    }
+    const before = row.text.slice(0, row.cursorCol);
+    const atCursorChar = row.text[row.cursorCol] ?? " ";
+    const after = row.text.slice(row.cursorCol + 1);
+    boxChildren.push(
+      React.createElement(
+        Box, { key: i === 0 ? "input" : `input-${i}` },
+        prefix,
+        React.createElement(Text, null, ` ${before}`),
+        React.createElement(Text, { inverse: true }, atCursorChar),
+        after ? React.createElement(Text, null, after) : null,
+        !compact && suggestion && cursorAtEnd
+          ? React.createElement(Text, { dimColor: true }, suggestion)
+          : null,
+      ),
+    );
+  });
+  if (inputRows.hiddenBelow > 0) {
+    boxChildren.push(React.createElement(Text, { key: "input-below", dimColor: true }, `  … ${inputRows.hiddenBelow} more line(s) below`));
+  }
 
   for (let i = 0; i < qDisplay.visible.length; i++) {
     const item = qDisplay.visible[i]!;

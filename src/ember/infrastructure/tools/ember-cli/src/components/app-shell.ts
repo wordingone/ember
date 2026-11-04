@@ -211,17 +211,78 @@ export function virtualMessageWindow(messageCount: number, viewportRows: number,
 }
 
 
+/** Rough rendered height of a message: wrapped lines of its text plus a header row.
+ * Only bounds PageUp; layout itself never depends on it. `width` is the chat column's own width
+ * (not the terminal's); the reply gutter and a little slack come off it. */
+export function estimateMessageRows(msg: SessionMessage, width: number): number {
+  const raw = (msg as Record<string, unknown>)["content"];
+  const text = typeof raw === "string" ? raw : "";
+  const w = Math.max(10, Math.floor(width) - 4);
+  let rows = 1;
+  for (const line of text.split("\n")) rows += Math.max(1, Math.ceil(line.length / w));
+  return rows;
+}
+
+/** Estimated rows of the whole transcript. */
+export function totalMessageRows(messages: readonly SessionMessage[], width: number): number {
+  let total = 0;
+  for (const m of messages) total += estimateMessageRows(m, width);
+  return total;
+}
+
+/** Clamp a transcript row offset to what scrolling can reveal: the first message lands at the
+ * top of the viewport. Past that there is nothing above it to show, only an empty screen
+ * (#2381 U-PageUp), so the limit is the whole transcript minus one screenful. */
+export function clampRowOffset(requested: number, messages: readonly SessionMessage[], viewportRows: number, width: number): number {
+  const reachable = Math.max(0, totalMessageRows(messages, width) - Math.max(1, Math.floor(viewportRows)));
+  return Math.max(0, Math.min(Math.floor(requested), reachable));
+}
+
+/** Scroll up by rows: hide the newest `rowOffset` estimated rows, trimming the
+ * text of the message that straddles the cut. Bottom-anchored layout then shows
+ * what was above. */
+export function scrollMessagesByRows(messages: readonly SessionMessage[], rowOffset: number, width: number): SessionMessage[] {
+  const out = messages.slice();
+  let remaining = Math.max(0, Math.floor(rowOffset));
+  while (remaining > 0 && out.length > 1) {
+    const last = out[out.length - 1]!;
+    const rows = estimateMessageRows(last, width);
+    const raw = (last as Record<string, unknown>)["content"];
+    if (rows <= remaining || typeof raw !== "string") {
+      out.pop();
+      remaining -= Math.min(rows, remaining);
+      continue;
+    }
+    const lines = raw.split("\n");
+    const keep = Math.max(1, lines.length - remaining);
+    out[out.length - 1] = { ...last, content: lines.slice(0, keep).join("\n") } as SessionMessage;
+    remaining = 0;
+  }
+  return out;
+}
+
 export interface VirtualMessageListProps {
   messages:      SessionMessage[];
   renderMessage: (msg: SessionMessage) => React.ReactElement | null;
   viewportRows:  number;
+  /** PageUp/PageDown: rows the transcript is scrolled up from the bottom. */
+  rowOffset?:    number;
+  /** Terminal width, for estimating wrapped rows when scrolling by rows. */
+  width?:        number;
 }
 
 export function VirtualMessageList({
-  messages,
+  messages: allMessages,
   renderMessage,
   viewportRows,
+  rowOffset = 0,
+  width = 80,
 }: VirtualMessageListProps): React.ReactElement {
+  const messages = rowOffset > 0 ? scrollMessagesByRows(allMessages, rowOffset, width) : allMessages;
+  // Scrolled to the very top: anchor the oldest message to the top edge. The estimates that got
+  // us here can be a few rows off, and a bottom-anchored list that is a few rows short leaves the
+  // top of the screen empty.
+  const atTop = rowOffset > 0 && rowOffset >= totalMessageRows(allMessages, width) - viewportRows;
   const [scrollState, setScrollState] = useState<ScrollState>({
     atBottom:       true,
     userScrolledUp: false,
@@ -255,6 +316,19 @@ export function VirtualMessageList({
     );
   }).reverse();
 
+  if (atTop) {
+    // A plain top-down column that fills the area it is given: the oldest message starts on the
+    // first rows whatever the area's height turns out to be, so no height is assumed here.
+    return React.createElement(
+      Box,
+      { flexDirection: "column", flexGrow: 1, minHeight: 0, overflow: "hidden" },
+      React.createElement(Text, { key: "row-indicator", color: "cyan" }, "↑ top of the conversation · PageDown to return"),
+      // Whole messages, not the row-trimmed list: nothing is cut, the area clips the rest.
+      ...allMessages.slice(0, Math.max(1, viewportRows)).map((msg) =>
+        React.createElement(OffscreenFreeze, { key: msg.id, isOffscreen: false }, renderMessage(msg))),
+    );
+  }
+
   return React.createElement(
     Box,
     {
@@ -266,6 +340,9 @@ export function VirtualMessageList({
         messages.length, viewportRows, current + ((event as InkPointerEvent).deltaY < 0 ? 1 : -1),
       ).offset),
     },
+    rowOffset > 0
+      ? React.createElement(Text, { key: "row-indicator", color: "cyan" }, `↑ scrolled up ${rowOffset} rows · PageDown to return`)
+      : null,
     ...entries,
     (showScrollIndicator || window.offset > 0)
       ? React.createElement(Text, { key: "indicator", color: "cyan" }, "↓ scroll to bottom")

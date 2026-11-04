@@ -116,6 +116,19 @@ This requires a supported Windows Python environment and network access for depe
 not require model weights or a GPU. See the [start guide](docs/domains/governance/guides/START-HERE.md) before using
 operator or training surfaces.
 
+## Run ember-cli with a local model
+
+On Windows with an NVIDIA GPU, one command checks the prerequisites, installs Bun and the
+`ember-cli` dependencies, and pulls and calibrates an open-weights model that fits the GPU
+(the model is third-party, not an Ember-trained model):
+
+```text
+.\Ember-Open-Setup.cmd
+```
+
+The [install guide](docs/ember-cli/INSTALL.md) covers the model choice by VRAM, starting
+`Ember-Open`, checking web search, web fetch and computer use, troubleshooting, and the limits.
+
 ## Verify safely
 
 The smallest safe default is CPU-only authority verification from the repository root:
@@ -151,6 +164,7 @@ completion claim.
 - Understand the project: [system overview](docs/architecture/system-overview.md) and
   [glossary](docs/GLOSSARY.md).
 - Use or inspect it: [start guide](docs/domains/governance/guides/START-HERE.md).
+- Run `ember-cli` with a local open-weights model: [install guide](docs/ember-cli/INSTALL.md).
 - Verify evidence: [verification guide](docs/guides/VERIFY.md) and
   [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md).
 - Operate it: [operator documentation](docs/domains/governance/operator/README.md).

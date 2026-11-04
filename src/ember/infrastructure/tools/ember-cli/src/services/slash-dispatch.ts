@@ -40,6 +40,8 @@ export function parseSlashInput(text: string): { name: string; args: string } | 
   const body = trimmed.slice(1);
   const m = body.match(/^(\S+)\s*([\s\S]*)$/);
   if (!m) return null; // bare "/" — treat as ordinary input, not a command
+  // "/etc/hosts has a typo" is a path, not a command: send it to the model.
+  if (/[\/\\.]/.test(m[1])) return null;
   return { name: m[1], args: m[2].trim() };
 }
 

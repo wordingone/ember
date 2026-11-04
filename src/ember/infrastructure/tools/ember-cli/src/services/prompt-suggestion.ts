@@ -467,10 +467,11 @@ export function makeSuggestionExecutor(
       ) ?? [];
 
     const callParams: CallModelParams = {
-      // The resolved suggestion-prompt string is the full system instruction.
-      systemPrompt: prompt,
-      // Pass the parent conversation so the model has context to predict from.
-      messages: parentMessages,
+      // The suggestion instruction goes last, as a user turn. As a system prompt it
+      // was dropped on the wire, and a conversation ending on an assistant turn makes
+      // llama.cpp continue that reply instead of predicting the operator's next input.
+      systemPrompt: "",
+      messages: [...parentMessages, { role: "user", content: prompt }],
       // Empty tools array: deny-all tool use for the forked agent.
       tools: [],
       // Model identifier — inherit from env; llama-server loads one model and
@@ -628,10 +629,15 @@ export async function tryGenerateSuggestion(
     }
 
     const promptId = getPromptVariant();
+    // The REPL call sites pass no cacheSafeParams, which left the forked call
+    // with an empty conversation (HTTP 500 "No messages provided").
+    const params = Array.isArray((cacheSafeParams as Record<string, unknown>)["messages"])
+      ? cacheSafeParams
+      : { ...cacheSafeParams, messages };
     const result = await generateSuggestion(
       abortController,
       promptId,
-      cacheSafeParams,
+      params,
       forkedAgentExecutor,
     );
 
