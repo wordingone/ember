@@ -155,11 +155,48 @@ export function findGitBash(): string | null {
   return _gitBash;
 }
 
-interface ExecResult {
+export interface ExecResult {
   stdout: Buffer;
   stderr: string;
   exitCode: number;
   timedOut: boolean;
+}
+
+/** Defined before every Git Bash command (#2380 S27). Git Bash rewrites an argument that looks like
+ *  a POSIX path into a Windows path ("MSYS path conversion"): `/c` becomes `C:/` and `/b` becomes
+ *  `B:/`. So `cmd /c ...` reached cmd.exe without its `/c`, and `start /b ...` (Git's own `start`
+ *  is `cmd //c start "$@"`) without its `/b`; cmd.exe then ran as an interactive shell, printed its
+ *  banner and prompt, and waited for input until the 120 s timeout. These wrappers call cmd.exe
+ *  with path conversion turned off; `//c` (the usual Git Bash workaround) still works. One line,
+ *  ended by "; ", so the line numbers in the command's own error messages do not move. Not
+ *  exported to child processes: a script the command runs still sees Git's plain tools. */
+export const GIT_BASH_PRELUDE =
+  `__ember_cmd() { local a=() x; for x in "$@"; do case "$x" in //[A-Za-z]) x="\${x#/}" ;; esac; a+=("$x"); done; ` +
+  `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' command cmd.exe "\${a[@]}"; }; ` +
+  `cmd() { __ember_cmd "$@"; }; cmd.exe() { __ember_cmd "$@"; }; ` +
+  `start() { __ember_cmd /d /c start "\${@//&/^&}"; }; `;
+
+/** How the Bash tool starts its shell. stdin is never a pipe: nothing ever writes to it, and an open
+ *  pipe let any program that reads input (an interactive cmd.exe, `read`, a REPL) wait on it until
+ *  the timeout (#2380 S27). With no stdin such a program sees end of input at once. */
+export function shellInvocation(command: string, gitBash: string | null): {
+  file: string;
+  args: string[];
+  stdio: ["ignore", "pipe", "pipe"];
+  verbatim: boolean;
+  batch: { path: string; body: string } | null;
+} {
+  const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
+  if (gitBash) return { file: gitBash, args: ["-c", GIT_BASH_PRELUDE + command], stdio, verbatim: false, batch: null };
+  // Verbatim: Node's default argv quoting turned every `"` into `\"`, which cmd.exe does not
+  // understand (blind test S03-S05). `/s /c "<cmd>"` makes cmd strip exactly the outer quotes.
+  // A multi-line command runs as a temporary batch file: `cmd /c` runs only the first line (S08).
+  if (/[\r\n]/.test(command.trim())) {
+    const path = join(tmpdir(), `ember-bash-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.cmd`);
+    const body = "@echo off\r\n" + command.replace(/\r?\n/g, "\r\n") + "\r\n";
+    return { file: "cmd.exe", args: ["/d", "/s", "/c", `"call "${path}""`], stdio, verbatim: true, batch: { path, body } };
+  }
+  return { file: "cmd.exe", args: ["/d", "/s", "/c", `"${command}"`], stdio, verbatim: true, batch: null };
 }
 
 async function executeCommand(
@@ -169,34 +206,39 @@ async function executeCommand(
   cwd: string,
   toolUseId?: string,
 ): Promise<ExecResult> {
+  return executeCommandWithShell(command, timeout, abortSignal, cwd, findGitBash(), toolUseId);
+}
+
+/** {@link executeCommand} with the shell given: tests pass a real bash on any platform. */
+export async function executeCommandWithShell(
+  command: string,
+  timeout: number,
+  abortSignal: AbortSignal,
+  cwd: string,
+  gitBash: string | null,
+  toolUseId?: string,
+): Promise<ExecResult> {
   return new Promise((resolveRaw) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: string[] = [];
     let finished = false;
 
-    // Verbatim: Node's default argv quoting turned every `"` into `\"`, which cmd.exe does not
-    // understand (blind test S03-S05). `/s /c "<cmd>"` makes cmd strip exactly the outer quotes.
-    // A multi-line command runs as a temporary batch file: `cmd /c` runs only the first line (S08).
+    const invocation = shellInvocation(command, gitBash);
     let batchPath: string | null = null;
-    let cmdArgs: string[];
-    const gitBash = findGitBash();
-    if (gitBash) {
-      cmdArgs = ["-c", command];
-    } else if (/[\r\n]/.test(command.trim())) {
-      batchPath = join(tmpdir(), `ember-bash-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.cmd`);
-      writeFileSync(batchPath, "@echo off\r\n" + command.replace(/\r?\n/g, "\r\n") + "\r\n");
-      cmdArgs = ["/d", "/s", "/c", `"call "${batchPath}""`];
-    } else {
-      cmdArgs = ["/d", "/s", "/c", `"${command}"`];
+    if (invocation.batch) {
+      batchPath = invocation.batch.path;
+      writeFileSync(batchPath, invocation.batch.body);
     }
+    const cmdArgs = invocation.args;
     const cleanupBatch = () => {
       if (batchPath) { try { unlinkSync(batchPath); } catch { /* already gone */ } batchPath = null; }
     };
-    const proc = spawn(gitBash ?? "cmd.exe", cmdArgs, {
+    const proc = spawn(invocation.file, cmdArgs, {
       env: process.env,
       cwd,
       shell: false,
-      windowsVerbatimArguments: !gitBash,
+      stdio: invocation.stdio,
+      windowsVerbatimArguments: invocation.verbatim,
       // Own hidden console: a child sharing ember's console could change its title, code page and
       // window size (blind test: after a PowerShell call the caret and borders drew as "?").
       windowsHide: true,
@@ -420,8 +462,8 @@ Runs a command with cmd.exe on Windows (bash is not installed): use cmd syntax (
 - Every call starts fresh in the project directory: cd and set do NOT carry over to the next call.
   Chain dependent steps in one call (cd sub && build) or put them on separate lines (run as a batch file).`) + `
 - Read-only commands are auto-allowed; commands that change things may ask for permission.
-- Timeout default: 120 seconds (pass timeout in ms for longer jobs). A command that waits for input
-  is stopped at the timeout and its whole process tree is ended.
+- Timeout default: 120 seconds (pass timeout in ms for longer jobs). There is no input: a command
+  that reads input gets end of input at once. At the timeout the whole process tree is ended.
 - Output over 30 KB keeps its beginning and end.`,
 
     checkPermissions: async (input: BashInput, ctx: ToolUseContext) => {

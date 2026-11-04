@@ -361,6 +361,62 @@ export interface TextRun { len: number; style: Style; }
 /** Style of each painted character of a text node with runs. Wrapping inserts line breaks and
  * drops spaces at the break, so the painted text is the source with some spaces removed and
  * some newlines and "…" added: walk both in step and give each painted char its source style. */
+/** Tab stop width used when a Text node's tabs are expanded to spaces. */
+export const TEXT_TAB_STOP = 8;
+const TERMINAL_CONTROL_RE = /[\x00-\x09\x0b-\x1f\x7f]/;
+
+/** Text a cell can hold. A Text node's source may carry "\t" (Read output is `N\t<line>`), "\r"
+ * or other C0 controls. Each was measured as one cell and written into a cell as-is; the terminal
+ * then moved its cursor (a tab jumps to the next stop without overwriting the cells it skips, "\r"
+ * goes back to column 0), so the screen and the renderer's frame disagreed and earlier rows' text
+ * stayed visible until a full repaint (#2379 FO-49: "1txt:4Theckubrown fox"). Tabs become spaces to
+ * the next stop of {@link TEXT_TAB_STOP} columns from the start of the logical line; every other
+ * control except "\n" is dropped. Runs are re-measured so each style covers the same characters. */
+export function expandTerminalText(text: string, runs?: TextRun[]): { text: string; runs: TextRun[] | undefined } {
+  if (!TERMINAL_CONTROL_RE.test(text)) return { text, runs };
+  const per: Array<Style | undefined> = [];
+  if (runs) for (const r of runs) for (let i = 0; i < r.len; i++) per.push(r.style);
+  let out = "";
+  const outStyles: Array<Style | undefined> = [];
+  let col = 0;
+  let i = 0;
+  for (const ch of text) {
+    const st = per[i++];
+    if (ch === "\n") { out += ch; outStyles.push(st); col = 0; continue; }
+    if (ch === "\t") {
+      const n = TEXT_TAB_STOP - (col % TEXT_TAB_STOP);
+      out += " ".repeat(n);
+      for (let k = 0; k < n; k++) outStyles.push(st);
+      col += n;
+      continue;
+    }
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp < 0x20 || cp === 0x7f) continue;
+    out += ch;
+    outStyles.push(st);
+    col += charWidth(ch);
+  }
+  if (!runs) return { text: out, runs };
+  const merged: TextRun[] = [];
+  for (const st of outStyles) {
+    const style = st ?? {};
+    const last = merged[merged.length - 1];
+    if (last && last.style === style) last.len++;
+    else merged.push({ len: 1, style });
+  }
+  return { text: out, runs: merged };
+}
+
+/** A text node's paintable source and runs, cached on the node while text and runs are unchanged. */
+function textSource(node: RenderNode): { text: string; runs: TextRun[] | undefined } {
+  const text = node.text ?? "";
+  const cache = node.expandedSource;
+  if (cache && cache.from === text && cache.fromRuns === node.runs) return cache;
+  const expanded = expandTerminalText(text, node.runs);
+  node.expandedSource = { from: text, fromRuns: node.runs, text: expanded.text, runs: expanded.runs };
+  return node.expandedSource;
+}
+
 export function runStylesFor(source: string, painted: string, runs: TextRun[], fallback: Style): Style[] {
   const src = Array.from(source);
   const per: Style[] = [];
@@ -394,6 +450,8 @@ export interface RenderNode {
   textWrap?: TextWrapMode;
   /** Frame-local transformed text. Source text remains immutable in `text`. */
   renderedText?: string;
+  /** Cache for {@link textSource}: `text` and `runs` with tabs expanded and controls removed. */
+  expandedSource?: { from: string; fromRuns: TextRun[] | undefined; text: string; runs: TextRun[] | undefined };
   /** For text nodes: applied style. */
   style?: Style;
   /** For text nodes: per-span styles over the source text, in code points (Text `runs`). */
@@ -544,7 +602,7 @@ function intrinsicTextDimensions(value: string): { width: number; height: number
 
 function resetTextLayout(node: RenderNode): void {
   if (node.kind === "text" && node.text !== undefined) {
-    const intrinsic = intrinsicTextDimensions(node.text);
+    const intrinsic = intrinsicTextDimensions(textSource(node).text);
     node.renderedText = undefined;
     node.layout.width = intrinsic.width;
     node.layout.height = intrinsic.height;
@@ -555,10 +613,11 @@ function resetTextLayout(node: RenderNode): void {
 function fitTextLayout(node: RenderNode, parentContentWidth: number): boolean {
   let changed = false;
   if (node.kind === "text" && node.text !== undefined) {
-    const intrinsic = intrinsicTextDimensions(node.text);
+    const source = textSource(node).text;
+    const intrinsic = intrinsicTextDimensions(source);
     const computed = node.layout.computedWidth > 0 ? node.layout.computedWidth : intrinsic.width;
     const available = Math.max(1, Math.min(intrinsic.width, computed, parentContentWidth));
-    const formatted = formatTextForWidth(node.text, available, node.textWrap ?? "wrap");
+    const formatted = formatTextForWidth(source, available, node.textWrap ?? "wrap");
     const fitted = intrinsicTextDimensions(formatted);
     node.renderedText = formatted;
     if (node.layout.width !== available || node.layout.height !== fitted.height) changed = true;
@@ -1038,8 +1097,9 @@ function renderNodeToTarget(
 
   if (node.kind === "text" && node.text !== undefined) {
     const style = node.style ?? {};
-    const painted = node.renderedText ?? node.text;
-    const perChar = node.runs && node.runs.length > 0 ? runStylesFor(node.text, painted, node.runs, style) : null;
+    const source = textSource(node);
+    const painted = node.renderedText ?? source.text;
+    const perChar = source.runs && source.runs.length > 0 ? runStylesFor(source.text, painted, source.runs, style) : null;
     let ci = 0;
     // Write each character, handling newlines to advance to the next row.
     // #561: a right-edge overflow used to `break` out of the WHOLE loop -- correct for a

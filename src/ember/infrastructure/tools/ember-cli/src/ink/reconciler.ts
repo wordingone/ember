@@ -254,13 +254,15 @@ function _attachChild(parent: InternalNode | RootNode, child: InternalNode): voi
   if (parent.kind === "raw-ansi") {
     const rp = parent as InternalNode;
     if (child.kind === "text" && child.text !== undefined && !child.children.length) {
-      rp.rawAnsi = (rp.rawAnsi ?? "") + child.text;
+      if (!rp._rawChildren) rp._rawChildren = [];
+      const at = rp._rawChildren.indexOf(child); // already here: move it to the end
+      if (at >= 0) rp._rawChildren.splice(at, 1);
+      rp._rawChildren.push(child);
+      child._rawParent = rp;
+      rp.rawAnsi = rp._rawChildren.map((c) => c.text ?? "").join("");
       const visual = _stripAnsi(rp.rawAnsi);
       rp.layout.width  = Math.max(visual.length, 1);
       rp.layout.height = 1;
-      if (!rp._rawChildren) rp._rawChildren = [];
-      rp._rawChildren.push(child);
-      child._rawParent = rp;
       return;
     }
   }
@@ -270,20 +272,24 @@ function _attachChild(parent: InternalNode | RootNode, child: InternalNode): voi
       if (!child.style || !Object.keys(child.style).length) {
         child.style = mp.style;
       }
-      mp.text = (mp.text ?? "") + child.text;
-      mp.layout.width  = mp.text.length;
-      mp.layout.height = 1;
       if (!mp._mergedChildren) mp._mergedChildren = [];
+      const at = mp._mergedChildren.indexOf(child); // already here: move it to the end
+      if (at >= 0) mp._mergedChildren.splice(at, 1);
       mp._mergedChildren.push(child);
       child._mergedInto = mp;
+      mp.text = mp._mergedChildren.map((c) => c.text ?? "").join("");
+      mp.layout.width  = mp.text.length;
+      mp.layout.height = 1;
       return;
     }
   }
   const p = parent as { children: InternalNode[]; layout: ReturnType<typeof createLayoutNode> };
-  if (!p.children.includes(child)) {
-    p.children.push(child);
-    p.layout.appendChild(child.layout);
-  }
+  // DOM semantics: appending a child that is already here moves it to the end. React reorders keyed
+  // children this way; keeping it in place left the tree out of order (#2381 U-PageUp).
+  const at = p.children.indexOf(child);
+  if (at >= 0) p.children.splice(at, 1);
+  p.children.push(child);
+  p.layout.appendChild(child.layout);
 }
 
 function _insertBefore(
@@ -291,7 +297,31 @@ function _insertBefore(
   child:  InternalNode,
   before: InternalNode,
 ): void {
+  if (child === before) return;
+  // A text leaf under a Text (or RawAnsi) parent lives in that parent's string, not its children:
+  // attach (or move) it to the end of the merged list, then put it before `before` and rebuild.
+  const mergeable = (parent.kind === "text" || parent.kind === "raw-ansi")
+    && child.kind === "text" && child.text !== undefined && !child.children.length;
+  if (mergeable) {
+    _attachChild(parent, child);
+    const owner = parent as InternalNode;
+    const merged = (parent.kind === "text" ? owner._mergedChildren : owner._rawChildren) ?? [];
+    merged.splice(merged.indexOf(child), 1);
+    const idx = merged.indexOf(before);
+    merged.splice(idx >= 0 ? idx : merged.length, 0, child);
+    if (parent.kind === "text") {
+      owner.text = merged.map((c) => c.text ?? "").join("");
+      owner.layout.width = owner.text.length;
+    } else {
+      owner.rawAnsi = merged.map((c) => c.text ?? "").join("");
+    }
+    return;
+  }
+  child._parent = parent;
   const p = parent as { children: InternalNode[]; layout: ReturnType<typeof createLayoutNode> };
+  // DOM semantics: a child that is already here moves; it used to be inserted a second time.
+  const at = p.children.indexOf(child);
+  if (at >= 0) p.children.splice(at, 1);
   const idx = p.children.indexOf(before);
   if (idx >= 0) {
     p.children.splice(idx, 0, child);
