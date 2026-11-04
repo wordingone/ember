@@ -148,6 +148,8 @@ completion claim.
 
 ## Documentation routes
 
+- Review the project in plain words (aims, measurements, open gaps, how to read the research log):
+  [overview](docs/OVERVIEW.md).
 - Understand the project: [system overview](docs/architecture/system-overview.md) and
   [glossary](docs/GLOSSARY.md).
 - Use or inspect it: [start guide](docs/domains/governance/guides/START-HERE.md).
