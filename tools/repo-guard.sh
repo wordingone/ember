@@ -166,7 +166,7 @@ fi
 # this check). Windows+Temp is scoped to require the Temp segment specifically
 # so a universal, non-identifying path like C:\Windows\System32\cmd.exe never
 # false-positives here.
-# POSIX roots (owner ruling 2026-11-04): a user's home directory (under
+# POSIX roots (ruling by an AI agent acting for the owner, 2026-11-04): a user's home directory (under
 # "home" or macOS "Users", plus root's home), a CI runner's workspace (under
 # the runner user's home) and the temporary roots ("tmp", "var/tmp",
 # "var/folders", "private/tmp|var") are local-path leaks too, because Linux

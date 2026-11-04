@@ -379,7 +379,7 @@ def test_red_absolute_path_doubled_json_escape():
         cleanup(tmp)
 
 # ---------------------------------------------------------------------------
-# RED/GREEN: POSIX home, runner and temporary roots (owner ruling 2026-11-04)
+# RED/GREEN: POSIX home, runner and temporary roots (ruling by an AI agent acting for the owner, 2026-11-04)
 # ---------------------------------------------------------------------------
 def test_red_posix_local_paths():
     tmp = make_fixture("fix/selftest-red-posix-path")
