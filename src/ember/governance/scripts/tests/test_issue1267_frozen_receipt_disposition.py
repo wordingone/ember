@@ -16,7 +16,9 @@ import sys
 _REPO_ROOT = next(
     parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()
 )
-ROOT = Path(os.environ.get("EMBER_ISSUE1267_ROOT", _REPO_ROOT))
+# No environment override: nothing in the repository set EMBER_ISSUE1267_ROOT, and an
+# os.environ lookup is outside the self-location census grammar, so it could not be checked.
+ROOT = _REPO_ROOT
 TOTALITY = ROOT / "src/ember/governance/scripts/ember_totality"
 DISPOSITION = Path(
     os.environ.get(
