@@ -1032,7 +1032,7 @@ def test_split_kernel_scans_subject_guard_for_absolute_paths():
     try:
         (tmp / "tools" / "repo-guard.sh").write_text(
             "#!/usr/bin/env bash\n"
-            "# candidate-smuggled path: " + "C:" + "/Users/example/private\n"
+            "# candidate-smuggled path: " + "C:" + "/" + "Users/example/private\n"
             "exit 0\n",
             encoding="utf-8",
             newline="\n",
