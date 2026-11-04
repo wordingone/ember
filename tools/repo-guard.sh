@@ -166,20 +166,15 @@ fi
 # this check). Windows+Temp is scoped to require the Temp segment specifically
 # so a universal, non-identifying path like C:\Windows\System32\cmd.exe never
 # false-positives here.
-PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)'
-# POSIX roots (owner ruling 2026-11-04, scoped to receipts): a user's home
-# directory (under "home" or macOS "Users", plus root's home), a CI runner's
-# workspace (under the runner user's home) and the temporary roots ("tmp",
-# "var/tmp", "var/folders", "private/tmp|var") are local-path leaks in a
-# RECEIPT, because Linux runners write receipts with them. Elsewhere in the
-# tree (tests, code, prose) the same shapes are legitimate literals (fixtures,
-# docs), so PATHPAT_POSIX_RECEIPTS is applied to the receipts/ pathspec only,
-# in both scan scopes below; src/ember/governance/scripts/redact_local_paths.py
-# keeps the full rule (_POSIX_LOCAL_PATH) for receipts it normalizes. The
-# leading class keeps relative, home-relative (tilde), URL and drive-letter
-# paths out (a drive path such as C:/tmp stays judged by the narrower Windows
-# rules in PATHPAT). Keep the roots in step with _POSIX_LOCAL_PATH.
-PATHPAT_POSIX_RECEIPTS='(^|[^A-Za-z0-9_.~:/\\-])/((home|Users)/[^/[:space:]]+|(root|tmp|var/tmp|var/folders|private/tmp|private/var)/)'
+# POSIX roots (owner ruling 2026-11-04): a user's home directory (under
+# "home" or macOS "Users", plus root's home), a CI runner's workspace (under
+# the runner user's home) and the temporary roots ("tmp", "var/tmp",
+# "var/folders", "private/tmp|var") are local-path leaks too, because Linux
+# runners write receipts with them. The leading class keeps relative,
+# home-relative (tilde), URL and drive-letter paths out (a drive path such as
+# C:/tmp stays judged by the narrower Windows rules above). Mirrors _POSIX_LOCAL_PATH in
+# src/ember/governance/scripts/redact_local_paths.py.
+PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)|((^|[^A-Za-z0-9_.~:/\\-])/((home|Users)/[^/[:space:]]+|(root|tmp|var/tmp|var/folders|private/tmp|private/var)/))'
 # Files that intentionally embed a leaked-path-shaped literal as adversarial
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
@@ -214,14 +209,6 @@ PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)receipts/ember-02-launch-authority/certificate.json'
   ':(exclude)receipts/ember-02-launch-authority/run-spec.json'
 )
-# Receipts exempt from the POSIX receipt rule ONLY (the Windows rules in PATHPAT
-# still apply to them). The custody freeze-artifact probe embeds a captured
-# terminal screenshot as text; its "/tmp/ember-1043-c" fragment (preceded by an ellipsis) is a
-# truncated on-screen label, not a path the host wrote. The receipt is a 5.8 MB
-# frozen custody artifact referenced by path from other manifests.
-PATHPAT_POSIX_RECEIPT_EXCLUDE_ARGS=(
-  ':(exclude)receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json'
-)
 PATHPAT_SELF_EXCLUDE_ARGS=()
 if surface_bytes_match 'tools/repo-guard.sh'; then
   PATHPAT_SELF_EXCLUDE_ARGS=(':(exclude)tools/repo-guard.sh')
@@ -233,20 +220,14 @@ fi
 # (default, no env var) is unchanged and is what CI / the freshness monitor
 # run. Same PATHPAT and conditional/fixture pathspecs, applied to the diff.
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
-  : >/tmp/rg_paths
-  git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >>/tmp/rg_paths 2>/dev/null
-  git diff --cached -U0 --no-color -- receipts "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" "${PATHPAT_POSIX_RECEIPT_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT_POSIX_RECEIPTS" >>/tmp/rg_paths 2>/dev/null
-  if [ -s /tmp/rg_paths ]; then
+  if git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in staged changes"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else
     ok "paths" "no absolute local paths (staged scope)"
   fi
 else
-  : >/tmp/rg_paths
-  git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >>/tmp/rg_paths 2>/dev/null
-  git grep -nIE "$PATHPAT_POSIX_RECEIPTS" -- receipts "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" "${PATHPAT_POSIX_RECEIPT_EXCLUDE_ARGS[@]}" >>/tmp/rg_paths 2>/dev/null
-  if [ -s /tmp/rg_paths ]; then
+  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
     fail "paths" "absolute local filesystem paths in tracked files"
     sed 's/^/      /' /tmp/rg_paths | head -20
   else

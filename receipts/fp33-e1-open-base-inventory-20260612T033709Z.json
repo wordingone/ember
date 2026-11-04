@@ -3,7 +3,7 @@
   "ts": "20260612T033709Z",
   "scan_elapsed_s": 13.38,
   "scan_roots": {
-    "local:the maintainer/.cache/huggingface/hub": {
+    "/home/the maintainer/.cache/huggingface/hub": {
       "found": 0,
       "fresh": 0
     },
