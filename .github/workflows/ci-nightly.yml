@@ -32,15 +32,53 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
-      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0"
+      # pytest is test tooling, not a runtime dependency, so the manifest does not carry it.
+      - run: python -m pip install "pytest==8.4.1"
+      # CPU torch, as every other ubuntu workflow here installs it. The manifest's torch row is
+      # the cu126 build from the CUDA wheel index, which this runner cannot use.
       - run: python -m pip install "torch==2.13.0" --index-url https://download.pytorch.org/whl/cpu
-      - run: python -m pip install "numpy==2.2.6"
-      # Collection-cure round two: both pins come from the canonical
-      # manifests/python-environment-v1.json environment declaration.
-      - run: python -m pip install "tokenizers==0.22.2" "huggingface_hub==1.22.0"
+      # The rest of the install set is DERIVED from manifests/python-environment-v1.json, not
+      # hand-picked (hand-picking is how psutil, a default Linux runtime dependency, went
+      # missing). Every default-install runtime row of the linux profile is installed at its
+      # manifest pin, except the rows a CPU runner cannot take, which are excluded by rule, not
+      # by name: the CUDA-index row (torch, above), CUDA local builds (a "+cu" version), and the
+      # rows the manifest's own installer puts outside the resolver because their metadata
+      # conflicts (python_environment.py _RESOLVER_BYPASS_DISTRIBUTIONS). The manifest is loaded
+      # and shape-validated by its own authority tool, so a malformed manifest fails here. The
+      # constraint keeps any dependency from replacing the CPU torch wheel.
+      - name: Derive the non-CUDA install set from the environment manifest
+        run: |
+          python -I - > "${RUNNER_TEMP}/nightly-requirements.txt" <<'PY'
+          import importlib.util, sys
+          from pathlib import Path
+          tool = Path("src/ember/infrastructure/tools/ember-restart-3b/python_environment.py")
+          spec = importlib.util.spec_from_file_location("ember_python_environment", tool)
+          env = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = env
+          spec.loader.exec_module(env)
+          manifest = env.load_manifest(Path("manifests/python-environment-v1.json"))
+          env.validate_manifest_shape(manifest)
+          bypass = set(env._RESOLVER_BYPASS_DISTRIBUTIONS)
+          for row in env._package_rows_for_profile(manifest, "linux"):
+              if row["group"] != "runtime" or not row["install_by_default"]:
+                  continue
+              version = env._expected_package_version(row, "linux")
+              if row["source"]["kind"] == "index":
+                  reason = "CUDA wheel index"
+              elif "+cu" in version:
+                  reason = "CUDA local build"
+              elif env._normalized_distribution(row["distribution"]) in bypass:
+                  reason = "outside the resolver in the manifest's own install plan"
+              else:
+                  print(f"{row['distribution']}=={version}")
+                  continue
+              print(f"excluded {row['distribution']} {version}: {reason}", file=sys.stderr)
+          PY
+          cat "${RUNNER_TEMP}/nightly-requirements.txt"
+          grep -qx 'psutil==.*' "${RUNNER_TEMP}/nightly-requirements.txt"
+          python -c 'import torch; print("torch==" + torch.__version__.split("+")[0])' > "${RUNNER_TEMP}/nightly-constraints.txt"
+      - run: python -m pip install -r "${RUNNER_TEMP}/nightly-requirements.txt" -c "${RUNNER_TEMP}/nightly-constraints.txt"
       - run: python -m pip install --editable .
-      # If another dependency round is required, stop hand-picking packages:
-      # derive the nightly's non-CUDA install set from the manifest instead.
       - name: Guard complete scripts/tests collection
         run: python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380
       # One step per suite, each with its own bound. The single combined step could only fail
