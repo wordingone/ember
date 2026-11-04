@@ -80,12 +80,12 @@ describe("AC2: ExitDialog onWait callback", () => {
 describe("AC3: InvalidConfigDialog file path", () => {
   test("createElement passes filePath through props", () => {
     const el = React.createElement(InvalidConfigDialog, {
-      error: { filePath: "/home/.ember/settings.json", message: "Unexpected token" },
+      error: { filePath: "/fixture/home/.ember/settings.json", message: "Unexpected token" },
       onEdit: () => {},
       onContinueWithDefaults: () => {},
     });
     const p = el.props as { error: { filePath: string } };
-    expect(p.error.filePath).toBe("/home/.ember/settings.json");
+    expect(p.error.filePath).toBe("/fixture/home/.ember/settings.json");
   });
 });
 
@@ -141,7 +141,7 @@ describe("AC5: AUTO_DISMISS_MS", () => {
 describe("AC6: HistoryDialog session open", () => {
   test("createElement passes store prop", () => {
     const entries: SessionEntry[] = [
-      { id: "sess-1", date: "2026-06-01", cwd: "/home/user", snippet: "first session" },
+      { id: "sess-1", date: "2026-06-01", cwd: "/fixture/home/user", snippet: "first session" },
     ];
     let openedId: string | null = null;
     const store: SessionStore = {

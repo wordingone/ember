@@ -74,9 +74,9 @@ describe("AC3 — analytics event constants", () => {
 // ---------------------------------------------------------------------------
 describe("AC4 — getTrustSavePath session", () => {
   test("AC4: session destination resolves to home dir path, not project dir", () => {
-    const path = getTrustSavePath("session", "/home/user", "/projects/myapp");
+    const path = getTrustSavePath("session", "/fixture/home/user", "/projects/myapp");
     // session → home-directory session global file (under ~/.ember/, not project)
-    expect(path).toContain("/home/user");
+    expect(path).toContain("/fixture/home/user");
     expect(path).not.toContain("/projects/myapp"); // must NOT be in the project dir
   });
 });
@@ -91,7 +91,7 @@ describe("AC5 — getTrustSavePath project", () => {
     const saved = process.env["EMBER_STATE_ROOT"];
     process.env["EMBER_STATE_ROOT"] = join("/cockpit-state");
     try {
-      const path = getTrustSavePath("project", "/home/user", "/projects/myapp");
+      const path = getTrustSavePath("project", "/fixture/home/user", "/projects/myapp");
       expect(path).toBe(join(resolve("/cockpit-state"), "trust.json"));
       expect(path).not.toContain("myapp");
     } finally {
@@ -101,8 +101,8 @@ describe("AC5 — getTrustSavePath project", () => {
   });
 
   test("AC5: the project destination is distinct from the session destination", () => {
-    expect(getTrustSavePath("project", "/home/user", "/projects/myapp")).not.toBe(
-      getTrustSavePath("session", "/home/user", "/projects/myapp"),
+    expect(getTrustSavePath("project", "/fixture/home/user", "/projects/myapp")).not.toBe(
+      getTrustSavePath("session", "/fixture/home/user", "/projects/myapp"),
     );
   });
 });
@@ -128,7 +128,7 @@ describe("AC7 — hasDangerousSettings safe settings", () => {
   test("AC7b: settings with only allowed env vars → false", () => {
     expect(
       hasDangerousSettings({
-        envVars: { PATH: "/usr/bin", HOME: "/home/user" },
+        envVars: { PATH: "/usr/bin", HOME: "/fixture/home/user" },
         allowedEnvVars: new Set(["PATH", "HOME"]),
       }),
     ).toBe(false);

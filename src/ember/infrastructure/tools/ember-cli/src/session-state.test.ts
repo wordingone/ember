@@ -88,7 +88,7 @@ describe("resetStateForTests guard", () => {
 describe("session identity", () => {
   test("AC1: switchSession changes both sessionId and projectDir atomically", () => {
     const id = "session-abc-123";
-    const dir = "/tmp/my-project";
+    const dir = "/fixture/tmp/my-project";
     switchSession(id, dir);
     expect(getSessionId()).toBe(id);
     expect(getSessionProjectDir()).toBe(dir);

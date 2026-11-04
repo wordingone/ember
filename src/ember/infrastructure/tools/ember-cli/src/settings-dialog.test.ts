@@ -203,7 +203,7 @@ describe("AC8: StatusTab MCP servers", () => {
     const meta: SessionMeta = {
       version: "1.0.0",
       sessionId: "abc-123",
-      cwd: "/home/user",
+      cwd: "/fixture/home/user",
       account: "alice",
       apiProvider: "openai",
       model: "qwen-3.6",
@@ -213,7 +213,7 @@ describe("AC8: StatusTab MCP servers", () => {
         { name: "browser",    status: "error"     },
       ],
       sandboxMode: "regular",
-      settingsSources: ["/home/.ember/settings.json"],
+      settingsSources: ["/fixture/home/.ember/settings.json"],
     };
     const el = StatusTab({ meta });
     expect(el).toBeDefined();

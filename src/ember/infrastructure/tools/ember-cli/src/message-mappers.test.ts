@@ -101,13 +101,13 @@ describe('buildSystemInitMessage', () => {
   });
 
   test('AC6: UDS_INBOX set + feature flag on → udsInboxPath in result', () => {
-    process.env['UDS_INBOX'] = '/tmp/uds.sock';
+    process.env['UDS_INBOX'] = '/fixture/tmp/uds.sock';
     const result = buildSystemInitMessage({ udsInboxFeatureEnabled: true });
-    expect(result.udsInboxPath).toBe('/tmp/uds.sock');
+    expect(result.udsInboxPath).toBe('/fixture/tmp/uds.sock');
   });
 
   test('UDS_INBOX set but feature flag off → udsInboxPath absent', () => {
-    process.env['UDS_INBOX'] = '/tmp/uds.sock';
+    process.env['UDS_INBOX'] = '/fixture/tmp/uds.sock';
     const result = buildSystemInitMessage({ udsInboxFeatureEnabled: false });
     expect(result.udsInboxPath).toBeUndefined();
   });
