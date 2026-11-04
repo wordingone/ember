@@ -39,12 +39,11 @@ _EXACT_WINDOWS_ABSOLUTE_PATH = re.compile(r"(?is)^(\s*)([A-Z]:[\\/][^\r\n\"'<>|]
 # workspace (which lives under the runner user's home), and the temporary
 # roots ("tmp", "var/tmp", macOS "var/folders" and "private/tmp|var").
 # Linux runners write receipts with these, so a Windows-only check let them
-# land unredacted.  The lookbehind keeps relative, home-relative (tilde), URL
-# and drive-letter paths out; a drive path is judged by the Windows rule above.
-# tools/repo-guard.sh PATHPAT carries the same roots for the tree-wide landing
-# scan; keep the two in step.
+# land unredacted.  The lookbehind keeps relative, home-relative (tilde) and
+# URL paths out.  tools/repo-guard.sh PATHPAT carries the same roots for the
+# tree-wide landing scan; keep the two in step.
 _POSIX_LOCAL_PATH = re.compile(
-    r"(?<![A-Za-z0-9_.~:/\\-])("
+    r"(?<![A-Za-z0-9_.~/\\-])("
     r"/(?:(?:home|Users)/[^\s/\"'<>|]+(?:/[^\s\"'<>|]*)?"
     r"|(?:root|tmp|var/tmp|var/folders|private/tmp|private/var)/[^\s\"'<>|]*)"
     r")"
