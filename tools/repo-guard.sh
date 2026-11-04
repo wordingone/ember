@@ -208,6 +208,17 @@ PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
   ':(exclude)receipts/ember-02-launch-authority/certificate.json'
   ':(exclude)receipts/ember-02-launch-authority/run-spec.json'
+  # Class 4 (2026-11-04, POSIX local-path policy): files whose POSIX-root
+  # match is not a host path, each enumerated by exact file with a
+  # docs/domains/governance/authority/REDACTIONS.md row. Reviewed ruling by an
+  # AI agent acting for the owner. Like every entry here, the exclusion covers
+  # the whole paths check for that file; the names checks still cover it.
+  ':(exclude)receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json'
+  ':(exclude)docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl'
+  ':(exclude)baseline/fragments/inventory-v0.md'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli/src/build-tools/lifecycle-smoke.test.ts'
+  ':(exclude)src/ember/governance/scripts/fp17_mixweights.py'
+  ':(exclude)src/ember/infrastructure/tools/ember-restart-3b/python_environment.py'
 )
 PATHPAT_SELF_EXCLUDE_ARGS=()
 if surface_bytes_match 'tools/repo-guard.sh'; then
