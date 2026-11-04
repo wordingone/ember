@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 SOURCE = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[5]  # tests/ scripts/ governance/ ember/ src/ -> repository root
     / "src" / "ember" / "governance" / "scripts" / "w1_collapse_control_run.py"
 )
 

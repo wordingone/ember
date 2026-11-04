@@ -16,8 +16,8 @@ from pathlib import Path
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 TOOLS = (
     ROOT / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py",
-    ROOT / "scripts" / "verify_authority_conservation.py",
-    ROOT / "scripts" / "check_changed_receipts.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "check_changed_receipts.py",
 )
 PROVENANCE = re.compile(
     r"^EMBER_GATE_PROVENANCE path=(?P<path>\S+) sha256=(?P<sha>[0-9a-f]{64}) head=(?P<head>\S+)$"

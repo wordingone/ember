@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "roadmap"
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "src" / "ember" / "governance" / "scripts" / "roadmap"
 
 
 def load(name: str):

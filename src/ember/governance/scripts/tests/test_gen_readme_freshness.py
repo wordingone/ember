@@ -110,6 +110,9 @@ def test_generation_writes_continuity_and_leaves_readme_byte_identical(
             "--data-root", str(tmp_path),
             "--subject-manifest", str(subject),
             "--branch-inventory", str(inventory),
+            # This fixture page has no continuity-status block, so it must not be paired with
+            # the repository's real snapshot: since #2339 the generator requires both or neither.
+            "--continuity-snapshot", str(tmp_path / "absent-continuity-snapshot.json"),
         ],
     )
 

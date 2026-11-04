@@ -19,7 +19,9 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-TARGET = ROOT / "scripts" / "ember_totality" / "test_c9.py"
+TARGET = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_totality" / "test_c9.py"
+if not TARGET.is_file():  # a moved probe must fail loudly, never leave these cases testing nothing
+    raise FileNotFoundError(TARGET)
 
 
 def _load_target():

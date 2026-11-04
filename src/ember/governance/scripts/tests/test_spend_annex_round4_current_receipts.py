@@ -14,7 +14,10 @@ from pathlib import Path
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-TOTALITY = ROOT / "scripts" / "ember_totality"
+TOTALITY = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_totality"
+for _required in ("test_c_neg1.py", "spend_annex_scan.py"):
+    if not (TOTALITY / _required).is_file():  # a moved scanner must fail loudly, not test nothing
+        raise FileNotFoundError(TOTALITY / _required)
 
 
 def _load_scanner():
