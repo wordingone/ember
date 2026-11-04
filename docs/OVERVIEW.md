@@ -8,7 +8,8 @@ page governs. Nothing here is new evidence.
 **Status of this page.** Written on 2026-11-04 from the public tree at master commit
 `df2a2d69603ffe8c1eca0faa54eb44837a0bd9b3` (dated 2026-10-10). No research events published in this
 repository are dated after 2026-10-07; read every "current" statement below as "as of that record".
-This page was drafted by an AI coding agent and reviewed by the owner.
+This page was drafted by an AI coding agent and reviewed by another AI agent acting for the owner;
+the owner has not yet reviewed it.
 
 ## What Ember is
 
