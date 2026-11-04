@@ -7,16 +7,20 @@
 // Mechanism these tests pin (the Windows half is inferred, not observed here): Git Bash's path
 // conversion turns `/b` and `/c` into drive paths, cmd.exe gets no `/c`, runs as an interactive
 // shell, and waits on the tool's stdin pipe, which nothing ever closed.
-// They run the Bash tool's real spawn path with a real bash on any platform, and put a fake
-// `cmd.exe` first on PATH that logs its argv and, like an interactive cmd, reads stdin when it
-// is not given `/c`.
+// They run the Bash tool's real spawn path with a real bash: /bin/bash, or Git Bash on Windows.
+// The tests that need a fake `cmd.exe` (a bash script first on PATH that logs its argv and, like
+// an interactive cmd, reads stdin when not given `/c`) run only off Windows, where a script can
+// stand in for cmd.exe; on Windows the real cmd.exe path is covered by bash-tool-windows.test.ts.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { executeCommandWithShell, GIT_BASH_PRELUDE, shellInvocation } from "./bash-tool.ts";
+import { executeCommandWithShell, findGitBash, GIT_BASH_PRELUDE, shellInvocation } from "./bash-tool.ts";
 
-const BASH = ["/bin/bash", "/usr/bin/bash"].find((p) => existsSync(p)) ?? null;
+const isWin = process.platform === "win32";
+const BASH = isWin ? findGitBash() : (["/bin/bash", "/usr/bin/bash"].find((p) => existsSync(p)) ?? null);
+// Windows cannot run a bash script named cmd.exe, so the fake-cmd tests need a POSIX host.
+const FAKE_CMD = BASH !== null && !isWin;
 let dir = "";
 let log = "";
 const savedPath = process.env["PATH"];
@@ -35,7 +39,7 @@ beforeAll(() => {
     "",
   ].join("\n"));
   chmodSync(fake, 0o755);
-  process.env["PATH"] = `${dir}:${savedPath}`;
+  if (!isWin) process.env["PATH"] = `${dir}:${savedPath}`;
 });
 
 afterAll(() => {
@@ -61,7 +65,7 @@ describe("Bash tool: no stdin, and cmd/start keep their switches (#2380 S27)", (
     expect(Date.now() - t0).toBeLessThan(4_000);
   });
 
-  test.if(BASH !== null)("an interactive cmd.exe (the live banner-and-prompt case) ends at once", async () => {
+  test.if(FAKE_CMD)("an interactive cmd.exe (the live banner-and-prompt case) ends at once", async () => {
     const t0 = Date.now();
     // Bypass the wrappers: `command` calls the fake cmd.exe with no /c, as path conversion did.
     const out = await run("command cmd.exe B:/ python", 8_000);
@@ -70,20 +74,20 @@ describe("Bash tool: no stdin, and cmd/start keep their switches (#2380 S27)", (
     expect(Date.now() - t0).toBeLessThan(4_000);
   });
 
-  test.if(BASH !== null)("`start /b python -c ...` reaches cmd.exe as `/d /c start /b python -c ...`", async () => {
+  test.if(FAKE_CMD)("`start /b python -c ...` reaches cmd.exe as `/d /c start /b python -c ...`", async () => {
     rmSync(log, { force: true });
     const out = await run('start /b python -c "import time; time.sleep(555)"');
     expect(out.timedOut).toBe(false);
     expect(readFileSync(log, "utf-8").trim()).toBe("/d /c start /b python -c import time; time.sleep(555)");
   });
 
-  test.if(BASH !== null)("`cmd /c` and the Git Bash idiom `cmd //c` both reach cmd.exe as `/c`", async () => {
+  test.if(FAKE_CMD)("`cmd /c` and the Git Bash idiom `cmd //c` both reach cmd.exe as `/c`", async () => {
     rmSync(log, { force: true });
     await run("cmd /c echo one && cmd //c echo two && cmd.exe /C echo three");
     expect(readFileSync(log, "utf-8").trim().split("\n")).toEqual(["/c echo one", "/c echo two", "/C echo three"]);
   });
 
-  test.if(BASH !== null)("`&` inside a start argument is escaped for cmd, as Git's own start script does", async () => {
+  test.if(FAKE_CMD)("`&` inside a start argument is escaped for cmd, as Git's own start script does", async () => {
     rmSync(log, { force: true });
     await run('start "https://example.com/?a=1&b=2"');
     expect(readFileSync(log, "utf-8").trim()).toBe("/d /c start https://example.com/?a=1^&b=2");
@@ -96,7 +100,7 @@ describe("Bash tool: no stdin, and cmd/start keep their switches (#2380 S27)", (
   });
 
   test.if(BASH !== null)("the wrappers are not exported to scripts the command runs", async () => {
-    const out = await run('bash -c "type -t start || echo none"');
+    const out = await run('bash -c "type -t __ember_cmd || echo none"');
     expect(out.stdout.toString().trim()).toBe("none");
   });
 });
