@@ -792,7 +792,17 @@ fn fixture_child_process() {
 fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_both_guards() {
     let root = sandbox("foreign-pressure-dispatch-refusal");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // This test hand-writes the `fenced` foreign-pressure row and then expects
+    // dispatch to read it back. The ordinary constructor also starts the
+    // resource-guard monitor, which every RESOURCE_GUARD_SAMPLE_INTERVAL_MS
+    // (2s) overwrites that row with a real census (CLEAR on a healthy runner).
+    // On a loaded Windows runner the overwrite landed between the UPDATE and
+    // the dispatch read, so the receipt said REFUSED_RESOURCE_GUARD_FROZEN
+    // (sticky guard only) instead of REFUSED_FOREIGN_PROCESS_PRESSURE (CI run
+    // 41811136406, attempt 1). The no-monitor seam removes the writer race.
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
     let pressure_observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
         "result": "FENCED",
@@ -3387,8 +3397,21 @@ fn delayed_minimal_slice_waits_for_terminal_completion() {
     // must remain admissible until the dispatch-bound deadline, not be rejected
     // merely because readiness took longer than a fixed convenience timeout.
     let (daemon, _phase_root) = start_phase_fixture_with_delay(&root, "phase-delayed", true, 1_000);
+    // The deadline must cover the producer's 1s deliberate delay PLUS child
+    // process startup and phase writes on a contended host. The old fixed 5s
+    // (measured from start_job) left ~4s for startup, while a non-delayed
+    // producer alone was measured at ~1.5s on ubuntu (see
+    // COMPLETION_MARKER_WAIT_BUDGET_MS) and Windows runners are slower under
+    // parallel test load. The call returns as soon as the producer completes,
+    // so the wide deadline costs nothing on a pass; the readiness-expiry
+    // behaviour is covered separately by
+    // `readiness_deadline_expiry_refuses_without_stopping_valid_producer`.
     let produced = daemon
-        .execute_minimal_episode("phase-delayed", 1, readiness_deadline_after_ms(5_000))
+        .execute_minimal_episode(
+            "phase-delayed",
+            1,
+            readiness_deadline_after_ms(1_000 + 2 * COMPLETION_MARKER_WAIT_BUDGET_MS),
+        )
         .unwrap();
     assert_eq!(produced.len(), 8);
     daemon.stop_job("phase-delayed").unwrap();
