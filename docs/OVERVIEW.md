@@ -6,14 +6,17 @@ It summarizes other pages and links to them; where this page and a linked page d
 page governs. Nothing here is new evidence.
 
 **Status of this page.** Written on 2026-11-04 from the public tree at master commit
-`df2a2d69603ffe8c1eca0faa54eb44837a0bd9b3` (the newest master commit, dated 2026-10-10). The newest
-research events published in this repository are dated 2026-10-07. Work has not continued on master
-since 2026-10-10, so read every "current" statement below as "as of that record".
+`df2a2d69603ffe8c1eca0faa54eb44837a0bd9b3` (dated 2026-10-10). No research events published in this
+repository are dated after 2026-10-07; read every "current" statement below as "as of that record".
+This page was drafted by an AI coding agent and reviewed by the owner.
 
 ## What Ember is
 
 Ember is an attempt to build an AI model from scratch on one home computer with one consumer graphics
-card (an NVIDIA RTX 4090 with 24 GB of memory), and to run it locally. "From scratch" means no borrowed
+card, and to run it locally (the research journal's gate table names a single RTX 4090, and the
+roadmap's last milestone refers to a 24 GiB GPU:
+[journal](domains/lab/research/journal.md.txt),
+[roadmap table](domains/governance/roadmap/README.md#milestones)). "From scratch" means no borrowed
 model weights, no teacher model and no judge model: every weight is to be learned here
 ([project front door](../README.md)). The work is organised as twelve milestones, from "the project
 has one consistent definition" to "another person can independently own and continue the whole
@@ -29,8 +32,8 @@ certificate, which include benchmark floors relative to frozen reference models
 
 The repository also contains `ember-cli`, a terminal tool used to run and watch the training, and an
 experiment lab. The code and research records were largely written by AI coding agents under the
-owner's direction: of the newest 50 master commits (counted 2026-11-04 from `git log`), 49 carry an AI
-coding-agent session or co-author line, and the research log attributes individual rulings to agent
+owner's direction: of the 50 master commits up to and including `df2a2d69` (counted 2026-11-04 from `git log`), 49
+carry an AI coding-agent session or co-author line, and the research log attributes individual rulings to agent
 "seats" ([research journal](domains/lab/research/journal.md.txt)).
 
 ## What has been achieved, and what has not
@@ -52,8 +55,10 @@ describes a target contract and makes no capability claims
 
 **Not shown: benchmark ability.** The protected image-question benchmark used as a gate (MMMU) never
 cleared its floor of 0.2857; the best recorded score was 0.285 and the newest 0.263. The journal also
-records that, until 2026-09-27, the "missing image" and "wrong image" control runs used an evaluator
-that ignored the image condition, so whether the model used the images at all was never measured
+records that, from attempt 8 until 2026-09-27, the "missing image" and "wrong image" control runs
+used an evaluator that ignored the image condition, so image use was not measured in that period.
+Later corrected controls did not show the real image beating the missing- and wrong-image controls
+beyond noise (for example 0.263 against 0.259 and 0.259)
 ([journal, historical state and standing lessons](domains/lab/research/journal.md.txt)).
 
 **A data-lineage caveat.** A July 2026 audit found that the earlier model line ("cbase") was trained
@@ -98,14 +103,15 @@ checkout ([continuity page, dated training status](domains/governance/authority/
 
 **How much was tried.** The published research export contains 537 recorded hypotheses and 371
 attempt-registry rows. Counting the final ruling of each hypothesis in that file gives 228 supported,
-201 refuted, 50 inconclusive and 58 closed without a ruling (counted by the author of this page from
+201 refuted, 50 inconclusive and 58 closed without a ruling, including a few self-tests of the
+logging tool (counted by the drafting agent from
 [`docs/domains/lab/research/export/research-index.json`](domains/lab/research/export/research-index.json);
 the file states it is a selected subset, not the complete research history).
 
 **Where the measurements live, and their limit.** Many figures above were produced on the operator's
-machine. The research site names their source files as "seat record: ..." and gives their hashes, but
-most receipt files are not in this public repository, so a reader can check that the published pages
-are consistent with each other, not re-run the measurements
+machine. The research site names their source files as "seat record: ...", some with hashes, but
+most receipt files are not in this public repository, so for most figures a reader can check that the
+published pages agree with each other, not re-run the measurements
 ([how the research pages are made](domains/lab/research/method.html)).
 
 ## How to read the research log
@@ -125,8 +131,10 @@ cloning; GitHub shows their source); the `.md.txt` files are readable as text on
    ruling is a separate checkpoint-acceptance decision under its own frozen policy.
 3. **Expect corrections to stay visible.** Refuted and withdrawn results are kept, not deleted, with a
    list of what they do not close; a later attempt that replaces one names it as its successor
-   ([hypothesis ledger](domains/lab/research/hypotheses.html)). One example: a registry row dated 2026-09-15
-   records that a profiling probe never actually ran the captured (CUDA-graph) execution path it was
+   ([hypothesis ledger](domains/lab/research/hypotheses.html)). One example: the registry row
+   `the-execution-mode-named-capture-issues-zero-cuda-graph-launches-so-the-whole-step-graph-route-is-unimplemented-not-exhausted-20260915`
+   (in the [structured export](domains/lab/research/export/research-index.json)) records that a
+   profiling probe never actually ran the captured (CUDA-graph) execution path it was
    meant to measure; later rows state which readings from that trace survive (kernel counts) and which
    do not (idle and dispatch time), and re-measure on the captured path.
 4. **Use the campaign ledger for history** ([`campaign.md.txt`](domains/lab/research/campaign.md.txt)),
@@ -136,10 +144,8 @@ cloning; GitHub shows their source); the `.md.txt` files are readable as text on
    ([`research-index.json`](domains/lab/research/export/research-index.json)); its `coverage` section
    says which fields were left out and why.
 
-Words used on those pages: *diagnostic* means a measurement that explains where time goes but earns
-no progress credit; *governed* means a run under the full accounting contract whose number can count;
-*admitted* means accepted by the governing verifier and independent review for the exact claimed use
-([glossary](GLOSSARY.md)).
+A word used on those pages and above: *admitted* means accepted by the governing verifier and
+independent review for the exact claimed use ([glossary](GLOSSARY.md)).
 
 ## If you want to check something yourself
 
