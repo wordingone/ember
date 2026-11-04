@@ -190,15 +190,22 @@ class FlexNode implements LayoutNode {
   // Hierarchy
   // ---------------------------------------------------------------------------
 
+  // DOM semantics: a child that is already here MOVES (React reorders keyed children this way).
+  // It used to stay put on appendChild and be inserted twice on insertBefore (#2381 U-PageUp).
   appendChild(child: LayoutNode): void {
     if (this._freed) throw new Error("appendChild on freed node");
     const c = child as FlexNode;
-    if (!this._children.includes(c)) this._children.push(c);
+    const at = this._children.indexOf(c);
+    if (at >= 0) this._children.splice(at, 1);
+    this._children.push(c);
   }
 
   insertBefore(child: LayoutNode, before: LayoutNode): void {
-    const idx = this._children.indexOf(before as FlexNode);
     const c = child as FlexNode;
+    if (c === before) return;
+    const at = this._children.indexOf(c);
+    if (at >= 0) this._children.splice(at, 1);
+    const idx = this._children.indexOf(before as FlexNode);
     if (idx < 0) { this._children.push(c); return; }
     this._children.splice(idx, 0, c);
   }
