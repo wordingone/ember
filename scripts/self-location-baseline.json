@@ -1,11 +1,11 @@
 {
   "baselined_row_count": 206,
-  "expires_on": "2026-10-13",
+  "expires_on": "2026-11-11",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
   "maximum_rows": 206,
-  "minted_on": "2026-10-06",
+  "minted_on": "2026-11-04",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
     {
@@ -2482,6 +2482,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "d2869e81c99d72ba738d59ca6bc93b038784608b40fc1da58d0eb244bc97d74b",
+  "self_sha256": "d6eb529000e2b40779c1b037f8c2c08f7bd49f14d99d3d3a472fe537ff20a6fe",
   "workstream_id": "EMBER-02A"
 }
