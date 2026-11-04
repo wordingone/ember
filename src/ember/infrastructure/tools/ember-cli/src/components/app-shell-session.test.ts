@@ -32,6 +32,21 @@ describe("mounted process-entry session identity handoff", () => {
     const replNode = tree.children[0] as Node;
     expect(replNode.props?.sessionId).toBe("mounted-root-a");
   });
+
+  it("forwards a --continue / --resume session to the REPL (#2383)", () => {
+    type Node = { type: unknown; props: Record<string, unknown> | null; children: unknown[] };
+    const fakeReact = {
+      createElement(type: unknown, props: Record<string, unknown> | null, ...children: unknown[]): Node {
+        return { type, props, children };
+      },
+    };
+    const resume = { sessionId: "abc", messages: [{ role: "user", content: [] }], notices: ["Resumed session abc."] };
+    const base = { config: {}, cwd: "/c", sessionId: "s", modelSeat: { phase: "ABSENT" }, onExit: () => {} };
+    const withResume = buildInteractiveReplElement(fakeReact, "InkApp", () => null, { ...base, resume }) as Node;
+    expect((withResume.children[0] as Node).props?.resume).toBe(resume);
+    const without = buildInteractiveReplElement(fakeReact, "InkApp", () => null, base) as Node;
+    expect("resume" in ((without.children[0] as Node).props ?? {})).toBe(false);
+  });
 });
 
 describe("AppRoot session identity", () => {

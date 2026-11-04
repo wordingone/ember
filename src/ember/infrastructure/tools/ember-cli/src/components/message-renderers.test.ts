@@ -169,3 +169,17 @@ describe("CompactionProgressMessage — constant values", () => {
     expect(COMPACTION_COMPLETE_PREFIX).toBe("⌁ Crunched for ");
   });
 });
+
+describe("CompactionProgressMessage — token counts (#2372)", () => {
+  it("adds the before/after estimate to the completion line when given", () => {
+    const el = CompactionProgressMessage({ isComplete: true, elapsedSecs: 3, tokensBefore: 41200, tokensAfter: 2100 });
+    const text = String(props(el)["children"]);
+    expect(text).toContain("3s");
+    expect(text).toContain("~41,200 → ~2,100 tokens");
+  });
+
+  it("is unchanged without token counts", () => {
+    const el = CompactionProgressMessage({ isComplete: true, elapsedSecs: 3 });
+    expect(String(props(el)["children"])).not.toContain("tokens");
+  });
+});

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ember-cli-extensions-settings",
+  "title": "ember-cli extension settings: hooks (settings.json) and MCP servers (mcp.json)",
+  "description": "Mirrors extensions/hooks.ts parseHooksConfig and extensions/mcp-manager.ts loadMcpConfigs. Documented in specs/extensions.md.",
+  "$defs": {
+    "hookCommand": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "type": { "const": "command" },
+        "command": { "type": "string", "minLength": 1 },
+        "timeout": { "type": "number", "exclusiveMinimum": 0, "description": "seconds, default 60" }
+      },
+      "additionalProperties": false
+    },
+    "hookEntry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["hooks"],
+          "properties": {
+            "matcher": { "type": "string", "description": "regex over the whole tool name; empty or * matches all (tool events only)" },
+            "hooks": { "type": "array", "items": { "$ref": "#/$defs/hookCommand" } }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["command"],
+          "properties": {
+            "matcher": { "type": "string" },
+            "type": { "const": "command" },
+            "command": { "type": "string", "minLength": 1 },
+            "timeout": { "type": "number", "exclusiveMinimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "mcpServer": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["stdio", "http", "sse", "streamable-http"] },
+        "command": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "url": { "type": "string" },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "disabled": { "type": "boolean" }
+      },
+      "anyOf": [{ "required": ["command"] }, { "required": ["url"] }]
+    }
+  },
+  "anyOf": [
+    {
+      "title": "settings.json",
+      "type": "object",
+      "properties": {
+        "hooks": {
+          "type": "object",
+          "properties": {
+            "PreToolUse": { "type": "array", "items": { "$ref": "#/$defs/hookEntry" } },
+            "PostToolUse": { "type": "array", "items": { "$ref": "#/$defs/hookEntry" } },
+            "UserPromptSubmit": { "type": "array", "items": { "$ref": "#/$defs/hookEntry" } },
+            "Stop": { "type": "array", "items": { "$ref": "#/$defs/hookEntry" } }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "title": "mcp.json",
+      "type": "object",
+      "required": ["mcpServers"],
+      "properties": {
+        "mcpServers": { "type": "object", "additionalProperties": { "$ref": "#/$defs/mcpServer" } }
+      }
+    }
+  ]
+}

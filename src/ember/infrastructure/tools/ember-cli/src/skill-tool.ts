@@ -23,6 +23,12 @@ export interface SkillEntry {
   tools?: string[];
   disableModelInvocation?: boolean;
   executionMode?: string;
+  /** Frontmatter `argument-hint`, shown beside the /<skill> command. */
+  argumentHint?: string;
+  /** Frontmatter `user-invocable: false` hides the skill from the slash menu. */
+  userInvocable?: boolean;
+  /** Set when SKILL.md frontmatter is missing or could not be parsed; shown by /skills. */
+  warning?: string;
 }
 
 export interface SkillPermissionRules {

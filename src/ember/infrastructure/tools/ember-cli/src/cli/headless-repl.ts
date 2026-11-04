@@ -6,7 +6,8 @@
 // -p / --print flag path in process-entry.ts.
 // Bundle: cli/headless-repl.ts (lines 308342–308540)
 
-import { QueryEngine, type QueryEvent } from "../core/query-engine.ts";
+import { QueryEngine, type CanUseToolFn, type QueryEvent } from "../core/query-engine.ts";
+import { headlessCanUseTool } from "../core/headless-permissions.ts";
 import type { Tool } from "../core/tool-interface.ts";
 import type { LoopDepsOverrides } from "../query/query-loop-support.ts";
 
@@ -26,6 +27,11 @@ export interface HeadlessReplOptions {
   jsonSchema?:         unknown;
   verbose?:            boolean;
   replayUserMessages?: boolean;
+  /**
+   * `--dangerously-skip-permissions`: allow every call a tool does not deny outright. Without it a
+   * headless run refuses calls that need approval (see core/headless-permissions.ts).
+   */
+  bypassPermissions?:  boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +139,7 @@ export async function* headlessRepl(
   commands:               unknown[],
   tools:                  Tool[],
   initialMessages:        unknown[],
-  canUseTool:             (tool: Tool, input: unknown) => Promise<boolean>,
+  canUseTool:             CanUseToolFn,
   sdkMcpConfigs:          unknown[],
   getAppState:            () => unknown,
   setAppState:            (updater: (prev: unknown) => unknown) => void | Promise<void>,
@@ -282,7 +288,7 @@ export async function runHeadlessPrompt(
     [],
     tools,
     [],
-    async () => true,
+    options.bypassPermissions ? async () => true : headlessCanUseTool,
     [],
     () => appState,
     async (updater) => { Object.assign(appState, updater(appState)); },

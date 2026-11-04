@@ -5,7 +5,7 @@
 // Bundle: components/markdown-and-code.ts (line 321756)
 
 import React from "react";
-import { Box, Text, RawAnsi } from "../ink/components.ts";
+import { Box, Text, RawAnsi, type TextRun } from "../ink/components.ts";
 import {
   LRUCache,
   HIGHLIGHT_CACHE_MAX,
@@ -267,6 +267,35 @@ function renderInlinePlain(text: string): React.ReactElement {
   return React.createElement(Text, null, text);
 }
 
+/** The spans of one line of markdown inline text (links, **bold**, `code`), so the whole line
+ * is ONE Text and wraps as a paragraph. Separate Text elements side by side each wrap in their
+ * own column: text after a `code` span then wrapped under the span, not under the line start. */
+export function inlineRuns(text: string): TextRun[] {
+  const runs: TextRun[] = [];
+  for (const part of text.split(/(\[[^\]]+\]\([^)]+\))/g)) {
+    if (part === "") continue;
+    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (link) { runs.push({ text: link[1]!, color: color("primary", "fg", "dark"), underline: true }); continue; }
+    for (const b of part.split(/(\*\*[^*]+\*\*)/g)) {
+      if (b === "") continue;
+      const bold = b.match(/^\*\*([^*]+)\*\*$/);
+      if (bold) { runs.push({ text: bold[1]!, bold: true }); continue; }
+      for (const c of b.split(/(`[^`]+`)/g)) {
+        if (c === "") continue;
+        const code = c.match(/^`([^`]+)`$/);
+        runs.push(code ? { text: code[1]!, color: "cyan" } : { text: c });
+      }
+    }
+  }
+  return runs;
+}
+
+function InlineText({ text }: { text: string }): React.ReactElement {
+  const runs = inlineRuns(text);
+  if (runs.length <= 1 && !runs[0]?.color && !runs[0]?.bold) return React.createElement(Text, null, text);
+  return React.createElement(Text, { runs });
+}
+
 /** Public entry point: bold/inline-code (renderInlinePlain) plus link spans, composable. */
 export function renderInline(text: string): React.ReactElement {
   return renderInlineWithLinks(text);
@@ -297,9 +326,20 @@ function headingStyle(level: number): HeadingStyle {
 // Markdown — root component
 // ---------------------------------------------------------------------------
 
-export interface MarkdownProps { content: string; }
+export interface MarkdownProps {
+  content: string;
+  /** Cells available to this block (the chat column minus the reply gutter). Omitted -> no limit.
+   *  A table whose natural width is larger than this is laid out as one `Header: value` list per
+   *  row instead of squeezing its last column to a sliver (#2380 S39). */
+  width?: number;
+}
 
-export function Markdown({ content }: MarkdownProps): React.ReactElement {
+/** Cells a grid of the given column widths needs: each column plus a 1-cell gap after it. */
+export function tableNaturalWidth(colWidths: readonly number[]): number {
+  return colWidths.reduce((sum, w) => sum + w + 1, 0);
+}
+
+export function Markdown({ content, width }: MarkdownProps): React.ReactElement {
   const nodes = parseMarkdown(content);
 
   const elements = nodes.map((node, idx) => {
@@ -332,13 +372,39 @@ export function Markdown({ content }: MarkdownProps): React.ReactElement {
           const cellsInCol = [header[c] ?? "", ...rows.map((r) => r[c] ?? "")];
           colWidths[c] = Math.max(...cellsInCol.map((cell) => cell.length));
         }
+        // #2380 S39: wider than the column it lives in. A row-per-record list reads at any width;
+        // a grid with its last column flex-shrunk to two characters (or clipped) does not.
+        if (width !== undefined && colCount > 0 && tableNaturalWidth(colWidths) > Math.max(1, width)) {
+          const records = rows.length > 0 ? rows : [[]];
+          const labelWidth = Math.min(
+            Math.max(...Array.from({ length: colCount }, (_, c) => (header[c] ?? "").length)) + 2,
+            Math.max(4, Math.floor(width / 2)),
+          );
+          const out: React.ReactElement[] = [];
+          records.forEach((row, rIdx) => {
+            if (rIdx > 0) out.push(React.createElement(Text, { key: `sep${rIdx}` }, " "));
+            for (let c = 0; c < colCount; c++) {
+              const label = (header[c] ?? `col ${c + 1}`).slice(0, Math.max(1, labelWidth - 2)) + ": ";
+              out.push(React.createElement(
+                Box, { key: `r${rIdx}c${c}`, flexDirection: "row" },
+                React.createElement(Box, { width: labelWidth, flexShrink: 0 },
+                  React.createElement(Text, { bold: true }, label.padEnd(labelWidth, " "))),
+                React.createElement(Box, { flexShrink: 1, flexGrow: 1 },
+                  React.createElement(Text, null, row[c] ?? "")),
+              ));
+            }
+          });
+          return React.createElement(Box, { key: idx, flexDirection: "column" }, ...out);
+        }
         const renderRow = (cells: string[], rowIdx: number, isHeader: boolean) =>
           React.createElement(
-            Box, { key: rowIdx, flexDirection: "row" },
+            // The 1-cell gap between columns is the row's `gap`: a marginRight on each cell Box
+            // rendered no gap at all ("ccc"+"d" ran together as "cccd").
+            Box, { key: rowIdx, flexDirection: "row", gap: 1 },
             ...Array.from({ length: colCount }, (_, c) => {
               const cellText = (cells[c] ?? "").padEnd(colWidths[c] ?? 0, " ");
               return React.createElement(
-                Box, { key: c, marginRight: 1 },
+                Box, { key: c },
                 React.createElement(Text, { bold: isHeader }, cellText),
               );
             }),
@@ -357,13 +423,13 @@ export function Markdown({ content }: MarkdownProps): React.ReactElement {
         });
       }
       case "hr": {
-        return React.createElement(Text, { key: idx, dimColor: true }, "─".repeat(40));
+        return React.createElement(Text, { key: idx, dimColor: true }, "─".repeat(width === undefined ? 40 : Math.max(1, Math.min(40, width))));
       }
       case "ul": {
         return React.createElement(
           Box, { key: idx, flexDirection: "row" },
           React.createElement(Text, null, "• "),
-          renderInline(node.content ?? ""),
+          React.createElement(InlineText, { text: node.content ?? "" }),
         );
       }
       case "ol": {
@@ -371,18 +437,18 @@ export function Markdown({ content }: MarkdownProps): React.ReactElement {
         return React.createElement(
           Box, { key: idx, flexDirection: "row" },
           React.createElement(Text, null, `${label} `),
-          renderInline(node.content ?? ""),
+          React.createElement(InlineText, { text: node.content ?? "" }),
         );
       }
       case "blockquote": {
         return React.createElement(
           Box, { key: idx, flexDirection: "row", paddingLeft: 2 },
           React.createElement(Text, { dimColor: true }, "│ "),
-          renderInline(node.content ?? ""),
+          React.createElement(InlineText, { text: node.content ?? "" }),
         );
       }
       case "paragraph": {
-        return React.createElement(Box, { key: idx }, renderInline(node.content ?? ""));
+        return React.createElement(Box, { key: idx }, React.createElement(InlineText, { text: node.content ?? "" }));
       }
       default:
         return React.createElement(Text, { key: idx }, node.content ?? "");

@@ -114,7 +114,7 @@ describe("#1215 central tool permission gate", () => {
     expect(observed.callCount).toBe(0);
     expect(observed.predicateInput).toEqual({ value: "raw", normalized: true });
     expect(observed.result?.is_error).toBe(true);
-    expect(observed.result?.content).toContain("sandbox");
+    expect(observed.result?.content).toContain("Tool call not approved: mutation");
   });
 
   test("an authorized tool executes with the permission-normalized input", async () => {

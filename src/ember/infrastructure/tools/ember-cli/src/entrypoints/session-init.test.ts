@@ -605,3 +605,56 @@ describe("session-init — resolveInitServerUrl: EMBER_GPU_FREE null signal must
     expect(resolveInitServerUrl("http://localhost:1111", "http://localhost:9999")).toBe("http://localhost:1111");
   });
 });
+
+describe("buildProductionCallModel — wire shape of the conversation", () => {
+  const origFetch = globalThis.fetch;
+  const origOw = process.env["EMBER_OPEN_WEIGHTS_ACTIVE"];
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    if (origOw === undefined) delete process.env["EMBER_OPEN_WEIGHTS_ACTIVE"];
+    else process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = origOw;
+  });
+
+  function captureFetch(): { body: () => string; calls: () => number } {
+    let body = "";
+    let calls = 0;
+    globalThis.fetch = mock(async (_url, init) => {
+      calls++;
+      body = String(init?.body ?? "");
+      return { ok: true, status: 200, body: { getReader: makeSingleChunkReader } } as unknown as Response;
+    }) as unknown as typeof fetch;
+    return { body: () => body, calls: () => calls };
+  }
+
+  it("sends the system prompt as the leading message on an open-weights seat", async () => {
+    process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+    const f = captureFetch();
+    await buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 })({
+      messages: [{ role: "user" as const, content: "hi" }], systemPrompt: "SYSMARK", tools: [], model: "m", maxTokens: 64,
+    }).catch(() => {});
+    const sent = JSON.parse(f.body()) as { messages: Array<{ role: string; content: unknown }> };
+    expect(sent.messages[0]).toEqual({ role: "system", content: "SYSMARK" });
+    expect(sent.messages[1]!.role).toBe("user");
+  });
+
+  it("keeps the reference seat's wire shape (no system message)", async () => {
+    delete process.env["EMBER_OPEN_WEIGHTS_ACTIVE"];
+    const f = captureFetch();
+    await buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 })({
+      messages: [{ role: "user" as const, content: "hi" }], systemPrompt: "SYSMARK", tools: [], model: "m", maxTokens: 64,
+    }).catch(() => {});
+    const sent = JSON.parse(f.body()) as { messages: Array<{ role: string }> };
+    expect(sent.messages.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  it("refuses an empty conversation before any network call", async () => {
+    process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] = "1";
+    const f = captureFetch();
+    let thrown: unknown = null;
+    await buildProductionCallModel({ serverUrl: "http://localhost:1", nCtx: 8192 })({
+      messages: [], systemPrompt: "SYSMARK", tools: [], model: "m", maxTokens: 64,
+    }).catch((e) => { thrown = e; });
+    expect((thrown as Error).message).toContain("no conversation messages");
+    expect(f.calls()).toBe(0);
+  });
+});

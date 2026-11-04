@@ -28,6 +28,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { harnessWarn } from "./harness-warn.ts";
 
 function isRepoRoot(candidate: string): boolean {
   const goalMarkers = [
@@ -280,8 +281,9 @@ export function resolveEmberSourceRootOrCwd(
   try {
     return resolveEmberSourceRoot(options);
   } catch (err) {
-    console.error(
+    harnessWarn(
       `${warnPrefix} refusing to run without a validated ember source root: ${err instanceof Error ? err.message : String(err)}`,
+      "error",
     );
     throw err;
   }
@@ -302,7 +304,7 @@ export function resolveEmberRepoRootOrCwd(
   try {
     return resolveEmberRepoRoot(options);
   } catch (err) {
-    console.warn(
+    harnessWarn(
       `${warnPrefix} repo root resolution failed, falling back to cwd: ${err instanceof Error ? err.message : String(err)}`,
     );
     return options.startDir ?? process.cwd();

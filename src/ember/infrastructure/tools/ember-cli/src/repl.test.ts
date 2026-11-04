@@ -114,21 +114,19 @@ describe("AC2: user → UserTextMessage with bold 'You' header", () => {
     expect((el.props as { text: string }).text).toBe("hello world");
   });
 
-  it("UserTextMessage output contains bold 'You' header", () => {
-    // Render the component directly to inspect its output
+  it("UserTextMessage renders a gray \"> \" prompt block, not a 'You' label", () => {
     const el = UserTextMessage({ text: "hello world" });
     const s = ser(el);
-    // Header is React.createElement(Text, { bold: true }, "You")
-    // JSON: {"props":{"bold":true,"children":"You"},...}
-    expect(s).toContain('"You"');
-    expect(s).toContain('"bold":true');
+    expect(s).toContain('"> "');
+    expect(s).toContain('"backgroundColor":"#373737"');
+    expect(s).not.toContain('"You"');
   });
 
   it("UserTextMessage normal layout: text below the header", () => {
     // Default (brief=false): returns Box with header row + text row
     const el = UserTextMessage({ text: "hello world" });
     const s = ser(el);
-    expect(s).toContain('"hello world"');
+    expect(s).toContain("hello world");
   });
 });
 

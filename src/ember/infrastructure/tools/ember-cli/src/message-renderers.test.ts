@@ -7,6 +7,7 @@ import { test, expect, describe } from "bun:test";
 import React from "react";
 import {
   MAX_API_ERROR_CHARS,
+  MAX_REPLY_CHARS,
   MIN_HINT_DISPLAY_MS,
   BLACK_CIRCLE,
   COMPACT_BOUNDARY_TEXT,
@@ -204,18 +205,24 @@ describe("AC6: long error text truncation", () => {
     expect(MAX_API_ERROR_CHARS).toBe(1000);
   });
 
-  test("AssistantTextMessage truncates text over 1000 chars", () => {
-    const longText = "x".repeat(1001);
+  test("AssistantTextMessage renders an ordinary multi-paragraph reply in full", () => {
+    const reply = "word ".repeat(400);
+    const el = AssistantTextMessage({ text: reply, isExpanded: false });
+    expect(childText(el!)).not.toContain("Ctrl+O");
+  });
+
+  test("AssistantTextMessage folds a reply over MAX_REPLY_CHARS", () => {
+    const longText = "x".repeat(MAX_REPLY_CHARS + 1);
     const el = AssistantTextMessage({ text: longText, isExpanded: false });
     expect(el).not.toBeNull();
     const serialized = childText(el!);
     expect(serialized).toContain("Ctrl+O");
     // The actual text in the element should be ≤ 1000 chars content + ellipsis
-    expect(serialized).not.toContain("x".repeat(1001));
+    expect(serialized).not.toContain("x".repeat(MAX_REPLY_CHARS + 1));
   });
 
   test("AssistantTextMessage does NOT truncate when isExpanded=true", () => {
-    const longText = "y".repeat(1001);
+    const longText = "y".repeat(MAX_REPLY_CHARS + 1);
     const el = AssistantTextMessage({ text: longText, isExpanded: true });
     expect(el).not.toBeNull();
     expect(childText(el!)).not.toContain("Ctrl+O");

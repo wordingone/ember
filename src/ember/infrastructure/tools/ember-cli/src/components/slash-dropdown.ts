@@ -80,7 +80,7 @@ export function SlashDropdown({ commands, selectedIndex, overflowCount, width }:
         React.createElement(
           Text,
           { color: selected ? color("primary", "fg") : undefined, bold: selected },
-          `${selected ? SELECTED_MARKER : UNSELECTED_MARKER}/${cmd.name}`,
+          `${selected ? (process.env["EMBER_ASCII_GLYPHS"] === "1" ? "> " : SELECTED_MARKER) : UNSELECTED_MARKER}/${cmd.name}`,
         ),
         React.createElement(Text, { color: color("muted", "fg") }, `  ${description}`),
       );

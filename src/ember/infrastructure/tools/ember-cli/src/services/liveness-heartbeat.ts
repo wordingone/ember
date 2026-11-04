@@ -23,6 +23,7 @@
 // side is caught by heartbeatAge's own parse try/catch and reported as unknown (null), never as a
 // false-fresh age.
 
+import { harnessWarn } from "../utils/harness-warn.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
@@ -140,7 +141,7 @@ export function createLivenessHeartbeatWriter(
   try {
     repoRoot = options.repoRoot ?? resolveEmberRepoRoot({});
   } catch (err) {
-    console.warn(
+    harnessWarn(
       `[liveness-heartbeat] repo root resolution failed -- heartbeat writer is INERT ` +
         `(no file will ever be created or written): ${err instanceof Error ? err.message : String(err)}`,
     );

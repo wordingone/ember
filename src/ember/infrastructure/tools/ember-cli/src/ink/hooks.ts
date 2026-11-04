@@ -85,7 +85,9 @@ export function _deliverKeyEvent(
   ke: { ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean },
 ): void {
   const key   = makeKeyboardKey(keyName, ke);
-  const input = keyName.length === 1 ? keyName : "";
+  // readline names a bare LF (Ctrl+J, or a line break inside a paste) "enter",
+  // distinct from CR "return": deliver it as a typed newline.
+  const input = [...keyName].length === 1 ? keyName : keyName === "enter" ? "\n" : "";
   for (const entry of _inputHandlers) {
     if (entry.isActive) entry.handler(input, key);
   }
@@ -100,6 +102,30 @@ export function _setMouseDispatcher(dispatcher: MouseDispatcher): () => void {
   return () => {
     if (_mouseDispatcher === dispatcher) _mouseDispatcher = null;
   };
+}
+
+type RepaintRequester = (immediate: boolean) => void;
+let _repaintRequester: RepaintRequester | null = null;
+
+/** Installs the currently mounted renderer's repaint hook. @internal */
+export function _setRepaintRequester(requester: RepaintRequester): () => void {
+  _repaintRequester = requester;
+  return () => {
+    if (_repaintRequester === requester) _repaintRequester = null;
+  };
+}
+
+/**
+ * Ask the mounted renderer for a full clear-and-repaint (#2380 S41): the terminal can hold stale
+ * cells the diff renderer thinks are blank (ConPTY reflow, text printed behind our back, a
+ * /clear that shrank the transcript). `immediate` repaints the current tree now (Ctrl+L); without
+ * it the repaint rides on the next commit (right after a state change such as /clear).
+ * Returns false when nothing is mounted.
+ */
+export function requestFullRepaint(immediate: boolean = true): boolean {
+  if (_repaintRequester === null) return false;
+  _repaintRequester(immediate);
+  return true;
 }
 
 /** Routes one decoded mouse press to the currently mounted renderer. @internal */

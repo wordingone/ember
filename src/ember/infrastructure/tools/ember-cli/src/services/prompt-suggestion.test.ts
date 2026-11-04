@@ -1036,26 +1036,32 @@ describe("AC8: makeSuggestionExecutor — real executor factory with mock callMo
 
   // ---- Behaviour: systemPrompt is the SUGGESTION_PROMPTS variant ----
 
-  it("uses SUGGESTION_PROMPTS['user_intent'] text as systemPrompt in callModel params", async () => {
+  it("sends SUGGESTION_PROMPTS['user_intent'] as the final user turn, not as a system prompt", async () => {
     let capturedSystemPrompt: string | undefined;
+    let capturedLast: unknown;
     const mockCallModel = async (params: CallModelParams): Promise<ModelResponse> => {
       capturedSystemPrompt = params.systemPrompt;
+      capturedLast = params.messages[params.messages.length - 1];
       return makeTextModelResponse("commit the changes");
     };
     const executor = makeSuggestionExecutor(mockCallModel);
     await generateSuggestion(new AbortController(), "user_intent", {}, executor);
-    expect(capturedSystemPrompt).toBe(SUGGESTION_PROMPTS["user_intent"]);
+    expect(capturedSystemPrompt).toBe("");
+    expect(capturedLast).toEqual({ role: "user", content: SUGGESTION_PROMPTS["user_intent"] });
   });
 
-  it("uses SUGGESTION_PROMPTS['stated_intent'] text as systemPrompt for the stated_intent variant", async () => {
+  it("sends SUGGESTION_PROMPTS['stated_intent'] as the final user turn for that variant", async () => {
     let capturedSystemPrompt: string | undefined;
+    let capturedLast: unknown;
     const mockCallModel = async (params: CallModelParams): Promise<ModelResponse> => {
       capturedSystemPrompt = params.systemPrompt;
+      capturedLast = params.messages[params.messages.length - 1];
       return makeTextModelResponse("run all benchmarks");
     };
     const executor = makeSuggestionExecutor(mockCallModel);
     await generateSuggestion(new AbortController(), "stated_intent", {}, executor);
-    expect(capturedSystemPrompt).toBe(SUGGESTION_PROMPTS["stated_intent"]);
+    expect(capturedSystemPrompt).toBe("");
+    expect(capturedLast).toEqual({ role: "user", content: SUGGESTION_PROMPTS["stated_intent"] });
   });
 
   // ---- Behaviour: end-to-end through tryGenerateSuggestion ----
@@ -1083,6 +1089,21 @@ describe("AC8: makeSuggestionExecutor — real executor factory with mock callMo
     expect(result!.generationRequestId).toMatch(/^psg-/);
   });
 
+  it("forwards the transcript when the caller passes no cacheSafeParams (REPL call sites)", async () => {
+    let capturedMessages: unknown[] | undefined;
+    const executor = makeSuggestionExecutor(async (p: CallModelParams): Promise<ModelResponse> => {
+      capturedMessages = p.messages;
+      return makeTextModelResponse("run the build");
+    });
+    const messages: EmberMessage[] = [
+      makeAssistantMessage({ content: "first response" }),
+      makeAssistantMessage({ content: "second response" }),
+    ];
+    await tryGenerateSuggestion(new AbortController(), messages, () => makeAppState(), {}, undefined, executor);
+    expect(capturedMessages!.length).toBe(3);
+    expect(capturedMessages!.slice(0, 2)).toEqual(messages);
+  });
+
   // ---- Behaviour: parent messages extracted from cacheSafeParams ----
 
   it("passes cacheSafeParams.messages to callModel as the messages param", async () => {
@@ -1099,10 +1120,10 @@ describe("AC8: makeSuggestionExecutor — real executor factory with mock callMo
       { messages: parentMessages },
       executor,
     );
-    expect(capturedMessages).toBe(parentMessages);
+    expect(capturedMessages!.slice(0, -1)).toEqual(parentMessages);
   });
 
-  it("uses an empty messages array when cacheSafeParams has no messages field", async () => {
+  it("sends only the instruction turn when cacheSafeParams has no messages field", async () => {
     let capturedMessages: unknown[] | undefined;
     const mockCallModel = async (params: CallModelParams): Promise<ModelResponse> => {
       capturedMessages = params.messages;
@@ -1110,6 +1131,6 @@ describe("AC8: makeSuggestionExecutor — real executor factory with mock callMo
     };
     const executor = makeSuggestionExecutor(mockCallModel);
     await generateSuggestion(new AbortController(), "user_intent", {}, executor);
-    expect(capturedMessages).toEqual([]);
+    expect(capturedMessages).toEqual([{ role: "user", content: SUGGESTION_PROMPTS["user_intent"] }]);
   });
 });

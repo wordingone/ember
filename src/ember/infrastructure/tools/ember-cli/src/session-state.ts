@@ -53,6 +53,7 @@ let currentBudget: number = 0;
 let budgetContinuationCnt: number = 0;
 let postCompactionFlag: boolean = false;
 let postCompactionElapsedSecs: number = 0;
+let postCompactionTokens: { tokensBefore: number; tokensAfter: number } | null = null;
 let promptIdValue: string | null = null;
 
 const sessionSwitchListeners: Array<(newId: string) => void> = [];
@@ -94,6 +95,7 @@ export function resetStateForTests(): void {
   budgetContinuationCnt = 0;
   postCompactionFlag = false;
   postCompactionElapsedSecs = 0;
+  postCompactionTokens = null;
   promptIdValue = null;
   sessionSwitchListeners.length = 0;
 }
@@ -324,9 +326,13 @@ export function getBudgetContinuationCount(): number { return budgetContinuation
 // Post-compaction flag (one-shot)
 // ---------------------------------------------------------------------------
 
-export function markPostCompaction(elapsedSecs: number = 0): void {
+export function markPostCompaction(
+  elapsedSecs: number = 0,
+  tokens?: { tokensBefore: number; tokensAfter: number },
+): void {
   postCompactionFlag = true;
   postCompactionElapsedSecs = elapsedSecs;
+  postCompactionTokens = tokens ?? null;
 }
 
 /**
@@ -335,13 +341,24 @@ export function markPostCompaction(elapsedSecs: number = 0): void {
  * pending. Number-not-boolean so the REPL can render "Crunched for Xs".
  */
 export function consumePostCompaction(): number | null {
-  if (postCompactionFlag) {
-    postCompactionFlag = false;
-    const elapsed = postCompactionElapsedSecs;
-    postCompactionElapsedSecs = 0;
-    return elapsed;
-  }
-  return null;
+  return consumePostCompactionDetail()?.elapsedSecs ?? null;
+}
+
+/**
+ * Like consumePostCompaction, plus the estimated prompt tokens before and after the
+ * summary replaced the older messages (absent when the compaction reported none).
+ */
+export function consumePostCompactionDetail(): {
+  elapsedSecs: number;
+  tokensBefore?: number;
+  tokensAfter?: number;
+} | null {
+  if (!postCompactionFlag) return null;
+  postCompactionFlag = false;
+  const detail = { elapsedSecs: postCompactionElapsedSecs, ...(postCompactionTokens ?? {}) };
+  postCompactionElapsedSecs = 0;
+  postCompactionTokens = null;
+  return detail;
 }
 
 // ---------------------------------------------------------------------------

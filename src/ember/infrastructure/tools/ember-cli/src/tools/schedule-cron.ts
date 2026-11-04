@@ -4,13 +4,16 @@
 // tools/schedule-cron.ts — Cron scheduling tools: CronCreate, CronDelete, CronList.
 //
 // Schedules prompt-enqueue jobs against a standard 5-field cron expression.
-// Jobs live in an in-memory store (_cronStore) for the session lifetime.
+// Jobs live in an in-memory store (_cronStore) for the session lifetime. The REPL's
+// scheduler ticker (extensions/scheduler.ts) fires due jobs via takeNextDueCronJob()
+// while the TUI is idle.
 // Durable jobs (durable:true) are advisory-flagged; actual durable backing is
 // provided by the runtime when EMBER_DURABLE_CRON=1.
 
 import { z } from "zod";
 import { buildTool } from "../core/tool-interface.ts";
 import type { ToolUseContext } from "../core/tool-interface.ts";
+import { nextCronTime } from "../extensions/cron-time.ts";
 
 // ---------------------------------------------------------------------------
 // Feature flags
@@ -182,6 +185,8 @@ interface CronJob {
   humanSchedule: string;
   createdAt: number;
   agentId: string | undefined;
+  /** Epoch ms of the next scheduled fire (local-time cron rules). */
+  nextFireAt: number;
 }
 
 const MAX_CRON_JOBS = 50;
@@ -197,6 +202,29 @@ function generateJobId(): string {
 
 function isTeamLead(context: ToolUseContext): boolean {
   return !context.agentId;
+}
+
+/**
+ * Removes and returns the first job whose time has come (cron jobs fire at most once per
+ * call; the caller invokes this again for the next one). A recurring job is rescheduled from
+ * `now`, so a job that came due while the TUI was busy fires once late, never in a burst; a
+ * one-shot job is deleted; a recurring job older than DEFAULT_MAX_AGE_DAYS fires a last time.
+ */
+export function takeNextDueCronJob(now: number): { id: string; prompt: string } | null {
+  for (const job of _cronStore.values()) {
+    if (job.nextFireAt > now) continue;
+    const expired = now - job.createdAt > DEFAULT_MAX_AGE_DAYS * 24 * 3600 * 1000;
+    const next = job.recurring && !expired ? nextCronTime(job.cron, now) : null;
+    if (next === null) _cronStore.delete(job.id);
+    else job.nextFireAt = next;
+    return { id: job.id, prompt: job.prompt };
+  }
+  return null;
+}
+
+/** Number of active cron jobs (for status lines and tests). */
+export function cronJobCount(): number {
+  return _cronStore.size;
 }
 
 // Test hook — allows resetting the store in unit tests.
@@ -252,6 +280,10 @@ export const CronCreateTool = buildTool<CronCreateInput, unknown>({
     const durable = requestedDurable && isDurableCronEnabled();
     const id = generateJobId();
     const humanSchedule = humanizeCronExpression(args.cron, recurring);
+    const nextFireAt = nextCronTime(args.cron, Date.now());
+    if (nextFireAt === null) {
+      throw new Error(`Cron expression "${args.cron}" never fires.`);
+    }
     const job: CronJob = {
       id,
       cron: args.cron,
@@ -261,6 +293,7 @@ export const CronCreateTool = buildTool<CronCreateInput, unknown>({
       humanSchedule,
       createdAt: Date.now(),
       agentId: context.agentId,
+      nextFireAt,
     };
     _cronStore.set(id, job);
 
@@ -367,6 +400,7 @@ export const CronListTool = buildTool<CronListInput, unknown>({
       id: job.id,
       cron: job.cron,
       humanSchedule: job.humanSchedule,
+      nextFire: new Date(job.nextFireAt).toISOString(),
       prompt: job.prompt.length > 80 ? job.prompt.slice(0, 77) + "..." : job.prompt,
       ...(job.recurring ? {} : { recurring: false }),
       ...(job.durable ? { durable: true } : {}),

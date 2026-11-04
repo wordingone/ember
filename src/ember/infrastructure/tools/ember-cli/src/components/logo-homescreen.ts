@@ -202,6 +202,18 @@ export function clipToWidth(text: string, width: number): string {
   return budget.join("") + "…";
 }
 
+/** The model row: a seat prefix ("OPEN_WEIGHTS: ") is dropped before the model name is cut, and
+ *  the name is cut by character, never at a word boundary (a model id has no spaces, so the
+ *  word clip removed the whole name and showed "OPEN_WEIGHTS:…"). */
+export function fitModelLabel(label: string, width: number): string {
+  if ([...label].length <= width) return label;
+  const colon = label.indexOf(": ");
+  const name = colon > 0 ? label.slice(colon + 2) : label;
+  const chars = [...name];
+  if (chars.length <= width) return name;
+  return width <= 1 ? "…" : chars.slice(0, width - 1).join("") + "…";
+}
+
 /** Shortens a filesystem path to its last two segments with a leading ellipsis marker once the
  *  full path doesn't fit `budget` — the tail of a path (its deepest directories) is what actually
  *  identifies which tree/worktree is active, so this drops the FRONT and keeps the back, same
@@ -512,7 +524,7 @@ function renderIdentityBlock(state: LogoState, fireballTick: number, viewportWid
       ? React.createElement(
           Box, { key: "l2", flexDirection: "row" },
           React.createElement(
-            Text, null, clipToWidth(state.model, Math.max(1, textWidth - 8)),
+            Text, null, fitModelLabel(state.model, Math.max(1, textWidth - 8)),
           ),
           // B4 W1: mock1's real truecolor accent, never the dim ANSI-16 "green" literal.
           React.createElement(Text, { color: LOCAL_ACCENT_COLOR }, " \xB7 Local"),

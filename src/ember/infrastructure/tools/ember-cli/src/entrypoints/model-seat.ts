@@ -4,16 +4,22 @@
 
 export const REFERENCE_SEAT_FLAG = "--reference-seat";
 
-export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY" | "OFFLINE";
+/** Operator-selected open-weights harness mode: run any non-Ember model the
+ * operator chose (e.g. one fetched by `ember pull`) as the working model.  It
+ * is labelled OPEN_WEIGHTS everywhere and, like REFERENCE_ONLY, never carries
+ * an owned identity, a modelConfigSha256, or owned capability. */
+export const OPEN_WEIGHTS_FLAG = "--open-weights";
+
+export type ModelSeat = "OWNED_ADMITTED" | "OWNED_DEVELOPMENT" | "REFERENCE_ONLY" | "OPEN_WEIGHTS" | "OFFLINE";
 
 /** The operator-visible seat lifecycle.  This is a projection of the existing
  * model-seat authority, not a second launcher or ownership registry. */
 export type ModelSeatPhase = "ABSENT" | "LOADING" | "RESIDENT";
 
 export type ModelSeatState =
-  | { phase: "ABSENT"; owner?: string; endpoint?: never; vramBytes?: never }
-  | { phase: "LOADING"; owner?: string; endpoint?: never; vramBytes?: never }
-  | { phase: "RESIDENT"; owner: string; endpoint: string; vramBytes: number };
+  | { phase: "ABSENT"; owner?: string; endpoint?: never; vramBytes?: never; note?: string }
+  | { phase: "LOADING"; owner?: string; endpoint?: never; vramBytes?: never; note?: string }
+  | { phase: "RESIDENT"; owner: string; endpoint: string; vramBytes: number; vramUnmeasured?: boolean; note?: string };
 
 /** Runtime fail-closed guard for stale or untyped cockpit state.  Internal
  * callers get the discriminated-union guarantee above; this guard prevents a
@@ -28,7 +34,7 @@ export function normalizeModelSeatState(state: ModelSeatState): ModelSeatState {
   ) {
     return state;
   }
-  return { phase: "ABSENT" };
+  return state.note ? { phase: "ABSENT", note: state.note } : { phase: "ABSENT" };
 }
 
 interface OwnedServerLaunchBase {
@@ -111,12 +117,13 @@ const MODEL_FREE_FAST_FLAGS = new Set([
   "--dump-system-prompt",
   "--watch",
   "goal-session-smoke",
+  "pull",
 ]);
 
 export function isModelFreeFastPath(argv: string[]): boolean {
   const args = argv
     .slice(2)
-    .filter((argument) => argument !== REFERENCE_SEAT_FLAG);
+    .filter((argument) => argument !== REFERENCE_SEAT_FLAG && argument !== OPEN_WEIGHTS_FLAG);
   const first = args[0] ?? "";
   return (
     MODEL_FREE_FAST_FLAGS.has(first) ||
@@ -139,15 +146,19 @@ export interface ModelSeatResolutionInput {
    * the caller actually knows the identity.
    */
   referenceModelName?: string;
+  /** "1" when EMBER_OPEN_WEIGHTS requests the open-weights harness mode. */
+  openWeightsEnv?: string;
+  /** True when the operator's models.json declares `"seat": "open-weights"`. */
+  openWeightsConfig?: boolean;
 }
 
 export interface ModelSeatDecision {
   allowed: boolean;
   seat: ModelSeat | null;
-  source: "flag" | "env" | "gpu-free" | "owned-manifest" | "owned-development-manifest" | "none";
+  source: "flag" | "env" | "config" | "gpu-free" | "owned-manifest" | "owned-development-manifest" | "none";
   argv: string[];
   ownedIdentity?: OwnedModelIdentity;
-  /** Set only when `seat === "REFERENCE_ONLY"`; see `ModelSeatResolutionInput.referenceModelName`. */
+  /** Set only when `seat` is REFERENCE_ONLY or OPEN_WEIGHTS; see `ModelSeatResolutionInput.referenceModelName`. */
   referenceModelName?: string;
   error?: string;
 }
@@ -187,7 +198,16 @@ export interface OwnedModelContract {
  * reachable from `selectedModelContract`, so a consumer can never be handed
  * a callable-looking model identity for a seat with no model.
  */
-export type SelectedModelContract = ReferenceModelContract | OwnedModelContract;
+/** Contract for the operator-selected open-weights harness mode.  Same
+ * invariants as REFERENCE_ONLY: never owned, no config hash, no capability. */
+export interface OpenWeightsModelContract {
+  seat: "OPEN_WEIGHTS";
+  modelName: string;
+  modelConfigSha256: null;
+  structuredOutputs: false;
+}
+
+export type SelectedModelContract = ReferenceModelContract | OpenWeightsModelContract | OwnedModelContract;
 
 export function resolveModelSeat(
   input: ModelSeatResolutionInput,
@@ -195,10 +215,28 @@ export function resolveModelSeat(
   const flagRequested = input.argv
     .slice(2)
     .some((argument) => argument === REFERENCE_SEAT_FLAG);
+  const openWeightsFlag = input.argv
+    .slice(2)
+    .some((argument) => argument === OPEN_WEIGHTS_FLAG);
   const sanitizedArgv = input.argv.filter(
-    (argument, index) => index < 2 || argument !== REFERENCE_SEAT_FLAG,
+    (argument, index) =>
+      index < 2 || (argument !== REFERENCE_SEAT_FLAG && argument !== OPEN_WEIGHTS_FLAG),
   );
   const envRequested = input.referenceSeatEnv === "1";
+
+  // Open-weights harness mode: an explicit operator choice (flag, env, or a
+  // models.json "seat") to work with a non-Ember model.  It never overrides
+  // an explicit --reference-seat request, which keeps its parity semantics.
+  if (!flagRequested && !envRequested &&
+      (openWeightsFlag || input.openWeightsEnv === "1" || input.openWeightsConfig === true)) {
+    return {
+      allowed: true,
+      seat: "OPEN_WEIGHTS",
+      source: openWeightsFlag ? "flag" : input.openWeightsEnv === "1" ? "env" : "config",
+      argv: sanitizedArgv,
+      referenceModelName: input.referenceModelName,
+    };
+  }
 
   if (flagRequested || envRequested) {
     return {
@@ -275,6 +313,13 @@ export function resolveModelSeat(
   };
 }
 
+export function openWeightsModelName(modelName: string | undefined): string {
+  const subject = modelName?.trim() || "unidentified-model";
+  return subject.startsWith("OPEN_WEIGHTS: ")
+    ? subject
+    : "OPEN_WEIGHTS: " + subject;
+}
+
 export function referenceSeatModelName(modelName: string | undefined): string {
   const subject = modelName?.trim() || "unidentified-model";
   return subject.startsWith("REFERENCE_ONLY: ")
@@ -310,6 +355,15 @@ export function selectedModelContract(
     return {
       seat: "REFERENCE_ONLY",
       modelName: referenceSeatModelName(decision.referenceModelName),
+      modelConfigSha256: null,
+      structuredOutputs: false,
+    };
+  }
+
+  if (decision.seat === "OPEN_WEIGHTS") {
+    return {
+      seat: "OPEN_WEIGHTS",
+      modelName: openWeightsModelName(decision.referenceModelName),
       modelConfigSha256: null,
       structuredOutputs: false,
     };

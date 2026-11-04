@@ -17,4 +17,6 @@ export interface LogOption {
   isLite: boolean;
   sessionId: string;
   projectPath: string;
+  /** One-line notice from loading the full log (e.g. unreadable lines that were skipped). */
+  notice?: string;
 }

@@ -8,6 +8,7 @@
 import { AskUserQuestionTool } from "./ask-user-question.ts";
 import { bashTool } from "./bash-tool.ts";
 import { SendUserMessageTool } from "./brief-tool.ts";
+import { computerTool } from "./computer-use.ts";
 import { editTool } from "./file-edit.ts";
 import { readTool } from "./file-read.ts";
 import { writeTool } from "./file-write.ts";
@@ -21,6 +22,9 @@ import { EnterWorktreeTool, ExitWorktreeTool } from "./worktree-tools.ts";
 import { RemoteTriggerTool } from "./remote-trigger.ts";
 import { GOAL_TOOLS } from "./goal-tools.ts";
 import { GITHUB_TOOLS } from "./github-tools.ts";
+import { AgentTool } from "./agent-tool.ts";
+import { SkillTool } from "./skill-registration.ts";
+import { WEB_TOOLS } from "./web-registry.ts";
 
 // Registry of all built-in tools, in bundle-defined order
 export const BUILTIN_TOOLS = [
@@ -32,6 +36,7 @@ export const BUILTIN_TOOLS = [
   grepTool,
   notebookEditTool,
   powerShellTool,
+  computerTool,
   AskUserQuestionTool,
   EnterPlanModeTool,
   ExitPlanModeTool,
@@ -43,6 +48,9 @@ export const BUILTIN_TOOLS = [
   ExitWorktreeTool,
   SendUserMessageTool,
   RemoteTriggerTool,
+  AgentTool,
+  SkillTool,
   ...GOAL_TOOLS,
   ...GITHUB_TOOLS,
+  ...WEB_TOOLS,
 ];

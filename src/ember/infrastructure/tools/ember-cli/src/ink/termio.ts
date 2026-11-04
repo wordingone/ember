@@ -68,10 +68,33 @@ export interface SgrMouseDecodeResult {
 export interface SgrMouseDecoder {
   push(chunk: string | Buffer): SgrMouseDecodeResult;
   reset(): void;
+  /** True while the front of a mouse report is held, waiting for the rest of it. */
+  hasPending(): boolean;
+  /**
+   * Drops a held partial report that never completed, so it cannot swallow or be typed in front
+   * of the next keystrokes. If the rest of it turns up late, that remainder is dropped too.
+   */
+  discardPending(): void;
+  /**
+   * The caller delivered a lone ESC as an Escape keypress. If it was really the first byte of a
+   * mouse report and the rest follows late, the remainder is dropped instead of typed.
+   */
+  noteOrphanedEscape(): void;
 }
 
 const SGR_MOUSE_PREFIX = "\x1b[<";
 const SGR_MOUSE_SEQUENCE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
+// The front of a report that has digits but never became a complete one ("\x1b[<35;10;5" cut off,
+// or "\x1b[<35;10M" with a field missing). Dropped, never typed. "\x1b[<x..." has no digits and
+// stays keyboard passthrough.
+const SGR_MOUSE_TRUNCATED = /^\x1b\[<[\d;]*\d[\d;]*[Mm]?/;
+
+/** How long after an orphaned report front the rest of it is still recognised and dropped. */
+const MOUSE_REMNANT_WINDOW_MS = 250;
+// What the rest of a report looks like, by how much of it was already dropped.
+const REMNANT_AFTER_ESC = /^\[<[\d;]*[Mm]?/;
+const REMNANT_AFTER_ESC_BRACKET = /^<[\d;]*[Mm]?/;
+const REMNANT_DIGITS = /^[\d;]*[Mm]?/;
 
 function retainedPrefixLength(value: string): number {
   const max = Math.min(value.length, SGR_MOUSE_PREFIX.length - 1);
@@ -88,10 +111,22 @@ function retainedPrefixLength(value: string): number {
  */
 export function createSgrMouseDecoder(): SgrMouseDecoder {
   let pending = "";
+  // Set when the front of a report was dropped (or delivered as Escape): what its tail should look like.
+  let orphan: { want: RegExp; since: number } | null = null;
 
   return {
     push(chunk: string | Buffer): SgrMouseDecodeResult {
-      pending += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      let text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      if (orphan !== null && pending === "") {
+        const m = Date.now() - orphan.since <= MOUSE_REMNANT_WINDOW_MS ? orphan.want.exec(text) : null;
+        if (m !== null && m[0].length > 0) {
+          text = text.slice(m[0].length);
+          orphan = /[Mm]$/.test(m[0]) ? null : { want: REMNANT_DIGITS, since: Date.now() };
+        } else {
+          orphan = null;
+        }
+      }
+      pending += text;
       const events: SgrMouseEvent[] = [];
       let passthrough = "";
       let cursor = 0;
@@ -113,6 +148,12 @@ export function createSgrMouseDecoder(): SgrMouseDecoder {
           if (/^\x1b\[<[\d;]*$/.test(candidate)) {
             pending = candidate;
             return { events, passthrough };
+          }
+          const truncated = SGR_MOUSE_TRUNCATED.exec(candidate);
+          if (truncated) {
+            // A report that stopped short and was followed by something else: drop what there is of it.
+            cursor = start + truncated[0].length;
+            continue;
           }
           passthrough += pending[start]!;
           cursor = start + 1;
@@ -154,6 +195,20 @@ export function createSgrMouseDecoder(): SgrMouseDecoder {
     },
     reset(): void {
       pending = "";
+      orphan = null;
+    },
+    hasPending(): boolean {
+      return pending !== "";
+    },
+    discardPending(): void {
+      const held = pending;
+      pending = "";
+      if (held === "\x1b") orphan = { want: REMNANT_AFTER_ESC, since: Date.now() };
+      else if (held === "\x1b[") orphan = { want: REMNANT_AFTER_ESC_BRACKET, since: Date.now() };
+      else if (held.startsWith(SGR_MOUSE_PREFIX)) orphan = { want: REMNANT_DIGITS, since: Date.now() };
+    },
+    noteOrphanedEscape(): void {
+      orphan = { want: REMNANT_AFTER_ESC, since: Date.now() };
     },
   };
 }

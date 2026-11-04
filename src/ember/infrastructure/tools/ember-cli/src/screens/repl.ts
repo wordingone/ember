@@ -7,6 +7,8 @@
 // and builtin-tools (loaded lazily on first user submission).
 // Bundle: screens/repl.ts (line 322314)
 
+import { applyInterrupt } from "./interrupt-transcript.ts";
+import { createSessionAppState } from "../core/session-app-state.ts";
 import React, {
   useState,
   useRef,
@@ -16,11 +18,14 @@ import React, {
   useContext,
 } from "react";
 import { Box, Text, TerminalSizeContext } from "../ink/components.ts";
-import { useInput, useInterval } from "../ink/hooks.ts";
+import { requestFullRepaint, useInput, useInterval } from "../ink/hooks.ts";
 import {
   VirtualMessageList,
+  clampRowOffset,
   type SessionMessage,
 } from "../components/app-shell.ts";
+import { CLEAR_COMMAND_NAME } from "../commands/session-basics.ts";
+import { harnessWarn } from "../utils/harness-warn.ts";
 import {
   StatusLine,
   type PermissionModeState,
@@ -32,6 +37,8 @@ import {
   PromptInput,
   usePromptInput,
   parseInputMode,
+  cursorLineMove,
+  MAX_INPUT_CHARS,
   type PromptInputState,
   type PermissionMode as PromptPermissionMode,
 } from "../components/prompt-input.ts";
@@ -54,6 +61,8 @@ import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
   UserTextMessage,
+  ToolCallMessage,
+  summarizeToolInput,
   AssistantTextMessage,
   AssistantToolUseMessage,
   SystemAPIErrorMessage,
@@ -70,8 +79,12 @@ import {
 import {
   SpinnerAnimationRow,
   ANIMATION_LOOP_MS,
+  pickSpinnerActivity,
+  type ActiveToolCall,
 }                                        from "../components/spinner.ts";
+import { onToolProgress }                from "../core/tool-progress.ts";
 import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../core/query-engine.ts";
+import type { MessageChange } from "../services/session-store.ts";
 import type { PermissionBehavior, Tool } from "../core/tool-interface.ts";
 import {
   getDiagnostics,
@@ -80,6 +93,7 @@ import {
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
 import { telemetryMemoKey }              from "../services/telemetry-label.ts";
+import { getEffortLevel }                from "../services/effort-level.ts";
 import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
 import {
   OPERATOR_CONTROL_ACTIONS,
@@ -113,7 +127,23 @@ import {
   tryDispatchSlashCommandSafely,
   parseSlashInput,
 } from "../services/slash-dispatch.ts";
-import { consumePostCompaction } from "../session-state.ts";
+import { consumePostCompactionDetail } from "../session-state.ts";
+import { loadStandingCompactInstructions } from "../services/compact-instructions.ts";
+import { setSessionControl } from "../services/session-control.ts";
+import { SessionWriter, sessionsDirFor } from "../services/session-store.ts";
+import { engineMessagesToTranscript } from "../services/session-transcript.ts";
+import { loadFullSessionLog, recentSessionLogs, type ResumeInit } from "../services/session-resume.ts";
+import { resetResumeDeps, setResumeDeps } from "../resume.ts";
+import { contextNoticeLine, systemPromptWithContext } from "../services/project-context.ts";
+import {
+  awaitExtensionsReady,
+  bindExtensionTools,
+  getExtensions,
+  onExtensionNotice,
+} from "../extensions/runtime.ts";
+import { setHookWarningSink } from "../extensions/hooks.ts";
+import { SchedulerTicker } from "../extensions/scheduler.ts";
+import { applyUserPromptSubmitHooks, runStopHooks, stopLoopsOnEscape } from "../extensions/repl-seam.ts";
 import { OperatorInjector } from "../services/operator-input.ts";
 import { startOperatorPipe } from "../services/operator-pipe.ts";
 import {
@@ -175,6 +205,7 @@ import {
 import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
 import type { ModelSeatState } from "../entrypoints/model-seat.ts";
 import { getModelSeatState } from "../entrypoints/session-init.ts";
+import { buildApprovalDetail } from "./approval-preview.ts";
 
 // ---------------------------------------------------------------------------
 // Constants (spec — preserve exactly)
@@ -201,9 +232,14 @@ export const ANALYTICS_SESSION_END      = "ember_repl_session_end";
  *  both so a single missed tick never flaps the status between active/recovered. */
 export const POLL_FAILURE_RECOVERY_MS = 20_000;
 
-/** Width budget for the in-window provenance/agent pane. */
+/** Below this many columns the provenance/agent pane is not drawn at all (#2381 U-50x16): at
+ *  50 columns it took half the screen and left the conversation 25 cells. */
+export const OPERATOR_SURFACE_MIN_COLUMNS = 60;
+
+/** Width budget for the in-window provenance/agent pane; 0 means the pane is hidden. */
 export function operatorSurfaceWidth(terminalColumns: number): number {
   if (!Number.isFinite(terminalColumns) || terminalColumns <= 0) return 28;
+  if (terminalColumns < OPERATOR_SURFACE_MIN_COLUMNS) return 0;
   const minTranscript = Math.min(20, Math.max(10, Math.floor(terminalColumns * 0.5)));
   const minPane = Math.min(28, Math.max(10, Math.floor(terminalColumns * 0.5)));
   const preferred = Math.floor(terminalColumns * 0.42);
@@ -265,6 +301,17 @@ export interface ReplScreenProps {
   onExit?:         () => void;
   /** Existing model-seat authority's live lifecycle projection. */
   modelSeat?:      ModelSeatState;
+  /** A recorded session to continue (`ember --continue` / `--resume`); absent starts fresh. */
+  resume?:         ResumeInit;
+}
+
+/** Transcript rows for a launch that continues (or tried to continue) a recorded session. */
+export function initialResumeTranscript(resume: ResumeInit | undefined): SessionMessage[] {
+  if (!resume) return [];
+  return [
+    ...engineMessagesToTranscript(resume.messages),
+    ...resume.notices.map((content) => ({ id: crypto.randomUUID(), type: "assistant", content })),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +371,29 @@ export function cycleReplPermissionMode(current: ReplPermissionMode): ReplPermis
 }
 
 /** Session-level authority applied after each tool has produced its own permission verdict. */
+/** One-line description of a tool call for the approval prompt. */
+export function describeToolCallForApproval(toolName: string, input: unknown): string {
+  const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const pick = ["command", "file_path", "path", "url", "pattern", "action", "description"]
+    .map((k) => (typeof o[k] === "string" ? `${k}=${o[k] as string}` : null))
+    .filter((x): x is string => x !== null);
+  let text = pick.length > 0 ? pick.join("  ") : JSON.stringify(input) ?? "";
+  text = text.replace(/\s+/g, " ");
+  return `${toolName}: ${text.length > 180 ? text.slice(0, 177) + "..." : text}`;
+}
+
+export type ApprovalDecision = "yes" | "always" | "no";
+
+/** Maps an approval keypress to a decision, or null when the key means nothing here. */
+export function approvalKeyDecision(input: string, key: { escape?: boolean; return?: boolean }): ApprovalDecision | null {
+  if (key.escape) return "no";
+  const c = input.toLowerCase();
+  if (c === "y" || key.return) return "yes";
+  if (c === "a") return "always";
+  if (c === "n") return "no";
+  return null;
+}
+
 export function authorizeReplTool(
   mode: ReplPermissionMode,
   tool: Tool<any, any>,
@@ -447,6 +517,24 @@ export function extractShellCommand(text: string): string {
   return parsed.mode === "bash" ? parsed.value : text;
 }
 
+/** Prompt history navigation. `index` is null while editing a fresh draft.
+ * Returns the text to show and the new index; null text means "no change". */
+export function historyStep(
+  history: readonly string[],
+  index: number | null,
+  dir: -1 | 1,
+  draft: string,
+): { index: number | null; text: string | null } {
+  if (history.length === 0) return { index, text: null };
+  if (dir === -1) {
+    const next = index === null ? history.length - 1 : Math.max(0, index - 1);
+    return { index: next, text: history[next]! };
+  }
+  if (index === null) return { index: null, text: null };
+  if (index + 1 >= history.length) return { index: null, text: draft };
+  return { index: index + 1, text: history[index + 1]! };
+}
+
 export function toggleTaskPanel(current: boolean): boolean {
   return !current;
 }
@@ -468,6 +556,8 @@ export function renderMsgDispatch(
    *  real commands. Omitted -> the block renders every spine function BLOCKED, which is honest but
    *  useless; both call sites pass it. */
   spineCommands?: readonly RegistryCommand[] | null,
+  /** Ctrl+O: show long replies in full instead of their first screenful. */
+  expanded: boolean = false,
 ): React.ReactElement {
   switch (msg.type) {
     case "welcome":
@@ -497,6 +587,16 @@ export function renderMsgDispatch(
       return React.createElement(AssistantTextMessage, {
         key:  msg.id,
         text: String(msg["content"] ?? ""),
+        isExpanded: expanded,
+        width: viewportWidth,
+      });
+
+    case "tool_call":
+      return React.createElement(ToolCallMessage, {
+        key:     msg.id,
+        name:    String(msg["toolName"] ?? ""),
+        summary: String(msg["summary"] ?? ""),
+        status:  msg["status"] as "running" | "done" | "error" | "interrupted" | undefined,
       });
 
     case "tool_use":
@@ -514,7 +614,7 @@ export function renderMsgDispatch(
         content:     String(msg["content"]     ?? ""),
         is_error:    msg["is_error"] === true,
       };
-      return React.createElement(UserToolResultMessage, { key: msg.id, result });
+      return React.createElement(UserToolResultMessage, { key: msg.id, result, isExpanded: expanded });
     }
 
     case "error":
@@ -546,10 +646,13 @@ export function renderMsgDispatch(
 
     case "compaction": {
       const elapsed = msg["elapsedSecs"];
+      const before  = msg["tokensBefore"];
+      const after   = msg["tokensAfter"];
       return React.createElement(CompactionProgressMessage, {
         key:         msg.id,
         isComplete:  msg["isComplete"] === true,
         ...(typeof elapsed === "number" ? { elapsedSecs: elapsed } : {}),
+        ...(typeof before === "number" && typeof after === "number" ? { tokensBefore: before, tokensAfter: after } : {}),
       });
     }
 
@@ -639,6 +742,19 @@ export function applyResultEvent(
   // success / error_max_tokens: content already arrived via the preceding
   // "assistant" event -- this seam only threads stop_reason/usage metadata
   // onto the pending message, never rewriting content that's already there.
+  // A turn that ends with no visible answer (the model spent it all on hidden reasoning) used to
+  // leave the screen frozen with nothing to say why (blind test S26).
+  const pending = messages.find((m) => m.id === pendingId);
+  if (pending && String(pending["content"] ?? "").trim() === "" && !extractFinalText(finalMessage)) {
+    return [
+      ...messages.filter((m) => m.id !== pendingId),
+      {
+        id: crypto.randomUUID(),
+        type: "error",
+        content: "The model finished without writing an answer (it returned only hidden reasoning). Ask again, or ask for a shorter answer.",
+      },
+    ];
+  }
   if (!finalMessage) return messages;
   return messages.map((m) =>
     m.id === pendingId
@@ -726,6 +842,7 @@ export function ReplScreen({
   operatorReceiptWriter,
   onExit:         _onExit,
   modelSeat,
+  resume,
 }: ReplScreenProps): React.ReactElement {
   const { rows: terminalRows, columns: terminalCols } = useContext(TerminalSizeContext);
   // Hoisted because the homescreen, prompt, and palette below all consume the same conversation
@@ -740,7 +857,7 @@ export function ReplScreen({
     const next = getModelSeatState();
     setLiveModelSeat((current) => current && current.phase === next.phase &&
       current.owner === next.owner && current.endpoint === next.endpoint &&
-      current.vramBytes === next.vramBytes ? current : next);
+      current.vramBytes === next.vramBytes && current.note === next.note ? current : next);
   }, 250);
 
   // #924: the operator surface's source-provenance contract (#921) requires
@@ -840,6 +957,17 @@ export function ReplScreen({
   const [taskPanelVisible, setTaskPanelVisible] = useState(false);
   const [tasks]                                 = useState<Task[]>([]);
   const [permQueue,        setPermQueue]        = useState<PermissionQueueItem[]>([]);
+  // Interactive approval (regular mode): a tool call the mode does not allow outright
+  // waits here for y / a / n instead of being refused with no way to say yes.
+  const [pendingApproval, setPendingApproval] = useState<{
+    summary: string;
+    /** Why the tool asks (for example: the path is outside the working directory). */
+    message?: string;
+    /** Preview lines: what a Write or Edit would change (blind test FO-7). */
+    detail?: string[];
+    resolve: (d: ApprovalDecision) => void;
+  } | null>(null);
+  const sessionApprovedToolsRef = useRef<Set<string>>(new Set());
   const [idleReturn,       setIdleReturn]       = useState(false);
   const [idleTaskCount,    setIdleTaskCount]    = useState(0);
   const [costThreshold,    setCostThreshold]    = useState(false);
@@ -850,7 +978,10 @@ export function ReplScreen({
   // turns or activity events landed it silently scrolled away (the operator's "banner scrolled
   // away" report). It is now an always-mounted, top-locked region (see the render tree below),
   // rendered directly from `config`/`cwd`/`boardSummary`/`dataRoot` -- `messages` starts empty.
-  const [messages, setMessages] = useState<SessionMessage[]>([]);
+  const [messages, setMessages] = useState<SessionMessage[]>(() => initialResumeTranscript(resume));
+  // #2374: the last "Loaded ..." line shown, so the notice appears when the engine first starts
+  // and again only if the set of loaded files changes (not at launch: the cockpit layout is fixed).
+  const contextLineRef = useRef<string | null>(null);
 
   // #50 round-3 repair: the exact post-applyResultEvent transcript for the
   // in-flight turn, threaded through a DEDICATED React state slot rather than
@@ -868,6 +999,14 @@ export function ReplScreen({
   const mountRef  = useRef(Date.now());
   const engineRef = useRef<QueryEngine | null>(null);
   const abortRef  = useRef<AbortController | null>(null);
+  // Ctrl+O toggles full-length rendering of long replies.
+  const [expandAll, setExpandAll] = useState(false);
+  // PageUp/PageDown: rows the transcript is scrolled up from the bottom.
+  const [transcriptRowOffset, setTranscriptRowOffset] = useState(0);
+  // Up/Down recall of submitted prompts (this session only).
+  const promptHistoryRef = useRef<string[]>([]);
+  const historyIndexRef  = useRef<number | null>(null);
+  const historyDraftRef  = useRef("");
 
   // Prompt-suggestion state — dimmed ghost text rendered after cursor; Tab accepts it.
   const [currentSuggestion, setCurrentSuggestion] = useState<string | null>(null);
@@ -877,6 +1016,11 @@ export function ReplScreen({
   const messagesRef  = useRef<SessionMessage[]>([]);
   // Stable per-session id for the slash-command CommandContext.
   const sessionIdRef = useRef<string>(sessionId?.trim() || crypto.randomUUID());
+  // #2373: the recorded conversation this screen appends to (its own id unless continuing one),
+  // its writer (made on the first message), and the history the next engine starts from.
+  const conversationIdRef = useRef<string>(resume?.sessionId ?? sessionIdRef.current);
+  const sessionWriterRef  = useRef<SessionWriter | null>(null);
+  const pendingHistoryRef = useRef<unknown[] | null>(resume && resume.messages.length > 0 ? resume.messages : null);
 
   // Operator input channel (ember #165 / #154) — a local named pipe the operator
   // writes prompts to alongside the keyboard. submitPromptRef always holds the
@@ -991,10 +1135,11 @@ export function ReplScreen({
       });
       supervisor.start();
     } catch (error) {
-      pollFailureStatusRef.current?.report(
-        "memory-footprint:inert",
-        `[memory-footprint] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const inertMessage = `[memory-footprint] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`;
+      // Open-weights seats have no Ember checkout for this supervisor to watch:
+      // log it once instead of pinning a warning inside the prompt box.
+      if (process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1") harnessWarn(inertMessage);
+      else pollFailureStatusRef.current?.report("memory-footprint:inert", inertMessage);
     }
     return () => supervisor?.stop();
   }, []);
@@ -1037,10 +1182,11 @@ export function ReplScreen({
       });
       topologyService.start();
     } catch (error) {
-      pollFailureStatusRef.current?.report(
-        "serving-topology:inert",
-        `[serving-topology] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const inertMessage = `[serving-topology] supervisor is inert: ${error instanceof Error ? error.message : String(error)}`;
+      // Open-weights seats have no Ember checkout for this supervisor to watch:
+      // log it once instead of pinning a warning inside the prompt box.
+      if (process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1") harnessWarn(inertMessage);
+      else pollFailureStatusRef.current?.report("serving-topology:inert", inertMessage);
     }
     return () => topologyService?.stop();
   }, []);
@@ -1049,6 +1195,23 @@ export function ReplScreen({
   const busyRef                             = useRef(false);
   const [spinnerElapsed, setSpinnerElapsed] = useState(0);
   const spinnerStartRef                     = useRef(0);
+  // Tool calls the query loop is executing right now, so the spinner can name them (blind test
+  // S24). Read on every spinner tick; the map is the whole state, nothing here re-renders by itself.
+  const activeToolsRef                      = useRef(new Map<string, ActiveToolCall>());
+  const approvalSinceRef                    = useRef(0);
+  useEffect(() => onToolProgress((event) => {
+    const active = activeToolsRef.current;
+    if (event.kind === "start") {
+      active.set(event.toolUseId, {
+        toolName: event.toolName, summary: summarizeToolInput(event.input), startedAt: event.startedAt, tail: "",
+      });
+    } else if (event.kind === "output") {
+      const call = active.get(event.toolUseId);
+      if (call) call.tail = event.tail;
+    } else {
+      active.delete(event.toolUseId);
+    }
+  }), []);
 
   // issue #283: an Enter pressed while busy must PREEMPT once idle, never be
   // silently dropped -- the "user always preempts" goal-mode contract. Queue
@@ -1237,6 +1400,45 @@ export function ReplScreen({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // /resume (#2373): list this directory's recorded sessions and switch the screen to one. The
+  // switch drops the engine; the next turn builds a new one from the restored messages.
+  useEffect(() => {
+    setResumeDeps({
+      getSessions: async () => recentSessionLogs(cwd).filter((s) => s.sessionId !== conversationIdRef.current),
+      openPicker: undefined,
+      loadFullLog: async (log) => loadFullSessionLog(log),
+      onResume: async (id, log) => {
+        engineRef.current = null;
+        pendingHistoryRef.current = log.messages.length > 0 ? log.messages : null;
+        conversationIdRef.current = id;
+        sessionWriterRef.current = null;
+        setTranscriptRowOffset(0);
+        setCurrentSuggestion(null);
+        setMessages(engineMessagesToTranscript(log.messages));
+        return {
+          type: "message" as const,
+          message: [`Resumed session ${id.slice(0, 8)} (${log.messages.length} messages).`, log.notice]
+            .filter((line): line is string => typeof line === "string" && line !== "")
+            .join("\n"),
+        };
+      },
+    });
+    return () => resetResumeDeps();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // /compact reaches the live engine through the session-control seam (slash commands cannot
+  // see the REPL's refs). Registered for the lifetime of the screen.
+  useEffect(() => {
+    setSessionControl({
+      compact: async (instructions) => {
+        const engine = engineRef.current;
+        if (!engine) return { status: "skipped", reason: "no-conversation" };
+        return engine.compact(instructions);
+      },
+    });
+    return () => setSessionControl(null);
+  }, []);
+
   // #303: Load board summary on mount. EMBER_GOALFORGE_ROOT must be set to point at the
   // live tree (not cwd-relative, to avoid reading stale data from a deployment copy).
   useEffect(() => {
@@ -1340,7 +1542,7 @@ export function ReplScreen({
     [],
   );
   // Status-bar prop shapes
-  const sbMode: "bypass" | "regular"   = permMode === "bypass" ? "bypass" : "regular";
+  const sbMode: "bypass" | "regular" | "plan" = permMode === "bypass" ? "bypass" : permMode === "plan" ? "plan" : "regular";
   const permModeState: PermissionModeState = { mode: sbMode, cycle: handlePermCycle };
   const taskPanelState: TaskPanelState     = {
     visible: taskPanelVisible,
@@ -1372,8 +1574,8 @@ export function ReplScreen({
   // Render dispatch (memoised per lookups + viewport width)
   const renderMessage = useCallback(
     (msg: SessionMessage) =>
-      renderMsgDispatch(msg, lookups as MessageLookups, terminalCols, slashCommands),
-    [lookups, terminalCols, slashCommands],
+      renderMsgDispatch(msg, lookups as MessageLookups, mainColumnWidth, slashCommands, expandAll),
+    [lookups, mainColumnWidth, slashCommands, expandAll],
   );
 
   // Transcript region
@@ -1383,6 +1585,8 @@ export function ReplScreen({
         messages,
         renderMessage,
         viewportRows: transcriptViewportRows,
+        rowOffset:    transcriptRowOffset,
+        width:        mainColumnWidth,
       })
     : React.createElement(
         Box,
@@ -1414,7 +1618,7 @@ export function ReplScreen({
   // keypress to every active handler and a handler returning does not stop propagation, so while
   // the pane holds focus this hook must be switched OFF rather than merely out-competed.
   const [inputState, inputActions] = usePromptInput({
-    keyboardActive: !paneFocused,
+    keyboardActive: !paneFocused && !pendingApproval,
     permissionMode: permMode,
     onPermissionModeCycle: handlePermCycle,
   });
@@ -1618,6 +1822,41 @@ export function ReplScreen({
     return () => handle.stop();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Extension layer (MCP servers, plugins, hooks, scheduled prompts). Startup problems and hook
+  // warnings surface as transcript notices and never block the session; a late-connecting MCP
+  // server refreshes the slash menu; the ticker fires cron / /loop prompts only while idle.
+  const stopHookActiveRef = useRef(false);
+  useEffect(() => {
+    const note = (m: string): void => {
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), type: "error", content: `[extensions] ${m}` }]);
+    };
+    const offNotice = onExtensionNotice(note);
+    setHookWarningSink(note);
+    const offChange = getExtensions()?.mcp.onChange(() => {
+      void getCommands(cwd).then(setSlashCommands).catch(() => {});
+    });
+    const ticker = new SchedulerTicker({
+      isIdle: () =>
+        !busyRef.current &&
+        inputStateRef.current.text.length === 0 &&
+        (operatorInjectorRef.current?.queueLength ?? 0) === 0,
+      fire: (due) => {
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), type: "assistant", content: `(scheduled prompt: ${due.source === "loop" ? "loop" : due.id})` },
+        ]);
+        void submitPromptRef.current(due.prompt, "operator");
+      },
+    });
+    ticker.start();
+    return () => {
+      ticker.stop();
+      offNotice();
+      offChange?.();
+      setHookWarningSink(null);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Submits `text` exactly as Enter would — shared by the keyboard Enter-key
   // handler below and the operator-pipe injector (ember #165). `origin` tags
   // the echoed transcript row so a human watching the window can tell who
@@ -1671,7 +1910,38 @@ export function ReplScreen({
       mode:      String(permMode),
       cwd,
     });
-    if (slashResult !== null) {
+    if (slashResult !== null && slashParsed?.name === CLEAR_COMMAND_NAME) {
+      // /clear: keep the welcome card, drop the transcript, and start a fresh
+      // engine so the model's history is gone too (it is rebuilt lazily below).
+      engineRef.current = null;
+      // The cleared conversation is a new recorded session; the old file stays as it was.
+      conversationIdRef.current = crypto.randomUUID();
+      sessionWriterRef.current  = null;
+      pendingHistoryRef.current = null;
+      setTranscriptRowOffset(0);
+      setCurrentSuggestion(null);
+      setMessages((prev) => [
+        ...prev.filter((m) => m.type === "welcome"),
+        { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
+      ]);
+      // #2380 S41: the transcript just shrank to a card; paint the next frame from scratch so
+      // nothing of the old one survives under it.
+      requestFullRepaint(false);
+      busyRef.current = false;
+      setBusy(false);
+      return;
+    }
+    // A prompt-type command (skill, plugin command, MCP prompt, /loop) carries the text for a
+    // model turn: show its notice, then fall through to the engine with that text.
+    let modelText = text;
+    if (slashResult !== null && slashResult.prompt !== undefined) {
+      if (slashResult.message) {
+        const notice = slashResult.message;
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), type: "assistant", content: notice }]);
+      }
+      modelText = slashResult.prompt;
+    }
+    if (slashResult !== null && slashResult.prompt === undefined) {
       setMessages((prev) => [
         ...prev,
         { id: crypto.randomUUID(), type: "assistant", content: slashResult.message },
@@ -1694,6 +1964,20 @@ export function ReplScreen({
       return;
     }
 
+    // UserPromptSubmit hooks (settings "hooks"): exit code 2 blocks the prompt before any model call.
+    const promptHook = await applyUserPromptSubmitHooks(modelText);
+    if (promptHook.blocked) {
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: "error", content: `Prompt blocked by a UserPromptSubmit hook: ${promptHook.reason ?? "no reason given"}` },
+      ]);
+      busyRef.current = false;
+      setBusy(false);
+      pokeGoalContinuationRef.current?.();
+      return;
+    }
+    modelText = promptHook.prompt;
+
     // Lazy-init the QueryEngine on first submission
     if (!engineRef.current) {
       try {
@@ -1701,29 +1985,72 @@ export function ReplScreen({
           import("../entrypoints/session-init.ts"),
           import("../tools/builtin-tools.ts"),
         ]);
+        // MCP servers started at session start; give them a moment so the first turn already
+        // sees their tools (a slower server joins the live tool list on a later turn).
+        await awaitExtensionsReady(5000);
 
         const deps      = siMod.getLoopDeps();
+        // #2374: EMBER.md / AGENTS.md / CLAUDE.md and the memory index, re-read for each new engine
+        // (first turn, /clear, /resume).
+        const { prompt: enginePrompt, context: projectCtx } = systemPromptWithContext(systemPromptRef.current, { cwd });
+        const ctxLine    = contextNoticeLine(projectCtx);
+        if (ctxLine !== contextLineRef.current) {
+          contextLineRef.current = ctxLine;
+          if (ctxLine) setMessages((prev) => [...prev, { id: crypto.randomUUID(), type: "assistant", content: ctxLine }]);
+        }
         callModelRef.current = deps.callModel;
+        const sessionAppState = createSessionAppState(cwd);
         const engineCfg = {
           cwd,
-          tools:              btMod.BUILTIN_TOOLS as unknown as Tool[],
+          tools:              bindExtensionTools(btMod.BUILTIN_TOOLS as unknown as Tool[]),
           commands:           [] as unknown[],
           mcpClients:         {} as Record<string, unknown>,
           agents:             {} as Record<string, unknown>,
-          canUseTool:         async (tool: Tool, input: unknown, behavior: PermissionBehavior) =>
-            authorizeReplTool(permModeRef.current, tool, input, behavior),
+          canUseTool:         async (tool: Tool, input: unknown, behavior: PermissionBehavior, message?: string) =>
+          {
+            if (authorizeReplTool(permModeRef.current, tool, input, behavior)) return true;
+            if (behavior === "deny" || permModeRef.current !== "regular") return false;
+            // "Always" covers a tool's routine calls; a call the tool itself flags ("ask": bulk
+            // delete, command substitution) is asked about every time (blind test S31).
+            if (behavior !== "ask" && sessionApprovedToolsRef.current.has(tool.name)) return true;
+            const detail = await buildApprovalDetail(tool.name, input, cwd);
+            const decision = await new Promise<ApprovalDecision>((resolveDecision) => {
+              approvalSinceRef.current = Date.now();
+              setPendingApproval({ summary: describeToolCallForApproval(tool.name, input), message, detail, resolve: resolveDecision });
+            });
+            setPendingApproval(null);
+            if (decision === "always" && behavior !== "ask") sessionApprovedToolsRef.current.add(tool.name);
+            return decision !== "no";
+          },
           // #182: ExitPlanMode/EnterWorktree/ExitWorktree read state["cwd"] as
           // a fallback path to the resolved root; keep it consistent with the
           // same `cwd` this config already threads via ToolUseContext.cwd.
-          getAppState:        () => ({ cwd } as Record<string, unknown>),
-          setAppState:        async () => {},
+          getAppState:        sessionAppState.get,
+          setAppState:        async (updater: (prev: unknown) => unknown) => { sessionAppState.set(updater); },
           readFileCache:      new Map<string, unknown>(),
           // #157: size tool-result truncation off the server's real n_ctx
           // (siMod probed it during init via /props), not a guessed default.
           // #197: conversationMaxChars (same call) bounds the whole assembled
           // conversation, not just one result.
           toolResultBudget:   siMod.getToolResultBudget(),
-          customSystemPrompt: systemPromptRef.current,
+          customSystemPrompt: enginePrompt,
+          // #2372: settings `compactInstructions` and "Compact Instructions" sections of
+          // EMBER.md / AGENTS.md / CLAUDE.md, re-read at each compaction.
+          compactInstructions: () => loadStandingCompactInstructions({ cwd }),
+          // #2373: continue a resumed conversation, and record every change to the log.
+          ...(pendingHistoryRef.current ? { initialMessages: pendingHistoryRef.current } : {}),
+          onMessagesChanged: (change: MessageChange) => {
+            if (!sessionWriterRef.current) {
+              sessionWriterRef.current = new SessionWriter({
+                dir: sessionsDirFor(cwd),
+                sessionId: conversationIdRef.current,
+                cwd,
+                onError: (content) =>
+                  setMessages((prev) => [...prev, { id: crypto.randomUUID(), type: "assistant", content }]),
+              });
+            }
+            sessionWriterRef.current.append(change);
+          },
           userSpecifiedModel: config.model,
           // #197: live retry-attempt status → the status-bar effort callout,
           // never a transcript message. Cleared on the next assistant/user/
@@ -1737,6 +2064,7 @@ export function ReplScreen({
           },
         };
         engineRef.current = new QueryEngine(engineCfg, deps);
+        pendingHistoryRef.current = null;
       } catch (err) {
         setMessages((prev) => [
           ...prev,
@@ -1769,9 +2097,13 @@ export function ReplScreen({
     // fallback dispatch below). Plain per-invocation flag, not read across
     // any React scheduling boundary -- safe.
     let sawResultEvent = false;
+    // The answer written after tool calls goes in a new message below their output, not back
+    // into the first placeholder above it (blind test S40: answer drawn above its tool output).
+    let currentId = assistantId;
+    let toolOutputSinceText = false;
 
     try {
-      for await (const ev of (engineRef.current as QueryEngine).submitMessage(text)) {
+      for await (const ev of (engineRef.current as QueryEngine).submitMessage(modelText, { abortSignal: abortCtrl.signal })) {
         if (abortCtrl.signal.aborted) break;
 
         const event = ev as QueryEvent;
@@ -1788,10 +2120,42 @@ export function ReplScreen({
                 .map((b) => b.text ?? "")
                 .join("")
             : String(raw ?? "");
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content } : m)),
-          );
+          if (toolOutputSinceText && content.trim() !== "") {
+            const nextId = crypto.randomUUID();
+            const prevId = currentId;
+            currentId = nextId;
+            toolOutputSinceText = false;
+            setMessages((prev) => [
+              ...prev.filter((m) => !(m.id === prevId && String(m["content"] ?? "").trim() === "")),
+              { id: nextId, type: "assistant", content },
+            ]);
+          } else {
+            const targetId = currentId;
+            setMessages((prev) =>
+              prev.map((m) => (m.id === targetId ? { ...m, content } : m)),
+            );
+          }
+          // One "● Tool(args)" line per tool call, in the order the model made them (operator
+          // 2026-11-03: a call and its output were not told apart from model text).
+          const calls = Array.isArray(raw)
+            ? (raw as Array<{ type?: string; id?: string; name?: string; input?: unknown }>)
+                .filter((b) => b.type === "tool_use" && typeof b.id === "string")
+            : [];
+          if (calls.length > 0) {
+            setMessages((prev) => {
+              const seen = new Set(prev.filter((m) => m.type === "tool_call").map((m) => String(m["toolUseId"])));
+              const fresh = calls.filter((c) => !seen.has(String(c.id)));
+              return fresh.length === 0 ? prev : [
+                ...prev,
+                ...fresh.map((c) => ({
+                  id: crypto.randomUUID(), type: "tool_call", toolUseId: String(c.id),
+                  toolName: String(c.name ?? "tool"), summary: summarizeToolInput(c.input), status: "running",
+                })),
+              ];
+            });
+          }
         } else if (event.type === "user") {
+          toolOutputSinceText = true;
           // #173: the engine's "user" event carries one ToolResultBlock per tool
           // invoked in the preceding assistant turn (parallel tool calls yield
           // several). Each block already has tool_use_id/content/is_error typed
@@ -1799,8 +2163,10 @@ export function ReplScreen({
           // behavior) dumped raw wire JSON into the transcript instead of routing
           // per-block through UserToolResultMessage's formatted card.
           const toolResultBlocks = event.message.toolUseResult ?? [];
+          const outcome = new Map(toolResultBlocks.map((b) => [String(b.tool_use_id), b.is_error === true ? "error" : "done"]));
           setMessages((prev) => [
-            ...prev,
+            ...prev.map((m) => (m.type === "tool_call" && outcome.has(String(m["toolUseId"]))
+              ? { ...m, status: outcome.get(String(m["toolUseId"])) } : m)),
             ...toolResultBlocks.map((block) => ({
               id:          crypto.randomUUID(),
               type:        "tool_result",
@@ -1824,7 +2190,7 @@ export function ReplScreen({
           sawResultEvent = true;
           const aborted = abortCtrl.signal.aborted;
           setMessages((prev) => {
-            const next = applyResultEvent(event, prev, assistantId);
+            const next = applyResultEvent(event, prev, currentId);
             if (!aborted) setCompletedTranscript(next);
             return next;
           });
@@ -1849,15 +2215,18 @@ export function ReplScreen({
       // user sees the conversation was compacted — closes the dead-feature
       // gap where the flag was set but never read and the progress
       // component was never mounted.
-      const compactedElapsed = consumePostCompaction();
-      if (compactedElapsed !== null) {
+      const compacted = consumePostCompactionDetail();
+      if (compacted !== null) {
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             type: "compaction",
             isComplete: true,
-            elapsedSecs: compactedElapsed,
+            elapsedSecs: compacted.elapsedSecs,
+            ...(compacted.tokensBefore !== undefined && compacted.tokensAfter !== undefined
+              ? { tokensBefore: compacted.tokensBefore, tokensAfter: compacted.tokensAfter }
+              : {}),
           },
         ]);
       }
@@ -1888,6 +2257,10 @@ export function ReplScreen({
         });
       }
     } finally {
+      // An interrupted turn says so instead of leaving an empty reply.
+      if (abortCtrl.signal.aborted) {
+        setMessages((prev) => applyInterrupt(prev, assistantId));
+      }
       abortRef.current = null;
       busyRef.current  = false;
       setBusy(false);
@@ -1905,6 +2278,18 @@ export function ReplScreen({
       // continues correctly via the outer call's own self-re-invocation once
       // its semaphore genuinely releases (core/goal-continuation-wiring.ts).
       pokeGoalContinuationRef.current?.();
+      // Stop hooks run after a turn that finished normally; exit code 2 makes the model continue
+      // once with the hook's stderr as the instruction.
+      if (sawResultEvent && !abortCtrl.signal.aborted) {
+        const wasActive = stopHookActiveRef.current;
+        stopHookActiveRef.current = false;
+        void runStopHooks(wasActive).then((r) => {
+          if (r.continueWith !== undefined && !busyRef.current) {
+            stopHookActiveRef.current = true;
+            void submitPromptRef.current(r.continueWith, "operator");
+          }
+        }).catch(() => {});
+      }
     }
   };
   submitPromptRef.current = submitPrompt;
@@ -1923,6 +2308,17 @@ export function ReplScreen({
 
   // Main keyboard handler
   useInput((input, key) => {
+    // Ctrl+L: clear the screen and paint every cell again (#2380 S41). First, so it works while
+    // an approval is open, the operator pane has focus, or the model is busy.
+    if (key.ctrl && input === "l") {
+      requestFullRepaint();
+      return;
+    }
+    if (pendingApproval) {
+      const decision = approvalKeyDecision(input, key);
+      if (decision) pendingApproval.resolve(decision);
+      return;
+    }
     // R2b -- ORDER INVARIANT (frozen spec): whether a text input has focus is decided FIRST,
     // before any accelerator/traversal dispatch is even considered. `paneFocused` IS that
     // decision (there is exactly one focus target in this app, so "operator surface focused"
@@ -1996,6 +2392,12 @@ export function ReplScreen({
         setDropdownSelIndex((i) => moveDropdownSelection(i, dropdownMatches.length, -1));
         return;
       }
+      if (key.tab && !key.shift) {
+        // Tab accepts the highlighted command into the prompt.
+        const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
+        if (chosen) inputActions.setText(completeSlashSelection(chosen));
+        return;
+      }
       if (key.return) {
         const chosen = dropdownDisplay.visible[dropdownDisplay.selectedIndex];
         if (!chosen) return;
@@ -2003,10 +2405,56 @@ export function ReplScreen({
         const exactCommand = findCommand(slashQueryFrom(liveCommand), dropdownMatches);
         const isExactArgumentFreeCommand = exactCommand !== undefined && !exactCommand.argumentHint;
         if (!isExactArgumentFreeCommand) {
-          inputActions.setText(completeSlashSelection(chosen));
-          return;
+          if (chosen.argumentHint || exactCommand !== undefined) {
+            // Needs arguments: complete it and let the user type them.
+            inputActions.setText(completeSlashSelection(chosen));
+            return;
+          }
+          // A partial name ("/clea") of a command that takes no arguments: run it.
+          inputActions.setText(`/${chosen.name}`);
         }
       }
+    }
+
+    // Esc during a model call interrupts it (same path as Ctrl+C).
+    if (key.escape) {
+      // Esc also stops every /loop (even while idle between runs).
+      const loopNotice = stopLoopsOnEscape();
+      if (loopNotice !== null) {
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), type: "assistant", content: loopNotice }]);
+      }
+      if (busyRef.current) abortRef.current?.abort();
+      if (busyRef.current || loopNotice !== null) return;
+    }
+    if (key.ctrl && input === "o") {
+      setExpandAll((v) => !v);
+      return;
+    }
+    if (key.pageUp || key.pageDown) {
+      const page = Math.max(1, terminalRows - 8);
+      setTranscriptRowOffset((cur) => clampRowOffset(
+        cur + (key.pageUp ? page : -page), messagesRef.current, Math.max(1, terminalRows - 3), mainColumnWidth,
+      ));
+      return;
+    }
+    // Line editing: cursor movement and prompt history.
+    if (key.leftArrow)  { inputActions.moveCursorLeft();  return; }
+    if (key.rightArrow) { inputActions.moveCursorRight(); return; }
+    if (key.home || (key.ctrl && input === "a")) { inputActions.moveCursorHome(); return; }
+    if (key.end  || (key.ctrl && input === "e")) { inputActions.moveCursorEnd();  return; }
+    if (key.ctrl && input === "u") { inputActions.setText(""); historyIndexRef.current = null; return; }
+    if ((key.upArrow || key.downArrow) && historyIndexRef.current === null) {
+      // Inside a multi-line draft, Up/Down move between its lines first.
+      const snap = inputActions.getSnapshot();
+      const moved = cursorLineMove(snap.text, snap.cursor, key.upArrow ? -1 : 1);
+      if (moved !== null) { inputActions.setCursor(moved); return; }
+    }
+    if (key.upArrow || key.downArrow) {
+      if (historyIndexRef.current === null) historyDraftRef.current = inputActions.getSnapshot().text;
+      const step = historyStep(promptHistoryRef.current, historyIndexRef.current, key.upArrow ? -1 : 1, historyDraftRef.current);
+      historyIndexRef.current = step.index;
+      if (step.text !== null) inputActions.setText(step.text);
+      return;
     }
 
     // Submit on Enter
@@ -2021,7 +2469,8 @@ export function ReplScreen({
       // controls -- entering at the first ENABLED control (never a disabled one, when at least
       // one control is enabled) so the visible focus indicator never opens on a dead control.
       // Guarded on !dropdownOpen so composing a slash command is never interrupted mid-type.
-      if (!dropdownOpen) {
+      // A hidden pane (a narrow terminal) has nothing to focus; entering it would swallow keys.
+      if (!dropdownOpen && paneWidth > 0) {
         const { status } = operatorControlStatus(telemetry);
         const enabledMask = OPERATOR_CONTROL_ACTIONS.map((action) =>
           isOperatorControlEnabled(action, status, telemetry, selectedProcess),
@@ -2033,6 +2482,11 @@ export function ReplScreen({
       return;
     }
 
+    // Alt+Enter (and Ctrl+J, delivered as "\n" input below) adds a line break.
+    if (key.return && (key.meta || key.alt)) {
+      inputActions.insertText("\n");
+      return;
+    }
     if (key.return) {
       // issue #251: read the synchronous live snapshot, not `inputState.text` -- the latter is
       // React-state-derived and reflects only the last completed render, which a same-tick
@@ -2041,6 +2495,10 @@ export function ReplScreen({
       const live = inputActions.getSnapshot();
       if (!live.text.trim()) return;
       const text = live.text;
+      const hist = promptHistoryRef.current;
+      if (hist[hist.length - 1] !== text) hist.push(text);
+      historyIndexRef.current = null;
+      setTranscriptRowOffset(0);
       inputActions.setText("");
       clearInputRefForSubmit(inputStateRef);
       clearCommandBarNotice();
@@ -2060,6 +2518,11 @@ export function ReplScreen({
     if (key.ctrl && input === "c") {
       if (busyRef.current) {
         abortRef.current?.abort();
+      } else if (inputState.text.length > 0) {
+        // Blind test: Ctrl+C with a draft typed quit the app. It now clears the draft, as a
+        // shell does; Ctrl+C on an empty prompt still exits.
+        inputActions.setText("");
+        setCommandBarNotice("Draft cleared. Press Ctrl+C again on an empty prompt to exit.");
       } else {
         _onExit?.();
       }
@@ -2082,7 +2545,12 @@ export function ReplScreen({
     if (input && !key.ctrl && !key.meta && !key.alt) {
       if (currentSuggestion) setCurrentSuggestion(null);
       clearCommandBarNotice();
-      inputActions.insertText(input);
+      if (inputActions.insertText(input)) {
+        setCommandBarNotice(
+          `Input is limited to ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters; the rest was cut. ` +
+          "For longer text, save it to a file and ask Ember to read the file.",
+        );
+      }
     }
   });
 
@@ -2282,12 +2750,32 @@ export function ReplScreen({
         ),
       ),
       dialogOverlay,
+      pendingApproval
+        ? React.createElement(
+            Box,
+            { key: "approval", flexDirection: "column", flexShrink: 0, borderStyle: "round", borderColor: "yellow", paddingX: 1, width: mainColumnWidth },
+            React.createElement(Text, { color: "yellow" }, `Allow ${pendingApproval.summary}`),
+            pendingApproval.message
+              ? React.createElement(Text, { color: "red", bold: true }, pendingApproval.message)
+              : null,
+            ...(pendingApproval.detail ?? []).map((line, i) => React.createElement(Text, { key: `detail-${i}`, dimColor: true }, line)),
+            React.createElement(Text, { dimColor: true }, "y yes · a yes to this tool for the session · n no (Esc)"),
+          )
+        : null,
+      // flexShrink 0: when the column is over-full the engine took its deficit from every shrinkable
+      // child, and the spinner's auto-height row went to zero rows (it was in the tree, painted nothing).
       busy && !dropdownOpen
-        ? React.createElement(SpinnerAnimationRow, {
-            key:         "spinner",
-            elapsedMs:   spinnerElapsed,
-            startedAtMs: spinnerStartRef.current,
-          })
+        ? React.createElement(Box, { key: "spinner-slot", flexShrink: 0, flexDirection: "column" },
+            React.createElement(SpinnerAnimationRow, {
+              elapsedMs:   spinnerElapsed,
+              startedAtMs: spinnerStartRef.current,
+              width:       mainColumnWidth,
+              activity:    pickSpinnerActivity(
+                activeToolsRef.current.values(),
+                pendingApproval ? { summary: pendingApproval.summary, since: approvalSinceRef.current } : null,
+                Date.now(),
+              ),
+            }))
         : null,
       dropdownOpen && slashDropdownCanRender(terminalRows, dropdownMatches.length)
         ? React.createElement(SlashDropdown, {
@@ -2313,6 +2801,7 @@ export function ReplScreen({
           modelMetrics:   modelMetrics ?? undefined,
           modelSeat: liveModelSeat,
           effort:         retryStatus,
+          thinkingLevel:  getEffortLevel(),
           degraded:       degradedBanner,
           outage:         outageBanner,
           pollFailures:   pollFailureStatuses,
@@ -2324,7 +2813,7 @@ export function ReplScreen({
         }),
       }),
     ),
-    React.createElement(OperatorSurfacePane, {
+    paneWidth === 0 ? null : React.createElement(OperatorSurfacePane, {
       key: "operator-surface",
       telemetry,
       host: hostTelemetry,

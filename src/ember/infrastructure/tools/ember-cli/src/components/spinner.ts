@@ -107,21 +107,109 @@ export function thinkingShimmerColor(startedAtMs: number, nowMs: number): RGB | 
   return interpolateRGB(SHIMMER_COLOR_LO, SHIMMER_COLOR_HI, sine);
 }
 
+/**
+ * What the turn is doing right now when it is not just thinking (blind test S24: a long command
+ * ran under a spinner that said "Thinking… 6m 29s"). A tool call that is running names itself,
+ * counts its own time, and shows the last line it printed; a call waiting for approval says so.
+ */
+export interface SpinnerActivity {
+  /** "Running Bash: ping -t 127.0.0.1" / "Waiting for approval: Bash(...)". */
+  label: string;
+  /** Time on THIS activity (the tool's own run time), not on the whole turn. */
+  elapsedMs: number;
+  /** The last line of output the running tool printed, if it streams any. */
+  tail?: string;
+}
+
+/** The spinner label for a running tool call: "Running Bash: <short command>". */
+export function runningToolLabel(toolName: string, summary: string, maxSummary = 60): string {
+  const short = summary.length > maxSummary ? summary.slice(0, maxSummary - 1) + "…" : summary;
+  return short ? `Running ${toolName}: ${short}` : `Running ${toolName}`;
+}
+
+/** A tool call the query loop is executing right now, as the screen tracks it. */
+export interface ActiveToolCall {
+  toolName: string;
+  summary:  string;
+  startedAt: number;
+  tail:     string;
+}
+
+/**
+ * What the spinner should say. A pending approval wins (nothing is running while the user is
+ * asked), then the most recently started tool call that is still running; otherwise null and the
+ * spinner stays on "Thinking…".
+ */
+export function pickSpinnerActivity(
+  active: Iterable<ActiveToolCall>,
+  approval: { summary: string; since: number } | null,
+  now: number,
+): SpinnerActivity | undefined {
+  if (approval) {
+    return { label: `Waiting for your approval: ${approval.summary}`, elapsedMs: Math.max(0, now - approval.since) };
+  }
+  let newest: ActiveToolCall | undefined;
+  for (const call of active) if (!newest || call.startedAt >= newest.startedAt) newest = call;
+  if (!newest) return undefined;
+  return {
+    label: runningToolLabel(newest.toolName, newest.summary),
+    elapsedMs: Math.max(0, now - newest.startedAt),
+    ...(newest.tail ? { tail: newest.tail } : {}),
+  };
+}
+
+/** The dim second row under the spinner: what the running tool last printed, cut to `width`. */
+export function formatSpinnerTail(tail: string, width: number): string {
+  const room = Math.max(8, width - 4);
+  const one = tail.replace(/\s+/g, " ").trim();
+  return "  ⎿ " + (one.length > room ? one.slice(0, room - 1) + "…" : one);
+}
+
+/** The activity label cut so glyph + label + time + hint stay on ONE row of `width` cells. */
+export function fitActivityLabel(activity: SpinnerActivity, width?: number): string {
+  if (width === undefined) return activity.label;
+  const suffix = ` ${formatSpinnerElapsed(activity.elapsedMs)} · Esc to interrupt`;
+  const room = Math.max(12, width - 2 - suffix.length - 1);
+  return activity.label.length > room ? activity.label.slice(0, room - 1) + "…" : activity.label;
+}
+
 export function renderSpinnerRow(
   elapsedMs:      number,
   reducedMotion:  boolean,
   frames:         string[],
   startedAtMs:    number,
   realTokenCount: number,
+  activity?:      SpinnerActivity,
+  width?:         number,
 ): React.ReactElement {
   if (reducedMotion) {
     const dimmed = Math.floor(elapsedMs / 2000) % 2 === 1;
-    return React.createElement(Text, { dimColor: dimmed }, REDUCED_MOTION_GLYPH);
+    const glyph = React.createElement(Text, { dimColor: dimmed }, REDUCED_MOTION_GLYPH);
+    return activity
+      ? React.createElement(Box, { flexDirection: "row" }, glyph,
+          React.createElement(Text, null, ` ${fitActivityLabel(activity, width)}`),
+          React.createElement(Text, { dimColor: true }, ` ${formatSpinnerElapsed(activity.elapsedMs)} · Esc to interrupt`))
+      : glyph;
   }
 
   const glyph      = spinnerFrame(elapsedMs, frames);
   const shimmer    = thinkingShimmerColor(startedAtMs, startedAtMs + elapsedMs);
   const displayTok = advanceTokenCounter(0, realTokenCount);
+
+  if (activity) {
+    const row = React.createElement(
+      Box, { flexDirection: "row" },
+      React.createElement(Text, null, glyph),
+      React.createElement(Text, shimmer ? { color: rgbToHex(shimmer) } : null, ` ${fitActivityLabel(activity, width)}`),
+      React.createElement(Text, { dimColor: true }, ` ${formatSpinnerElapsed(activity.elapsedMs)} · Esc to interrupt`),
+    );
+    if (!activity.tail) return row;
+    return React.createElement(
+      Box, { flexDirection: "column" },
+      row,
+      React.createElement(Text, { dimColor: true }, formatSpinnerTail(activity.tail, width ?? 80)),
+    );
+  }
 
   return React.createElement(
     Box, { flexDirection: "row" },
@@ -132,7 +220,18 @@ export function renderSpinnerRow(
     realTokenCount > 0
       ? React.createElement(Text, { dimColor: true }, ` ${displayTok}`)
       : null,
+    // A wait the user can measure, and how to leave it.
+    elapsedMs >= 1000
+      ? React.createElement(Text, { dimColor: true }, ` ${formatSpinnerElapsed(elapsedMs)} · Esc to interrupt`)
+      : null,
   );
+}
+
+/** "7s", "1m 05s". */
+export function formatSpinnerElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +245,10 @@ export interface SpinnerAnimationRowProps {
   hasActiveTools?:   boolean;
   leaderIsIdle?:     boolean;
   msSinceLastToken?: number;
+  /** A running tool call / pending approval; replaces "Thinking…" while it lasts. */
+  activity?:         SpinnerActivity;
+  /** Width the row may use; bounds the output-tail row. */
+  width?:            number;
 }
 
 export function SpinnerAnimationRow(props: SpinnerAnimationRowProps): React.ReactElement {
@@ -169,5 +272,7 @@ export function SpinnerAnimationRow(props: SpinnerAnimationRowProps): React.Reac
     getSpinnerFrames(),
     startedAtMs,
     realTokenCount,
+    props.activity,
+    props.width,
   );
 }

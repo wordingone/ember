@@ -5,9 +5,17 @@
 // De-transpiled from bundle (lines 304380–304645). Executes via cmd.exe on Windows.
 // bundle=Y
 
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
+import { existsSync, unlinkSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { dirname, join } from "path";
 import { z } from "zod";
+import { isDestructiveCommand, DESTRUCTIVE_ASK_MESSAGE } from "../core/destructive-command.ts";
+import { privateHostAskMessage, privateHostInCommand } from "../core/private-hosts.ts";
 import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
+import { createTailReporter } from "../core/tool-progress.ts";
+import { assignToSessionJob } from "./process-job.ts";
+import { shellStateNote } from "./shell-state-note.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,6 +121,40 @@ function detectImageOutput(buf: Buffer): boolean {
 // Process execution
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Shell choice: Git Bash when installed, else cmd.exe
+// ---------------------------------------------------------------------------
+
+let _gitBash: string | null | undefined;
+
+/** Git for Windows' bash.exe, or null. A tool named Bash that ran cmd.exe broke every bash habit
+ *  of the model: `mkdir -p` made a "-p" folder, `$VAR` stayed literal (blind test S05-S07).
+ *  WSL's System32\bash.exe is never used: it runs in another filesystem. */
+export function findGitBash(): string | null {
+  if (_gitBash !== undefined) return _gitBash;
+  _gitBash = null;
+  if (process.platform !== "win32") return _gitBash;
+  const candidates: string[] = [];
+  const fromEnv = process.env["EMBER_GIT_BASH_PATH"];
+  if (fromEnv === "") return _gitBash; // explicitly disabled: use cmd.exe
+  if (fromEnv) candidates.push(fromEnv);
+  for (const root of [process.env["ProgramFiles"], process.env["ProgramFiles(x86)"], process.env["LOCALAPPDATA"] && join(process.env["LOCALAPPDATA"]!, "Programs")]) {
+    if (root) candidates.push(join(root, "Git", "bin", "bash.exe"));
+  }
+  try {
+    const where = spawnSync("where.exe", ["git"], { windowsHide: true, encoding: "utf-8" });
+    for (const line of String(where.stdout ?? "").split(/\r?\n/)) {
+      const git = line.trim();
+      if (git) candidates.push(join(dirname(dirname(git)), "bin", "bash.exe"));
+    }
+  } catch { /* no where.exe */ }
+  for (const c of candidates) {
+    if (/\\system32\\/i.test(c)) continue;
+    if (existsSync(c)) { _gitBash = c; break; }
+  }
+  return _gitBash;
+}
+
 interface ExecResult {
   stdout: Buffer;
   stderr: string;
@@ -125,21 +167,59 @@ async function executeCommand(
   timeout: number,
   abortSignal: AbortSignal,
   cwd: string,
+  toolUseId?: string,
 ): Promise<ExecResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolveRaw) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: string[] = [];
     let finished = false;
 
-    const proc = spawn("cmd.exe", ["/c", command], {
+    // Verbatim: Node's default argv quoting turned every `"` into `\"`, which cmd.exe does not
+    // understand (blind test S03-S05). `/s /c "<cmd>"` makes cmd strip exactly the outer quotes.
+    // A multi-line command runs as a temporary batch file: `cmd /c` runs only the first line (S08).
+    let batchPath: string | null = null;
+    let cmdArgs: string[];
+    const gitBash = findGitBash();
+    if (gitBash) {
+      cmdArgs = ["-c", command];
+    } else if (/[\r\n]/.test(command.trim())) {
+      batchPath = join(tmpdir(), `ember-bash-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.cmd`);
+      writeFileSync(batchPath, "@echo off\r\n" + command.replace(/\r?\n/g, "\r\n") + "\r\n");
+      cmdArgs = ["/d", "/s", "/c", `"call "${batchPath}""`];
+    } else {
+      cmdArgs = ["/d", "/s", "/c", `"${command}"`];
+    }
+    const cleanupBatch = () => {
+      if (batchPath) { try { unlinkSync(batchPath); } catch { /* already gone */ } batchPath = null; }
+    };
+    const proc = spawn(gitBash ?? "cmd.exe", cmdArgs, {
       env: process.env,
       cwd,
       shell: false,
+      windowsVerbatimArguments: !gitBash,
+      // Own hidden console: a child sharing ember's console could change its title, code page and
+      // window size (blind test: after a PowerShell call the caret and borders drew as "?").
+      windowsHide: true,
     });
+    // Anything this command leaves running ends with ember, not with the window (blind test S27/S28).
+    assignToSessionJob(proc.pid);
+    // The screen shows the last line of output while the command runs (blind test S24).
+    const liveTail = createTailReporter(toolUseId);
+    const resolve = (result: ExecResult): void => { liveTail.stop(); resolveRaw(result); };
+    // Killing cmd.exe alone leaves its children running (a timed-out ping kept going): end the
+    // whole tree this tool started, by its PID.
+    const killTree = () => {
+      if (proc.pid !== undefined && process.platform === "win32") {
+        try { spawnSync("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { windowsHide: true }); } catch { /* best effort */ }
+      }
+      try { proc.kill(); } catch { /* already exited */ }
+    };
+    proc.on("exit", cleanupBatch);
 
     const timer = setTimeout(() => {
       if (!finished) {
-        proc.kill();
+        killTree();
+        cleanupBatch();
         finished = true;
         resolve({
           stdout: Buffer.concat(stdoutChunks),
@@ -152,7 +232,8 @@ async function executeCommand(
 
     const abort = () => {
       if (!finished) {
-        proc.kill();
+        killTree();
+        cleanupBatch();
         finished = true;
         clearTimeout(timer);
         resolve({
@@ -166,8 +247,27 @@ async function executeCommand(
 
     abortSignal.addEventListener("abort", abort, { once: true });
 
-    proc.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-    proc.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk.toString("utf-8")));
+    proc.stdout?.on("data", (chunk: Buffer) => { stdoutChunks.push(chunk); liveTail.push(chunk); });
+    proc.stderr?.on("data", (chunk: Buffer) => { stderrChunks.push(chunk.toString("utf-8")); liveTail.push(chunk); });
+
+    // A command that starts a background process (`start /b`, `cmd &`) exits while the child still
+    // holds the output pipes, so "close" never comes until the timeout (blind test S27). Once the
+    // shell itself has exited, give stragglers a moment, then return what arrived.
+    proc.on("exit", (code: number | null) => {
+      setTimeout(() => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        abortSignal.removeEventListener("abort", abort);
+        try { proc.stdout?.destroy(); proc.stderr?.destroy(); } catch { /* already closed */ }
+        resolve({
+          stdout: Buffer.concat(stdoutChunks),
+          stderr: stderrChunks.join("") + "\n[the command started a background process that is still running; its later output is not captured]",
+          exitCode: code ?? 0,
+          timedOut: false,
+        });
+      }, 1500);
+    });
 
     proc.on("close", (code: number | null) => {
       if (!finished) {
@@ -199,6 +299,16 @@ async function executeCommand(
   });
 }
 
+/** Over the cap, keep the start and the end: the end of a log is usually what matters. */
+function keepHeadAndTail(text: string): string {
+  if (text.length <= MAX_OUTPUT_BYTES) return text;
+  const half = Math.floor(MAX_OUTPUT_BYTES / 2);
+  const dropped = text.length - 2 * half;
+  return text.slice(0, half) + `
+... [${dropped} characters of output omitted] ...
+` + text.slice(-half);
+}
+
 // ---------------------------------------------------------------------------
 // Public output type
 // ---------------------------------------------------------------------------
@@ -216,6 +326,13 @@ export interface BashOutput {
 // Execution wrapper
 // ---------------------------------------------------------------------------
 
+/** S12: a call whose only effect was a lost `cd` / variable says so in its result. */
+function withStateNote(interpretation: string, command: string, result: ExecResult, ctx: ToolUseContext): string {
+  if (result.timedOut || result.exitCode !== 0) return interpretation;
+  const note = shellStateNote(command, findGitBash() ? "bash" : "cmd", ctx.cwd ?? process.cwd());
+  return note ? `${interpretation}; ${note}` : interpretation;
+}
+
 async function runBash(
   input: { command: string; timeout?: number },
   ctx: ToolUseContext,
@@ -225,24 +342,19 @@ async function runBash(
   const disableBackground = process.env["EMBER_DISABLE_BACKGROUND_TASKS"] === "1";
 
   if (!disableBackground) {
-    let bgTaskId: string | undefined;
+    const bgTaskId: string | undefined = undefined;
     const startTime = Date.now();
-    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd());
+    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd(), ctx.toolUseId);
     const elapsed = Date.now() - startTime;
     const stdoutBuf = result.stdout;
     const isImage = detectImageOutput(stdoutBuf);
     let stdout = isImage ? "[binary image output]" : stdoutBuf.toString("utf-8");
-    if (stdout.length > MAX_OUTPUT_BYTES) {
-      stdout = stdout.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
-    }
-    let stderr = result.stderr;
-    if (stderr.length > MAX_OUTPUT_BYTES) {
-      stderr = stderr.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
-    }
-    const interpretation = interpretExitCode(command, result.exitCode);
-    if (elapsed > BACKGROUND_THRESHOLD_MS && !result.timedOut) {
-      bgTaskId = "bg-" + Math.random().toString(36).slice(2);
-    }
+    stdout = keepHeadAndTail(stdout);
+    const stderr = keepHeadAndTail(result.stderr);
+    const interpretation = withStateNote(result.timedOut
+      ? `Command timed out after ${Math.round(timeout / 1000)}s and was stopped (it may be waiting for input, or need a larger timeout)`
+      : interpretExitCode(command, result.exitCode), command, result, ctx);
+    void elapsed; void BACKGROUND_THRESHOLD_MS;
     return {
       stdout: stdout || undefined,
       stderr: stderr || undefined,
@@ -252,21 +364,18 @@ async function runBash(
       ...(isImage ? { isImage: true } : {}),
     };
   } else {
-    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd());
+    const result = await executeCommand(command, timeout, ctx.abortController.signal, ctx.cwd ?? process.cwd(), ctx.toolUseId);
     const stdoutBuf = result.stdout;
     const isImage = detectImageOutput(stdoutBuf);
     let stdout = isImage ? "[binary image output]" : stdoutBuf.toString("utf-8");
-    if (stdout.length > MAX_OUTPUT_BYTES) {
-      stdout = stdout.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
-    }
-    let stderr = result.stderr;
-    if (stderr.length > MAX_OUTPUT_BYTES) {
-      stderr = stderr.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
-    }
+    stdout = keepHeadAndTail(stdout);
+    const stderr = keepHeadAndTail(result.stderr);
     return {
       stdout: stdout || undefined,
       stderr: stderr || undefined,
-      returnCodeInterpretation: interpretExitCode(command, result.exitCode),
+      returnCodeInterpretation: withStateNote(result.timedOut
+        ? `Command timed out after ${Math.round(timeout / 1000)}s and was stopped (it may be waiting for input, or need a larger timeout)`
+        : interpretExitCode(command, result.exitCode), command, result, ctx),
       noOutputExpected: stdout.length === 0 && stderr.length === 0,
       ...(isImage ? { isImage: true } : {}),
     };
@@ -302,13 +411,18 @@ export const bashTool = Object.assign(
     description: (_input?: BashInput, _opts?) =>
       "Execute shell commands. Returns stdout, stderr, and exit code interpretation.",
 
-    prompt: (_opts?) => `## Bash tool
-Execute shell commands in a bash session.
-- Commands like ls, grep, cat, find are auto-allowed (read-only).
-- Write operations (rm, mv, cp, etc.) require permission.
-- Timeout default: 120 seconds.
-- Long-running commands (>15s) may be automatically backgrounded.
-- CWD resets to project root if changed outside it.`,
+    prompt: (_opts?) => (findGitBash() || process.platform !== "win32" ? `## Bash tool
+Runs a command with bash (Git Bash on Windows): use bash syntax (ls, cat, mkdir -p, $VAR, pipes).
+Windows paths work with forward slashes (for example D:/work/notes.txt). Windows programs (python, node, git) are on PATH.
+- Every call starts fresh in the project directory: cd and variables do NOT carry over to the next call.
+  Chain dependent steps in one call (cd sub && make).` : `## Bash tool
+Runs a command with cmd.exe on Windows (bash is not installed): use cmd syntax (dir, type, set, &&, ^ escapes).
+- Every call starts fresh in the project directory: cd and set do NOT carry over to the next call.
+  Chain dependent steps in one call (cd sub && build) or put them on separate lines (run as a batch file).`) + `
+- Read-only commands are auto-allowed; commands that change things may ask for permission.
+- Timeout default: 120 seconds (pass timeout in ms for longer jobs). A command that waits for input
+  is stopped at the timeout and its whole process tree is ended.
+- Output over 30 KB keeps its beginning and end.`,
 
     checkPermissions: async (input: BashInput, ctx: ToolUseContext) => {
       const { command } = input;
@@ -322,6 +436,14 @@ Execute shell commands in a bash session.
             message: `Command denied by rule: ${pattern}`,
           };
         }
+      }
+      if (isDestructiveCommand(command)) {
+        return { behavior: "ask" as const, updatedInput: input, message: DESTRUCTIVE_ASK_MESSAGE };
+      }
+      // WebFetch refuses private/loopback addresses; a shell command that reaches one must not be a way round (W28).
+      const privateHost = privateHostInCommand(command);
+      if (privateHost) {
+        return { behavior: "ask" as const, updatedInput: input, message: privateHostAskMessage(privateHost) };
       }
       if (detectDangerousPatterns(command)) {
         return {
@@ -348,10 +470,22 @@ Execute shell commands in a bash session.
     mapToolResultToToolResultBlockParam: (content: BashOutput, toolUseId: string) => ({
       type: "tool_result" as const,
       tool_use_id: toolUseId,
-      content: JSON.stringify(content),
+      content: shellResultText(content),
     }),
 
     toAutoClassifierInput: (input?: BashInput) => input?.command ?? "",
   }),
   { searchHint: "execute shell commands" } as const,
 );
+
+/** Plain text for a shell result: stdout, then stderr, then the exit line. A JSON blob with \r\n
+ *  escapes was shown to the user whenever stdout was empty or the output was large (blind test). */
+export function shellResultText(out: { stdout?: string; stderr?: string; returnCodeInterpretation?: string }): string {
+  const parts: string[] = [];
+  const stdout = (out.stdout ?? "").replace(/\r\n/g, "\n").replace(/\n+$/, "");
+  if (stdout.length > 0) parts.push(stdout);
+  const stderr = (out.stderr ?? "").replace(/\r\n/g, "\n").trim();
+  if (stderr.length > 0) parts.push(`stderr: ${stderr}`);
+  if (out.returnCodeInterpretation) parts.push(`(${out.returnCodeInterpretation})`);
+  return parts.length > 0 ? parts.join("\n") : "(no output)";
+}

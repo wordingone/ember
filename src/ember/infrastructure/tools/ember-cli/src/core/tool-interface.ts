@@ -79,6 +79,10 @@ export interface ToolUseContext {
   setSDKStatus?: unknown;
   /** Present when call() is invoked from within an agent task. */
   agentId?: string;
+  /** Subagent nesting depth (0 = main session). */
+  agentDepth?: number;
+  /** Loop deps (callModel etc.) of the owning engine; subagents reuse them so they share the one model server. */
+  loopDeps?: import("../query/query-loop-support.ts").LoopDepsOverrides;
   isNonInteractiveSession?: boolean;
   fileStateCache?: unknown;
   setResponseLength?: () => void;

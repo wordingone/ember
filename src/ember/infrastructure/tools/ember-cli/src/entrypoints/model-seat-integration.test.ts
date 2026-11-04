@@ -228,6 +228,9 @@ describe("process entry model-seat enforcement", () => {
     const startupOrder: string[] = [];
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
+    // In -p mode the startup notices go to stderr (stdout is JSON lines): capture both.
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stderr.write;
     process.stdout.write = ((chunk: string) => {
       stdout += chunk;
       return true;
@@ -288,6 +291,7 @@ describe("process entry model-seat enforcement", () => {
       });
     } finally {
       process.stdout.write = originalStdout;
+      process.stderr.write = originalStderr;
     }
 
     expect(exitCode).toBe(0);
@@ -320,6 +324,9 @@ describe("process entry model-seat enforcement", () => {
     let verifyCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
+    // In -p mode the startup notices go to stderr (stdout is JSON lines): capture both.
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stderr.write;
     process.stdout.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stdout.write;
     try {
       await main({
@@ -367,6 +374,7 @@ describe("process entry model-seat enforcement", () => {
       });
     } finally {
       process.stdout.write = originalStdout;
+      process.stderr.write = originalStderr;
     }
 
     expect(exitCode).toBe(0);
@@ -394,6 +402,9 @@ describe("process entry model-seat enforcement", () => {
     let initCalls = 0;
     let stdout = "";
     const originalStdout = process.stdout.write.bind(process.stdout);
+    // In -p mode the startup notices go to stderr (stdout is JSON lines): capture both.
+    const originalStderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => { stdout += chunk; return true; }) as typeof process.stderr.write;
     process.stdout.write = ((chunk: string) => {
       stdout += chunk;
       return true;
@@ -417,6 +428,7 @@ describe("process entry model-seat enforcement", () => {
       });
     } finally {
       process.stdout.write = originalStdout;
+      process.stderr.write = originalStderr;
     }
 
     expect(exitCode).toBe(0);
@@ -458,4 +470,12 @@ describe("process entry model-seat enforcement", () => {
     expect(initCalls).toBe(0);
     expect(stderr).toContain("ember-lab handshake");
   });
+});
+
+it("in -p and --mcp modes startup notices go to stderr, so stdout starts with JSON", async () => {
+  const { startupNoticeStream } = await import("./process-entry.ts");
+  expect(startupNoticeStream(["node", "ember", "-p", "hi"])).toBe(process.stderr);
+  expect(startupNoticeStream(["node", "ember", "--print", "hi"])).toBe(process.stderr);
+  expect(startupNoticeStream(["node", "ember", "--mcp"])).toBe(process.stderr);
+  expect(startupNoticeStream(["node", "ember"])).toBe(process.stdout);
 });
