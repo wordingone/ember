@@ -146,7 +146,7 @@ class TestCLIArgParsing(unittest.TestCase):
 
     def test_defaults(self):
         args = self.module._parse_args([
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
         ])
         self.assertAlmostEqual(args.ceiling_tokens, 2.2e9)
         self.assertEqual(args.backend, "daemon")
@@ -155,14 +155,14 @@ class TestCLIArgParsing(unittest.TestCase):
     def test_ceiling_tokens_override(self):
         args = self.module._parse_args([
             "--ceiling-tokens", "1000",
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
         ])
         self.assertEqual(args.ceiling_tokens, 1000.0)
 
     def test_tiny_flag(self):
         args = self.module._parse_args([
             "--tiny",
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
             "--backend", "inline",
         ])
         self.assertTrue(args.tiny)
@@ -171,21 +171,21 @@ class TestCLIArgParsing(unittest.TestCase):
     def test_optimizer_param(self):
         args = self.module._parse_args([
             "--optimizer", "muon_split",
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
         ])
         self.assertEqual(args.optimizer, "muon_split")
 
     def test_train_ids_param(self):
         args = self.module._parse_args([
             "--train-ids", "t001", "t004", "t007",
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
         ])
         self.assertEqual(args.train_ids, ["t001", "t004", "t007"])
 
     def test_eval_every_param(self):
         args = self.module._parse_args([
             "--eval-every", "500",
-            "--out-receipt", "/tmp/receipt.jsonl",
+            "--out-receipt", "/fixture/tmp/receipt.jsonl",
         ])
         self.assertEqual(args.eval_every, 500)
 
@@ -747,7 +747,7 @@ class TestDaemonPayloadContract(unittest.TestCase):
     def test_cli_default_port(self):
         """CLI --daemon-url default must be http://127.0.0.1:8741."""
         import ember_cbase_launch
-        args = ember_cbase_launch._parse_args(["--out-receipt", "/tmp/r.jsonl"])
+        args = ember_cbase_launch._parse_args(["--out-receipt", "/fixture/tmp/r.jsonl"])
         self.assertEqual(
             args.daemon_url, "http://127.0.0.1:8741",
             f"CLI --daemon-url default must be 'http://127.0.0.1:8741', "
