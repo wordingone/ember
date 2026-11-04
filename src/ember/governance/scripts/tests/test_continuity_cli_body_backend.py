@@ -21,6 +21,7 @@ REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (paren
 CONTINUITY = REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md"
 
 EXPECTED_BACKEND = "reference_seat_explicit"
+EXPECTED_IDENTITY = "source:src/ember/infrastructure/tools/ember-cli"
 FORBIDDEN_BACKEND = "qwen_reference_default"
 EXPECTED_EVIDENCE_FRAGMENT = (
     "receipts/ember-01-custody/cli-body-reverification-v1.json"
@@ -78,5 +79,10 @@ def test_ember_cli_body_backend_is_explicit_reference_seat() -> None:
         f"receipt ({EXPECTED_EVIDENCE_FRAGMENT!r}); got {evidence!r}"
     )
     assert row[3] == "research_prototype", "artifact_class must stay research_prototype"
-    assert row[2] == "source:tools/ember-cli", "canonical_identity must stay source:tools/ember-cli"
+    # A canonical identity of the form source:<path> is a repository location,
+    # not a stable name (owner ruling, 2026-11-04): it moves when the tree
+    # moves, so it must name where the body lives now and that place must exist.
+    assert row[2] == EXPECTED_IDENTITY, f"canonical_identity must be {EXPECTED_IDENTITY!r}"
+    identity_path = REPO_ROOT / EXPECTED_IDENTITY.removeprefix("source:")
+    assert identity_path.is_dir(), f"canonical_identity path {identity_path} is not a directory"
     assert row[7] == "none", "capability_credit must stay none"

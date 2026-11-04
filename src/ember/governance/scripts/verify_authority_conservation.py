@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Mapping
 
 
@@ -166,6 +166,19 @@ AUTHORITY_DOMAIN_DIRECTORY = PurePosixPath("docs/domains/governance/authority")
 # legacy directory, because the migration's own exclusion list rules that the domain-directory
 # path will never exist -- so returning it would name a path nothing can resolve.
 AUTHORITY_UNMIGRATED_NAMES = frozenset({"INVARIANT.md"})
+
+
+def _is_anchored_on_any_host(raw: str) -> bool:
+    """True when ``raw`` is absolute or drive/root-anchored under EITHER path flavor.
+
+    ``Path.is_absolute()`` answers for the running host only: on POSIX,
+    ``C:/escaped/goal.md`` is a relative path whose first component is ``C:``,
+    so a Windows-anchored goal_path passed the absolute-path check and was
+    reported as a missing file instead of an invalid path. A recorded authority
+    binding must be judged the same on every host that verifies it.
+    """
+    windows = PureWindowsPath(raw)
+    return PurePosixPath(raw).is_absolute() or bool(windows.drive or windows.root)
 
 
 def authority_canonical_relative_path(name: str) -> PurePosixPath:
@@ -1395,7 +1408,7 @@ def parse_graph_selection(
         if (
             not isinstance(raw_goal_path, str)
             or not raw_goal_path
-            or Path(raw_goal_path).is_absolute()
+            or _is_anchored_on_any_host(raw_goal_path)
         ):
             errors.append(
                 finding(
