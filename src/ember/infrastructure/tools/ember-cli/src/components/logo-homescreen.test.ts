@@ -612,7 +612,7 @@ describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () =
   });
 
   it("uses forward-slash separators for a forward-slash path (never mixes separators)", () => {
-    const long = "/fixture/home/user/repos/ember/.claude/worktrees/cockpit-telemetry-447";
+    const long = "/home/user/repos/ember/.claude/worktrees/cockpit-telemetry-447";
     expect(shortenDataRootForDisplay(long, 40)).toBe(".../worktrees/cockpit-telemetry-447".replace("...", "…"));
   });
 
