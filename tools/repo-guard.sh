@@ -171,9 +171,10 @@ fi
 # the runner user's home) and the temporary roots ("tmp", "var/tmp",
 # "var/folders", "private/tmp|var") are local-path leaks too, because Linux
 # runners write receipts with them. The leading class keeps relative,
-# home-relative (tilde) and URL paths out. Mirrors _POSIX_LOCAL_PATH in
+# home-relative (tilde), URL and drive-letter paths out (a drive path such as
+# C:/tmp stays judged by the narrower Windows rules above). Mirrors _POSIX_LOCAL_PATH in
 # src/ember/governance/scripts/redact_local_paths.py.
-PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)|((^|[^A-Za-z0-9_.~/\\-])/((home|Users)/[^/[:space:]]+|(root|tmp|var/tmp|var/folders|private/tmp|private/var)/))'
+PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)|((^|[^A-Za-z0-9_.~:/\\-])/((home|Users)/[^/[:space:]]+|(root|tmp|var/tmp|var/folders|private/tmp|private/var)/))'
 # Files that intentionally embed a leaked-path-shaped literal as adversarial
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
