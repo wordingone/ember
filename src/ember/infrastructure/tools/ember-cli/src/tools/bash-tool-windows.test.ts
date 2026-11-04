@@ -56,3 +56,20 @@ test.if(isWin && findGitBash() !== null)("a background process does not hold the
   expect(out.stdout).toContain("started");
   expect(Date.now() - t0).toBeLessThan(6_000);
 });
+
+// #2380 S27 live check (2026-11-04): this exact command through Git Bash hit the 120 s timeout with a
+// cmd banner and prompt as its output. Git Bash's path conversion turned `/b` into `B:/`, so cmd.exe
+// ran interactively and waited on stdin. Now: stdin is closed and `start`/`cmd` keep their switches.
+test.if(isWin && findGitBash() !== null)("`start /b python` returns promptly through Git Bash", async () => {
+  const t0 = Date.now();
+  const out = await run('start /b python -c "import time; time.sleep(4)"', 60_000);
+  expect(out.returnCodeInterpretation ?? "").not.toContain("timed out");
+  expect(out.stdout ?? "").not.toContain("Microsoft Windows");
+  expect(Date.now() - t0).toBeLessThan(15_000);
+}, 70_000);
+
+test.if(isWin && findGitBash() !== null)("`cmd /c echo` works through Git Bash", async () => {
+  const out = await run("cmd /c echo ember-s27-ok", 30_000);
+  expect(out.stdout).toContain("ember-s27-ok");
+  expect(out.stdout).not.toContain("Microsoft Windows");
+}, 40_000);
