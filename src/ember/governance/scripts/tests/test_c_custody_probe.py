@@ -26,12 +26,30 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
+# The probe stays at the repository-root scripts/ember_totality/ (its custody
+# records, sidecars and every citation name that path); only this test moved
+# under src/ember/governance/scripts/tests/ in the issue-1949 cutover. Resolve
+# from the repository root, and refuse to run against a missing probe: a
+# missing file used to surface as an empty stdout line, i.e. as a verdict.
+REPO_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents
+    if (parent / "pyproject.toml").is_file()
+)
+PROBE_PATH = str(REPO_ROOT / "scripts" / "ember_totality" / "test_c_custody.py")
+if not os.path.isfile(PROBE_PATH):
+    raise RuntimeError(f"C-CUSTODY probe not found at {PROBE_PATH}")
+
+# Where the probe reads its allowlist authority (ALLOWLIST_AUTHORITY_REL in the
+# probe). Carrier-013 moved it under src/ and repointed the probe, but left these
+# fixtures writing the old scripts/ember_totality/ location, so every
+# allowlist-honoring case ran with no authority file at all.
+ALLOWLIST_AUTHORITY_DIR_PARTS = ("src", "ember", "governance", "scripts", "ember_totality")
+
+
 def run_probe(root_dir):
     """Run test_c_custody.py with EMBER_TOTALITY_ROOT set to root_dir.
     Returns (stdout_line, returncode)."""
-    probe_path = os.path.join(
-        os.path.dirname(__file__), "..", "ember_totality", "test_c_custody.py"
-    )
+    probe_path = PROBE_PATH
     try:
         result = subprocess.run(
             [sys.executable, probe_path],
@@ -52,9 +70,7 @@ def run_probe_full(root_dir):
     """Same as run_probe but also returns stderr -- needed to assert on the
     disclosed-rejection line the pattern validator prints there.
     Returns (stdout_first_line, stderr_text, returncode)."""
-    probe_path = os.path.join(
-        os.path.dirname(__file__), "..", "ember_totality", "test_c_custody.py"
-    )
+    probe_path = PROBE_PATH
     try:
         result = subprocess.run(
             [sys.executable, probe_path],
@@ -185,7 +201,7 @@ def test_allowlist_wrong_workstream_not_honored():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-WRONG-WORKSTREAM", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -200,7 +216,7 @@ def test_allowlist_wrong_workstream_not_honored():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init wrong-workstream allowlist"], cwd=tmpdir, capture_output=True)
 
         output, rc = run_probe(tmpdir)
@@ -224,7 +240,7 @@ def test_allowlist_missing_identity_field_not_honored():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-MISSING-FIELD", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -240,7 +256,7 @@ def test_allowlist_missing_identity_field_not_honored():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init missing-field allowlist"], cwd=tmpdir, capture_output=True)
 
         output, rc = run_probe(tmpdir)
@@ -265,7 +281,7 @@ def test_allowlist_malformed_pattern_no_crash():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-MALFORMED-PATTERN", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -284,7 +300,7 @@ def test_allowlist_malformed_pattern_no_crash():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init malformed-pattern allowlist"], cwd=tmpdir, capture_output=True)
 
         output, rc = run_probe(tmpdir)
@@ -307,7 +323,7 @@ def test_authority_file_untracked_not_honored():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-UNTRACKED-AUTHORITY", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -346,7 +362,7 @@ def test_dirty_authority_file_committed_content_governs():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-DIRTY-AUTHORITY", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
 
@@ -363,7 +379,7 @@ def test_dirty_authority_file_committed_content_governs():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "commit non-permissive allowlist"], cwd=tmpdir, capture_output=True)
 
         # Dirty edit: working tree now grants the exact permissive pattern.
@@ -399,7 +415,7 @@ def test_bracket_and_regex_patterns_bounded_red_no_crash():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-BRACKET-REGEX", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -414,7 +430,7 @@ def test_bracket_and_regex_patterns_bounded_red_no_crash():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init bracket+regex allowlist"], cwd=tmpdir, capture_output=True)
 
         output, rc = run_probe(tmpdir)
@@ -437,7 +453,7 @@ def test_separator_pattern_not_honored():
         with open(receipt_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-SEPARATOR-PATTERN", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -452,7 +468,7 @@ def test_separator_pattern_not_honored():
         subprocess.run(["git", "init"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init separator-pattern allowlist"], cwd=tmpdir, capture_output=True)
 
         output, stderr, rc = run_probe_full(tmpdir)
@@ -495,7 +511,7 @@ def test_matching_committed_authority_grants_authority_sibling_stays_red():
         with open(unrelated_file, "w", encoding="utf-8") as f:
             json.dump({"ticket": "TEST-UNRELATED", "status": "test"}, f)
 
-        allowlist_dir = os.path.join(tmpdir, "scripts", "ember_totality")
+        allowlist_dir = os.path.join(tmpdir, *ALLOWLIST_AUTHORITY_DIR_PARTS)
         os.makedirs(allowlist_dir, exist_ok=True)
         allowlist_path = os.path.join(allowlist_dir, "custody-allowlist.json")
         with open(allowlist_path, "w", encoding="utf-8") as f:
@@ -512,7 +528,7 @@ def test_matching_committed_authority_grants_authority_sibling_stays_red():
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmpdir, capture_output=True)
         # Commit the allowlist authority file (and nothing else) so it is
         # tracked at HEAD -- the two receipts stay deliberately untracked.
-        subprocess.run(["git", "add", "scripts/"], cwd=tmpdir, capture_output=True)
+        subprocess.run(["git", "add", ALLOWLIST_AUTHORITY_DIR_PARTS[0] + "/"], cwd=tmpdir, capture_output=True)
         subprocess.run(["git", "commit", "-m", "commit permissive, correctly-bound allowlist"], cwd=tmpdir, capture_output=True)
 
         output, rc = run_probe(tmpdir)
@@ -723,3 +739,15 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_fixture_allowlist_location_matches_probe():
+    """The fixtures above must write the allowlist where the probe reads it.
+    If they drift apart again, the allowlist-honoring cases stop exercising
+    the allowlist and the negative cases pass vacuously."""
+    import re
+
+    source = Path(PROBE_PATH).read_text(encoding="utf-8")
+    match = re.search(r'^ALLOWLIST_AUTHORITY_REL = "([^"]+)"', source, re.MULTILINE)
+    assert match, "probe no longer declares ALLOWLIST_AUTHORITY_REL"
+    assert match.group(1) == "/".join(ALLOWLIST_AUTHORITY_DIR_PARTS) + "/custody-allowlist.json"
