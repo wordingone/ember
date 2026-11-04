@@ -416,6 +416,8 @@ def test_green_posix_relative_and_url_paths():
             "~" + sep + sep.join(["tmp", "x.json"]),
             "https:" + sep * 2 + sep.join(["example.org", "home", "x"]),
             sep + sep.join(["usr", "bin", "python3"]),
+            # A drive path stays with the narrower Windows rules.
+            "C" + ":" + sep + sep.join(["tmp", "clean-room", "x.json"]),
         ]
         (tmp / "docs" / "note.md").write_text(
             "".join(f"{p}\n" for p in fine), encoding="utf-8", newline="\n",
