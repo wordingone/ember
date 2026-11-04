@@ -23,7 +23,7 @@ pytest.importorskip(
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 

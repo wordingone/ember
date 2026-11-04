@@ -12,7 +12,9 @@ from pathlib import Path
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-CHECKER = REPO_ROOT / "scripts" / "check_inference_training_translation.py"
+CHECKER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "check_inference_training_translation.py"
+if not CHECKER.is_file():  # a missing checker also exits nonzero, which the negative cases would accept
+    raise FileNotFoundError(CHECKER)
 HEADER = (
     "| ID | Inference technique | Inference benefit | Training analog | "
     "Field maturity | Ember status | Candidate experiment |"
@@ -66,8 +68,9 @@ def _write_fixture(root: Path, table: str | None = None) -> None:
     (canonical_design / "inference-to-training-translation-v1.md").write_text(
         table or _valid_table(), encoding="utf-8"
     )
-    integration_design = root / "docs" / "design"
-    integration_design.mkdir(parents=True)
+    # The integration documents moved next to the table (docs/domains/governance/design);
+    # the checker reads them there, so the fixture must write them there too.
+    integration_design = canonical_design
     link = "docs/domains/governance/design/inference-to-training-translation-v1.md"
     (integration_design / "sota-stack-floor-spec.md").write_text(link, encoding="utf-8")
     (integration_design / "sota-stack-floor.md").write_text(link, encoding="utf-8")
@@ -122,7 +125,7 @@ class TranslationCheckerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_fixture(root)
-            (root / "docs" / "design" / "sota-stack-floor.md").write_text(
+            (root / "docs" / "domains" / "governance" / "design" / "sota-stack-floor.md").write_text(
                 "# Missing canonical translation link\n", encoding="utf-8"
             )
             result = self._run(root)

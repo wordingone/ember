@@ -11,7 +11,13 @@ import subprocess
 import sys
 
 
-ROOT = Path(os.environ.get("EMBER_ISSUE1267_ROOT", Path(__file__).parents[2]))
+# Repository root by marker, not by a fixed parent depth: the carrier move to
+# src/ember/governance/scripts/tests made parents[2] resolve to src/ember/governance.
+_REPO_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()
+)
+ROOT = Path(os.environ.get("EMBER_ISSUE1267_ROOT", _REPO_ROOT))
+TOTALITY = ROOT / "src/ember/governance/scripts/ember_totality"
 DISPOSITION = Path(
     os.environ.get(
         "EMBER_ISSUE1267_DISPOSITION",
@@ -50,7 +56,7 @@ def test_frozen_receipt_identity_is_unchanged() -> None:
 
 def test_c4_c5_have_no_supplemental_merge_authority() -> None:
     for name in ("test_c4.py", "test_c5.py"):
-        text = _text(ROOT / "scripts/ember_totality" / name).lower()
+        text = _text(TOTALITY / name).lower()
         for forbidden in ("issue1267", "receipt-errata", "receipt-supersession", "overlay"):
             assert forbidden not in text
         assert "check_path_sha_pairs" in text
@@ -72,7 +78,7 @@ def test_historical_receipt_remains_artifact_reachability_red() -> None:
     env["EMBER_TOTALITY_ROOT"] = str(ROOT)
     for name in ("test_c4.py", "test_c5.py"):
         proc = subprocess.run(
-            [sys.executable, "-B", str(ROOT / "scripts/ember_totality" / name)],
+            [sys.executable, "-B", str(TOTALITY / name)],
             cwd=ROOT,
             env=env,
             capture_output=True,
