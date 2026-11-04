@@ -384,7 +384,7 @@ def test_red_absolute_path_doubled_json_escape():
 def test_red_posix_local_paths():
     tmp = make_fixture("fix/selftest-red-posix-path")
     try:
-        (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "receipts").mkdir(exist_ok=True)
         # Assembled at runtime so this tracked source never matches the scan.
         sep = "/"
         bad = [
@@ -392,7 +392,7 @@ def test_red_posix_local_paths():
             sep + sep.join(["tmp", "pytest-of-someone", "x.json"]),
             sep + sep.join(["Users", "someone", "notes.txt"]),
         ]
-        (tmp / "docs" / "note.md").write_text(
+        (tmp / "receipts" / "note.json").write_text(
             "".join(f"line {i} wrote {p} here.\n" for i, p in enumerate(bad)),
             encoding="utf-8", newline="\n",
         )
@@ -401,7 +401,7 @@ def test_red_posix_local_paths():
         assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
         assert "FAIL [paths]" in out, out
         for line in (1, 2, 3):
-            assert f"docs/note.md:{line}" in out, out
+            assert f"receipts/note.json:{line}" in out, out
     finally:
         cleanup(tmp)
 
@@ -410,6 +410,7 @@ def test_green_posix_relative_and_url_paths():
     tmp = make_fixture("fix/selftest-green-posix-relative")
     try:
         (tmp / "docs").mkdir(exist_ok=True)
+        (tmp / "receipts").mkdir(exist_ok=True)
         sep = "/"
         fine = [
             sep.join(["src", "tmp", "x.json"]),
@@ -419,8 +420,13 @@ def test_green_posix_relative_and_url_paths():
             # A drive path stays with the narrower Windows rules.
             "C" + ":" + sep + sep.join(["tmp", "clean-room", "x.json"]),
         ]
+        body = "".join(f"{p}\n" for p in fine)
+        (tmp / "receipts" / "note.json").write_text(body, encoding="utf-8", newline="\n")
+        # The POSIX roots are a receipts-only rule: the same shapes in prose
+        # or code (fixtures, docs) are legitimate literals and must pass.
+        posix = sep + sep.join(["home", "runner", "work", "x"])
         (tmp / "docs" / "note.md").write_text(
-            "".join(f"{p}\n" for p in fine), encoding="utf-8", newline="\n",
+            body + f"example: {posix}\n", encoding="utf-8", newline="\n"
         )
         commit_fixture(tmp)
         rc, out = run_guard(tmp)

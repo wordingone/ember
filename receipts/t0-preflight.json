@@ -35,7 +35,7 @@
     "hf_cache": {
       "ok": true,
       "value": {
-        "path": "/home/the maintainer/.cache/huggingface/hub",
+        "path": "local:the maintainer/.cache/huggingface/hub",
         "exists": false
       }
     },
@@ -67,5 +67,10 @@
         }
       }
     }
+  },
+  "redaction_note": {
+    "policy": "repo-relative-or-local-basename",
+    "replacement_count": 1,
+    "first_landing_override_reason": "owner ruling 2026-11-04: POSIX home paths in tracked receipts redacted with the redactor itself (PR 2390)"
   }
 }
