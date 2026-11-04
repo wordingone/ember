@@ -4,10 +4,18 @@
 // core/query-engine.history.test.ts -- #2382: the model's replies stay in the conversation
 // even when the caller stops iterating at the result event, as the REPL does.
 
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { dropUnansweredToolCalls, QueryEngine, type EngineMessage } from "./query-engine.ts";
 import type { CallModelParams, LoopDepsOverrides, ModelResponse } from "../query/query-loop-support.ts";
-import type { MessageChange } from "../services/session-store.ts";
+import { loadSessionFile, SessionWriter, sessionsDirFor, type MessageChange } from "../services/session-store.ts";
+
+const made: string[] = [];
+afterEach(() => {
+  for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 
 function reply(text: string): ModelResponse {
   return { role: "assistant", content: [{ type: "text", text }], stop_reason: "end_turn" };
@@ -110,5 +118,61 @@ describe("dropUnansweredToolCalls", () => {
       msg("assistant", [{ type: "tool_use", id: "t2", name: "Bash", input: {} }]),
     ];
     expect(dropUnansweredToolCalls(turn)).toEqual(turn.slice(0, 2));
+  });
+});
+
+describe("#2382 saved session and interrupted turns", () => {
+  it("a consumer that breaks on result still leaves the assistant line in the session JSONL", async () => {
+    const home = mkdtempSync(join(tmpdir(), "ember-2382-"));
+    made.push(home);
+    const writer = new SessionWriter({ dir: sessionsDirFor("/proj", home), sessionId: "s1", cwd: "/proj" });
+    const deps: LoopDepsOverrides = {
+      callModel: async () => reply("391"),
+      generateUuid: () => "u",
+    };
+    const engine = new QueryEngine(
+      { getAppState: () => ({}), setAppState: () => {}, onMessagesChanged: (c) => writer.append(c) },
+      deps,
+    );
+    await submitLikeRepl(engine, "What is 17 times 23?");
+    const roles = readFileSync(writer.path, "utf-8")
+      .split("\n")
+      .filter((l) => l.includes('"type":"message"'))
+      .map((l) => (JSON.parse(l) as { message: { role: string } }).message.role);
+    expect(roles).toEqual(["user", "assistant"]);
+    const restored = loadSessionFile(writer.path)!;
+    expect(texts(restored.messages)).toEqual(["user:What is 17 times 23?", "assistant:391"]);
+  });
+
+  it("an interrupt on a tool call with no result leaves no dangling tool_use in the history", async () => {
+    const deps: LoopDepsOverrides = {
+      callModel: async () => ({
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "NoSuchTool", input: {} }],
+        stop_reason: "tool_use",
+      }),
+      generateUuid: () => "u",
+    };
+    const engine = new QueryEngine({ getAppState: () => ({}), setAppState: () => {} }, deps);
+    for await (const ev of engine.submitMessage("do it")) {
+      if ((ev as { type: string }).type === "assistant") break; // Esc right after the call
+    }
+    expect(texts(engine.getMessages())).toEqual(["user:do it"]);
+  });
+
+  it("the replay phase also commits the reply when the consumer breaks at result", async () => {
+    const engine = new QueryEngine(
+      {
+        getAppState: () => ({}),
+        setAppState: () => {},
+        initialMessages: [{ role: "user", content: [{ type: "text", text: "earlier question" }] }],
+        replayUserMessages: true,
+      },
+      { callModel: async () => reply("earlier answer"), generateUuid: () => "u" },
+    );
+    for await (const ev of engine.submitMessage("new question")) {
+      if ((ev as { type: string }).type === "result") break; // ends the replay turn
+    }
+    expect(texts(engine.getMessages())).toEqual(["user:earlier question", "assistant:earlier answer"]);
   });
 });
