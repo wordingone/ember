@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Make the sibling ``hour_test_support`` module importable under every pytest import mode.
 
@@ -7,6 +7,9 @@ Each test here starts with ``import hour_test_support``. Under pytest's default 
 mode that works because the test's own directory is put on ``sys.path``; the nightly runs
 with ``--import-mode=importlib``, which does not, so all eight files failed at collection
 with ``ModuleNotFoundError: No module named 'hour_test_support'``.
+
+Bound to EMBER-02A, not the directory's EMBER-02B: this file changes no hour-continuation
+behaviour; it only makes the nightly's governed test signal (02A) collect these tests.
 """
 from __future__ import annotations
 
