@@ -2492,7 +2492,7 @@ def run_and_emit_live() -> Path:
         import importlib.util as _ember_d9c5c82c124e1dc8_importlib
         import sys as _ember_d9c5c82c124e1dc8_sys
         from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
-        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parent.joinpath('..', 'timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parent.parent.joinpath('timeshare_pretrain.py')
         if not _ember_d9c5c82c124e1dc8_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/timeshare_pretrain.py')
         _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'src.ember.governance.scripts.timeshare_pretrain', 'timeshare_pretrain')

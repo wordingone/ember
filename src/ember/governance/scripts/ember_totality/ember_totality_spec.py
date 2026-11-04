@@ -113,6 +113,11 @@ REPO_ROOT = os.path.abspath(os.path.join(MODULE_DIR, "..", "..", "..", "..", "..
 HERE = os.path.join(REPO_ROOT, "scripts", "ember_totality")
 PROBE_DIRS = (HERE, MODULE_DIR)
 sys.path.insert(0, REPO_ROOT)
+# The `scripts.ember_totality.*` / `scripts.ember_phase3_c14.*` imports below name modules that
+# the 2026-09-02 carrier move put under src/ember/governance/scripts/. `scripts` is a namespace
+# package, so it spans that directory only when src/ember/governance is on sys.path. Without
+# this line the runner died at import with "cannot import name 'receipt_chain_verify'".
+sys.path.insert(1, os.path.join(REPO_ROOT, "src", "ember", "governance"))
 # issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
 import importlib.util as _ember_2560a87c017c05b0_importlib
 import sys as _ember_2560a87c017c05b0_sys
@@ -163,7 +168,7 @@ from scripts.ember_totality import receipt_chain_verify
 import importlib.util as _ember_39e1b9f43e5ffbf4_importlib
 import sys as _ember_39e1b9f43e5ffbf4_sys
 from pathlib import Path as _ember_39e1b9f43e5ffbf4_Path
-_ember_39e1b9f43e5ffbf4_path = _ember_39e1b9f43e5ffbf4_Path(__file__).resolve().parent.joinpath('..', 'redact_local_paths.py')
+_ember_39e1b9f43e5ffbf4_path = _ember_39e1b9f43e5ffbf4_Path(__file__).resolve().parent.parent.joinpath('redact_local_paths.py')
 if not _ember_39e1b9f43e5ffbf4_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/redact_local_paths.py')
 _ember_39e1b9f43e5ffbf4_aliases = ('_ember_issue2015_39e1b9f43e5ffbf4', 'redact_local_paths', 'src.ember.governance.scripts.redact_local_paths')
