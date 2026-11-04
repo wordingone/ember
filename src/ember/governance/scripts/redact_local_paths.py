@@ -6,7 +6,7 @@
 
 Every input is one explicitly named JSON file.  The writer converts paths
 under the repository to forward-slash repo-relative paths and other
-drive-rooted paths to ``local:<basename>``.  Existing files at the selected
+drive-rooted or POSIX home, runner and temporary paths to ``local:<basename>``.  Existing files at the selected
 base are refused unless a reasoned first-landing override is supplied.
 """
 
@@ -33,6 +33,31 @@ _WINDOWS_ABSOLUTE_PATH = re.compile(
     r"(?i)(?<![A-Za-z0-9_])([A-Z]:[\\/][^\s\"'<>|]*)"
 )
 _EXACT_WINDOWS_ABSOLUTE_PATH = re.compile(r"(?is)^(\s*)([A-Z]:[\\/][^\r\n\"'<>|]*?)(\s*)$")
+
+# POSIX absolute paths that carry machine-local context: a user's home
+# directory (under "home" or macOS "Users", plus root's home), a CI runner's
+# workspace (which lives under the runner user's home), and the temporary
+# roots ("tmp", "var/tmp", macOS "var/folders" and "private/tmp|var").
+# Linux runners write receipts with these, so a Windows-only check let them
+# land unredacted.  The lookbehind keeps relative, home-relative (tilde) and
+# URL paths out.  tools/repo-guard.sh PATHPAT carries the same roots for the
+# tree-wide landing scan; keep the two in step.
+_POSIX_LOCAL_PATH = re.compile(
+    r"(?<![A-Za-z0-9_.~/\\-])("
+    r"/(?:(?:home|Users)/[^\s/\"'<>|]+(?:/[^\s\"'<>|]*)?"
+    r"|(?:root|tmp|var/tmp|var/folders|private/tmp|private/var)/[^\s\"'<>|]*)"
+    r")"
+)
+_EXACT_POSIX_LOCAL_PATH = re.compile(
+    r"(?s)^(\s*)("
+    r"/(?:(?:home|Users)/[^\s/\"'<>|]+(?:/[^\r\n\"'<>|]*?)?"
+    r"|(?:root|tmp|var/tmp|var/folders|private/tmp|private/var)/[^\r\n\"'<>|]*?)"
+    r")(\s*)$"
+)
+# Group 1 is a drive path, group 2 a POSIX local path.
+_LOCAL_ABSOLUTE_PATH = re.compile(
+    r"(?i:(?<![A-Za-z0-9_])([A-Z]:[\\/][^\s\"'<>|]*))|" + _POSIX_LOCAL_PATH.pattern
+)
 _TRAILING_PROSE = ".,;:)]}"
 _NOTE_KEY = "redaction_note"
 _NOTE_POLICY = "repo-relative-or-local-basename"
@@ -66,7 +91,9 @@ def _repo_relative_or_local(token: str, repo_root: Path) -> str:
 
 
 def _rewrite_string(value: str, repo_root: Path) -> tuple[str, int]:
-    exact = _EXACT_WINDOWS_ABSOLUTE_PATH.fullmatch(value)
+    exact = _EXACT_WINDOWS_ABSOLUTE_PATH.fullmatch(
+        value
+    ) or _EXACT_POSIX_LOCAL_PATH.fullmatch(value)
     if exact:
         return (
             exact.group(1)
@@ -80,9 +107,10 @@ def _rewrite_string(value: str, repo_root: Path) -> tuple[str, int]:
     def replace(match: re.Match[str]) -> str:
         nonlocal count
         count += 1
-        return _repo_relative_or_local(match.group(1), repo_root)
+        token = match.group(1) if match.group(1) is not None else match.group(2)
+        return _repo_relative_or_local(token, repo_root)
 
-    return _WINDOWS_ABSOLUTE_PATH.sub(replace, value), count
+    return _LOCAL_ABSOLUTE_PATH.sub(replace, value), count
 
 
 def _normalize_value(value: Any, repo_root: Path) -> tuple[Any, int]:
@@ -140,14 +168,14 @@ def normalize_json_paths(payload: Mapping[str, Any], repo_root: Path) -> tuple[d
 def _violation_locations(value: Any, location: str = "$") -> list[str]:
     found: list[str] = []
     if isinstance(value, str):
-        if _WINDOWS_ABSOLUTE_PATH.search(value):
+        if _LOCAL_ABSOLUTE_PATH.search(value):
             found.append(location)
     elif isinstance(value, list):
         for index, item in enumerate(value):
             found.extend(_violation_locations(item, f"{location}[{index}]"))
     elif isinstance(value, dict):
         for key, item in value.items():
-            if isinstance(key, str) and _WINDOWS_ABSOLUTE_PATH.search(key):
+            if isinstance(key, str) and _LOCAL_ABSOLUTE_PATH.search(key):
                 found.append(f"{location}.<key:{key}>")
             found.extend(_violation_locations(item, f"{location}.{key}"))
     return found
