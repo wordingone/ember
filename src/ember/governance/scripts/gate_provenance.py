@@ -12,6 +12,19 @@ import sys
 from pathlib import Path
 
 
+def _repository_root(tool: Path) -> Path:
+    """The checkout root that holds ``tool``, found by its pyproject.toml marker.
+
+    The default used to be ``tool.parents[1]``, which was the repository root only while
+    gates lived in ``scripts/``. After the move to ``src/ember/governance/scripts/`` it
+    named ``src/ember/governance`` and every banner reported ``path=scripts/<tool>``.
+    """
+    for parent in tool.parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return tool.parents[1]
+
+
 def render_gate_provenance(
     tool_path: str | Path, *, repo_root: str | Path | None = None
 ) -> str:
@@ -21,7 +34,7 @@ def render_gate_provenance(
     root = (
         Path(repo_root).resolve(strict=False)
         if repo_root is not None
-        else tool.parents[1]
+        else _repository_root(tool)
     )
     try:
         display_path = tool.relative_to(root).as_posix()

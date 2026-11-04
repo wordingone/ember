@@ -11,7 +11,9 @@ from pathlib import Path
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT = ROOT / "scripts" / "ember_cbase_mixture.py"
+SCRIPT = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_cbase_mixture.py"
+if not SCRIPT.is_file():  # a missing script also exits nonzero; that must not read as a refusal
+    raise FileNotFoundError(SCRIPT)
 REFUSAL = (
     "historical_only: the sub-3B cbase mixture assembler and every "
     "importer are execution-denied"
