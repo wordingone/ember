@@ -52,7 +52,7 @@
     },
     {
       "path": "src/ember/governance/scripts/test_ember_cbase_launch.py",
-      "sha256": "80ba65f5528dee76aaf4ad716353578326072773412a91082a6979fa249920c8",
+      "sha256": "15d8956e6c756a95297d1dabbe587158c037c7e906d5155cf9f484bf704e409d",
       "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
     },
     {

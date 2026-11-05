@@ -37,7 +37,7 @@ function makeDefaultDeps(overrides?: Partial<UltrareviewDeps>): UltrareviewDeps 
     getDefaultBranch: async () => "main",
     computeMergeBase: async () => "abc123sha",
     getDiffBetween: async () => "diff --git a/foo.ts b/foo.ts\n+changed",
-    bundleWorkingTree: async () => ({ tooLarge: false, bundlePath: "/tmp/bundle.tar" }),
+    bundleWorkingTree: async () => ({ tooLarge: false, bundlePath: "/fixture/tmp/bundle.tar" }),
     onEscape: (_cb) => () => {},
     launchRemoteSession: async () => ({ sessionUrl: "https://ccr/session/xyz" }),
     setShouldQuery: (_v) => {},
@@ -402,7 +402,7 @@ describe("/ultrareview", () => {
       const cap: { opts: LaunchOpts | null } = { opts: null };
       const cmd = createUltrareviewCommand(
         makeDefaultDeps({
-          bundleWorkingTree: async () => ({ tooLarge: false, bundlePath: "/tmp/b.tar" }),
+          bundleWorkingTree: async () => ({ tooLarge: false, bundlePath: "/fixture/tmp/b.tar" }),
           launchRemoteSession: async (opts) => {
             cap.opts = opts;
             return { sessionUrl: "https://x" };
@@ -411,7 +411,7 @@ describe("/ultrareview", () => {
       );
       await cmd.execute("", mockContext);
       expect(cap.opts?.useBundle).toBe(true);
-      expect(cap.opts?.bundlePath).toBe("/tmp/b.tar");
+      expect(cap.opts?.bundlePath).toBe("/fixture/tmp/b.tar");
     });
   });
 });

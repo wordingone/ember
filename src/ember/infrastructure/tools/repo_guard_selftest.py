@@ -379,6 +379,57 @@ def test_red_absolute_path_doubled_json_escape():
         cleanup(tmp)
 
 # ---------------------------------------------------------------------------
+# RED/GREEN: POSIX home, runner and temporary roots (ruling by an AI agent acting for the owner, 2026-11-04)
+# ---------------------------------------------------------------------------
+def test_red_posix_local_paths():
+    tmp = make_fixture("fix/selftest-red-posix-path")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        # Assembled at runtime so this tracked source never matches the scan.
+        sep = "/"
+        bad = [
+            sep + sep.join(["home", "runner", "work", "ember", "receipt.json"]),
+            sep + sep.join(["tmp", "pytest-of-someone", "x.json"]),
+            sep + sep.join(["Users", "someone", "notes.txt"]),
+        ]
+        (tmp / "docs" / "note.md").write_text(
+            "".join(f"line {i} wrote {p} here.\n" for i, p in enumerate(bad)),
+            encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [paths]" in out, out
+        for line in (1, 2, 3):
+            assert f"docs/note.md:{line}" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_posix_relative_and_url_paths():
+    tmp = make_fixture("fix/selftest-green-posix-relative")
+    try:
+        (tmp / "docs").mkdir(exist_ok=True)
+        sep = "/"
+        fine = [
+            sep.join(["src", "tmp", "x.json"]),
+            "~" + sep + sep.join(["tmp", "x.json"]),
+            "https:" + sep * 2 + sep.join(["example.org", "home", "x"]),
+            sep + sep.join(["usr", "bin", "python3"]),
+            # A drive path stays with the narrower Windows rules.
+            "C" + ":" + sep + sep.join(["tmp", "clean-room", "x.json"]),
+        ]
+        (tmp / "docs" / "note.md").write_text(
+            "".join(f"{p}\n" for p in fine), encoding="utf-8", newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert "ok   [paths]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+# ---------------------------------------------------------------------------
 # RED: text-attributed files must be checked regardless of filename extension.
 # ---------------------------------------------------------------------------
 def test_red_text_attributed_binary_extension_utf16le():
@@ -981,7 +1032,7 @@ def test_split_kernel_scans_subject_guard_for_absolute_paths():
     try:
         (tmp / "tools" / "repo-guard.sh").write_text(
             "#!/usr/bin/env bash\n"
-            "# candidate-smuggled path: " + "C:" + "/Users/example/private\n"
+            "# candidate-smuggled path: " + "C:" + "/" + "Users/example/private\n"
             "exit 0\n",
             encoding="utf-8",
             newline="\n",
@@ -1809,6 +1860,8 @@ ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
     test_red_absolute_path_doubled_json_escape,
+    test_red_posix_local_paths,
+    test_green_posix_relative_and_url_paths,
     test_red_text_attributed_binary_extension_utf16le,
     test_red_utf16le_bom,
     test_red_utf32le_bom,

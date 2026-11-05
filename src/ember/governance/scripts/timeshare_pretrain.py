@@ -2920,13 +2920,13 @@ def _selftest_v0ext() -> None:
         #     never the synthetic run_segment path.
         _route.clear()
         try:
-            main(["--live", "--shard-dir", "/tmp/ember-shards-xyz",
+            main(["--live", "--shard-dir", "/fixture/tmp/ember-shards-xyz",
                   "--steps", "3", "--total-steps", "9", "--run-dir", _rd])
         except _RouteStop:
             pass
         assert _route.get("v0"), "--live must dispatch run_v0_segment (eng-54)"
         assert _route["v0"]["live"] is True
-        assert _route["v0"]["shard_dir"] == "/tmp/ember-shards-xyz"
+        assert _route["v0"]["shard_dir"] == "/fixture/tmp/ember-shards-xyz"
         assert _route["v0"]["total_steps"] == 9
         assert "seg" not in _route, \
             "live path must NOT fall through to synthetic run_segment (eng-54)"

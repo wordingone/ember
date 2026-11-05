@@ -154,8 +154,8 @@ describe('BashProvider', () => {
   });
 
   test('TMUX_SOCKET forwarded in env overrides', () => {
-    const p = new BashProvider({ tmuxSocket: '/tmp/tmux.sock' });
-    expect(p.getEnvironmentOverrides()['TMUX_SOCKET']).toBe('/tmp/tmux.sock');
+    const p = new BashProvider({ tmuxSocket: '/fixture/tmp/tmux.sock' });
+    expect(p.getEnvironmentOverrides()['TMUX_SOCKET']).toBe('/fixture/tmp/tmux.sock');
   });
 });
 

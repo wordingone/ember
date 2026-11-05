@@ -67,7 +67,7 @@ function makeEntry(overrides: Partial<MemoryFileEntry> = {}): MemoryFileEntry {
     name: overrides.name ?? 'test-entry',
     description: overrides.description ?? 'A test entry description',
     type: overrides.type ?? 'user',
-    filePath: overrides.filePath ?? '/tmp/test.md',
+    filePath: overrides.filePath ?? '/fixture/tmp/test.md',
     body: overrides.body ?? makeValidFileContent({ name: 'test-entry', description: 'A test entry description' }),
     modifiedAt: overrides.modifiedAt ?? new Date(),
   };

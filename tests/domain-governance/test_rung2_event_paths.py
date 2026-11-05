@@ -80,7 +80,7 @@ class TestReceiptPathRelative(unittest.TestCase):
 
         # Test paths: in-repo and out-of-repo
         in_repo_path = repo_root / "cache"
-        out_of_repo_path = Path("/tmp/other_location")
+        out_of_repo_path = Path("/fixture/tmp/other_location")
 
         # Convert in-repo path
         rel_in_repo = cbase_grow_rung2_event._make_path_repo_relative(in_repo_path, repo_root)
@@ -130,7 +130,7 @@ class TestReceiptPathRelative(unittest.TestCase):
 
         # Simulate paths on different drives
         repo_on_b = Path("repo_root")
-        path_on_c = Path("/tmp/other")
+        path_on_c = Path("/fixture/tmp/other")
 
         # Test the relpath behavior
         try:

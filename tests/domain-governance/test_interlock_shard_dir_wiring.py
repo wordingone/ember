@@ -46,12 +46,12 @@ def test_check_launch_interlock_forwards_shard_dir():
 
                 # TEST 1: Call with shard_dir and verify it's forwarded
                 gate_kwargs.clear()
-                _check_launch_interlock(live=True, shard_dir="/tmp/test_shards")
+                _check_launch_interlock(live=True, shard_dir="/fixture/tmp/test_shards")
 
                 assert "shard_dir_override" in gate_kwargs, \
                     "shard_dir_override not found in gate kwargs"
-                assert gate_kwargs["shard_dir_override"] == "/tmp/test_shards", \
-                    f"Expected shard_dir_override='/tmp/test_shards', got {gate_kwargs.get('shard_dir_override')}"
+                assert gate_kwargs["shard_dir_override"] == "/fixture/tmp/test_shards", \
+                    f"Expected shard_dir_override='/fixture/tmp/test_shards', got {gate_kwargs.get('shard_dir_override')}"
 
                 # TEST 2: Call without shard_dir and verify default (None)
                 gate_kwargs.clear()

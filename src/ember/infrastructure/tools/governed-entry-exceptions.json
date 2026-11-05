@@ -53,7 +53,7 @@
     },
     {
       "path": "src/ember/infrastructure/tools/repo_guard_selftest.py",
-      "sha256": "920c21eb2c1dfe98531ea6e44b648892d56df047dbf824048a8469b7c2177213",
+      "sha256": "86232732d49c2b067e86a1d019153f05e91a4e49fe10f807de1ed51ec02aacd4",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
