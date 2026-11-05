@@ -875,7 +875,13 @@ fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_bot
 fn foreign_pressure_refusal_precedes_a_simultaneous_host_commit_cap_refusal() {
     let root = sandbox("foreign-pressure-precedes-host-cap");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     set_foreign_pressure_state(&db, "fenced", "FENCED");
 
     let manifest = write_restore_manifest(&root, "foreign-pressure-precedes-host-cap-job");
@@ -944,7 +950,13 @@ fn foreign_pressure_refusal_precedes_a_simultaneous_host_commit_cap_refusal() {
 fn foreign_pressure_refusal_survives_a_host_commit_measurement_failure() {
     let root = sandbox("foreign-pressure-precedes-host-measurement-failure");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     set_foreign_pressure_state(&db, "fenced", "FENCED");
     let manifest = write_restore_manifest(
         &root,
@@ -1146,7 +1158,13 @@ fn dispatch_pressure_fixture(
 fn fenced_foreign_pressure_alone_refuses_before_process_birth() {
     let root = sandbox("foreign-pressure-only-fenced");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     set_foreign_pressure_state(&db, "fenced", "FENCED");
 
     let (result, argv_marker, child_birth_marker, payload) =
@@ -1183,7 +1201,13 @@ fn fenced_foreign_pressure_alone_refuses_before_process_birth() {
 fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
     let root = sandbox("foreign-pressure-only-probe-failed");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     set_foreign_pressure_state(&db, "probe_failed", "PROBE_FAILED");
 
     let (result, argv_marker, child_birth_marker, payload) =
@@ -1231,7 +1255,13 @@ fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
 fn malformed_foreign_pressure_observation_is_not_reported_as_counter_failure() {
     let root = sandbox("foreign-pressure-malformed-observation");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     let malformed_observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
         "error": "fixture counter failure",
@@ -1279,7 +1309,13 @@ fn malformed_foreign_pressure_observation_is_not_reported_as_counter_failure() {
 fn observed_foreign_processes_with_healthy_host_allow_dispatch() {
     let root = sandbox("foreign-pressure-observed-admits");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     set_foreign_pressure_state(&db, "observed", "OBSERVED");
 
     let (result, argv_marker, child_birth_marker, _) =
@@ -1302,7 +1338,13 @@ fn observed_foreign_processes_with_healthy_host_allow_dispatch() {
 fn denied_attribution_with_healthy_host_allows_dispatch() {
     let root = sandbox("foreign-pressure-denied-attribution-admits");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row, so it must not race
+    // the 2s monitor's unconditional census overwrite (see the
+    // monitor_owned_rows_guard test for the rule).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     let observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
         "result": "CLEAR",
