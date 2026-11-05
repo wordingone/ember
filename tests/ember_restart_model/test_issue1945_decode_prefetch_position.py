@@ -114,7 +114,7 @@ class PrefetchPositionTests(unittest.TestCase):
         stream, packs = hour_packs(image_start, 3)
         with patch.object(images, '_decode_uint8', zero_grid):
             staged = runner._stage_next_early(packs[1], CPU, stream, packs[0], True, image_start=image_start)
-            self.assertEqual(staged[2], hour.DECODE_PREFETCH_MISS)  # nothing had prefetched update 1 yet (index 1 and 2 never hit)
+            self.assertEqual(staged[2], hour.DECODE_PREFETCH_MISS)  # nothing prefetched update 1 in this fixture (the hour's record step would, one-ahead)
             self.assertEqual(len(images._AHEAD), 1)
             rows, patches = images.load_patches(packs[2], CPU)
             images.join_prefetch()
@@ -168,7 +168,8 @@ class PrefetchPositionTests(unittest.TestCase):
 
 
 def synthetic_rows(count, *, misses=(), without_field=()):
-    """index 0 warm, then measured rows; updates 1 and 2 decode in-step by construction (nothing prefetched them)."""
+    """index 0 warm, then measured rows; updates 1 and 2 are modelled in-step, the allowance's upper bound (in the
+    hour only update 2 is structurally unprefetched under two-ahead; the record step's one-ahead prefetch covers 1)."""
     for index in range(count + 1):
         row = dict(index=index, phase='warm' if index == 0 else 'measured')
         if index not in without_field:

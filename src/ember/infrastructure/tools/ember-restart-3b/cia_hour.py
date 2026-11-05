@@ -413,7 +413,10 @@ def require_remaining_hour_capacity(measured_updates, maximum):
 
 DECODE_PREFETCH_CLAUSE = 'decode-prefetch-actually-hit'
 DECODE_PREFETCH_ASSERTED_ROWS = 64   # measured rows the assertion inspects before the hour counts; counted-only after
-DECODE_PREFETCH_FIRST_INDEX = 3      # first update whose patches a two-ahead prefetch can have decoded (1 and 2 never hit)
+# First update a two-ahead prefetch can have decoded, an UPPER bound: update 2 is staged inside update 1 before any
+# prefetch targets it (update 1 prefetches update 3); update 1 is covered by the record step's one-ahead prefetch, and a
+# one-ahead-only hour has no structural miss at all (the Sept 24 genesis control reads 1,200 of 1,200 hits).
+DECODE_PREFETCH_FIRST_INDEX = 3
 DECODE_PREFETCH_HIT = 'decoded-in-previous-step-wall'
 DECODE_PREFETCH_MISS = 'decoded-in-this-step'
 
