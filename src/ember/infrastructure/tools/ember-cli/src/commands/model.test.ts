@@ -613,7 +613,7 @@ describe("model command", () => {
         modernCheckpointSaveDeps: modernDeps(verifiedDirs),
       });
 
-      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+      const result = await cmd.execute("checkpoint save /fixture/tmp/target-dir", mockCtx);
 
       expect(result?.exitCode).toBeUndefined();
       expect(result?.message).toContain(fakeOwnedIdentity.checkpointSha256);
@@ -648,7 +648,7 @@ describe("model command", () => {
         },
       });
 
-      const result = await cmd.execute("checkpoint save /tmp/target-dir", mockCtx);
+      const result = await cmd.execute("checkpoint save /fixture/tmp/target-dir", mockCtx);
 
       expect(result?.exitCode).toBe(1);
       expect(result?.message).toContain("no durable selected owned checkpoint");
@@ -686,11 +686,11 @@ describe("model command", () => {
       });
 
       const result = await cmd.execute(
-        "checkpoint save-legacy /tmp/target-dir --source /tmp/reference-checkpoint",
+        "checkpoint save-legacy /fixture/tmp/target-dir --source /fixture/tmp/reference-checkpoint",
         mockCtx,
       );
 
-      expect(resolvedManifest).toBe(join("/tmp/reference-checkpoint", "manifest.json"));
+      expect(resolvedManifest).toBe(join("/fixture/tmp/reference-checkpoint", "manifest.json"));
       expect(result?.message).toContain("legacy checkpoint snapshot saved");
       expect(result?.message).toContain("not /model checkpoint load compatible");
     });

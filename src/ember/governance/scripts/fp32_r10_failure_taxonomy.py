@@ -300,7 +300,7 @@ def _fixture():
     def j(jid, ts, status, script, typ="eval"):
         return {"job_id": jid, "type": typ, "status": status,
                 "started_at": ts, "pid": 1,
-                "config": {"script": script, "output_dir": "/tmp/x"}}
+                "config": {"script": script, "output_dir": "/fixture/tmp/x"}}
     s_emb = "<local-path>"
     s_web = "<local-path>"
     return {

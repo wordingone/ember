@@ -27,7 +27,7 @@ import DoctorScreen, {
 describe("AC1: DoctorScreen renders Diagnostics title", () => {
   it("React.createElement succeeds and produces a valid element", () => {
     const el = React.createElement(DoctorScreen, {
-      cwd: "/tmp/test",
+      cwd: "/fixture/tmp/test",
       onDone: () => {},
     });
     expect(el.type).toBe(DoctorScreen);
@@ -331,7 +331,7 @@ describe("AC8: version locks section", () => {
 describe("AC9: agent parse errors", () => {
   it("agentParseErrors prop is threaded correctly", () => {
     const errors: AgentParseError[] = [
-      { file: "/home/.ember/agents/my-agent.json", error: "Unexpected end of JSON input" },
+      { file: "/fixture/home/.ember/agents/my-agent.json", error: "Unexpected end of JSON input" },
     ];
     const el = React.createElement(DoctorScreen, {
       cwd: "/tmp",
@@ -339,7 +339,7 @@ describe("AC9: agent parse errors", () => {
       agentParseErrors: errors,
     });
     const p = el.props as DoctorScreenProps;
-    expect(p.agentParseErrors![0]!.file).toBe("/home/.ember/agents/my-agent.json");
+    expect(p.agentParseErrors![0]!.file).toBe("/fixture/home/.ember/agents/my-agent.json");
     expect(p.agentParseErrors![0]!.error).toBe("Unexpected end of JSON input");
   });
 

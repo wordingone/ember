@@ -21,7 +21,7 @@ function makeLog(overrides: Partial<LogOption> = {}): LogOption {
   return {
     date: '2024-01-01',
     messages: [],
-    fullPath: '/tmp/sess.jsonl',
+    fullPath: '/fixture/tmp/sess.jsonl',
     value: 1,
     created: new Date('2024-01-01'),
     modified: new Date('2024-01-01'),

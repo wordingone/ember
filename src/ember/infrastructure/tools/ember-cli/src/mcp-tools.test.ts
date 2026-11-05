@@ -78,7 +78,7 @@ function makeContext(clients: McpClientInterface[] = []): McpToolsContext {
     getClient: (name: string) => clients.find((c) => c.serverName === name),
     startOAuthFlow: (_name: string, _config: McpServerConfig) => null,
     replaceAuthToolWithRealTools: (_name: string, _prefix: string) => {},
-    persistBlob: async (_data: Buffer, ext: string, id: string) => `/tmp/blob-${id}${ext}`,
+    persistBlob: async (_data: Buffer, ext: string, id: string) => `/fixture/tmp/blob-${id}${ext}`,
     resourceCache: cache,
   };
 }

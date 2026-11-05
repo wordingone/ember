@@ -159,7 +159,7 @@ describe("CommandBarPane rendering", () => {
     resetCommandRegistryForTests();
     try {
       setCommandRegistryDeps({ getBuiltinCommands: () => [cmd("brand-new-command")] });
-      const commands = await getCommands("/tmp/command-bar-growth");
+      const commands = await getCommands("/fixture/tmp/command-bar-growth");
       const lines = await renderToLines(
         React.createElement(CommandBarPane, { commands, width: 60, maxRows: 2 }),
         60,

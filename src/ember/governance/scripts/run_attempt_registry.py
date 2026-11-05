@@ -604,7 +604,9 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         poisoned["source_receipt"] = "B" + ":/x/receipt.json"
         check("absolute drive-letter path in a row value rejected ([paths] law)",
               any("absolute local path" in d for d in validate_row(poisoned)))
-        poisoned["source_receipt"] = "/tmp/receipt.json"
+        # Same split as above, for the POSIX form (repo-guard PATHPAT covers
+        # home and temp roots too).
+        poisoned["source_receipt"] = "/" + "tmp/receipt.json"
         check("absolute POSIX path in a row value rejected ([paths] law)",
               any("absolute local path" in d for d in validate_row(poisoned)))
         drifted = dict(foreign)

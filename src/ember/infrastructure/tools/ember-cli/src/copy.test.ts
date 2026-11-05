@@ -138,8 +138,8 @@ describe('buildTempPath', () => {
   });
 
   it('paths are under <tmpdir>/claude/', () => {
-    const path = buildTempPath('/tmp', true);
-    expect(path).toBe('/tmp/ember/response.md');
+    const path = buildTempPath('/fixture/tmp', true);
+    expect(path).toBe('/fixture/tmp/ember/response.md');
   });
 });
 

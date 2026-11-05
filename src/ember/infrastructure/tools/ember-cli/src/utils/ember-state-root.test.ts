@@ -164,8 +164,8 @@ describe("emberStateRoot", () => {
         "C:\\ignored",
       ),
     ).toBe("C:\\explicit\\.ember");
-    expect(defaultEmberStateParent({}, "linux", "/home/ember/.ember")).toBe(
-      "/home/ember/.ember",
+    expect(defaultEmberStateParent({}, "linux", "/fixture/home/ember/.ember")).toBe(
+      "/fixture/home/ember/.ember",
     );
   });
 

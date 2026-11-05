@@ -317,7 +317,7 @@ describe('WebFetch', () => {
       fetchFn: fakeFetch,
       persistBinary: async (_data, _mimeType, _url) => {
         persistCalled = true;
-        return '/tmp/binary-blob.png';
+        return '/fixture/tmp/binary-blob.png';
       },
     });
     const tool = buildWebFetchTool(deps);
@@ -329,7 +329,7 @@ describe('WebFetch', () => {
     );
     expect(persistCalled).toBe(true);
     const data = result.data as { result: string };
-    expect(data.result).toContain('/tmp/binary-blob.png');
+    expect(data.result).toContain('/fixture/tmp/binary-blob.png');
   });
 
   test('AC8: content longer than 100000 chars is truncated with notice', async () => {

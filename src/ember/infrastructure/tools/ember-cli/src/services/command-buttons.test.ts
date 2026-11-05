@@ -64,7 +64,7 @@ describe("buildCommandButtons — derived from the registry, never declared", ()
       setCommandRegistryDeps({
         getBuiltinCommands: () => [cmd("alpha"), cmd("beta"), cmd("newly-registered")],
       });
-      const commands = await getCommands("/tmp/registry-growth");
+      const commands = await getCommands("/fixture/tmp/registry-growth");
       const names = buildCommandButtons(commands).map((b) => b.name);
       expect(names).toEqual(["alpha", "beta", "newly-registered"]);
     } finally {

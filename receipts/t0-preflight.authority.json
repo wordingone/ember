@@ -1,0 +1,15 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "receipts/t0-preflight.json",
+  "artifact_sha256": "855e727116497b526c8717f9dc22663e27c565773a245cc8799d93614bc533bb",
+  "ticket": "posix-path-policy",
+  "ts": "2026-11-04T13:16:45Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "historical receipt edited only to remove a POSIX home path (extended local-path policy; ruling by an AI agent acting for the owner, 2026-11-04); the binding sits in a content-addressed sidecar so the evidence itself gains no authority fields"
+}

@@ -194,6 +194,66 @@ carry no absolute paths at all. They are, however, enumerated in
 `src/ember/infrastructure/tools/frozen-receipt-exceptions.json` for a different gate (the receipt schema
 floor), for the same underlying reason: their sha256 values are cited elsewhere.
 
+## POSIX local-path policy (2026-11-04)
+
+`PATHPAT` in `tools/repo-guard.sh` and `src/ember/governance/scripts/redact_local_paths.py`
+now also treat absolute paths under a user's home (the `home` and macOS `Users` roots,
+and root's home) and the temporary roots (`tmp`, `var/tmp`, `var/folders`,
+`private/tmp|var`) as local-path leaks, because Linux runners write receipts with them.
+Dispositions below are a reviewed ruling by an AI agent acting for the owner.
+
+**Redacted:**
+
+- `receipts/t0-preflight.json` — a home-directory cache path, rewritten by the redactor
+  itself (`local:<basename>`, first-landing override). Binding in
+  `receipts/t0-preflight.authority.json`. Nothing cites this receipt by hash.
+- `receipts/fp33-e1-open-base-inventory-20260612T033709Z.json` — the same kind of path,
+  as one `scan_roots` key; only that key was replaced (a full redactor write collapses
+  the receipt's duplicate `<local-path>` keys). Binding in the `.authority.json` sidecar.
+  `manifests/ember-01-identity/consumer-census-v1.json`, an environmental-discovery
+  snapshot not checked against the live tree, still records the pre-redaction sha256
+  `e9d1169cff61ab5506c5cf2298e4ec80b4c9e328a8c48cf13bf0d467adcd020b` as history.
+- One line of `docs/domains/governance/research/floor-probes-20260611/train.log` — a
+  cache path replaced with `local:<basename>`, byte-level.
+
+Synthetic test values under the temporary and home roots were moved under a `/fixture` root
+instead, keeping their shape; deliberate adversarial literals were split so the source
+never contains them.
+
+**Excluded by exact file (class 4 in `PATHPAT_FIXTURE_EXCLUDE_ARGS`, not redacted):**
+
+The exclusion covers the whole paths check for each file, Windows rules included; the
+operator-name checks still cover them in full.
+
+- `receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json`
+  (sha256: `c375ae6cda92b0d2944f2e2755f04f13d970ce6bcb923064cdabd41be177fefa`)
+  — a custody freeze artifact that pins other files by hash; the match is a truncated
+  on-screen label inside an embedded terminal capture, not a path the host wrote.
+  Editing custody evidence is out of bounds.
+- `docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl`
+  (sha256: `e0064d2f300b1e64ce0fe56e0598267a225d7737cf6c03b2a555d0086e572faf`)
+  — a template path relative to a `{root}` placeholder, not a local path; its sha256
+  is cited by the custody receipt above.
+- `baseline/fragments/inventory-v0.md`
+  (sha256: `941b5595bb552e4f3e04afdf241ef5da02a995ff1b617d7b63dab2fc30974119`)
+  — a path under an `<exec-root>` placeholder; rewriting it would misstate the
+  documented location.
+- `src/ember/infrastructure/tools/ember-cli/src/build-tools/lifecycle-smoke.test.ts`
+  (sha256: `fd9c6a4762832018a576a87f229ed1ca22dc9a6f0490a21522f9786178c67b63`)
+  — builds a drive-letter path on purpose to test drive-path handling; the POSIX rule
+  fires on its tail.
+- `src/ember/governance/scripts/fp17_mixweights.py`
+  (sha256: `dab16b9421486b1f20af62af071beb4b06cefbb0e498761e061e433b58327092`)
+  — its temporary root is the real scratch directory the script writes to; changing it
+  would change runtime behaviour.
+- `src/ember/infrastructure/tools/ember-restart-3b/python_environment.py`
+  (sha256: `0f5e33ebcf30f3780ad076e4f341eeea330e1b891e80d48b6f474f302bd352cc`)
+  — a regex that recognises the installer's own short temporary directory; not a host
+  path.
+
+The two code files above are live: a real leak added to them later would not be caught
+by the paths check. Revisit if either is edited for another reason.
+
 ## History note
 
 Git history retains the pre-redaction blobs (the redacted commits are new commits, not
