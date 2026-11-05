@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 # #1945 mixture amendment A1 section 9 (frozen before any A1 result): 16,384 optimizer updates per arm, the warm update
@@ -437,12 +438,20 @@ class DecodePrefetchWitness:
         self.residual = 0
         self.rows_asserted = 0
         self.measured_rows = 0
+        # Execution beside the request: rows that staged the next update, and rows whose staging started the two-ahead
+        # decode (the step's two_ahead_prefetched, read back off its staging object, never off the environment).
+        self.staged_next_rows = 0
+        self.two_ahead_prefetched_rows = 0
 
     def observe(self, row, measured_ordinal):
         """row: one complete step row as written; measured_ordinal: its 1-based position among measured rows."""
         if row.get('phase') != 'measured':
             return
         self.measured_rows += 1
+        if row.get('staged_next_step') is True:
+            self.staged_next_rows += 1
+        if row.get('two_ahead_prefetched') is True:
+            self.two_ahead_prefetched_rows += 1
         source = row.get('image_patches_source')
         if source is None:
             self.residual += 1
@@ -457,14 +466,31 @@ class DecodePrefetchWitness:
                                  'prefetch did not hit, so the hour refuses before it counts'
                                  % (measured_ordinal, row.get('index', 0)))
 
+    def two_ahead_executed(self):
+        """Every measured row that staged the next update also started the two-ahead decode, and at least one did.
+        False on the eager arm, on EMBER_STAGE_NEXT_STEP unset, and on a one-ahead hour: the request standing alone."""
+        return self.two_ahead_prefetched_rows > 0 and self.two_ahead_prefetched_rows == self.staged_next_rows
+
     def receipt(self):
         return dict(clause=DECODE_PREFETCH_CLAUSE, two_ahead_requested=self.two_ahead,
+                    two_ahead_executed=self.two_ahead_executed(),
+                    staged_next_rows=self.staged_next_rows, two_ahead_prefetched_rows=self.two_ahead_prefetched_rows,
                     asserted_rows=DECODE_PREFETCH_ASSERTED_ROWS, first_asserted_index=DECODE_PREFETCH_FIRST_INDEX,
                     rows_asserted=self.rows_asserted, measured_rows=self.measured_rows,
                     image_patches_source_counts=dict(sorted(self.counts.items())),
                     residual_rows_without_field=self.residual,
-                    claim='image_patches_source counted off the written measured rows; a refusal is recorded in the '
-                          'worker terminal under the clause above, never here')
+                    claim='image_patches_source counted off the written measured rows; two_ahead_executed read off '
+                          'the two_ahead_prefetched field the step wrote from its staging object, beside the request; '
+                          'a refusal is recorded in the worker terminal under the clause above, never here')
+
+
+def file_decode_prefetch_refusal(runner, custody, witness):
+    """Write the refusal's sidecar. A failure HERE is named on stderr (the parent files it as custody/stderr.log) and
+    never propagates: the caller's bare `raise` re-raises the clause-bearing refusal, which outranks its evidence."""
+    try:
+        runner._write_new(custody / 'decode-prefetch.json', dict(witness.receipt(), refused=True))
+    except Exception as error:   # evidence-only sidecar: FileExistsError, OSError, anything; the clause propagates
+        print('DECODE_PREFETCH_SIDECAR_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
@@ -1105,8 +1131,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             try:
                 decode_witness.observe(row, measured + 1)
             except ValueError:
-                runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=True))
-                raise
+                file_decode_prefetch_refusal(runner, custody, decode_witness)
+                raise   # the original refusal, clause intact; the sidecar's own failure never replaces it
             if started is not None and not gc.isenabled() and total_steps % 64 == 63:
                 runner.bounded_collect(total_steps)
             if os.environ.get('EMBER_LEAK_PROBE') and total_steps % 1024 == 1023:

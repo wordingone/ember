@@ -1803,16 +1803,23 @@ def prefetch_position(pack, image_start, ahead):
 
 
 def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0):
-    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream)."""
+    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream).
+
+    Returns (inputs, (rows, patches), patches_source, two_ahead_position). The last is the GLOBAL image-text position
+    whose decode this call started two updates ahead, or None when it started none (no image text, or two-ahead not in
+    effect on this call). The step reads it back as the two-ahead decode's EXECUTION; the EMBER_DECODE_TWO_AHEAD
+    request is not consulted for it."""
     staged = (staged_inputs(next_pack, device),
               load_image_text_module().load_patches(next_pack, device, pinned=True)
               if next_pack.get('images') else (None, None),
               load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
+    two_ahead_position = None
     if image_text is not None and two_ahead:
         # index+1's decode began one update earlier, so the staging above did not wait on it;
         # index+2's begins now and is joined inside this update's wall. Global position, never the local index.
-        load_image_text_module().prefetch_index(image_text, prefetch_position(pack, image_start, 2))
-    return staged
+        two_ahead_position = prefetch_position(pack, image_start, 2)
+        load_image_text_module().prefetch_index(image_text, two_ahead_position)
+    return staged + (two_ahead_position,)
 
 
 def release_unrouted_expert_grads(expert_owners, unrouted):
@@ -2120,6 +2127,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
+    two_ahead_position = None   # set from the staging this call produces; the row reads it back
 
     def _prepare(micro, staged_ahead):
         # Inputs, embedding and routing-buffer reset for one micro-step (same calls, same order as before).
@@ -2300,7 +2308,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
         # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
         capture.zero_grad(optimizer=optimizer)
-        next_inputs, next_patches, next_source = staged_early
+        next_inputs, next_patches, next_source, two_ahead_position = staged_early
         _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
                       'patches_source': next_source}
         if prelaunch_next:
@@ -2389,6 +2397,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             # This update's forward was enqueued inside the PREVIOUS call (EMBER_PRELAUNCH_FORWARD), read back off
             # the staging this call consumed: the prelaunch's execution, not its request.
             'prelaunched': pre is not None,
+            # This call started update index+2's image decode (EMBER_DECODE_TWO_AHEAD), read back off the staging it
+            # produced: the two-ahead decode's execution, not its request. False on every call that staged nothing.
+            'two_ahead_prefetched': two_ahead_position is not None,
             'accumulation_micro_steps': depth,
             'template_untrained_released': len(template_untrained),
             'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])

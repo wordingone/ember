@@ -15,9 +15,13 @@ load_patches (with only the image decode replaced by a zero grid), and the REAL 
 through -- and the deliberate red reverts the cure by monkeypatch and shows the chained case failing while the
 genesis case still passes, which is why a genesis test could never have caught this.
 """
+import contextlib
 import importlib.util
+import io
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -115,6 +119,8 @@ class PrefetchPositionTests(unittest.TestCase):
         with patch.object(images, '_decode_uint8', zero_grid):
             staged = runner._stage_next_early(packs[1], CPU, stream, packs[0], True, image_start=image_start)
             self.assertEqual(staged[2], hour.DECODE_PREFETCH_MISS)  # nothing prefetched update 1 in this fixture (the hour's record step would, one-ahead)
+            # The two-ahead decode's execution, read back off the staging object: the position it actually started.
+            self.assertEqual(staged[3], runner.prefetch_position(packs[0], image_start, 2))
             self.assertEqual(len(images._AHEAD), 1)
             rows, patches = images.load_patches(packs[2], CPU)
             images.join_prefetch()
@@ -127,6 +133,17 @@ class PrefetchPositionTests(unittest.TestCase):
         for image_start in (0, CHAINED_START):
             images._AHEAD.clear()
             self.assert_two_ahead_hits(image_start)
+
+    def test_staging_without_two_ahead_reads_back_no_two_ahead_position(self):
+        """Execution, not request: with two_ahead False (one-ahead arm) or no image text, the staging says so."""
+        stream, packs = hour_packs(CHAINED_START, 3)
+        with patch.object(images, '_decode_uint8', zero_grid):
+            self.assertIsNone(runner._stage_next_early(packs[1], CPU, stream, packs[0], False, image_start=CHAINED_START)[3])
+            self.assertEqual(images._AHEAD, {})
+            self.assertIsNone(runner._stage_next_early(packs[1], CPU, None, packs[0], True, image_start=CHAINED_START)[3])
+            self.assertEqual(images._AHEAD, {})
+            self.assertEqual(len(runner._stage_next_early(packs[1], CPU, stream, packs[0], True, image_start=CHAINED_START)), 4)
+            images.join_prefetch()
 
     def test_one_ahead_prefetch_position_hits_on_a_chained_start(self):
         stream, packs = hour_packs(CHAINED_START, 3)
@@ -167,11 +184,15 @@ class PrefetchPositionTests(unittest.TestCase):
         self.assertEqual(runner.prefetch_position({}, CHAINED_START, 1), CHAINED_START + 1)
 
 
-def synthetic_rows(count, *, misses=(), without_field=()):
+def synthetic_rows(count, *, misses=(), without_field=(), staged=True, two_ahead=True):
     """index 0 warm, then measured rows; updates 1 and 2 are modelled in-step, the allowance's upper bound (in the
-    hour only update 2 is structurally unprefetched under two-ahead; the record step's one-ahead prefetch covers 1)."""
+    hour only update 2 is structurally unprefetched under two-ahead; the record step's one-ahead prefetch covers 1).
+    As in the hour, the warm row and the last measured row stage nothing (no next pack); every other measured row
+    carries staged_next_step=staged and two_ahead_prefetched=(staged and two_ahead), the step's read-back fields."""
     for index in range(count + 1):
         row = dict(index=index, phase='warm' if index == 0 else 'measured')
+        stages = staged and 0 < index < count
+        row.update(staged_next_step=stages, two_ahead_prefetched=stages and two_ahead)
         if index not in without_field:
             row['image_patches_source'] = (hour.DECODE_PREFETCH_MISS if index in (1, 2) or index in misses
                                            else hour.DECODE_PREFETCH_HIT)
@@ -213,6 +234,54 @@ class DecodePrefetchWitnessTests(unittest.TestCase):
         self.assertEqual((receipt['rows_asserted'], receipt['measured_rows'], receipt['residual_rows_without_field']),
                          (62, 200, 0))
         self.assertEqual((receipt['clause'], receipt['two_ahead_requested']), ('decode-prefetch-actually-hit', True))
+        self.assertEqual((receipt['two_ahead_executed'], receipt['staged_next_rows'], receipt['two_ahead_prefetched_rows']),
+                         (True, 199, 199))
+
+    def test_two_ahead_executed_is_read_off_the_rows_and_a_bare_request_reads_false(self):
+        """The request field and the executed field stand side by side; only the rows' staging decides the second."""
+        bare = observe_all(hour.DecodePrefetchWitness(two_ahead=True), synthetic_rows(50, staged=False)).receipt()
+        self.assertEqual((bare['two_ahead_requested'], bare['two_ahead_executed'], bare['staged_next_rows'],
+                          bare['two_ahead_prefetched_rows']), (True, False, 0, 0))
+        one_ahead = observe_all(hour.DecodePrefetchWitness(two_ahead=True), synthetic_rows(50, two_ahead=False)).receipt()
+        self.assertEqual((one_ahead['two_ahead_executed'], one_ahead['staged_next_rows'],
+                          one_ahead['two_ahead_prefetched_rows']), (False, 49, 0))
+        # A row that staged without the two-ahead decode breaks the all-rows claim, however many did execute it.
+        rows = list(synthetic_rows(50))
+        rows[10]['two_ahead_prefetched'] = False
+        partial = observe_all(hour.DecodePrefetchWitness(two_ahead=True), rows).receipt()
+        self.assertEqual((partial['two_ahead_executed'], partial['staged_next_rows'], partial['two_ahead_prefetched_rows']),
+                         (False, 49, 48))
+        # Rows written before the field existed read as the bare request, never as executed.
+        legacy = [{k: v for k, v in row.items() if k not in ('staged_next_step', 'two_ahead_prefetched')}
+                  for row in synthetic_rows(20)]
+        self.assertFalse(observe_all(hour.DecodePrefetchWitness(two_ahead=True), legacy).receipt()['two_ahead_executed'])
+
+    def test_a_sidecar_write_failure_is_named_on_stderr_and_never_replaces_the_refusal(self):
+        """The clause outranks its evidence: with decode-prefetch.json already present (or any write failure), the
+        refusal that reaches the worker terminal is still the witness's ValueError, with nothing chained onto it."""
+        witness = hour.DecodePrefetchWitness(two_ahead=True)
+        with tempfile.TemporaryDirectory() as custody:
+            custody = Path(custody)
+            (custody / 'decode-prefetch.json').write_bytes(b'{"prior": true}')
+            stderr = io.StringIO()
+            with self.assertRaisesRegex(ValueError, '^decode-prefetch-actually-hit: ') as refused, \
+                    contextlib.redirect_stderr(stderr):
+                try:
+                    observe_all(witness, synthetic_rows(10, misses=(5,)))
+                except ValueError:
+                    hour.file_decode_prefetch_refusal(runner, custody, witness)
+                    raise
+            self.assertIsNone(refused.exception.__context__)
+            self.assertIsNone(refused.exception.__cause__)
+            self.assertIn('DECODE_PREFETCH_SIDECAR_DEGRADED FileExistsError', stderr.getvalue())
+            self.assertEqual((custody / 'decode-prefetch.json').read_bytes(), b'{"prior": true}')
+            # And when the write can happen, the sidecar carries the refusal with the request and execution beside it.
+            fresh = custody / 'fresh'
+            fresh.mkdir()
+            hour.file_decode_prefetch_refusal(runner, fresh, witness)
+            sidecar = json.loads((fresh / 'decode-prefetch.json').read_bytes())
+            self.assertEqual((sidecar['refused'], sidecar['clause'], sidecar['two_ahead_requested'], sidecar['two_ahead_executed']),
+                             (True, 'decode-prefetch-actually-hit', True, True))  # rows 1-5 all staged and all started two-ahead
 
     def test_after_row_64_an_in_step_row_is_counted_and_reported_never_a_refusal(self):
         witness = observe_all(hour.DecodePrefetchWitness(two_ahead=True), synthetic_rows(300, misses=(65, 150, 300)))
@@ -248,7 +317,9 @@ class HourAndStepWiringTests(unittest.TestCase):
         self.assertLess(loop.index("applied(row['applied_positions'])"), loop.index('decode_witness.observe(row, measured + 1)'))
         self.assertLess(loop.index('decode_witness.observe(row, measured + 1)'), loop.index('total_steps += 1'))
         self.assertLess(loop.index('decode_witness.observe(row, measured + 1)'), loop.index('measured += 1'))
-        self.assertIn("runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=True))", loop)
+        refusal = loop[loop.index('except ValueError:'):loop.index('total_steps += 1')]
+        self.assertLess(refusal.index('file_decode_prefetch_refusal(runner, custody, decode_witness)'), refusal.index('raise'))
+        self.assertNotIn('_write_new', refusal)   # the sidecar write lives behind the helper that cannot raise
         self.assertIn("runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=False))", loop)
 
     def test_the_step_threads_image_start_to_every_prefetch_and_evidences_the_prelaunch(self):
@@ -259,6 +330,9 @@ class HourAndStepWiringTests(unittest.TestCase):
         self.assertEqual(body.count('image_start=image_start'), 2)
         self.assertIn('prefetch_position(pack, image_start, 1)', body)
         self.assertIn("'prelaunched': pre is not None", body)
+        self.assertIn("'two_ahead_prefetched': two_ahead_position is not None", body)
+        self.assertIn('next_inputs, next_patches, next_source, two_ahead_position = staged_early', body)
+        self.assertNotIn("'two_ahead_prefetched': os.environ", body)
         staging = source[source.index('\ndef _stage_next_early('):source.index('\ndef ', source.index('\ndef _stage_next_early(') + 1)]
         self.assertIn('prefetch_position(pack, image_start, 2)', staging)
         for local in ("pack.get('index', 0) + 1)", "pack.get('index', 0) + 2)", "pack['index'] + 1)", "pack['index'] + 2)"):
