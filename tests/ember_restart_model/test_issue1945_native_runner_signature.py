@@ -132,6 +132,8 @@ class NativeSignatureTests(unittest.TestCase):
         self.assertIsNotNone(model.embedding.weight.grad)
         self.assertFalse(torch.equal(before, model.embedding.weight))
         self.assertEqual(row['applied_positions'], 4)
+        self.assertIs(row['prelaunched'], False)  # no previous call pre-launched this forward: evidenced, not inferred
+        self.assertIs(row['two_ahead_prefetched'], False)  # this call staged nothing, so it started no two-ahead decode
         self.assertEqual(row['routes_digest_grammar'], 'device-buffers-v1')
         self.assertEqual(model.hidden_requested, head_output == 'hidden')
         self.assertEqual(row['training_head'], 'cce-document-v1' if head_output == 'hidden' else 'native')
