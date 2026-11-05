@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
@@ -21,7 +21,7 @@ import v0_pretrain_launch_gate  # noqa: E402
 class MtpParameterAccountingContractTests(unittest.TestCase):
     def setUp(self):
         self.config = json.loads(
-            (ROOT / "configs" / "v0-pretrain-config.json").read_text(
+            (ROOT / "domains" / "model" / "configs" / "v0-pretrain-config.json").read_text(
                 encoding="utf-8"
             )
         )

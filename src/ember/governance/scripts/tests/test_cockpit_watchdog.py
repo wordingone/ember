@@ -762,7 +762,23 @@ def clean_state_root_env(monkeypatch):
     return monkeypatch
 
 
-def test_repo_state_key_matches_the_typescript_and_powershell_resolution_points(clean_state_root_env):
+@pytest.fixture
+def windows_root_semantics(clean_state_root_env, tmp_path):
+    # tmp_path is requested first so pytest's own temp directory is created under host rules.
+    """Resolve the Windows-shaped parity roots under Windows path rules on every host.
+
+    KEY_PARITY_VECTORS are Windows checkout roots, the only host the cockpit ships on. On a
+    POSIX runner ``os.path.abspath`` treats ``C:\\fixture\\ember`` as relative and prefixes the
+    working directory, so the nightly (Ubuntu) produced keys like ``home-runner-...-c-fixture-ember``
+    and the vectors could never match. ``ntpath.abspath`` is what ``os.path.abspath`` already is
+    on Windows, so this changes nothing there and lets the real key derivation run here.
+    """
+    if os.name != "nt":
+        clean_state_root_env.setattr(os.path, "abspath", ntpath.abspath)
+    return clean_state_root_env
+
+
+def test_repo_state_key_matches_the_typescript_and_powershell_resolution_points(windows_root_semantics):
     for root, expected_key in KEY_PARITY_VECTORS:
         assert _repo_state_key(root) == expected_key
 
@@ -772,13 +788,13 @@ def test_resolve_ember_state_root_honours_the_override_verbatim(clean_state_root
     assert _resolve_ember_state_root(r"C:\fixture\ember") == os.path.abspath(r"C:\fixture\cockpit-state")
 
 
-def test_resolve_ember_state_root_defaults_to_ember_home_cockpit_state_key(clean_state_root_env):
-    clean_state_root_env.setenv("EMBER_HOME", r"C:\fixture\home")
+def test_resolve_ember_state_root_defaults_to_ember_home_cockpit_state_key(windows_root_semantics):
+    windows_root_semantics.setenv("EMBER_HOME", r"C:\fixture\home")
     resolved = _resolve_ember_state_root(r"C:\fixture\ember")
     assert resolved == os.path.join(r"C:\fixture\home", "cockpit-state", "c-fixture-ember")
 
 
-def test_resolve_ember_state_root_defaults_to_home_dot_ember_when_ember_home_unset(clean_state_root_env, tmp_path, monkeypatch):
+def test_resolve_ember_state_root_defaults_to_home_dot_ember_when_ember_home_unset(windows_root_semantics, tmp_path, monkeypatch):
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
@@ -788,7 +804,7 @@ def test_resolve_ember_state_root_defaults_to_home_dot_ember_when_ember_home_uns
     )
 
 
-def test_resolve_ember_state_root_defaults_windows_receipts_and_cache_to_b(clean_state_root_env):
+def test_resolve_ember_state_root_defaults_windows_receipts_and_cache_to_b(windows_root_semantics):
     assert _resolve_ember_state_root(r"C:\fixture\ember", platform="nt") == (
         ntpath.join("B:" + ntpath.sep, "M", "cockpit-state", "c-fixture-ember")
     )

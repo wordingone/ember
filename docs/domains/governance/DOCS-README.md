@@ -6,6 +6,7 @@ eight adopted technical domains. The machine-generated list of current and norma
 
 ## Audience routes
 
+- Reviewer wanting a plain-language summary: [`docs/OVERVIEW.md`](../../OVERVIEW.md)
 - First-time reader: [`docs/domains/governance/guides/START-HERE.md`](guides/START-HERE.md)
 - User or installer: [`docs/domains/governance/guides/START-HERE.md`](guides/START-HERE.md)
 - Contributor: [`docs/contributing.md`](../../contributing.md)
