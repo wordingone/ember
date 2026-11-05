@@ -23,9 +23,11 @@ skipped), streamed and stopped at N so a 200 MB file is not read whole. For each
 The residual is a first-class number in the output, beside the buckets, never folded into either.
 
 THE VERDICT. SUPPORTED when at least N - 2 of the N rows read `decoded-in-previous-step-wall`; otherwise REFUTED
-(exit 3). The allowance of two is structural, not a tolerance: updates 1 and 2 are never prefetched, because the
-first prefetch is issued inside update 1 for update 3 (two-ahead) and nothing ran before update 1. Fewer than N
-measured rows in the file is a REFUSAL (exit 2), not a verdict on a smaller population.
+(exit 3). The allowance of two is an UPPER bound on the structural misses, not a tolerance: under two-ahead,
+update 2 is staged inside update 1 before any prefetch targets it (update 1 prefetches update 3), while update 1 is
+covered by the record step's one-ahead prefetch; a one-ahead-only hour has no structural miss at all (the Sept 24
+genesis control reads 1,200 of 1,200). Fewer than N measured rows in the file is a REFUSAL (exit 2), not a verdict
+on a smaller population.
 
 PLACEMENT. This consumer reads the producer's rows and imports nothing from it, so it binds EMBER-02A beside
 issue1945_hour_acceptance_predicate.py; the producer (cia_hour.py, cia_step_runner.py) binds EMBER-02B under the
@@ -44,7 +46,7 @@ HIT = 'decoded-in-previous-step-wall'
 MISS = 'decoded-in-this-step'
 FIELD = 'image_patches_source'
 DEFAULT_ROWS = 1200
-STRUCTURAL_MISSES = 2  # updates 1 and 2: no earlier update existed to prefetch them
+STRUCTURAL_MISSES = 2  # upper bound: update 2 under two-ahead; update 1 is covered by the record step's one-ahead prefetch
 EXIT_SUPPORTED, EXIT_INSUFFICIENT, EXIT_REFUTED = 0, 2, 3
 SCHEMA = 'ember-1945-h38-decode-prefetch-refuter-v1'
 FIRST_MISSES_KEPT = 8

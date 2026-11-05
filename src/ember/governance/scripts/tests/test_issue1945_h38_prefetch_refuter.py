@@ -6,8 +6,8 @@
 
 WHAT THIS GUARDS. H34 ran an hour whose every row said the two-ahead image decode never hit, and no reader existed
 to say so. The refuter is that reader. The cases pin: the three buckets (hit, miss, residual) with the residual
-printed as a first-class number; the SUPPORTED / REFUTED verdict at the N - 2 threshold, where 2 is the structural
-allowance for updates 1 and 2; the refusal on fewer rows than requested; the warm row skipped; the stream stopping
+printed as a first-class number; the SUPPORTED / REFUTED verdict at the N - 2 threshold, where 2 is the upper bound on
+structural misses (update 2 under two-ahead; update 1 is covered by the record step's one-ahead prefetch); the refusal on fewer rows than requested; the warm row skipped; the stream stopping
 at N (so a 200 MB rows file is never read whole); and one deliberate red through main() proving the tool exits 3 on
 the H34 shape rather than printing a tidy count and exiting 0.
 """
@@ -38,7 +38,7 @@ def refuter():
 
 
 def write_rows(path: Path, count: int, *, misses=(), without_field=(), trailing=''):
-    """index 0 warm, then `count` measured rows; updates 1 and 2 decode in-step by construction."""
+    """index 0 warm, then `count` measured rows; updates 1 and 2 modelled in-step (the allowance's upper bound)."""
     lines = []
     for index in range(count + 1):
         row = dict(index=index, phase='warm' if index == 0 else 'measured', wall_seconds=0.05)
