@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 # #1945 mixture amendment A1 section 9 (frozen before any A1 result): 16,384 optimizer updates per arm, the warm update
@@ -409,6 +410,87 @@ class _HourPushback:
 def require_remaining_hour_capacity(measured_updates, maximum):
     if measured_updates >= maximum:
         raise ValueError('declared measured hour capacity exhausted before completion')
+
+
+DECODE_PREFETCH_CLAUSE = 'decode-prefetch-actually-hit'
+DECODE_PREFETCH_ASSERTED_ROWS = 64   # measured rows the assertion inspects before the hour counts; counted-only after
+# First update a two-ahead prefetch can have decoded, an UPPER bound: update 2 is staged inside update 1 before any
+# prefetch targets it (update 1 prefetches update 3); update 1 is covered by the record step's one-ahead prefetch, and a
+# one-ahead-only hour has no structural miss at all (the Sept 24 genesis control reads 1,200 of 1,200 hits).
+DECODE_PREFETCH_FIRST_INDEX = 3
+DECODE_PREFETCH_HIT = 'decoded-in-previous-step-wall'
+DECODE_PREFETCH_MISS = 'decoded-in-this-step'
+
+
+class DecodePrefetchWitness:
+    """The consumer's own assertion for EMBER_DECODE_TWO_AHEAD=1: acceptance of the flag is not execution of the prefetch.
+
+    H34 (#1945) ran a whole hour with the flag accepted and every one of its 68,269 rows reading image_patches_source
+    'decoded-in-this-step', and nothing refused, because the flag was recorded and the outcome field was never read.
+    This reads it, off the row exactly as written. Inside the first DECODE_PREFETCH_ASSERTED_ROWS measured rows a row
+    with index >= DECODE_PREFETCH_FIRST_INDEX whose patches decoded in-step REFUSES the hour before it counts; the
+    raise reaches the worker's terminal record (status failed) carrying DECODE_PREFETCH_CLAUSE. After those rows the
+    field is only counted and reported through receipt(), never a mid-hour kill. A measured row without the field
+    (text-only pack) is the residual, counted beside the buckets and never assigned."""
+    def __init__(self, *, two_ahead):
+        self.two_ahead = bool(two_ahead)
+        self.counts = {}
+        self.residual = 0
+        self.rows_asserted = 0
+        self.measured_rows = 0
+        # Execution beside the request: rows that staged the next update, and rows whose staging started the two-ahead
+        # decode (the step's two_ahead_prefetched, read back off its staging object, never off the environment).
+        self.staged_next_rows = 0
+        self.two_ahead_prefetched_rows = 0
+
+    def observe(self, row, measured_ordinal):
+        """row: one complete step row as written; measured_ordinal: its 1-based position among measured rows."""
+        if row.get('phase') != 'measured':
+            return
+        self.measured_rows += 1
+        if row.get('staged_next_step') is True:
+            self.staged_next_rows += 1
+        if row.get('two_ahead_prefetched') is True:
+            self.two_ahead_prefetched_rows += 1
+        source = row.get('image_patches_source')
+        if source is None:
+            self.residual += 1
+            return
+        self.counts[source] = self.counts.get(source, 0) + 1
+        if (self.two_ahead and measured_ordinal <= DECODE_PREFETCH_ASSERTED_ROWS
+                and row.get('index', 0) >= DECODE_PREFETCH_FIRST_INDEX):
+            self.rows_asserted += 1
+            if source == DECODE_PREFETCH_MISS:
+                raise ValueError(DECODE_PREFETCH_CLAUSE + ': EMBER_DECODE_TWO_AHEAD=1 requested the two-ahead image '
+                                 'decode and measured row %d (update index %d) decoded its image patches in-step; the '
+                                 'prefetch did not hit, so the hour refuses before it counts'
+                                 % (measured_ordinal, row.get('index', 0)))
+
+    def two_ahead_executed(self):
+        """Every measured row that staged the next update also started the two-ahead decode, and at least one did.
+        False on the eager arm, on EMBER_STAGE_NEXT_STEP unset, and on a one-ahead hour: the request standing alone."""
+        return self.two_ahead_prefetched_rows > 0 and self.two_ahead_prefetched_rows == self.staged_next_rows
+
+    def receipt(self):
+        return dict(clause=DECODE_PREFETCH_CLAUSE, two_ahead_requested=self.two_ahead,
+                    two_ahead_executed=self.two_ahead_executed(),
+                    staged_next_rows=self.staged_next_rows, two_ahead_prefetched_rows=self.two_ahead_prefetched_rows,
+                    asserted_rows=DECODE_PREFETCH_ASSERTED_ROWS, first_asserted_index=DECODE_PREFETCH_FIRST_INDEX,
+                    rows_asserted=self.rows_asserted, measured_rows=self.measured_rows,
+                    image_patches_source_counts=dict(sorted(self.counts.items())),
+                    residual_rows_without_field=self.residual,
+                    claim='image_patches_source counted off the written measured rows; two_ahead_executed read off '
+                          'the two_ahead_prefetched field the step wrote from its staging object, beside the request; '
+                          'a refusal is recorded in the worker terminal under the clause above, never here')
+
+
+def file_decode_prefetch_refusal(runner, custody, witness):
+    """Write the refusal's sidecar. A failure HERE is named on stderr (the parent files it as custody/stderr.log) and
+    never propagates: the caller's bare `raise` re-raises the clause-bearing refusal, which outranks its evidence."""
+    try:
+        runner._write_new(custody / 'decode-prefetch.json', dict(witness.receipt(), refused=True))
+    except Exception as error:   # evidence-only sidecar: FileExistsError, OSError, anything; the clause propagates
+        print('DECODE_PREFETCH_SIDECAR_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
@@ -1012,6 +1094,10 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         # anyway; a pack drawn early and not trained on is pushed back after the loop (continuation reservation).
         stage_next = capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
         upcoming = None
+        # The GLOBAL image-text position this hour's packs are filled from (HourPacks.image_start; the look-ahead
+        # forwards it). The step keys every image prefetch at it, so a chained hour's prefetch matches its own packs.
+        image_start = prepared['packs'].image_start
+        decode_witness = DecodePrefetchWitness(two_ahead=os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1')
         while True:
             call_started = time.perf_counter()
             if stage_next and total_steps >= 1 and measured + 1 < identity['geometry']['measured_steps']:
@@ -1022,7 +1108,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 next_pack=upcoming, prelaunch_next=(
                     upcoming is not None and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1' and not probe
                     and not learning and started is not None and not hour_complete(
-                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)))
+                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)),
+                image_start=image_start)
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
@@ -1039,6 +1126,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                                                          call_finished=call_finished)) + b'\n')
             gc_rows.flush()
             applied(row['applied_positions'])
+            # The two-ahead decode's own assertion, read off the row as written (the physical update above is already
+            # applied and recorded). A refusal here precedes every count below; the sidecar keeps the tally it had.
+            try:
+                decode_witness.observe(row, measured + 1)
+            except ValueError:
+                file_decode_prefetch_refusal(runner, custody, decode_witness)
+                raise   # the original refusal, clause intact; the sidecar's own failure never replaces it
             if started is not None and not gc.isenabled() and total_steps % 64 == 63:
                 runner.bounded_collect(total_steps)
             if os.environ.get('EMBER_LEAK_PROBE') and total_steps % 1024 == 1023:
@@ -1099,6 +1193,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
         rows.flush()
         os.fsync(rows.fileno())
+        # image_patches_source counted over every measured row (the assertion above covered only the first 64).
+        runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=False))
         gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
