@@ -43,7 +43,9 @@ jobs:
       - name: Test tracked Python self-location guard
         run: python -B -m pytest -q scripts/tests/test_self_location_roots.py
       - name: Guard tracked Python self-location roots
-        run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json
+        # warn: the baseline's expiry is a burn-down deadline enforced by the scheduled
+        # ci-nightly check on master, not by every pull request (see EXPIRY_MODES).
+        run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json --expiry-mode warn
       - name: Compile changed governance tooling
         run: python -B -m compileall -q src/ember/governance/scripts/github
       - name: Bootstrap exact-head live PR policy (read-only)

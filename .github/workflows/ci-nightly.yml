@@ -18,6 +18,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  self-location-baseline-expiry:
+    # The self-location baseline's expiry deadline lives here, on master, and NOT on pull
+    # requests: a PR cannot cause the date to pass, so refusing it there blocked every PR at once
+    # on each lapse (2026-09-24, 10-05, 10-13). This job refuses on an expired baseline
+    # with remaining rows; ci-pr runs the same gate in warn mode.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.12"
+      - name: Guard tracked Python self-location roots (expiry blocks)
+        run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json --expiry-mode block
+
   extended-audit:
     runs-on: ubuntu-latest
     # 180, not 90: the three suites now carry their own bounds (15 + 40 + 90 = 145) and the
