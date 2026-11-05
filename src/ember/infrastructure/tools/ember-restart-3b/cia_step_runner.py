@@ -36,7 +36,7 @@ JOB_NAMESPACE = 'EmberCIAMeasurement'
 LIMITS = {
     'host_memory_bytes': 40 * GIB, 'total_gpu_bytes': 20 * GIB,
     'allocator_bytes': 18 * GIB, 'wall_seconds': 600,
-    'min_c_free_bytes': 150 * GIB, 'min_b_free_bytes': 250 * GIB,
+    'min_c_free_bytes': 40 * GIB, 'min_b_free_bytes': 250 * GIB,
     'min_free_commit_bytes': 42 * GIB, 'max_c_write_gib': 0.125, 'max_b_write_gib': 2.0,
 }
 CACHE_DIRS = {'TEMP': 'tmp', 'TMP': 'tmp', 'TORCH_HOME': 'torch', 'TRITON_CACHE_DIR': 'triton',

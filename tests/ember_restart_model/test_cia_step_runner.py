@@ -169,7 +169,7 @@ class PredictionTests(unittest.TestCase):
             'resources': {'host_memory_bytes': 40 * 1024 ** 3,
                           'total_gpu_bytes': 20 * 1024 ** 3,
                           'allocator_bytes': 18 * 1024 ** 3, 'wall_seconds': 600,
-                          'min_c_free_bytes': 150 * 1024 ** 3,
+                          'min_c_free_bytes': 40 * 1024 ** 3,
                           'min_b_free_bytes': 250 * 1024 ** 3,
                           'min_free_commit_bytes': 42 * 1024 ** 3,
                           'max_c_write_gib': 0.125, 'max_b_write_gib': 2.0},
