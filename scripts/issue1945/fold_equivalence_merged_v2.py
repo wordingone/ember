@@ -86,6 +86,10 @@ answers = list(pack['answer_rows'])
 denominator = control_sel['denominator']
 rows_expanded = sum(l if s is None else s[1] for s, l in zip(control_sel['selections'], lengths))
 rows_unique = sum(l if s is None else len(s[0]) for s, l in zip(treatment_sel['selections'], lengths))
+# Independent of every staged selection: counted from the pack's own targets and answer rows.
+pack_loss_rows = sum(1 for t in pack['target_ids'] if t != runner.IGNORE_TARGET)
+pack_answer_repeats = sum(1 for a in answers if pack['target_ids'][a] != runner.IGNORE_TARGET)
+pack_weight_total = pack_loss_rows + (W - 1) * pack_answer_repeats
 red_sel = {'selections': tuple(None if s is None else (s[0], torch.ones_like(s[1]), len(s[0]))
                                for s in treatment_sel['selections']), 'denominator': denominator}
 op = streamed._cce_operator()
@@ -112,7 +116,7 @@ def run(kind, seed):
         sel = treatment_sel if kind == 'treatment' else red_sel
         loss = streamed.weighted_document_streamed_loss(h, c, tgt, lengths, denominator, operator=op,
                                                         selections=sel['selections'])
-        executed[kind] = loss.cce_executed
+        executed[kind] = loss.cce_executed  # read with executed_values after backward has synchronized
     else:  # FP32 dense reference over the control's repeated rows (exact algebra)
         h32, c32 = h.detach().float().requires_grad_(), c.detach().float().requires_grad_()
         acc, start = 0, 0
@@ -125,7 +129,10 @@ def run(kind, seed):
         loss.backward()
         return float(loss), h32.grad, c32.grad
     loss.backward()
-    return float(loss), h.grad.float(), c.grad.float()
+    result = float(loss), h.grad.float(), c.grad.float()  # float() synchronizes
+    if kind in executed:
+        executed[kind] = streamed.executed_values(executed[kind])
+    return result
 
 
 def rel(a, b):
@@ -157,7 +164,8 @@ report = dict(goal_id='EMBER-02', workstream_id='EMBER-02A',
               control='cce-document-v1 document_streamed_loss, staged_inputs(fold=False)',
               treatment='cce-document-v2 weighted_document_streamed_loss, staged_inputs(fold=True)',
               red='treatment with every weight forced to 1, denominator unchanged',
-              rows_unique=rows_unique, rows_expanded=rows_expanded, removed_fraction=1 - rows_unique / rows_expanded,
+              rows_unique=rows_unique, rows_expanded=rows_expanded, pack_loss_rows=pack_loss_rows,
+              pack_weight_total=pack_weight_total, removed_fraction=1 - rows_unique / rows_expanded,
               answer_rows=answers, docs=lengths, denominator=denominator, seeds=[])
 ok = True
 for seed in crit['seeds']:
@@ -179,8 +187,11 @@ for seed in crit['seeds']:
         ok &= row['checks'][k]['ok']
     row['red_refused_on_any'] = any(c['red_refused'] for c in row['checks'].values())
     ok &= row['red_refused_on_any']
-    # executed, not configured: one call, unique rows, weight total == denominator
-    row['executed_ok'] = executed['treatment'] == dict(cce_calls=1, cce_rows=rows_unique, cce_weight_total=denominator)
+    # executed, not configured: one operator call, the pack's own loss-row count, and the device-reduced weight
+    # sum equal to the pack's own weighted count and to the denominator
+    row['executed_ok'] = (executed['treatment'] == dict(cce_calls=1, cce_rows=pack_loss_rows,
+                                                        cce_weight_total=pack_weight_total)
+                          and pack_weight_total == denominator)
     ok &= row['executed_ok']
     report['seeds'].append(row)
 report['pass'] = bool(ok)

@@ -11,6 +11,7 @@ import importlib
 import importlib.util
 import os
 from pathlib import Path
+import subprocess
 import sys
 from types import SimpleNamespace
 import unittest
@@ -154,15 +155,47 @@ class WeightedDocumentLoss(unittest.TestCase):
         sel = runner.staged_inputs(m, torch.device('cpu'), fold=True)[3]
         loss, _, _ = self.run_v2(sel, lengths, targets)
         unique = sum(1 for t in m['target_ids'] if t != IGNORE)
-        self.assertEqual(loss.cce_executed, dict(cce_calls=1, cce_rows=unique, cce_weight_total=sel['denominator']))
-        self.assertEqual(sel['denominator'], unique + (WEIGHT - 1) * len(m['answer_rows']))
-        row = runner._cce_executed_fields([loss.cce_executed])
-        self.assertEqual(row, loss.cce_executed)
+        expected = dict(cce_calls=1, cce_rows=unique, cce_weight_total=unique + (WEIGHT - 1) * len(m['answer_rows']))
+        # the weight total is the sum of the weight tensor the operator received, not the declared count
+        self.assertIsInstance(loss.cce_executed['cce_weight_total'], torch.Tensor)
+        self.assertEqual(loss_module.executed_values(loss.cce_executed), expected)
+        self.assertEqual(expected['cce_weight_total'], sel['denominator'])
+        self.assertEqual(runner._cce_executed_fields([loss.cce_executed]), expected)
         self.assertEqual(runner._cce_executed_fields([loss.cce_executed] * 2)['cce_calls'], 2)
         for missing in ([], [None], [loss.cce_executed, None], [{'cce_calls': 1}]):
             with self.subTest(missing=missing):
                 with self.assertRaisesRegex(ValueError, 'did not report its execution'):
                     runner._cce_executed_fields(missing)
+
+    def test_executed_weight_total_comes_from_the_weights_not_the_declared_count(self):
+        # A declared count that disagrees with the weights is refused by the count clause, so the only way to
+        # see the receipt diverge is an operator-received weight vector: forge one after validation.
+        m, lengths = micro()
+        targets = torch.tensor(m['target_ids']).clamp(min=0)
+        sel = runner.staged_inputs(m, torch.device('cpu'), fold=True)[3]
+        def doubling(e, c, y, w=None):
+            if w is not None:
+                w.mul_(2)  # what the operator received is what the receipt must report
+            return dense(e, c, y, w)
+        h, c = self.operands()
+        loss = loss_module.weighted_document_streamed_loss(h, c, targets, lengths, sel['denominator'],
+                                                           operator=doubling, selections=sel['selections'])
+        self.assertEqual(loss_module.executed_values(loss.cce_executed)['cce_weight_total'], 2 * sel['denominator'])
+
+    def test_missing_receipt_refuses_before_backward(self):
+        for bad in (None, {}, {'cce_calls': 0, 'cce_rows': 3, 'cce_weight_total': 3},
+                    {'cce_calls': 1, 'cce_rows': 3, 'cce_weight_total': 3.0}):
+            with self.subTest(bad=bad):
+                loss = torch.zeros(())
+                if bad is not None:
+                    loss.cce_executed = bad
+                with self.assertRaisesRegex(ValueError, 'did not report its execution'):
+                    runner._require_cce_receipt(loss)
+        source = (TOOLS / 'cia_step_runner.py').read_text(encoding='utf-8')
+        body = source[source.index('def measure_step('):]
+        body = body[:body.index('\ndef ')]
+        self.assertLess(body.index('_require_cce_receipt(loss)'), body.index('loss.backward()'))
+        self.assertLess(body.index('loss.backward()'), body.index('_cce_executed_fields(executed)'))
 
     def test_count_must_equal_weight_total_and_rows_must_be_unique(self):
         h, c = self.operands()
@@ -184,9 +217,17 @@ class WeightedDocumentLoss(unittest.TestCase):
             'fp64 weights': (rows, w.double(), 16),
             'length mismatch': (rows, w[:3], 16),
         }
+        named = {
+            'count below weight total': 'count differs from its weight total',
+            'count above weight total': 'count differs from its weight total',
+            'repeated row': 'rows are not unique and ascending',
+            'descending rows': 'rows are not unique and ascending',
+            'row outside document': 'row is outside its document',
+            'weight below one': 'weight is below one',
+        }
         for name, entry in cases.items():
             with self.subTest(name):
-                with self.assertRaises(ValueError):
+                with self.assertRaisesRegex(ValueError, named.get(name, '')):
                     loss_module.weighted_document_streamed_loss(h, c, y, lengths, 100, operator=forbidden,
                                                                 selections=(entry, None, None, None))
         with self.assertRaises(ValueError):  # denominator below the weight total
@@ -220,6 +261,68 @@ class WeightedDocumentLoss(unittest.TestCase):
                 unique, weights = runner._folded_rows(rows, answers, WEIGHT)
                 self.assertEqual(unique, rows)
                 self.assertEqual(sum(weights), len(runner._weighted_rows(rows, answers, WEIGHT)))
+
+
+# Each bad selection violates exactly ONE device clause. A device assert poisons the CUDA context, so every case
+# runs in its own process.
+_CUDA_CASE = r"""
+import os, sys
+import torch
+import torch.nn.functional as F
+sys.path.insert(0, sys.argv[1])
+from ember.model import ember_v0_streamed_loss as m
+case = sys.argv[2]
+dev = torch.device('cuda')
+h = torch.randn(22, 5, device=dev, requires_grad=True)
+c = torch.randn(11, 5, device=dev, requires_grad=True)
+y = torch.zeros(22, dtype=torch.long, device=dev)
+rows, w, count = [0, 2, 4, 5], [1.0, 7.0, 1.0, 7.0], 16
+if case == 'count': count = 15
+if case == 'weight': w = [1.0, 7.0, 0.5, 7.5]
+if case == 'ascending': rows = [0, 2, 2, 5]
+if case == 'outside': rows = [0, 2, 4, 6]
+entry = (torch.tensor(rows, device=dev), torch.tensor(w, device=dev), count)
+def dense(e, cc, t, ww=None):
+    nll = F.cross_entropy(e @ cc.T, t, reduction='sum' if ww is None else 'none')
+    return nll if ww is None else (nll * ww).sum()
+loss = m.weighted_document_streamed_loss(h, c, y, (6, 5, 7, 4), 32, operator=dense, selections=(entry, None, None, None))
+loss.backward()
+torch.cuda.synchronize()
+print('EXECUTED', m.executed_values(loss.cce_executed))
+"""
+
+
+@unittest.skipUnless(torch.cuda.is_available(), 'needs a CUDA device')
+class WeightedDocumentLossDeviceClauses(unittest.TestCase):
+    def run_case(self, case, blocking):
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
+        env.pop('CUDA_LAUNCH_BLOCKING', None)
+        if blocking:
+            env['CUDA_LAUNCH_BLOCKING'] = '1'
+        return subprocess.run([sys.executable, '-B', '-c', _CUDA_CASE, str(ROOT / 'src'), case], env=env,
+                              capture_output=True, text=True, timeout=180)
+
+    def test_each_device_clause_fires_and_names_itself_under_launch_blocking(self):
+        for case, message in (('count', 'count differs from its weight total'),
+                              ('weight', 'weight is below one'),
+                              ('ascending', 'rows are not unique and ascending'),
+                              ('outside', 'row is outside its document')):
+            with self.subTest(case):
+                result = self.run_case(case, blocking=True)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('EXECUTED', result.stdout)
+                self.assertIn('device assertion failed: Weighted selection ' + message, result.stderr)
+
+    def test_device_clause_fires_asynchronously_without_launch_blocking(self):
+        result = self.run_case('count', blocking=False)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('EXECUTED', result.stdout)
+        self.assertIn('device-side assert triggered', result.stderr)
+
+    def test_valid_selection_reports_the_device_reduced_weight_total(self):
+        result = self.run_case('good', blocking=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("EXECUTED {'cce_calls': 1, 'cce_rows': 20, 'cce_weight_total': 32}", result.stdout)
 
 
 if __name__ == '__main__':

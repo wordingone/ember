@@ -2072,13 +2072,22 @@ def _row_training_head(capture):
     return getattr(getattr(capture, 'loss_fn', None), 'training_head', 'cce-document-v1')
 
 
+def _require_cce_receipt(loss):
+    """cce-document-v2, first line: right after the loss returns and BEFORE its backward, the loss must carry
+    its own executed receipt, so an update whose loss did not report its execution is never applied."""
+    from ember.model.ember_v0_streamed_loss import require_executed
+    require_executed(getattr(loss, 'cce_executed', None))
+
+
 def _cce_executed_fields(executed):
-    """cce-document-v2 executed receipt for one update: summed over its micro-steps from the receipts the loss
-    attached to its own outputs. A micro-step loss that carries none refuses the row (the feature did not run)."""
-    if not executed or any(type(item) is not dict or set(item) != {'cce_calls', 'cce_rows', 'cce_weight_total'}
-                           for item in executed):
+    """cce-document-v2 executed receipt for one update, second line: summed over its micro-steps from the
+    receipts the loss attached to its own outputs, read after the update synchronized (the weight total is the
+    device-reduced sum of the weights the operator received). A missing receipt refuses the row."""
+    from ember.model.ember_v0_streamed_loss import executed_values
+    if not executed:
         raise ValueError('weighted document loss did not report its execution')
-    return {key: sum(item[key] for item in executed) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
+    values = [executed_values(item) for item in executed]
+    return {key: sum(item[key] for item in values) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
@@ -2253,6 +2262,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             with recording:
                 logits, routes, loss, micro_started, micro_forwarded = (
                     pre['launched'] if pre is not None else _launch(prep, micro_index, events))
+                if fold:
+                    _require_cce_receipt(loss)  # refused before backward: the update is never applied
                 if segment_optimizer is not None:
                     # The verdict and the unrouted gate are final once the forward is enqueued, so each segment's
                     # owners are stepped (gated) on the side stream as the backward finishes that segment.

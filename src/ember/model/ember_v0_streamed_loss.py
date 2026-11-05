@@ -163,12 +163,56 @@ def document_streamed_loss(hidden, classifier, targets, lengths, denominator, *,
     return _DocumentStreamedLoss.apply(hidden, classifier, targets, lengths, denominator, operator, selections)
 
 
-# cce-document-v2 executed receipt. Written by the loss forward AFTER its operator call returns, from the
-# operands the operator actually received (row count of the merged operand, weight total of the selections that
-# built it; the device assertion in weighted_document_streamed_loss binds that host total to weights.sum()), and
-# attached to the returned loss tensor as `cce_executed`. Per call, so a forward pre-launched inside the previous
-# update carries its own receipt; never a host read of a device value.
+# cce-document-v2 executed receipt, attached to the returned loss tensor as `cce_executed` and written by the
+# forward AFTER its operator call returns, from the operands the operator actually received:
+#   cce_calls, cce_rows  counted at operator entry (calls, and the merged operand's row count);
+#   cce_weight_total     the sum of the weight vector the operator received, reduced ON THE DEVICE and copied to
+#                        a pinned host scalar without blocking (never the selection's declared count). With no
+#                        weight vector (every document whole) every weight is 1 and the total is the row count.
+# Per call, so a forward pre-launched inside the previous update carries its own receipt. Read it with
+# executed_values() only after the update has synchronized; the copy is queued before that update's backward.
 _LAST_EXECUTED = {}
+EXECUTED_FIELDS = frozenset({'cce_calls', 'cce_rows', 'cce_weight_total'})
+
+
+def require_executed(receipt):
+    """Structural check of one call's receipt, safe BEFORE any synchronization (no device value is read).
+    Raises ValueError unless the loss reported at least one operator call over at least one row."""
+    if (type(receipt) is not dict or set(receipt) != EXECUTED_FIELDS
+            or type(receipt['cce_calls']) is not int or receipt['cce_calls'] < 1
+            or type(receipt['cce_rows']) is not int or receipt['cce_rows'] < 1
+            or not (type(receipt['cce_weight_total']) is int or (
+                isinstance(receipt['cce_weight_total'], torch.Tensor)
+                and receipt['cce_weight_total'].device.type == 'cpu'
+                and receipt['cce_weight_total'].ndim == 0))):
+        raise ValueError('weighted document loss did not report its execution')
+    return receipt
+
+
+def executed_values(receipt):
+    """One call's receipt as integers. Call only after the update has synchronized."""
+    require_executed(receipt)
+    total = receipt['cce_weight_total']
+    if isinstance(total, torch.Tensor):
+        value = float(total)
+        if value != round(value):
+            raise ValueError('executed weight total is not an integer')
+        total = int(round(value))
+    return {'cce_calls': receipt['cce_calls'], 'cce_rows': receipt['cce_rows'], 'cce_weight_total': total}
+
+
+def _device_clause(valid, message):
+    """One validation clause. CPU: raise ValueError(message). CUDA: torch._assert_async, which this build reports
+    with no message; under CUDA_LAUNCH_BLOCKING=1 the failure surfaces at this call and is re-raised naming the
+    clause. Without launch blocking it surfaces, unnamed, at the update's next synchronization."""
+    if valid.device.type != 'cuda':
+        if not bool(valid):
+            raise ValueError(message)
+        return
+    try:
+        torch._assert_async(valid, message)
+    except RuntimeError as exc:
+        raise RuntimeError('device assertion failed: ' + message) from exc
 
 
 class _WeightedDocumentStreamedLoss(torch.autograd.Function):
@@ -212,9 +256,16 @@ class _WeightedDocumentStreamedLoss(torch.autograd.Function):
             e = e_all.detach().requires_grad_(hidden.requires_grad)
             c = classifier.detach().requires_grad_(classifier.requires_grad)
             part = counted(e, c, t_all) if w_all is None else counted(e, c, t_all, w_all)
-        weight_total = sum(n if entry is None else entry[2]
-                           for entry, (*_, n) in zip(selections or (None,) * len(pieces), pieces))
-        _LAST_EXECUTED.update(cce_calls=len(calls), cce_rows=sum(calls), cce_weight_total=int(weight_total))
+        if w_all is None:
+            weight_total = sum(calls)  # no weight vector: every weight is 1
+        else:
+            reduced = w_all.detach().sum(dtype=torch.float64)
+            if reduced.device.type == 'cuda':
+                weight_total = torch.empty((), dtype=torch.float64, pin_memory=True)
+                weight_total.copy_(reduced, non_blocking=True)
+            else:
+                weight_total = reduced
+        _LAST_EXECUTED.update(cce_calls=len(calls), cce_rows=sum(calls), cce_weight_total=weight_total)
         ctx.state = (pieces, e, c, part, whole)
         ctx.denominator = denominator
         ctx.hidden_shape = hidden.shape
@@ -281,12 +332,12 @@ def weighted_document_streamed_loss(hidden, classifier, targets, lengths, denomi
                         or index.dtype != torch.int64 or weights.dtype != torch.float32
                         or index.device != hidden.device or weights.device != hidden.device):
                     raise ValueError('Document row selection is invalid')
-                # count == int(weights.sum()), rows unique (strictly ascending) and inside the document,
-                # every weight >= 1. Checked on the device without a host read on CUDA.
-                checks.append(((weights.sum() == count) & (weights >= 1).all()
-                               & (index[1:] > index[:-1]).all()
-                               & (index[0] >= start) & (index[-1] < start + length),
-                               'Weighted selection count, weights or rows are invalid'))
+                # Four clauses, each with its own name; on CUDA each is an _assert_async (no host read).
+                checks.append((weights.sum() == count, 'Weighted selection count differs from its weight total'))
+                checks.append(((weights >= 1).all(), 'Weighted selection weight is below one'))
+                checks.append(((index[1:] > index[:-1]).all(), 'Weighted selection rows are not unique and ascending'))
+                checks.append(((index[0] >= start) & (index[-1] < start + length),
+                               'Weighted selection row is outside its document'))
                 exposure += count
             start += length
     else:
@@ -296,10 +347,7 @@ def weighted_document_streamed_loss(hidden, classifier, targets, lengths, denomi
     checks.append((((targets >= 0) & (targets < len(classifier))).all(),
                    'Streamed loss requires every target in vocabulary'))
     for valid, message in checks:
-        if targets.device.type == 'cuda':
-            torch._assert_async(valid, message)
-        elif not bool(valid):
-            raise ValueError(message)
+        _device_clause(valid, message)
     if operator is None:
         if hidden.device.type != 'cuda' or hidden.dtype != torch.bfloat16:
             raise ValueError('Production streamed loss requires CUDA BF16 operands')
