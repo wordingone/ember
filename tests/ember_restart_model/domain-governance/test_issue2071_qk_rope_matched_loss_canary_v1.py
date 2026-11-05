@@ -422,12 +422,12 @@ def test_optimizer_structure_census_records_keys_shapes_and_dtypes():
 
 
 def test_prestart_contract_refuses_each_floor():
-    good = {"external_gpu_bytes": 0, "commit_free_bytes": 45 * 1024**3, "c_free_bytes": 150 * 1024**3, "b_free_bytes": 250 * 1024**3}
+    good = {"external_gpu_bytes": 0, "commit_free_bytes": 45 * 1024**3, "c_free_bytes": 40 * 1024**3, "b_free_bytes": 250 * 1024**3}
     MODULE.validate_prestart(good)
     cases = {
         "external_gpu_bytes": 3072 * 1024**2 + 1,
         "commit_free_bytes": 45 * 1024**3 - 1,
-        "c_free_bytes": 150 * 1024**3 - 1,
+        "c_free_bytes": 40 * 1024**3 - 1,
         "b_free_bytes": 1,
     }
     for field, value in cases.items():
