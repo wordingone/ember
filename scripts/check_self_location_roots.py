@@ -23,8 +23,16 @@ SCHEMA = "ember-self-location-census-v1"
 BASELINE_SCHEMA = "ember-self-location-baseline-v1"
 BASELINE_EXPIRY_AUTHORITY = "OPERATOR_ONLY"
 BASELINE_EXPIRY_CONSEQUENCE = (
-    "after this date the gate fails on every baselined row, blocking all pull requests"
+    "after this date the scheduled master check (ci-nightly) fails on every baselined row; "
+    "pull requests and the merge queue carry a warning and are not blocked"
 )
+# The expiry is a burn-down DEADLINE, not a property of any pull request's diff. In "block" mode
+# (the default, and the scheduled master check) an expired baseline with remaining rows refuses.
+# In "warn" mode (ci-pr: pull requests and the merge queue) it is reported under "warnings" and
+# does not refuse. Every protective check -- new or drifted rows, count growth, unjustified rows,
+# schema, self-hash and policy -- refuses in both modes.
+EXPIRY_MODES = ("block", "warn")
+EXPIRED_WITH_REMAINING_ROWS = "BASELINE_EXPIRED_WITH_REMAINING_ROWS"
 BASELINE_GOAL_BINDING = {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",
@@ -341,7 +349,12 @@ def _baseline_key(row: dict[str, object]) -> tuple[object, ...]:
     )
 
 
-def enforce_baseline(rows: list[dict[str, object]], baseline: dict[str, object], today: dt.date) -> list[str]:
+def enforce_baseline(
+    rows: list[dict[str, object]], baseline: dict[str, object], today: dt.date,
+    *, expiry_mode: str = "block",
+) -> list[str]:
+    if expiry_mode not in EXPIRY_MODES:
+        raise ValueError(f"unknown expiry mode {expiry_mode!r}; expected one of {EXPIRY_MODES}")
     if baseline.get("schema_version") != BASELINE_SCHEMA or not isinstance(baseline.get("rows"), list):
         return ["BASELINE_SCHEMA_INVALID"]
     unsigned = dict(baseline)
@@ -372,8 +385,8 @@ def enforce_baseline(rows: list[dict[str, object]], baseline: dict[str, object],
         # Appended, never returned early: the report must carry every finding it has, because a
         # gate that reveals one layer per run reads as a first report every time.
         errors.append("BASELINE_ROW_UNJUSTIFIED")
-    if today > expires and current:
-        errors.append("BASELINE_EXPIRED_WITH_REMAINING_ROWS")
+    if today > expires and current and expiry_mode == "block":
+        errors.append(EXPIRED_WITH_REMAINING_ROWS)
     if len(failures) > int(baseline.get("maximum_rows", -1)):
         errors.append("BASELINE_COUNT_GROWTH")
     if not current <= allowed:
@@ -381,12 +394,24 @@ def enforce_baseline(rows: list[dict[str, object]], baseline: dict[str, object],
     return errors
 
 
-def build_report(root: Path, paths: Iterable[Path], baseline: dict[str, object], today: dt.date) -> dict[str, object]:
+def build_report(
+    root: Path, paths: Iterable[Path], baseline: dict[str, object], today: dt.date,
+    *, expiry_mode: str = "block",
+) -> dict[str, object]:
     rows = scan_files(root, paths)
-    errors = enforce_baseline(rows, baseline, today)
+    errors = enforce_baseline(rows, baseline, today, expiry_mode=expiry_mode)
+    # Whatever block mode would refuse and this mode did not is reported, never dropped: the
+    # only such finding is the expiry, and a warning nobody can read is a silent pass.
+    warnings = [
+        finding for finding in enforce_baseline(rows, baseline, today)
+        if finding not in errors
+    ]
     return {
         "schema_version": SCHEMA,
         "result": "PASS" if not errors else "REFUSED",
+        "expiry_mode": expiry_mode,
+        "expires_on": baseline.get("expires_on"),
+        "warnings": warnings,
         "root": str(root.resolve()),
         "tracked_python_files": len(list(paths)) if not isinstance(paths, list) else len(paths),
         "examined_rows": len(rows),
@@ -461,6 +486,12 @@ def main() -> int:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
+    parser.add_argument(
+        "--expiry-mode", choices=EXPIRY_MODES, default="block",
+        help=("block (default; the scheduled master check): an expired baseline with remaining "
+              "rows refuses. warn (pull requests and the merge queue): it is reported under "
+              "warnings and as a GitHub annotation, and does not refuse."),
+    )
     parser.add_argument("--mint-baseline-expiry", type=dt.date.fromisoformat)
     parser.add_argument(
         "--justifications", type=Path,
@@ -501,8 +532,16 @@ def main() -> int:
         print(json.dumps({"result": "BASELINE_MINTED", "rows": payload["maximum_rows"], "self_sha256": payload["self_sha256"]}, sort_keys=True))
         return 0
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
-    report = build_report(root, paths, baseline, args.today)
+    report = build_report(root, paths, baseline, args.today, expiry_mode=args.expiry_mode)
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+    if EXPIRED_WITH_REMAINING_ROWS in report["warnings"] and os.environ.get("GITHUB_ACTIONS") == "true":
+        print(
+            "::warning title=Self-location baseline expired::"
+            f"{args.baseline.as_posix()} expired on {report['expires_on']} with "
+            f"{report['mismatch_rows'] + report['unevaluable_rows']} rows remaining. This pull "
+            "request is not blocked by it; the scheduled ci-nightly check on master is. Burn "
+            "rows down or re-mint (expiry change authority: OPERATOR_ONLY)."
+        )
     return 0 if report["result"] == "PASS" else 1
 
 

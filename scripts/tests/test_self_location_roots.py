@@ -316,6 +316,61 @@ def test_expired_baseline_refuses_any_remaining_debt(tmp_path: Path) -> None:
     ]
 
 
+def test_warn_mode_reports_the_expiry_without_refusing(tmp_path: Path) -> None:
+    source = write(tmp_path / "src" / "nested" / "probe.py", "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n")
+    rows = subject.scan_files(tmp_path, [source])
+    expired = baseline(rows)
+    assert subject.enforce_baseline(rows, expired, dt.date(2026, 9, 3), expiry_mode="warn") == []
+    report = subject.build_report(tmp_path, [source], expired, dt.date(2026, 9, 3), expiry_mode="warn")
+    assert report["result"] == "PASS"
+    assert report["warnings"] == ["BASELINE_EXPIRED_WITH_REMAINING_ROWS"]
+    assert report["expires_on"] == "2026-09-02"
+    blocked = subject.build_report(tmp_path, [source], expired, dt.date(2026, 9, 3))
+    assert blocked["result"] == "REFUSED"
+    assert blocked["errors"] == ["BASELINE_EXPIRED_WITH_REMAINING_ROWS"]
+    assert blocked["warnings"] == []
+
+
+def test_warn_mode_still_refuses_every_protective_finding(tmp_path: Path) -> None:
+    """Only the deadline moves to the scheduled check. A pull request that adds or drifts a row,
+    or grows the count, is refused in warn mode exactly as in block mode."""
+    first = write(tmp_path / "first" / "nested" / "probe.py", "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n")
+    rows = subject.scan_files(tmp_path, [first])
+    expired = baseline(rows)
+    second = write(tmp_path / "second" / "nested" / "probe.py", "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n")
+    grown = subject.scan_files(tmp_path, [first, second])
+    errors = subject.enforce_baseline(grown, expired, dt.date(2026, 9, 3), expiry_mode="warn")
+    assert errors == ["BASELINE_COUNT_GROWTH", "NEW_OR_DRIFTED_SELF_LOCATION_ROW"]
+    report = subject.build_report(tmp_path, [first, second], expired, dt.date(2026, 9, 3), expiry_mode="warn")
+    assert report["result"] == "REFUSED"
+    assert report["warnings"] == ["BASELINE_EXPIRED_WITH_REMAINING_ROWS"]
+
+
+def test_an_unknown_expiry_mode_is_refused_rather_than_read_as_warn(tmp_path: Path) -> None:
+    source = write(tmp_path / "src" / "nested" / "probe.py", "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n")
+    rows = subject.scan_files(tmp_path, [source])
+    try:
+        subject.enforce_baseline(rows, baseline(rows), dt.date(2026, 9, 3), expiry_mode="off")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an unknown expiry mode was accepted")
+
+
+def test_the_expiry_blocks_the_scheduled_master_check_and_only_warns_pull_requests() -> None:
+    workflows = SCRIPT.parents[1] / ".github/workflows"
+    gate = (
+        "python -B scripts/check_self_location_roots.py --root . "
+        "--baseline scripts/self-location-baseline.json"
+    )
+    pull_request = (workflows / "ci-pr.yml").read_text(encoding="utf-8")
+    assert pull_request.count(gate + " --expiry-mode warn\n") == 1
+    nightly = (workflows / "ci-nightly.yml").read_text(encoding="utf-8")
+    assert "schedule:" in nightly
+    assert nightly.count(gate + " --expiry-mode block\n") == 1
+    assert "--expiry-mode warn" not in nightly
+
+
 def test_baseline_manifest_binds_operator_expiry_policy_and_exact_count(tmp_path: Path) -> None:
     source = write(
         tmp_path / "src" / "nested" / "probe.py",
@@ -330,7 +385,8 @@ def test_baseline_manifest_binds_operator_expiry_policy_and_exact_count(tmp_path
     assert frozen["baselined_row_count"] == len(frozen["rows"]) == frozen["maximum_rows"]
     assert frozen["expiry_change_authority"] == "OPERATOR_ONLY"
     assert frozen["expiry_consequence"] == (
-        "after this date the gate fails on every baselined row, blocking all pull requests"
+        "after this date the scheduled master check (ci-nightly) fails on every baselined row; "
+        "pull requests and the merge queue carry a warning and are not blocked"
     )
 
     frozen["baselined_row_count"] = 0
