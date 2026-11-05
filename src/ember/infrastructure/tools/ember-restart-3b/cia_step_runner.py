@@ -1787,17 +1787,39 @@ class SegmentOptimizer:
         return keys, skip, refused != armed['refused']
 
 
-def _stage_next_early(next_pack, device, image_text, pack, two_ahead):
-    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream)."""
+def prefetch_position(pack, image_start, ahead):
+    """GLOBAL image-text position of the update `ahead` steps after `pack`: the position its pack is FILLED at.
+
+    HourPacks fills the image document at image_start + index (cia_hour.HourPacks.next_pack), and the image-text
+    stream keys its prefetch by the sha256 tuple of the pairs at the requested position. A prefetch issued at the
+    LOCAL index (image_start dropped) never matches on a chained hour (image_start != 0): load_patches misses, the
+    step thread decodes the eight images synchronously, and eight wrong images are decoded on the pool every update
+    (#1945 H34: image_patches_source 'decoded-in-this-step' on 68,269 of 68,269 rows under EMBER_DECODE_TWO_AHEAD=1,
+    while the Sept 24 genesis hour read 'decoded-in-previous-step-wall' on 57,973 of 57,974). Genesis is image_start 0,
+    where this equals the local arithmetic exactly."""
+    if type(image_start) is not int or image_start < 0:
+        raise ValueError('image-text start position must be a non-negative integer')
+    return image_start + pack.get('index', 0) + ahead
+
+
+def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0):
+    """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream).
+
+    Returns (inputs, (rows, patches), patches_source, two_ahead_position). The last is the GLOBAL image-text position
+    whose decode this call started two updates ahead, or None when it started none (no image text, or two-ahead not in
+    effect on this call). The step reads it back as the two-ahead decode's EXECUTION; the EMBER_DECODE_TWO_AHEAD
+    request is not consulted for it."""
     staged = (staged_inputs(next_pack, device),
               load_image_text_module().load_patches(next_pack, device, pinned=True)
               if next_pack.get('images') else (None, None),
               load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
+    two_ahead_position = None
     if image_text is not None and two_ahead:
         # index+1's decode began one update earlier, so the staging above did not wait on it;
-        # index+2's begins now and is joined inside this update's wall.
-        load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 2)
-    return staged
+        # index+2's begins now and is joined inside this update's wall. Global position, never the local index.
+        two_ahead_position = prefetch_position(pack, image_start, 2)
+        load_image_text_module().prefetch_index(image_text, two_ahead_position)
+    return staged + (two_ahead_position,)
 
 
 def release_unrouted_expert_grads(expert_owners, unrouted):
@@ -2009,8 +2031,13 @@ def exposure_fields(pack, wall):
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
                  experiment_binding=None, image_text=None, next_pack=None,
-                 prelaunch_next=False):
+                 prelaunch_next=False, image_start=0):
     """Return one row only after context exit, successful update and synchronization.
+
+    image_start is the GLOBAL image-text position of this run's first pack (cia_hour.HourPacks.image_start: the
+    chained parent's published step, 0 at genesis and on every non-chained caller). Every prefetch issued here is
+    keyed at image_start + pack index + ahead, which is the position the prefetched pack is filled at; the pack
+    itself is never mutated, so pack_sha256 and input_sha256 are unchanged.
 
     next_pack with EMBER_STAGE_NEXT_STEP=1 (on the resident captured path, after the recording step): once this step's
     optimizer is launched, and before its wall closes, the host stages update index+1 while the device runs the
@@ -2043,6 +2070,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         raise ValueError('reference routing observer must be callable')
     if route_snapshot is not None and type(route_snapshot) is not dict:
         raise ValueError('trajectory routing snapshot requires a plain output dictionary')
+    if type(image_start) is not int or image_start < 0:
+        raise ValueError('image-text start position must be a non-negative integer')
     experiment = step_experiment_fields(capture, experiment_binding)
     synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
     global _NEXT_STEP
@@ -2098,6 +2127,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
+    two_ahead_position = None   # set from the staging this call produces; the row reads it back
 
     def _prepare(micro, staged_ahead):
         # Inputs, embedding and routing-buffer reset for one micro-step (same calls, same order as before).
@@ -2186,13 +2216,14 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                 two_ahead = stage_next and os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1'
                 stage_after_optimizer = stage_next and os.environ.get('EMBER_STAGE_AFTER_OPTIMIZER') == '1'
                 if image_text is not None and micro_index == len(micros) - 1 and not two_ahead:
-                    load_image_text_module().prefetch_index(image_text, pack.get('index', 0) + 1)
+                    load_image_text_module().prefetch_index(image_text, prefetch_position(pack, image_start, 1))
                 if stage_next and micro_index == len(micros) - 1:
                     # Update index+1's inputs, staged at the last backward launch: the device still has this
                     # backward queued, and end_step below synchronizes, so staging after candidate_step exits
                     # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
                     if not stage_after_optimizer:
-                        staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead)
+                        staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead,
+                                                         image_start=image_start)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
@@ -2267,7 +2298,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if stage_next and staged_early is None:
         # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
         staged_early = _stage_next_early(next_pack, device, image_text, pack,
-                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1')
+                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1', image_start=image_start)
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
@@ -2277,7 +2308,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         # Update index+1, staged on the host while the device runs this update (all ordered after optimizer.step on
         # the same stream): the in-place clear it would open with, its pinned inputs, and its image patches.
         capture.zero_grad(optimizer=optimizer)
-        next_inputs, next_patches, next_source = staged_early
+        next_inputs, next_patches, next_source, two_ahead_position = staged_early
         _NEXT_STEP = {'pack': next_pack, 'inputs': next_inputs, 'patches': next_patches,
                       'patches_source': next_source}
         if prelaunch_next:
@@ -2363,6 +2394,12 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'optimizer_and_sync_seconds': finished - exited, 'loss': loss_value,
             **({'image_patches_source': patches_source} if pack.get('images') else {}),
             'staged_by_previous_step': ahead is not None, 'staged_next_step': stage_next,
+            # This update's forward was enqueued inside the PREVIOUS call (EMBER_PRELAUNCH_FORWARD), read back off
+            # the staging this call consumed: the prelaunch's execution, not its request.
+            'prelaunched': pre is not None,
+            # This call started update index+2's image decode (EMBER_DECODE_TWO_AHEAD), read back off the staging it
+            # produced: the two-ahead decode's execution, not its request. False on every call that staged nothing.
+            'two_ahead_prefetched': two_ahead_position is not None,
             'accumulation_micro_steps': depth,
             'template_untrained_released': len(template_untrained),
             'cuda_phase_seconds': ({'forward': sum(events[3 * m].elapsed_time(events[3 * m + 1])
