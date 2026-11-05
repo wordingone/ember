@@ -202,13 +202,19 @@ class _WeightedDocumentStreamedLoss(torch.autograd.Function):
             e_all, t_all = torch.cat(e_parts), torch.cat(t_parts)
             w_all = torch.cat([torch.ones(n, dtype=torch.float32, device=hidden.device) if w is None else w
                                for w, (*_, n) in zip(w_parts, pieces)])
+        calls = []
+
+        def counted(*operands):
+            # cce_calls is the number of times the operator was actually entered, not a constant.
+            calls.append(int(operands[0].shape[0]))
+            return operator(*operands)
         with torch.enable_grad():
             e = e_all.detach().requires_grad_(hidden.requires_grad)
             c = classifier.detach().requires_grad_(classifier.requires_grad)
-            part = operator(e, c, t_all) if w_all is None else operator(e, c, t_all, w_all)
+            part = counted(e, c, t_all) if w_all is None else counted(e, c, t_all, w_all)
         weight_total = sum(n if entry is None else entry[2]
                            for entry, (*_, n) in zip(selections or (None,) * len(pieces), pieces))
-        _LAST_EXECUTED.update(cce_calls=1, cce_rows=int(e.shape[0]), cce_weight_total=int(weight_total))
+        _LAST_EXECUTED.update(cce_calls=len(calls), cce_rows=sum(calls), cce_weight_total=int(weight_total))
         ctx.state = (pieces, e, c, part, whole)
         ctx.denominator = denominator
         ctx.hidden_shape = hidden.shape
