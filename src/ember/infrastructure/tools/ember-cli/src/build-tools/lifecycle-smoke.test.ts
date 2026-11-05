@@ -864,7 +864,7 @@ describe("compiled lifecycle workflow authority", () => {
     );
 
     expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
-    expect(workflow).toContain("uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97");
+    expect(workflow).toContain("uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0");
     expect(workflow).toContain("python-version: \"3.12\"");
     expect(workflow).toContain("Install pinned validator dependencies");
     expect(workflow).toContain("build-tools/cli-hardening-matrix.ts");
