@@ -2038,7 +2038,9 @@ def staged_inputs(micro, device, *, fold=False):
                 continue
             if weight > 1 and answers:
                 rows = numpy.asarray(_weighted_rows(rows.tolist(), answers, weight), dtype=numpy.int64)
-            if rows.shape[0] == hi - lo:
+            # loss_selection's whole-document predicate, verbatim: the document's own rows in order with no
+            # answer repeat. A count match alone (k + (weight - 1) * a == hi - lo) is not whole (#2410).
+            if rows.shape[0] == hi - lo and numpy.array_equal(rows, numpy.arange(lo, hi)):
                 spans.append(None)
             else:
                 spans.append((offset, rows.shape[0]))
