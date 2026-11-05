@@ -47,7 +47,7 @@ def headroom():
     if free < resources.MIN_FREE_COMMIT:
         raise ValueError('less than 42 GiB free system commit')
     disks = {drive: shutil.disk_usage(drive + ':/').free for drive in ('C', 'B')}
-    if disks['C'] < 40 * resources.GIB or disks['B'] < 250 * resources.GIB:
+    if disks['C'] < 150 * resources.GIB or disks['B'] < 250 * resources.GIB:
         raise ValueError('operating disk reserve is unavailable')
     return {'free_commit_bytes': free, 'free_disk_bytes': disks}
 
