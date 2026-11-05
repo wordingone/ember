@@ -54,9 +54,11 @@ def test_front_door_marker_coherence_requires_single_continuity_owner(
     tmp_path: Path,
 ) -> None:
     module = load_checker()
-    (tmp_path / "docs" / "authority").mkdir(parents=True)
+    # CONTINUITY.md moved to docs/domains/governance/authority/ (the checker reads it there).
+    authority = tmp_path / "docs" / "domains" / "governance" / "authority"
+    authority.mkdir(parents=True)
     (tmp_path / "README.md").write_text("# evergreen\n", encoding="utf-8")
-    (tmp_path / "docs" / "authority" / "CONTINUITY.md").write_text(
+    (authority / "CONTINUITY.md").write_text(
         "<!-- state-as-of: 2026-08-01 -->\n"
         f"{module.BOARD_BEGIN_MARKER}\n{module.BOARD_END_MARKER}\n"
         f"{module.SUBJECT_BEGIN_MARKER}\n{module.SUBJECT_END_MARKER}\n",

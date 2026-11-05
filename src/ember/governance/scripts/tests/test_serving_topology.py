@@ -26,7 +26,7 @@ import pytest
 
 # Add the canonical governance scripts directory for migrated imports.
 CANONICAL_SCRIPTS = (
-    Path(__file__).resolve().parents[2] / "src" / "ember" / "governance" / "scripts"
+    Path(__file__).resolve().parents[5] / "src" / "ember" / "governance" / "scripts"
 )
 sys.path.insert(
     0,
@@ -358,7 +358,10 @@ class TestCliManagedSpawnAuthority:
     def test_legacy_spawn_path_carries_the_registry_integration_contract(self):
         """AC5 preserves the path but makes its registry obligation explicit."""
         source_path = (
-            Path(__file__).parents[2]
+            Path(__file__).resolve().parents[5]
+            / "src"
+            / "ember"
+            / "infrastructure"
             / "tools"
             / "ember-cli"
             / "src"

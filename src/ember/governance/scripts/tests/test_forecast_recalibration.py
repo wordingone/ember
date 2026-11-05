@@ -26,11 +26,22 @@ def load_module():
     return module
 
 
+def forecast_fixture_path(repo: Path, rung: str) -> Path:
+    """Place a fixture forecast where the battery itself says that rung's forecast lives.
+
+    The fixtures used to hard-code ``docs/spec``; the R1 forecast later moved to
+    ``docs/domains/governance/spec`` and every fixture became a non-canonical file, so the
+    producer refused all of them before reaching the behaviour under test.
+    """
+    path = repo / load_battery().canonical_e6_forecast_path(rung)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def write_fixture(tmp_path: Path, *, run_ids: tuple[str, ...]) -> tuple[object, Path, Path]:
     module = load_module()
     repo = tmp_path / "repo"
-    forecast = repo / "docs" / "spec" / "ember02-r1-forecast-v1.json"
-    forecast.parent.mkdir(parents=True)
+    forecast = forecast_fixture_path(repo, "R1")
     forecast.write_text(
         json.dumps(
             {
@@ -266,7 +277,7 @@ def test_peak_vram_refuses_non_finite_e4_allocated_bytes(tmp_path: Path) -> None
 
 def test_r2_receipt_binds_rung_to_its_canonical_forecast(tmp_path: Path) -> None:
     module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
-    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast = forecast_fixture_path(run_root.parent, "R2")
     r2_forecast.write_bytes(r1_forecast.read_bytes())
 
     receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
@@ -287,7 +298,7 @@ def test_producer_refuses_unknown_or_cross_rung_forecast(
     tmp_path: Path, rung: str, forecast_name: str, reason: str
 ) -> None:
     module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
-    forecast = r1_forecast.with_name(forecast_name)
+    forecast = forecast_fixture_path(run_root.parent, "R1" if "-r1-" in forecast_name else "R2")
     if forecast != r1_forecast:
         forecast.write_bytes(r1_forecast.read_bytes())
 
@@ -297,7 +308,7 @@ def test_producer_refuses_unknown_or_cross_rung_forecast(
 
 def test_consumer_refuses_foreign_rung_and_path_tamper(tmp_path: Path) -> None:
     module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
-    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast = forecast_fixture_path(run_root.parent, "R2")
     r2_forecast.write_bytes(r1_forecast.read_bytes())
     receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
     candidate = run_root / "forecast-recalibration.json"
@@ -321,7 +332,7 @@ def test_consumer_refuses_foreign_rung_and_path_tamper(tmp_path: Path) -> None:
 
 def test_public_e6_path_adjudicates_r2_and_binds_selected_rung(tmp_path: Path) -> None:
     module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
-    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast = forecast_fixture_path(run_root.parent, "R2")
     r2_forecast.write_bytes(r1_forecast.read_bytes())
     receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
     (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")
@@ -360,7 +371,7 @@ def test_public_e6_path_refuses_cross_rung_receipt(tmp_path: Path) -> None:
 
 def test_battery_cli_adjudicates_r2_receipt_and_records_rung(tmp_path: Path) -> None:
     module, r1_forecast, run_root = write_fixture(tmp_path, run_ids=("run-a",))
-    r2_forecast = r1_forecast.with_name("ember02-r2-forecast-v1.json")
+    r2_forecast = forecast_fixture_path(run_root.parent, "R2")
     r2_forecast.write_bytes(r1_forecast.read_bytes())
     receipt = module.build_receipt(r2_forecast, run_root, rung="R2")
     (run_root / "forecast-recalibration.json").write_text(json.dumps(receipt), encoding="utf-8")

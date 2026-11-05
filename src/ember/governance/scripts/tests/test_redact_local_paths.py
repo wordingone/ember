@@ -11,10 +11,14 @@ from pathlib import Path
 
 import pytest
 
-from scripts import redact_local_paths
-
-
-SCRIPT = Path(redact_local_paths.__file__).resolve()
+# By file, not `from scripts import redact_local_paths`: the bare package import only
+# resolved when some earlier test had put src/ember/governance on sys.path, so this file
+# passed or failed by suite order.
+SCRIPT = (Path(__file__).resolve().parents[1] / "redact_local_paths.py").resolve()
+_spec = importlib.util.spec_from_file_location("redact_local_paths_under_test", SCRIPT)
+assert _spec is not None and _spec.loader is not None
+redact_local_paths = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(redact_local_paths)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:

@@ -6,7 +6,7 @@ borrowed_lineage=frozen_reference_only
 mechanism_erasure=forbidden
 -->
 
-<!-- state-as-of: 2026-08-01 -->
+<!-- state-as-of: 2026-08-01 --> Work paused 2026-10-10; the state-as-of marker dates only the generated current-subject manifest block, not this page. Entries below are the last recorded state.
 
 # Continuity
 

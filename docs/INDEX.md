@@ -21,6 +21,7 @@ This index is generated from `manifests/documentation/current-documents-v1.json`
 - [`ember.domain.governance`](domains/governance/README.md) — Authority, evidence, and lifecycle (normative; contributor, operator, auditor)
 - [`ember.entry.root`](../README.md) — Evergreen project front door and public routes (normative; new-user, user, contributor, operator, auditor)
 - [`ember.guide.contributing`](contributing.md) — Canonical public contribution and evidence route (current; contributor)
+- [`ember.guide.overview`](OVERVIEW.md) — Reviewer-facing plain-language overview of aims, measurements, and open gaps (current; new-user, user, auditor)
 - [`ember.guide.verify`](guides/VERIFY.md) — Exact four-command public verification route (current; contributor, auditor, operator)
 - [`ember.roadmap.public`](domains/governance/roadmap/README.md) — Milestone contracts and public completion certificates (normative; user, contributor, auditor)
 
