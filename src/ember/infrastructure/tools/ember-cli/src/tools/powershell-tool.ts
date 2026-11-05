@@ -5,9 +5,15 @@
 // De-transpiled from bundle (lines 306188–306694). Supports PowerShell 5.1 and 7+.
 // bundle=Y
 
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { z } from "zod";
+import { shellResultText } from "./bash-tool.ts";
+import { isDestructiveCommand, DESTRUCTIVE_ASK_MESSAGE } from "../core/destructive-command.ts";
+import { privateHostAskMessage, privateHostInCommand } from "../core/private-hosts.ts";
 import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
+import { createTailReporter } from "../core/tool-progress.ts";
+import { assignToSessionJob } from "./process-job.ts";
+import { shellStateNote } from "./shell-state-note.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -260,6 +266,7 @@ function runPsEditionCheck(exe: string): Promise<boolean> {
   return new Promise((resolve) => {
     const proc = spawn(exe, ["-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.Major"], {
       timeout: 5000,
+      windowsHide: true,
     });
     let output = "";
     proc.stdout?.on("data", (d: Buffer) => { output += d.toString(); });
@@ -318,21 +325,41 @@ async function executePs(
   abortSignal: AbortSignal,
   psExe: string,
   cwd: string,
+  toolUseId?: string,
 ): Promise<PsExecResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolveRaw) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: string[] = [];
     let finished = false;
 
-    const proc = spawn(psExe, ["-NoProfile", "-NonInteractive", "-Command", command], {
+    // -EncodedCommand (UTF-16LE base64) delivers the script byte-exact: no argv quoting layer
+    // between the model's text and PowerShell (cmd-style escaping mangled quotes, see Bash tool).
+    // Progress bars ("Preparing modules for first use") arrive on stderr as CLIXML when output is
+    // redirected; turn them off so the model and the user see only the command's output.
+    const encoded = Buffer.from("$ProgressPreference = 'SilentlyContinue'\n" + command, "utf16le").toString("base64");
+    const proc = spawn(psExe, ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], {
       env: process.env,
       cwd,
       shell: false,
+      // Own hidden console: a child sharing ember's console could change its title, code page and
+      // window size (blind test: after a PowerShell call the caret and borders drew as "?").
+      windowsHide: true,
     });
+    // Anything this command leaves running (Start-Process) ends with ember, not with the window
+    // (blind test S28). The screen shows the last line of output while it runs (S24).
+    assignToSessionJob(proc.pid);
+    const liveTail = createTailReporter(toolUseId);
+    const resolve = (result: PsExecResult): void => { liveTail.stop(); resolveRaw(result); };
+    const killTree = () => {
+      if (proc.pid !== undefined && process.platform === "win32") {
+        try { spawnSync("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { windowsHide: true }); } catch { /* best effort */ }
+      }
+      try { proc.kill(); } catch { /* already exited */ }
+    };
 
     const timer = setTimeout(() => {
       if (!finished) {
-        proc.kill();
+        killTree();
         finished = true;
         resolve({
           stdout: Buffer.concat(stdoutChunks),
@@ -345,7 +372,7 @@ async function executePs(
 
     const abort = () => {
       if (!finished) {
-        proc.kill();
+        killTree();
         finished = true;
         clearTimeout(timer);
         resolve({
@@ -359,8 +386,28 @@ async function executePs(
 
     abortSignal.addEventListener("abort", abort, { once: true });
 
-    proc.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-    proc.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk.toString("utf-8")));
+    proc.stdout?.on("data", (chunk: Buffer) => { stdoutChunks.push(chunk); liveTail.push(chunk); });
+    proc.stderr?.on("data", (chunk: Buffer) => { stderrChunks.push(chunk.toString("utf-8")); liveTail.push(chunk); });
+
+    // A command that starts a background process (Start-Process, a job) can exit while that child
+    // still holds the output pipes, so "close" would not come until the timeout (blind test S27,
+    // same defect as the Bash tool's). Once PowerShell itself has exited, give stragglers a moment,
+    // then return what arrived.
+    proc.on("exit", (code: number | null) => {
+      setTimeout(() => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        abortSignal.removeEventListener("abort", abort);
+        try { proc.stdout?.destroy(); proc.stderr?.destroy(); } catch { /* already closed */ }
+        resolve({
+          stdout: Buffer.concat(stdoutChunks),
+          stderr: stderrChunks.join("") + "\n[the command started a background process that is still running; its later output is not captured]",
+          exitCode: code ?? 0,
+          timedOut: false,
+        });
+      }, 1500);
+    });
 
     proc.on("close", (code: number | null) => {
       if (!finished) {
@@ -416,7 +463,7 @@ async function runPowerShell(
   const { command } = input;
   const timeout = input.timeout ?? BASH_TIMEOUT_MS;
   const psExe = await getPsExecutable();
-  const result = await executePs(command, timeout, ctx.abortController.signal, psExe, ctx.cwd ?? process.cwd());
+  const result = await executePs(command, timeout, ctx.abortController.signal, psExe, ctx.cwd ?? process.cwd(), ctx.toolUseId);
 
   const stdoutBuf = result.stdout;
   const isImage = detectImageOutput(stdoutBuf);
@@ -424,11 +471,18 @@ async function runPowerShell(
   if (stdout.length > MAX_OUTPUT_BYTES) {
     stdout = stdout.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
   }
-  let stderr = result.stderr;
+  let stderr = stripClixml(result.stderr);
   if (stderr.length > MAX_OUTPUT_BYTES) {
     stderr = stderr.slice(0, MAX_OUTPUT_BYTES) + TRUNCATION_MARKER;
   }
-  const interpretation = interpretPowerShellExitCode(command, result.exitCode);
+  let interpretation = result.timedOut
+    ? `Command timed out after ${Math.round(timeout / 1000)}s and was stopped (it may be waiting for input, or need a larger timeout)`
+    : interpretPowerShellExitCode(command, result.exitCode);
+  // S12: a call whose only effect was a lost `cd` / variable says so in its result.
+  if (!result.timedOut && result.exitCode === 0) {
+    const note = shellStateNote(command, "powershell", ctx.cwd ?? process.cwd());
+    if (note) interpretation = `${interpretation}; ${note}`;
+  }
   return {
     stdout: stdout || undefined,
     stderr: stderr || undefined,
@@ -473,8 +527,10 @@ Execute PowerShell commands (edition detected at runtime).
 - Read-only cmdlets (Get-ChildItem, Select-String, etc.) are auto-allowed.
 - Set-Content, Add-Content, Remove-Item are allowed in acceptEdits mode.
 - Dangerous patterns (Invoke-Expression, encoded commands, etc.) trigger a permission prompt.
-- Timeout default: 120 seconds.
-- Long-running commands (>15s) may be automatically backgrounded.
+- Every call starts a fresh PowerShell in the project directory: cd / Set-Location and variables do NOT carry
+  over to the next call. Chain dependent steps in one call (cd sub; make).
+- Timeout default: 120 seconds. A command that waits for input is stopped at the timeout.
+- A process you start in the background (Start-Process) may outlive the call but is ended when ember exits.
 - UNC paths (\\\\server\\share) are blocked.
 - Windows PowerShell 5.1: pipeline chain operators (&&/||) are NOT available; default encoding is UTF-16 LE.
 - PowerShell 7+: pipeline chain operators are available.`,
@@ -492,6 +548,14 @@ Execute PowerShell commands (edition detected at runtime).
             message: `Command denied by rule: ${pattern}`,
           };
         }
+      }
+      if (isDestructiveCommand(command)) {
+        return { behavior: "ask" as const, updatedInput: input, message: DESTRUCTIVE_ASK_MESSAGE };
+      }
+      // WebFetch refuses private/loopback addresses; a shell command that reaches one must not be a way round (W28).
+      const privateHost = privateHostInCommand(command);
+      if (privateHost) {
+        return { behavior: "ask" as const, updatedInput: input, message: privateHostAskMessage(privateHost) };
       }
       if (containsUncPath(command)) {
         return {
@@ -519,10 +583,25 @@ Execute PowerShell commands (edition detected at runtime).
     mapToolResultToToolResultBlockParam: (content: PowerShellOutput, toolUseId: string) => ({
       type: "tool_result" as const,
       tool_use_id: toolUseId,
-      content: JSON.stringify(content),
+      content: shellResultText(content),
     }),
 
     toAutoClassifierInput: (input?: PowerShellInput) => input?.command ?? "",
   }),
   { searchHint: "execute PowerShell commands" } as const,
 );
+
+/** PowerShell serialises stderr records as "#< CLIXML" + XML when redirected. Keep the error
+ *  text of <S S="Error"> records and drop progress records and the wrapper. */
+export function stripClixml(stderr: string): string {
+  if (!stderr.includes("#< CLIXML")) return stderr;
+  const out: string[] = [];
+  const re = /<S S="Error">([\s\S]*?)<\/S>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(stderr)) !== null) {
+    out.push(m[1]!.replace(/_x000D__x000A_/g, "\n").replace(/_x000A_/g, "\n")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&"));
+  }
+  const rest = stderr.replace(/#< CLIXML\r?\n?/g, "").replace(/<Objs[\s\S]*?<\/Objs>/g, "").trim();
+  return [out.join("").trim(), rest].filter((x) => x.length > 0).join("\n");
+}

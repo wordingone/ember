@@ -14,6 +14,7 @@ import {
   type ModelResponse,
 } from "../query/query-loop-support.ts";
 import { writeFile } from "node:fs/promises";
+import { BAD_TOOL_ARGUMENTS_KEY } from "../core/tool-input-check.ts";
 import { isAbsolute } from "node:path";
 import {
   assembleModelRequest,
@@ -29,8 +30,15 @@ import {
   CHARS_PER_TOKEN_ESTIMATE,
   ModelHttpError,
   normalizeModelServerUrl,
+  replyCutOffNotice,
 } from "../services/api-openai-adapter.ts";
-import { createMicrocompact } from "../services/compaction.ts";
+import {
+  chatTemplateKwargsForEffort,
+  getEffortLevel,
+  maxTokensForEffort,
+} from "../services/effort-level.ts";
+import { createMicrocompact, microcompactBudgetForContext } from "../services/compaction.ts";
+import { setContextWindowTokens } from "../services/context-window.ts";
 import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
 import type { CircuitBreakerState } from "../services/model-circuit-breaker.ts";
 import type { ModelSeatState } from "./model-seat.ts";
@@ -56,6 +64,12 @@ let _modelSeatState: ModelSeatState = { phase: "ABSENT" };
 
 export function getModelSeatState(): ModelSeatState {
   return { ..._modelSeatState };
+}
+
+/** Seed the seat projection for a seat whose server process-entry already started
+ * (OPEN_WEIGHTS); without it the cockpit's poll reads the ABSENT default. */
+export function seedModelSeatState(state: ModelSeatState): void {
+  _modelSeatState = { ...state };
 }
 
 // ---------------------------------------------------------------------------
@@ -222,14 +236,33 @@ export function buildProductionCallModel(
       tools:  tools as Parameters<typeof assembleModelRequest>[0]["tools"],
     });
 
+    // issue #2370: the operator's thinking level (/effort) rides on every request as
+    // chat_template_kwargs; `max` also raises the output cap past assembleModelRequest's.
+    const effort = getEffortLevel();
+
     // as any: assembled is Record<string,unknown>; interop with OpenAI adapter types
     const openAiReq = buildOpenAIRequest({
       model:     assembled["model"]     as string,
       messages:  assembled["messages"]  as any[],   // interop: Record<string,unknown>→EmberMessage[]
       tools:     (assembled["tools"]    as any[] | undefined) ?? undefined,
-      maxTokens:      assembled["max_tokens"] as number,
+      maxTokens:      maxTokensForEffort(effort, assembled["max_tokens"] as number),
       samplingParams: extractSamplingParams(assembled),
+      chatTemplateKwargs: { ...chatTemplateKwargsForEffort(effort) },
     });
+
+    // The system prompt was assembled (and counted toward prefill below) but never
+    // transmitted: buildOpenAIRequest only receives `messages`. Open-weights chat
+    // templates take a leading system message; the Ember reference seat keeps its
+    // historical wire shape.
+    const systemText = typeof assembled["system"] === "string" ? assembled["system"] : "";
+    if (systemText && process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1") {
+      openAiReq.messages.unshift({ role: "system", content: systemText });
+    }
+    // An empty conversation makes llama.cpp's template raise ("No messages
+    // provided", HTTP 500), which the retry layer then repeats. Refuse locally.
+    if (!openAiReq.messages.some((m) => m.role !== "system")) {
+      throw new Error("ember refused to send a model request with no conversation messages");
+    }
 
     // issue #157 Leg 2 (backstop): query-engine.ts's tool-result truncation
     // (Leg 1) is the primary cure for oversized prefill, but cumulative
@@ -400,8 +433,10 @@ export function buildProductionCallModel(
       throw err;
     }
 
-    // Merge thinking prefix into text when still in 'pre' state
-    if (ctx.state === "pre" && ctx.thinkingBuffer) {
+    // Merge thinking prefix into text when still in 'pre' state -- only for a turn that
+    // produced nothing else. A tool-call turn's reasoning stays reasoning: merged, it was shown
+    // to the user as an ordinary reply line (blind test U39).
+    if (ctx.state === "pre" && ctx.thinkingBuffer && ctx.toolCallsByIndex.size === 0) {
       ctx.textBuffer    = ctx.thinkingBuffer + ctx.textBuffer;
       ctx.thinkingBuffer = "";
     }
@@ -411,15 +446,26 @@ export function buildProductionCallModel(
     if (ctx.thinkingBuffer) {
       content.push({ type: "thinking", thinking: ctx.thinkingBuffer });
     }
-    if (ctx.textBuffer) {
-      content.push({ type: "text", text: ctx.textBuffer });
+    // finish_reason "length": the server stopped the reply because it ran out of room. Say so in
+    // the reply itself, so it does not read as a finished answer that stops mid-sentence (W30).
+    // A cut-off tool call is handled below (BAD_TOOL_ARGUMENTS_KEY), so only a reply without
+    // tool calls gets the line. The turn still ends as end_turn: the reply is kept in history.
+    const cutOff = ctx.finishReason === "length" && ctx.toolCallsByIndex.size === 0;
+    const replyText = cutOff
+      ? `${ctx.textBuffer}${ctx.textBuffer ? "\n\n" : ""}${replyCutOffNotice(reqBody["max_tokens"] as number | undefined)}`
+      : ctx.textBuffer;
+    if (replyText) {
+      content.push({ type: "text", text: replyText });
     }
     for (const [, tc] of ctx.toolCallsByIndex) {
       let input: unknown;
       try {
-        input = JSON.parse(tc.arguments);
+        input = tc.arguments.trim() === "" ? {} : JSON.parse(tc.arguments);
       } catch {
-        input = {};
+        // Unparseable arguments (usually a call cut off by the output token limit) used to become
+        // {} silently, and the tool then failed with an internal error. Mark it so the query engine
+        // can tell the model what happened (blind test FO-38).
+        input = { [BAD_TOOL_ARGUMENTS_KEY]: { receivedChars: tc.arguments.length } };
       }
       content.push({
         type:  "tool_use",
@@ -614,8 +660,11 @@ export function getCircuitBreakerState(): CircuitBreakerState | null {
 // is built here and carried on LoopDeps. Auto-compaction is conversation-store-
 // specific (it rewrites the persisted log), so it is built by QueryEngine against
 // its own message store — not here.
-function buildProductionMicrocompact(): (messages: unknown[]) => Promise<unknown[]> {
-  return createMicrocompact();
+function buildProductionMicrocompact(nCtx: number): (messages: unknown[]) => Promise<unknown[]> {
+  // EMBER_CONTEXT_TOKENS (read inside createMicrocompact) still wins when the operator sets it.
+  return createMicrocompact(
+    process.env["EMBER_CONTEXT_TOKENS"] === undefined ? { maxTokens: microcompactBudgetForContext(nCtx) } : {},
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -778,6 +827,7 @@ async function _runInit(opts: InitOpts): Promise<void> {
     }
   }
   _resolvedNCtx = nCtx;
+  setContextWindowTokens(nCtx);
 
   // issue #239: every production call goes through the circuit breaker, not
   // just buildProductionCallModel's raw fetch -- see buildGuardedProductionCallModel's
@@ -798,7 +848,7 @@ async function _runInit(opts: InitOpts): Promise<void> {
         modelCapabilities:       opts.modelCapabilities ?? null,
         servedModelConfigSha256: opts.servedModelConfigSha256 ?? null,
       });
-  const productionMicrocompact = buildProductionMicrocompact();
+  const productionMicrocompact = buildProductionMicrocompact(nCtx);
 
   _loopDeps = createLoopDeps({
     callModel:    _circuitBreakerHandle.callModel,
@@ -849,6 +899,7 @@ export function _resetInitForTests(): void {
   _telemetryInitialized = false;
   _cleanupHandlers.length = 0;
   _resolvedNCtx          = null;
+  setContextWindowTokens(null);
   _circuitBreakerHandle  = null;
 }
 

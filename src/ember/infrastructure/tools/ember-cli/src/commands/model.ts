@@ -468,6 +468,26 @@ function _realCheckpointSaveDeps(
  */
 const realWriteKillReceipt = _makeKillReceiptWriter({});
 
+/** `/model status` for an open-weights seat: the resolved seat, re-checked live. */
+export async function describeOpenWeightsSeat(
+  seat: { phase: string; owner?: string; endpoint?: string; vramBytes?: number; vramUnmeasured?: boolean },
+  probe: (url: string) => Promise<boolean> = async (url) => {
+    try {
+      const r = await fetch(`${url.replace(/\/+$/, "")}/health`, { signal: AbortSignal.timeout(3000) });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
+): Promise<string> {
+  if (seat.phase !== "RESIDENT" || !seat.endpoint) return `model: ${seat.phase.toLowerCase()} (open weights) — no server attached`;
+  const healthy = await probe(seat.endpoint);
+  const vram = seat.vramUnmeasured ? "vram unmeasured" : `vram ${((seat.vramBytes ?? 0) / 1024 ** 3).toFixed(1)} GiB`;
+  return healthy
+    ? `model: resident — ${seat.owner} (open weights) at ${seat.endpoint}, ${vram}, health ok`
+    : `model: NOT RESPONDING — ${seat.owner} at ${seat.endpoint} failed its health check`;
+}
+
 // ---------------------------------------------------------------------------
 // Factory (AC8)
 // ---------------------------------------------------------------------------
@@ -504,6 +524,13 @@ export function createModelCommand(deps: ModelCommandDeps = {}): RegistryCommand
 
       // AC9: /model status → current state + pid (if loaded)
       if (subcommand === "status" || subcommand === "") {
+        // An open-weights seat has no owned manifest to verify; the owned path
+        // below reported "unloaded" while the model was serving. Report the
+        // seat the session resolved, re-checked against the server's /health.
+        if (process.env["EMBER_OPEN_WEIGHTS_ACTIVE"] === "1") {
+          const { getModelSeatState } = await import("../entrypoints/session-init.ts");
+          return { type: "message" as const, message: await describeOpenWeightsSeat(getModelSeatState()) };
+        }
         let state = doGetModelState();
 
         // cond3 procreg (process_registry_watchdog): "loaded" out of

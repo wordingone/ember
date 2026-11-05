@@ -20,7 +20,18 @@ import { createCustodyCommand } from './commands/custody.ts';
 import { createBenchmarkCommand } from './commands/benchmark.ts';
 import { createSpinePanelCommand } from './components/spine-panel.ts';
 import { resumeCommand } from './resume.ts';
+import { createClearCommand, createHelpCommand } from './commands/session-basics.ts';
+import { createEffortCommand } from './commands/effort.ts';
+import { createCompactCommand } from './commands/compact.ts';
+import { createMemoryCommand } from './commands/memory.ts';
 import { getModeHistory } from './state/app-state.ts';
+import {
+  buildSkillCommands,
+  createExtensionCommands,
+  getMcpPromptCommandList,
+  getPluginCommandList,
+  mcpPromptCommandsAvailable,
+} from './extensions/commands.ts';
 
 export type { RegistryCommand };
 
@@ -70,14 +81,20 @@ const defaultDeps: CommandRegistryDeps = {
     createBenchmarkCommand(),
     createSpinePanelCommand(),
     resumeCommand,
+    createHelpCommand((cwd) => getCommands(cwd)),
+    createClearCommand(),
+    createEffortCommand(),
+    createCompactCommand(),
+    createMemoryCommand(),
+    ...createExtensionCommands(),
   ],
-  getSkillDirCommands: async () => [],
-  getPluginCommands: async () => [],
+  getSkillDirCommands: async (cwd) => buildSkillCommands(cwd),
+  getPluginCommands: async () => getPluginCommandList(),
   getDynamicSkillCommands: async () => [],
-  getMcpCommandList: () => [],
+  getMcpCommandList: () => getMcpPromptCommandList(),
   isCloudSubscriber: () => false,
   isConsoleUser: () => false,
-  isMcpSkillsEnabled: () => false,
+  isMcpSkillsEnabled: () => mcpPromptCommandsAvailable(),
 };
 
 let deps: CommandRegistryDeps = { ...defaultDeps };
@@ -153,8 +170,10 @@ export async function getCommands(cwd: string): Promise<RegistryCommand[]> {
   // Merge: builtins win over dynamic with same name
   const allNames = new Set<string>(builtins.map((c) => c.name));
   const dedupedDynamic = dynamic.filter((c) => !allNames.has(c.name));
+  // A skill named like a builtin (/help, /mcp, ...) never shadows it.
+  const dedupedSkillDir = skillDir.filter((c) => !allNames.has(c.name));
 
-  const merged = [...builtins, ...skillDir, ...plugins, ...dedupedDynamic, ...mcp];
+  const merged = [...builtins, ...dedupedSkillDir, ...plugins, ...dedupedDynamic, ...mcp];
 
   // Apply availability filter
   const filtered = merged.filter(meetsAvailabilityRequirement);

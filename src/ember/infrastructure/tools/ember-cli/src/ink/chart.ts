@@ -18,7 +18,6 @@
 // - NULL IS A GAP, NOT A ZERO: a null sample paints nothing at that x and is excluded from the
 //   autoscale range computation. Zero is a reading and plots as the value 0.
 
-import { createBrailleCanvas } from "./braille-canvas.ts";
 
 export interface ChartArea {
   /** Interior width/height in terminal cells. Zero or negative renders nothing. */
@@ -127,10 +126,10 @@ export function sparklineRow(samples: ReadonlyArray<number | null>, width: numbe
 }
 
 /**
- * Renders `samples` into a Braille chart of exactly `area.height` rows x `area.width` cells.
+ * Renders `samples` into a block-glyph chart of exactly `area.height` rows x `area.width` cells.
  * - area.width <= 0 or area.height <= 0: returns rows: [] (skip-path S1 — nothing, no throw).
  * - area.height === 1: single-row sparkline (degrade rather than vanish).
- * - Otherwise: Braille dots, min..max painted per bucket column so spikes survive.
+ * - Otherwise: block glyphs (8 levels per cell), min..max painted per column so spikes survive.
  */
 export function renderChart(samples: ReadonlyArray<number | null>, area: ChartArea, options: ChartOptions = {}): ChartRender {
   const width = Math.floor(area.width);
@@ -141,24 +140,30 @@ export function renderChart(samples: ReadonlyArray<number | null>, area: ChartAr
     const range = scaleRange(buckets, options);
     return { rows: [sparklineRow(samples, width, options)], yMin: range?.min ?? null, yMax: range?.max ?? null };
   }
-  const canvas = createBrailleCanvas(width, height);
-  const buckets = resampleMinMax(samples, canvas.dotWidth);
+  // Block glyphs, one column per bucket and 8 levels per cell. Braille dots drew as scattered
+  // specks in the Windows console font and read as rendering garbage (operator, 2026-11-03).
+  const buckets = resampleMinMax(samples, width);
   const range = scaleRange(buckets, options);
+  const grid: string[][] = Array.from({ length: height }, () => new Array<string>(width).fill(" "));
   if (range) {
     const span = range.max - range.min;
-    const toDotY = (value: number): number => {
+    const levels = height * 8;
+    // 0 = bottom eighth of the bottom row, levels-1 = top eighth of the top row.
+    const toLevel = (value: number): number => {
       const clamped = Math.max(range.min, Math.min(range.max, value));
-      // y grows downward; highest value paints on dot row 0.
-      return Math.max(0, Math.min(canvas.dotHeight - 1, Math.round((1 - (clamped - range.min) / span) * (canvas.dotHeight - 1))));
+      return Math.max(0, Math.min(levels - 1, Math.round(((clamped - range.min) / span) * (levels - 1))));
     };
-    for (let x = 0; x < canvas.dotWidth; x++) {
+    for (let x = 0; x < width; x++) {
       const bucket = buckets[x];
       if (!bucket) continue; // null sample -> gap, never a zero
-      const yMax = toDotY(bucket.max);
-      const yMin = toDotY(bucket.min);
-      // Paint the full min..max span of the bucket so the compressed extreme is visible as a bar.
-      for (let y = Math.min(yMax, yMin); y <= Math.max(yMax, yMin); y++) canvas.paint(x, y);
+      const lo = toLevel(bucket.min);
+      const hi = toLevel(bucket.max);
+      const topCell = Math.floor(hi / 8);
+      const lowCell = Math.floor(lo / 8);
+      // Cells strictly between the bucket's min and max are full: a spike shows as a bar.
+      for (let c = lowCell; c < topCell; c++) grid[height - 1 - c]![x] = "█";
+      grid[height - 1 - topCell]![x] = SPARK_GLYPHS[hi % 8]!;
     }
   }
-  return { rows: canvas.render(), yMin: range?.min ?? null, yMax: range?.max ?? null };
+  return { rows: grid.map((r) => r.join("")), yMin: range?.min ?? null, yMax: range?.max ?? null };
 }

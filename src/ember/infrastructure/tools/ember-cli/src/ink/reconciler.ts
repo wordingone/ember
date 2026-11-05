@@ -18,11 +18,12 @@ import {
   type StylePool,
   type HyperlinkPool,
 } from "../ink/rendering-pipeline.ts";
+import type { TextRun } from "../ink/rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
 import type { BorderStyleName } from "./border-glyphs.ts";
 import { ClickEvent, PointerEvent, type MouseModifiers, type TerminalEvent } from "./event-system.ts";
-import { _setMouseDispatcher } from "./hooks.ts";
+import { _setMouseDispatcher, _setRepaintRequester } from "./hooks.ts";
 import type { SgrMouseEvent } from "./termio.ts";
 import {
   createRendererDiagnosticFromEnv,
@@ -198,6 +199,14 @@ function extractInitialText(props: Props): string | undefined {
   return undefined;
 }
 
+function extractRuns(props: Props): TextRun[] | undefined {
+  const r = props["data-runs"];
+  if (typeof r === "string") {
+    try { return JSON.parse(r) as TextRun[]; } catch { /* ignore */ }
+  }
+  return undefined;
+}
+
 function extractTextWrap(props: Props): TextWrapMode | undefined {
   const value = props["data-text-wrap"];
   return typeof value === "string" ? value as TextWrapMode : undefined;
@@ -245,13 +254,15 @@ function _attachChild(parent: InternalNode | RootNode, child: InternalNode): voi
   if (parent.kind === "raw-ansi") {
     const rp = parent as InternalNode;
     if (child.kind === "text" && child.text !== undefined && !child.children.length) {
-      rp.rawAnsi = (rp.rawAnsi ?? "") + child.text;
+      if (!rp._rawChildren) rp._rawChildren = [];
+      const at = rp._rawChildren.indexOf(child); // already here: move it to the end
+      if (at >= 0) rp._rawChildren.splice(at, 1);
+      rp._rawChildren.push(child);
+      child._rawParent = rp;
+      rp.rawAnsi = rp._rawChildren.map((c) => c.text ?? "").join("");
       const visual = _stripAnsi(rp.rawAnsi);
       rp.layout.width  = Math.max(visual.length, 1);
       rp.layout.height = 1;
-      if (!rp._rawChildren) rp._rawChildren = [];
-      rp._rawChildren.push(child);
-      child._rawParent = rp;
       return;
     }
   }
@@ -261,20 +272,24 @@ function _attachChild(parent: InternalNode | RootNode, child: InternalNode): voi
       if (!child.style || !Object.keys(child.style).length) {
         child.style = mp.style;
       }
-      mp.text = (mp.text ?? "") + child.text;
-      mp.layout.width  = mp.text.length;
-      mp.layout.height = 1;
       if (!mp._mergedChildren) mp._mergedChildren = [];
+      const at = mp._mergedChildren.indexOf(child); // already here: move it to the end
+      if (at >= 0) mp._mergedChildren.splice(at, 1);
       mp._mergedChildren.push(child);
       child._mergedInto = mp;
+      mp.text = mp._mergedChildren.map((c) => c.text ?? "").join("");
+      mp.layout.width  = mp.text.length;
+      mp.layout.height = 1;
       return;
     }
   }
   const p = parent as { children: InternalNode[]; layout: ReturnType<typeof createLayoutNode> };
-  if (!p.children.includes(child)) {
-    p.children.push(child);
-    p.layout.appendChild(child.layout);
-  }
+  // DOM semantics: appending a child that is already here moves it to the end. React reorders keyed
+  // children this way; keeping it in place left the tree out of order (#2381 U-PageUp).
+  const at = p.children.indexOf(child);
+  if (at >= 0) p.children.splice(at, 1);
+  p.children.push(child);
+  p.layout.appendChild(child.layout);
 }
 
 function _insertBefore(
@@ -282,7 +297,31 @@ function _insertBefore(
   child:  InternalNode,
   before: InternalNode,
 ): void {
+  if (child === before) return;
+  // A text leaf under a Text (or RawAnsi) parent lives in that parent's string, not its children:
+  // attach (or move) it to the end of the merged list, then put it before `before` and rebuild.
+  const mergeable = (parent.kind === "text" || parent.kind === "raw-ansi")
+    && child.kind === "text" && child.text !== undefined && !child.children.length;
+  if (mergeable) {
+    _attachChild(parent, child);
+    const owner = parent as InternalNode;
+    const merged = (parent.kind === "text" ? owner._mergedChildren : owner._rawChildren) ?? [];
+    merged.splice(merged.indexOf(child), 1);
+    const idx = merged.indexOf(before);
+    merged.splice(idx >= 0 ? idx : merged.length, 0, child);
+    if (parent.kind === "text") {
+      owner.text = merged.map((c) => c.text ?? "").join("");
+      owner.layout.width = owner.text.length;
+    } else {
+      owner.rawAnsi = merged.map((c) => c.text ?? "").join("");
+    }
+    return;
+  }
+  child._parent = parent;
   const p = parent as { children: InternalNode[]; layout: ReturnType<typeof createLayoutNode> };
+  // DOM semantics: a child that is already here moves; it used to be inserted a second time.
+  const at = p.children.indexOf(child);
+  if (at >= 0) p.children.splice(at, 1);
   const idx = p.children.indexOf(before);
   if (idx >= 0) {
     p.children.splice(idx, 0, child);
@@ -533,7 +572,7 @@ const hostConfig: any = {
     const kind  = inferKind(type, props);
     const style = extractStyle(props);
     const text  = extractInitialText(props);
-    const node  = makeNode(kind, { style, text, textWrap: extractTextWrap(props) });
+    const node  = makeNode(kind, { style, text, textWrap: extractTextWrap(props), runs: extractRuns(props) });
     node.onClick = typeof props["onClick"] === "function"
       ? props["onClick"] as (event: TerminalEvent) => void
       : undefined;
@@ -610,6 +649,7 @@ const hostConfig: any = {
     if (newStyle !== undefined) instance.style = newStyle;
     const newTextWrap = extractTextWrap(nextProps);
     if (newTextWrap !== undefined) instance.textWrap = newTextWrap;
+    if (instance.kind === "text") instance.runs = extractRuns(nextProps);
     const newText = extractInitialText(nextProps);
     if (newText !== undefined) instance.text = newText;
     if (instance.kind === "raw-ansi") {
@@ -804,12 +844,18 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     (event) => dispatchMouseEvent(container, event),
   );
 
+  const removeRepaintRequester = _setRepaintRequester((immediate) => {
+    renderer.invalidate();
+    if (immediate) renderer.render(rootNode as unknown as RenderNode);
+  });
+
   return {
     update(newElement: ReactElement): void {
       _syncRender(newElement);
     },
     unmount(): void {
       removeMouseDispatcher();
+      removeRepaintRequester();
       _syncRender(null);
       renderer.unmount();
     },

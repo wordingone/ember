@@ -80,9 +80,30 @@ export function LargeTailOutput({ text }: { text: string }): React.ReactElement 
     React.createElement(
       Text,
       { key: "indicator", dimColor: true },
-      `└ … [${hiddenCount} lines above]`,
+      `${RESULT_GUTTER}… +${hiddenCount} lines above (Ctrl+O shows all)`,
     ),
-    React.createElement(Text, { key: "tail" }, tail),
+    React.createElement(Box, { key: "tail", paddingLeft: RESULT_GUTTER.length },
+      React.createElement(Text, { dimColor: true }, tail)),
+  );
+}
+
+/** Gutter in front of a tool's output. The classic Windows console font has no "⎿". */
+export const RESULT_GUTTER = process.env["EMBER_ASCII_GLYPHS"] === "1" ? "  L  " : "  ⎿  ";
+
+/** Tool output longer than this folds to its first FOLD_HEAD_LINES lines, as Claude Code does:
+ * a 14-hit search or a long listing otherwise pushed the answer off screen (blind test W26). */
+export const FOLD_LINE_THRESHOLD = 6;
+export const FOLD_HEAD_LINES = 3;
+
+export function FoldedOutput({ text }: { text: string }): React.ReactElement {
+  const lines = text.split("\n");
+  const hidden = lines.length - FOLD_HEAD_LINES;
+  return React.createElement(Box, { flexDirection: "column" },
+    React.createElement(Box, { key: "head", flexDirection: "row" },
+      React.createElement(Text, { dimColor: true }, RESULT_GUTTER),
+      React.createElement(Text, { dimColor: true }, lines.slice(0, FOLD_HEAD_LINES).join("\n"))),
+    React.createElement(Box, { key: "more", paddingLeft: RESULT_GUTTER.length },
+      React.createElement(Text, { dimColor: true }, `… +${hidden} lines (Ctrl+O shows all)`)),
   );
 }
 
@@ -170,6 +191,35 @@ export function contentToString(content: string | unknown[]): string {
  * (plain-string tool outputs).
  */
 export function formatToolResultForDisplay(text: string): string {
+  // A carriage return reaching the terminal moves the cursor to column 0 and overdraws the row (blind test T11:
+  // CRLF file content rendered as `1linesONE`). Normalize in the text AND in decoded JSON strings.
+  return stripCarriageReturns(formatToolResultForDisplayInner(stripCarriageReturns(text)));
+}
+
+export function stripCarriageReturns(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+const TODO_GLYPHS = (): { pending: string; active: string; done: string } =>
+  process.env["EMBER_ASCII_GLYPHS"] === "1"
+    ? { pending: "[ ]", active: "[~]", done: "[x]" }
+    : { pending: "☐", active: "◐", done: "☑" };
+
+/** TodoWrite result as a checklist (blind test T10: it was raw JSON). */
+export function formatTodoChecklist(todos: Array<{ content?: unknown; activeForm?: unknown; status?: unknown }>): string {
+  if (todos.length === 0) return "Todo list cleared.";
+  const g = TODO_GLYPHS();
+  return todos
+    .map((t) => {
+      const content = String(t.content ?? "");
+      if (t.status === "completed") return `${g.done} ${content}`;
+      if (t.status === "in_progress") return `${g.active} ${String(t.activeForm ?? content)} (in progress)`;
+      return `${g.pending} ${content}`;
+    })
+    .join("\n");
+}
+
+function formatToolResultForDisplayInner(text: string): string {
   const trimmed = text.trimStart();
   if (trimmed[0] !== "{" && trimmed[0] !== "[") return text;
 
@@ -185,6 +235,12 @@ export function formatToolResultForDisplay(text: string): string {
   if (!Array.isArray(parsed)) {
     const obj = parsed as Record<string, unknown>;
 
+    // TodoWrite shape: { oldTodos, newTodos, todos, message }
+    if (Array.isArray(obj["newTodos"]) && Array.isArray(obj["oldTodos"])) {
+      const list = Array.isArray(obj["todos"]) ? (obj["todos"] as unknown[]) : (obj["newTodos"] as unknown[]);
+      return formatTodoChecklist(list as Array<{ content?: unknown; activeForm?: unknown; status?: unknown }>);
+    }
+
     // Bash / PowerShell shape: { stdout, stderr, returnCodeInterpretation, ... }
     if (typeof obj["stdout"] === "string") {
       const lines: string[] = [];
@@ -199,6 +255,54 @@ export function formatToolResultForDisplay(text: string): string {
         lines.push(`(${interp})`);
       }
       if (lines.length > 0) return lines.join("\n");
+    }
+
+    // WebSearch shape: { query, results: [{ content: [{ url, title }] } | "text"] }. The raw JSON
+    // filled the screen and pushed the answer out of view (blind test W26).
+    if (typeof obj["query"] === "string" && Array.isArray(obj["results"])) {
+      const hits: string[] = [];
+      // "Note: search engine brave failed (HTTP 429)." Without it "no results" and "engines failed" look the same (W06).
+      const failed = (obj["results"] as unknown[]).filter((r): r is string => typeof r === "string" && r.startsWith("Note: search engine"))
+        .map((r) => r.replace(/^Note: /, ""));
+      for (const r of obj["results"] as unknown[]) {
+        const content = (r as { content?: unknown })?.content;
+        if (!Array.isArray(content)) continue;
+        for (const c of content) {
+          const { title, url } = (c ?? {}) as { title?: unknown; url?: unknown };
+          if (typeof url === "string") hits.push(`${typeof title === "string" ? title : url} — ${url}`);
+        }
+      }
+      return hits.length === 0
+        ? [`No results for "${obj["query"]}"${failed.length > 0 ? " (some search engines failed, so this may not mean nothing exists)" : ""}`, ...failed].join("\n")
+        : [`${hits.length} result${hits.length === 1 ? "" : "s"} for "${obj["query"]}"`, ...hits, ...failed].join("\n");
+    }
+
+    // Read shapes (blind test FO-49: they were shown as pretty-printed JSON, base64 included).
+    if (obj["type"] === "text" && typeof obj["content"] === "string" && typeof obj["totalLines"] === "number") {
+      return obj["content"] as string;
+    }
+    if (obj["type"] === "image" && typeof obj["metadata"] === "string") return obj["metadata"] as string;
+    if (obj["type"] === "notebook" && Array.isArray(obj["cells"])) {
+      return `Notebook with ${(obj["cells"] as unknown[]).length} cells`;
+    }
+    if (obj["type"] === "pdf" && typeof obj["pageCount"] === "number") {
+      return `PDF, ${obj["pageCount"]} page${obj["pageCount"] === 1 ? "" : "s"} (pages ${String(obj["extractedPages"] ?? "1")})`;
+    }
+
+    // Grep count / content shapes: { mode, numFiles, filenames, content, numMatches }. The generic
+    // file-list branch below showed only file names for both (blind test FO-51: the count was lost).
+    if (typeof obj["mode"] === "string" && Array.isArray(obj["filenames"]) && typeof obj["numFiles"] === "number") {
+      const files = obj["numFiles"] as number;
+      const body = typeof obj["content"] === "string" ? (obj["content"] as string).replace(/\n+$/, "") : "";
+      if (obj["mode"] === "count") {
+        const matches = typeof obj["numMatches"] === "number" ? (obj["numMatches"] as number) : 0;
+        if (files === 0) return "No matches found.";
+        const head = `${matches} match${matches === 1 ? "" : "es"} in ${files} file${files === 1 ? "" : "s"}`;
+        return body ? `${head}\n${body}` : head;
+      }
+      if (obj["mode"] === "content") {
+        return body.trim().length > 0 ? body : "No matches found.";
+      }
     }
 
     // Glob/search shape: { filenames, numFiles, ... }
@@ -232,6 +336,9 @@ export function classifyToolResult(result: ToolResultContent): ToolResultKind {
 
   // 2. REJECT_MESSAGE or INTERRUPT_MESSAGE → rejected
   if (text === REJECT_MESSAGE || text === INTERRUPT_MESSAGE) return "rejected";
+  // A denied approval: the text after the first sentence is guidance for the model, not the user
+  // (blind test: "Do not retry the same call; tell the user..." was printed in the chat).
+  if (text.startsWith("Tool call not approved:")) return "rejected";
 
   // 3. is_error = true → error
   if (result.is_error) return "error";
@@ -421,14 +528,14 @@ export function UserToolSuccessMessage(props: UserToolSuccessMessageProps): Reac
     // Large-output tail truncation (M10 A2 large_output): for outputs exceeding
     // LARGE_OUTPUT_LINE_THRESHOLD lines, show a hidden-count indicator and the
     // last LARGE_OUTPUT_TAIL_LINES lines so they stay visible in the viewport.
-    if (!isExpanded && isLargeOutput(text)) {
-      return React.createElement(LargeTailOutput, { text });
+    if (!isExpanded && text.split("\n").length > FOLD_LINE_THRESHOLD) {
+      return React.createElement(FoldedOutput, { text });
     }
 
-    // Normal path: └ card (M9 fidelity baseline).
+    // Normal path: dim output indented under its "● Tool(...)" line, as in Claude Code.
     return React.createElement(Box, { flexDirection: "row" },
-      React.createElement(Text, { dimColor: true }, "└ "),
-      React.createElement(Text, null, text),
+      React.createElement(Text, { dimColor: true }, RESULT_GUTTER),
+      React.createElement(Text, { dimColor: true }, text),
     );
   } catch (err) {
     // AC4: error boundary — rendering errors must not crash the session

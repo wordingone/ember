@@ -12,6 +12,7 @@ import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command
 import { createTrainCommand } from "../commands/train.ts";
 import { sessionIdForAppRoot } from "./app-shell.ts";
 import { buildInteractiveReplElement } from "../entrypoints/process-entry.ts";
+import { launchRepl } from "../core/frontend-shell.ts";
 
 describe("mounted process-entry session identity handoff", () => {
   it("passes the minted session identity into the production REPL element", () => {
@@ -31,6 +32,40 @@ describe("mounted process-entry session identity handoff", () => {
     }) as Node;
     const replNode = tree.children[0] as Node;
     expect(replNode.props?.sessionId).toBe("mounted-root-a");
+  });
+
+  it("forwards a --continue / --resume session to the REPL (#2383)", () => {
+    type Node = { type: unknown; props: Record<string, unknown> | null; children: unknown[] };
+    const fakeReact = {
+      createElement(type: unknown, props: Record<string, unknown> | null, ...children: unknown[]): Node {
+        return { type, props, children };
+      },
+    };
+    const resume = { sessionId: "abc", messages: [{ role: "user", content: [] }], notices: ["Resumed session abc."] };
+    const base = { config: {}, cwd: "/c", sessionId: "s", modelSeat: { phase: "ABSENT" }, onExit: () => {} };
+    const withResume = buildInteractiveReplElement(fakeReact, "InkApp", () => null, { ...base, resume }) as Node;
+    expect((withResume.children[0] as Node).props?.resume).toBe(resume);
+    const without = buildInteractiveReplElement(fakeReact, "InkApp", () => null, base) as Node;
+    expect("resume" in ((without.children[0] as Node).props ?? {})).toBe(false);
+  });
+  it("carries resume from launchRepl's combined props through to the REPL element (#2383 launch path)", async () => {
+    type Node = { type: unknown; props: Record<string, unknown> | null; children: unknown[] };
+    const fakeReact = {
+      createElement(type: unknown, props: Record<string, unknown> | null, ...children: unknown[]): Node {
+        return { type, props, children };
+      },
+    };
+    const resume = { sessionId: "abc", messages: [], notices: ["Resumed session abc."] };
+    let tree: Node | undefined;
+    await launchRepl(
+      { render: () => {} },
+      {} as never,
+      { config: {}, cwd: "/c", sessionId: "s", modelSeat: { phase: "ABSENT" }, onExit: () => {}, resume },
+      (_r, _App, REPLComponent, props) => {
+        tree = buildInteractiveReplElement(fakeReact, "InkApp", REPLComponent, props) as Node;
+      },
+    );
+    expect((tree?.children[0] as Node).props?.resume).toBe(resume);
   });
 });
 

@@ -356,6 +356,82 @@ export interface Patch {
 // ---------------------------------------------------------------------------
 
 export type RenderNodeKind = "box" | "text" | "raw-ansi" | "root";
+export interface TextRun { len: number; style: Style; }
+
+/** Style of each painted character of a text node with runs. Wrapping inserts line breaks and
+ * drops spaces at the break, so the painted text is the source with some spaces removed and
+ * some newlines and "…" added: walk both in step and give each painted char its source style. */
+/** Tab stop width used when a Text node's tabs are expanded to spaces. */
+export const TEXT_TAB_STOP = 8;
+const TERMINAL_CONTROL_RE = /[\x00-\x09\x0b-\x1f\x7f]/;
+
+/** Text a cell can hold. A Text node's source may carry "\t" (Read output is `N\t<line>`), "\r"
+ * or other C0 controls. Each was measured as one cell and written into a cell as-is; the terminal
+ * then moved its cursor (a tab jumps to the next stop without overwriting the cells it skips, "\r"
+ * goes back to column 0), so the screen and the renderer's frame disagreed and earlier rows' text
+ * stayed visible until a full repaint (#2379 FO-49: "1txt:4Theckubrown fox"). Tabs become spaces to
+ * the next stop of {@link TEXT_TAB_STOP} columns from the start of the logical line; every other
+ * control except "\n" is dropped. Runs are re-measured so each style covers the same characters. */
+export function expandTerminalText(text: string, runs?: TextRun[]): { text: string; runs: TextRun[] | undefined } {
+  if (!TERMINAL_CONTROL_RE.test(text)) return { text, runs };
+  const per: Array<Style | undefined> = [];
+  if (runs) for (const r of runs) for (let i = 0; i < r.len; i++) per.push(r.style);
+  let out = "";
+  const outStyles: Array<Style | undefined> = [];
+  let col = 0;
+  let i = 0;
+  for (const ch of text) {
+    const st = per[i++];
+    if (ch === "\n") { out += ch; outStyles.push(st); col = 0; continue; }
+    if (ch === "\t") {
+      const n = TEXT_TAB_STOP - (col % TEXT_TAB_STOP);
+      out += " ".repeat(n);
+      for (let k = 0; k < n; k++) outStyles.push(st);
+      col += n;
+      continue;
+    }
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp < 0x20 || cp === 0x7f) continue;
+    out += ch;
+    outStyles.push(st);
+    col += charWidth(ch);
+  }
+  if (!runs) return { text: out, runs };
+  const merged: TextRun[] = [];
+  for (const st of outStyles) {
+    const style = st ?? {};
+    const last = merged[merged.length - 1];
+    if (last && last.style === style) last.len++;
+    else merged.push({ len: 1, style });
+  }
+  return { text: out, runs: merged };
+}
+
+/** A text node's paintable source and runs, cached on the node while text and runs are unchanged. */
+function textSource(node: RenderNode): { text: string; runs: TextRun[] | undefined } {
+  const text = node.text ?? "";
+  const cache = node.expandedSource;
+  if (cache && cache.from === text && cache.fromRuns === node.runs) return cache;
+  const expanded = expandTerminalText(text, node.runs);
+  node.expandedSource = { from: text, fromRuns: node.runs, text: expanded.text, runs: expanded.runs };
+  return node.expandedSource;
+}
+
+export function runStylesFor(source: string, painted: string, runs: TextRun[], fallback: Style): Style[] {
+  const src = Array.from(source);
+  const per: Style[] = [];
+  for (const r of runs) for (let i = 0; i < r.len; i++) per.push(r.style);
+  const out: Style[] = [];
+  let p = 0;
+  for (const ch of painted) {
+    if (ch === "\n" && src[p] !== "\n") { out.push(fallback); continue; }
+    let q = p;
+    while (q < src.length && src[q] !== ch) q++;
+    if (q < src.length && q - p <= 64) { out.push(per[q] ?? fallback); p = q + 1; }
+    else out.push(per[Math.min(p, per.length - 1)] ?? fallback);
+  }
+  return out;
+}
 export type TextWrapMode =
   | "wrap"
   | "end"
@@ -374,8 +450,12 @@ export interface RenderNode {
   textWrap?: TextWrapMode;
   /** Frame-local transformed text. Source text remains immutable in `text`. */
   renderedText?: string;
+  /** Cache for {@link textSource}: `text` and `runs` with tabs expanded and controls removed. */
+  expandedSource?: { from: string; fromRuns: TextRun[] | undefined; text: string; runs: TextRun[] | undefined };
   /** For text nodes: applied style. */
   style?: Style;
+  /** For text nodes: per-span styles over the source text, in code points (Text `runs`). */
+  runs?: TextRun[];
   /** Raw ANSI string for raw-ansi nodes. */
   rawAnsi?: string;
   /** For box nodes: perimeter style name (undefined = no border painted). */
@@ -408,10 +488,26 @@ function charWidth(ch: string): number {
       (cp >= 0xac00 && cp <= 0xd7af) ||
       (cp >= 0xf900 && cp <= 0xfaff) ||
       (cp >= 0xff01 && cp <= 0xff60) ||
-      (cp >= 0x1f300 && cp <= 0x1f9ff))
+      (cp >= 0x1f300 && cp <= 0x1faff) ||
+      (cp >= 0x1f200 && cp <= 0x1f2ff) ||
+      (cp >= 0x1f191 && cp <= 0x1f19a) ||
+      cp === 0x1f004 || cp === 0x1f0cf || cp === 0x1f18e ||
+      WIDE_BMP_EMOJI.has(cp))
     return 2;
   return 1;
 }
+
+/** BMP symbols that Unicode gives East Asian Width "W" (emoji presentation by default), such as
+ *  the check mark U+2705: terminals draw them two cells wide. Blind test: a check mark measured as
+ *  one cell was then overwritten by the next character and vanished. */
+const WIDE_BMP_EMOJI = new Set<number>([
+  0x231a, 0x231b, 0x2329, 0x232a, 0x23e9, 0x23ea, 0x23eb, 0x23ec, 0x23f0, 0x23f3, 0x25fd, 0x25fe,
+  0x2614, 0x2615, 0x2648, 0x2649, 0x264a, 0x264b, 0x264c, 0x264d, 0x264e, 0x264f, 0x2650, 0x2651,
+  0x2652, 0x2653, 0x267f, 0x2693, 0x26a1, 0x26aa, 0x26ab, 0x26bd, 0x26be, 0x26c4, 0x26c5, 0x26ce,
+  0x26d4, 0x26ea, 0x26f2, 0x26f3, 0x26f5, 0x26fa, 0x26fd, 0x2705, 0x270a, 0x270b, 0x2728, 0x274c,
+  0x274e, 0x2753, 0x2754, 0x2755, 0x2757, 0x2795, 0x2796, 0x2797, 0x27b0, 0x27bf, 0x2b1b, 0x2b1c,
+  0x2b50, 0x2b55,
+]);
 
 function textWidth(value: string): number {
   let width = 0;
@@ -506,7 +602,7 @@ function intrinsicTextDimensions(value: string): { width: number; height: number
 
 function resetTextLayout(node: RenderNode): void {
   if (node.kind === "text" && node.text !== undefined) {
-    const intrinsic = intrinsicTextDimensions(node.text);
+    const intrinsic = intrinsicTextDimensions(textSource(node).text);
     node.renderedText = undefined;
     node.layout.width = intrinsic.width;
     node.layout.height = intrinsic.height;
@@ -517,10 +613,11 @@ function resetTextLayout(node: RenderNode): void {
 function fitTextLayout(node: RenderNode, parentContentWidth: number): boolean {
   let changed = false;
   if (node.kind === "text" && node.text !== undefined) {
-    const intrinsic = intrinsicTextDimensions(node.text);
+    const source = textSource(node).text;
+    const intrinsic = intrinsicTextDimensions(source);
     const computed = node.layout.computedWidth > 0 ? node.layout.computedWidth : intrinsic.width;
     const available = Math.max(1, Math.min(intrinsic.width, computed, parentContentWidth));
-    const formatted = formatTextForWidth(node.text, available, node.textWrap ?? "wrap");
+    const formatted = formatTextForWidth(source, available, node.textWrap ?? "wrap");
     const fitted = intrinsicTextDimensions(formatted);
     node.renderedText = formatted;
     if (node.layout.width !== available || node.layout.height !== fitted.height) changed = true;
@@ -532,9 +629,13 @@ function fitTextLayout(node: RenderNode, parentContentWidth: number): boolean {
   const borderRight = node.layout.borderRight || node.layout.border;
   const paddingLeft = node.layout.paddingLeft || node.layout.padding;
   const paddingRight = node.layout.paddingRight || node.layout.padding;
+  // A box laid out wider than the room its parent gives it (an auto-width row beside a gutter is
+  // never shrunk by the layout engine) still wraps its text to that room: otherwise the text is
+  // formatted past the parent's right clip and its last cells vanish (blind test: /help lines
+  // lost two characters, the width of the reply's gutter).
   const ownContentWidth = Math.max(
     1,
-    node.layout.computedWidth - borderLeft - borderRight - paddingLeft - paddingRight,
+    Math.min(node.layout.computedWidth, parentContentWidth) - borderLeft - borderRight - paddingLeft - paddingRight,
   );
   const contentOriginX = borderLeft + paddingLeft;
   for (const child of node.children) {
@@ -996,6 +1097,10 @@ function renderNodeToTarget(
 
   if (node.kind === "text" && node.text !== undefined) {
     const style = node.style ?? {};
+    const source = textSource(node);
+    const painted = node.renderedText ?? source.text;
+    const perChar = source.runs && source.runs.length > 0 ? runStylesFor(source.text, painted, source.runs, style) : null;
+    let ci = 0;
     // Write each character, handling newlines to advance to the next row.
     // #561: a right-edge overflow used to `break` out of the WHOLE loop -- correct for a
     // single-line node, but for multi-line text (node.text containing '\n') that silently
@@ -1004,7 +1109,9 @@ function renderNodeToTarget(
     // col and resume painting on the next row.
     let col = lx;
     let row = ly;
-    for (const ch of node.renderedText ?? node.text) {
+    for (const ch of painted) {
+      const chStyle = perChar ? (perChar[ci] ?? style) : style;
+      ci++;
       if (ch === "\n") {
         row++;
         col = lx;
@@ -1014,7 +1121,11 @@ function renderNodeToTarget(
         col >= clipRect.x && col < clipRect.x + clipRect.width &&
         row >= clipRect.y && row < clipRect.y + clipRect.height;
       if (inBounds) {
-        target.writeAt(row, col, ch, style);
+        target.writeAt(row, col, ch, chStyle);
+        // A wide glyph covers the next cell too: mark it as covered (empty), never a space.
+        if (charWidth(ch) === 2 && col + 1 < clipRect.x + clipRect.width) {
+          target.writeAt(row, col + 1, "", chStyle);
+        }
       }
       col += charWidth(ch);
     }
@@ -1146,6 +1257,56 @@ export interface Run {
   cells: FrameCell[];
 }
 
+/** A glyph whose width terminals disagree on: astral (emoji), symbols and dingbats (the spinner's
+ *  ✶ ❄), variation selectors, and anything charWidth() calls wide. Box drawing, block elements,
+ *  braille and ordinary punctuation are reliably one cell and are not risky. */
+const DINGBAT_EMOJI = new Set([0x2705, 0x270a, 0x270b, 0x2728, 0x274c, 0x274e, 0x2753, 0x2754, 0x2755, 0x2757, 0x2795, 0x2796, 0x2797, 0x27b0, 0x27bf]);
+
+export function isRiskyGlyph(ch: string): boolean {
+  if (!ch) return false;
+  const cp = ch.codePointAt(0) ?? 0;
+  if (cp <= 0x7e) return false;
+  if (cp > 0xffff) return true;
+  if (cp >= 0x2600 && cp <= 0x26ff) return true;
+  // Dingbats: only the emoji-presentation ones (a caret like ❯ or a star like ✶ is one cell).
+  if (cp >= 0x2700 && cp <= 0x27bf) return DINGBAT_EMOJI.has(cp);
+  if (cp >= 0x2b00 && cp <= 0x2bff) return true;
+  if (cp >= 0xfe00 && cp <= 0xfe0f) return true;
+  if (cp === 0x200d) return true;
+  return charWidth(ch) === 2;
+}
+
+/** True when a row holds a glyph whose terminal width may differ from charWidth(). */
+function rowHasRiskyGlyph(frame: Frame | null, row: number): boolean {
+  const cells = frame?.cells[row];
+  if (!cells) return false;
+  for (const cell of cells) {
+    if (cell && isRiskyGlyph(cell.char)) return true;
+  }
+  return false;
+}
+
+/** For each changed row that holds (or held) a non-ASCII glyph, include every cell of the row, so
+ *  the repaint does not depend on what the terminal did with the old glyphs. */
+export function widenRiskyRows(patch: Patch, curr: Frame, prev: Frame | null): Patch {
+  if (patch.changes.length === 0) return patch;
+  const rows = new Set<number>();
+  for (const change of patch.changes) rows.add(change.row);
+  const risky = [...rows].filter((r) => rowHasRiskyGlyph(curr, r) || rowHasRiskyGlyph(prev, r));
+  if (risky.length === 0) return patch;
+  const riskySet = new Set(risky);
+  const changes = patch.changes.filter((c) => !riskySet.has(c.row));
+  for (const r of risky) {
+    const cells = curr.cells[r];
+    if (!cells) continue;
+    for (let c = 0; c < curr.width; c++) {
+      const cell = cells[c];
+      if (cell) changes.push({ row: r, col: c, cell });
+    }
+  }
+  return { changes };
+}
+
 /** Merges adjacent changed cells in the same row into contiguous runs. */
 export function optimizePatch(patch: Patch): Run[] {
   const runs: Run[] = [];
@@ -1181,13 +1342,21 @@ export function serializePatchRuns(
   let prevStyleRef: StyleRef = 0;
   for (const run of runs) {
     buf += cursorPosition(run.row + 1, run.startCol + 1);
-    for (const cell of run.cells) {
+    let resync = false;
+    for (let i = 0; i < run.cells.length; i++) {
+      const cell = run.cells[i]!;
+      if (cell.char === "") continue; // right half of a wide glyph: the glyph already covers it
+      if (resync) {
+        buf += cursorPosition(run.row + 1, run.startCol + i + 1);
+        resync = false;
+      }
       const style = stylePool.lookup(cell.styleRef);
       const prevStyle = stylePool.lookup(prevStyleRef);
       sgrOutput.writeSGR(style, prevStyle);
       buf += sgrOutput.flush();
       buf += cell.char;
       prevStyleRef = cell.styleRef;
+      if (isRiskyGlyph(cell.char)) resync = true;
     }
   }
   // issue #310: every non-empty patch is self-terminating so the next render starts from the
@@ -1293,6 +1462,9 @@ export interface Renderer {
   render(rootNode: RenderNode): void;
   unmount(): void;
   clear(): void;
+  /** Make the NEXT render a full clear-and-repaint that bypasses the diff (Ctrl+L, /clear). It
+   *  does not render by itself; the caller renders when it wants the repaint to happen now. */
+  invalidate(): void;
 }
 
 /** issue #1455 self-limit: hard ceiling on distinct interned styles/hyperlinks a renderer
@@ -1390,7 +1562,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Diff -- force a full repaint (nothing carried from prevFrame) on any geometry change,
       // so a shrink never leaves stale off-frame content unaddressed.
       const previousFrame = prevFrame;
-      const patch = diffFrames(geometryChanged ? null : previousFrame, frame);
+      const patch = widenRiskyRows(diffFrames(geometryChanged ? null : previousFrame, frame), frame, geometryChanged ? null : previousFrame);
       const runs  = optimizePatch(patch);
 
       diagnostic?.recordRenderPass({
@@ -1479,6 +1651,11 @@ export function createRenderer(options: RendererOptions): Renderer {
     clear(): void {
       prevFrame = null;
       spareFrame = null;
+    },
+
+    invalidate(): void {
+      // Same bypass-the-diff path a resize or a drain takes: ESC[2J, then every cell again.
+      forceFullRepaintAfterDrain = true;
     },
   };
   return renderer;
@@ -1601,14 +1778,21 @@ export function parseRenderedIntoFrame(
         pos++;
       }
     } else {
-      // Printable character
-      const ch = rendered[pos] ?? "";
-      pos++;
+      // Printable character (a whole code point: an emoji is two UTF-16 units)
+      const cp = rendered.codePointAt(pos) ?? 0;
+      const ch = cp > 0xffff ? String.fromCodePoint(cp) : (rendered[pos] ?? "");
+      pos += ch.length || 1;
       if (curRow < frame.height && curCol < frame.width) {
         const cell = frame.cells[curRow]?.[curCol];
         if (cell && ch >= " ") {
           cell.char = ch;
           cell.styleRef = currentStyleRef;
+          // The right half of a wide glyph is covered by it: never paint a space over it (that
+          // erased emoji in the conhost window).
+          if (charWidth(ch) === 2) {
+            const right = frame.cells[curRow]?.[curCol + 1];
+            if (right) { right.char = ""; right.styleRef = currentStyleRef; }
+          }
         }
       }
       curCol += charWidth(ch);

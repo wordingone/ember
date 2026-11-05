@@ -18,6 +18,17 @@ import { readFile as readFileGit, stat as statGit } from "fs/promises";
 import { join as pathJoin, dirname as pathDirname } from "path";
 import { z } from "zod";
 import { buildTool, type ToolUseContext } from "../core/tool-interface.ts";
+import { resolveFilePath } from "./file-read.ts";
+import {
+  decodeTextBuffer,
+  describeWriteError,
+  encodeText,
+  fileStateKey,
+  invalidFileNameReason,
+  isOutsideCwd,
+  outsideCwdMessage,
+  type TextEncoding,
+} from "./file-text.ts";
 
 const execAsync = promisify(exec);
 
@@ -150,40 +161,60 @@ export function computeUnifiedDiff(
   const m = oldLines.length;
   const n = newLines.length;
 
-  // Fast path: if files are large, produce a single hunk with all changes
-  if (m * n > 1e5) {
-    const lines: string[] = [];
-    for (const l of oldLines) lines.push(`-${l}`);
-    for (const l of newLines) lines.push(`+${l}`);
-    return [{ oldStart: 1, oldLines: m, newStart: 1, newLines: n, lines }];
+  // Lines the two texts share at the start and at the end are not diffed. Without this, a one-line
+  // edit of a 5000-line file fell into the "large file" fallback below and was reported as every
+  // old line deleted and every new line added (blind test FO-32).
+  let prefix = 0;
+  while (prefix < m && prefix < n && oldLines[prefix] === newLines[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < m - prefix && suffix < n - prefix && oldLines[m - 1 - suffix] === newLines[n - 1 - suffix]) suffix++;
+  const midOld = oldLines.slice(prefix, m - suffix);
+  const midNew = newLines.slice(prefix, n - suffix);
+  const mm = midOld.length;
+  const nn = midNew.length;
+
+  type Op = { op: "eq" | "ins" | "del"; oldLine: number; newLine: number; text: string };
+  const ops: Op[] = [];
+
+  // Only `contextLines` of the shared head and tail can ever appear in a hunk.
+  for (let k = Math.max(0, prefix - contextLines); k < prefix; k++) {
+    ops.push({ op: "eq", oldLine: k, newLine: k, text: oldLines[k]! });
   }
 
-  // LCS-based diff via DP
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = m - 1; i >= 0; i--) {
-    for (let j = n - 1; j >= 0; j--) {
-      if (oldLines[i] === newLines[j]) {
-        dp[i]![j] = (dp[i + 1]?.[j + 1] ?? 0) + 1;
+  if (mm * nn > 1e5) {
+    // A very large changed region: one hunk, all old lines out and all new lines in.
+    for (let k = 0; k < mm; k++) ops.push({ op: "del", oldLine: prefix + k, newLine: prefix, text: midOld[k]! });
+    for (let k = 0; k < nn; k++) ops.push({ op: "ins", oldLine: prefix + mm, newLine: prefix + k, text: midNew[k]! });
+  } else {
+    // LCS-based diff via DP on the changed region only
+    const dp: number[][] = Array.from({ length: mm + 1 }, () => new Array(nn + 1).fill(0));
+    for (let i = mm - 1; i >= 0; i--) {
+      for (let j = nn - 1; j >= 0; j--) {
+        if (midOld[i] === midNew[j]) {
+          dp[i]![j] = (dp[i + 1]?.[j + 1] ?? 0) + 1;
+        } else {
+          dp[i]![j] = Math.max(dp[i + 1]?.[j] ?? 0, dp[i]?.[j + 1] ?? 0);
+        }
+      }
+    }
+    let i = 0, j = 0;
+    while (i < mm || j < nn) {
+      if (i < mm && j < nn && midOld[i] === midNew[j]) {
+        ops.push({ op: "eq", oldLine: prefix + i, newLine: prefix + j, text: midOld[i]! });
+        i++; j++;
+      } else if (i < mm && (j >= nn || (dp[i + 1]?.[j] ?? 0) >= (dp[i]?.[j + 1] ?? 0))) {
+        // removed lines come before the lines that replace them, as in every diff a reader has seen
+        ops.push({ op: "del", oldLine: prefix + i, newLine: prefix + j, text: midOld[i]! });
+        i++;
       } else {
-        dp[i]![j] = Math.max(dp[i + 1]?.[j] ?? 0, dp[i]?.[j + 1] ?? 0);
+        ops.push({ op: "ins", oldLine: prefix + i, newLine: prefix + j, text: midNew[j]! });
+        j++;
       }
     }
   }
 
-  type Op = { op: "eq" | "ins" | "del"; oldLine: number; newLine: number; text: string };
-  const ops: Op[] = [];
-  let i = 0, j = 0;
-  while (i < m || j < n) {
-    if (i < m && j < n && oldLines[i] === newLines[j]) {
-      ops.push({ op: "eq", oldLine: i, newLine: j, text: oldLines[i]! });
-      i++; j++;
-    } else if (j < n && (i >= m || (dp[i]?.[j + 1] ?? 0) >= (dp[i + 1]?.[j] ?? 0))) {
-      ops.push({ op: "ins", oldLine: i, newLine: j, text: newLines[j]! });
-      j++;
-    } else {
-      ops.push({ op: "del", oldLine: i, newLine: j, text: oldLines[i]! });
-      i++;
-    }
+  for (let k = 0; k < Math.min(contextLines, suffix); k++) {
+    ops.push({ op: "eq", oldLine: m - suffix + k, newLine: n - suffix + k, text: oldLines[m - suffix + k]! });
   }
 
   const hunks: HunkPatch[] = [];
@@ -298,7 +329,10 @@ async function writeFile_(
   input: { file_path: string; content: string },
   ctx: ToolUseContext,
 ): Promise<WriteOutput> {
-  const { file_path: filePath, content } = input;
+  const { content } = input;
+  // Relative paths resolve against the agent cwd, exactly as Read does (a bare
+  // "x.py" used to reach mkdir(".") which Bun on Windows rejects with EEXIST).
+  const filePath = resolveFilePath(input.file_path, ctx.cwd ?? process.cwd());
 
   if (containsTeamMemorySecrets(content)) {
     return { type: "error", error: "Write rejected: content contains team memory secrets." };
@@ -310,24 +344,61 @@ async function writeFile_(
     return { type: "error", error: `Write denied by session rules: ${filePath}` };
   }
 
+  // Windows rejects some names (< > : " | ? *, CON, NUL ...); Bun reports that as a bare ENOENT (blind test FO-43).
+  const badName = invalidFileNameReason(filePath);
+  if (badName) {
+    return { type: "error", error: badName };
+  }
+
   let originalFile: string | null = null;
   let originalEnding: LineEnding = "none";
+  let originalEncoding: TextEncoding = "utf-8";
+  let originalBom = false;
   let isCreate = true;
   try {
-    originalFile = await readFile(filePath, "utf-8");
+    // A UTF-16 file (PowerShell output) is rewritten as UTF-16, as its line endings are kept (FO-34).
+    const decoded = decodeTextBuffer(await readFile(filePath));
+    originalFile = decoded.text;
+    originalEncoding = decoded.encoding;
+    originalBom = decoded.bom;
     isCreate = false;
     originalEnding = detectLineEndings(originalFile);
   } catch {
     isCreate = true;
   }
 
+  // Overwriting a file the model has never read (or that changed since it read it) silently
+  // destroys content it never saw (blind test FO-09). Same guard as Claude Code's Write.
+  if (!isCreate && ctx.readFileState) {
+    const seen = ctx.readFileState.get(fileStateKey(filePath)) as { mtime: number } | undefined;
+    if (!seen) {
+      return {
+        type: "error",
+        error: `${filePath} already exists and has not been read in this session. Read it first, then Write (or use Edit for a change).`,
+      };
+    }
+    try {
+      const current = await stat(filePath);
+      if (current.mtimeMs !== seen.mtime) {
+        return {
+          type: "error",
+          error: `${filePath} changed on disk since it was last read. Read it again before writing.`,
+        };
+      }
+    } catch {}
+  }
+
   const finalContent = isCreate ? content : applyLineEnding(content, originalEnding);
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, finalContent, "utf-8");
+  try {
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, encodeText(finalContent, originalEncoding, originalBom));
+  } catch (e) {
+    return { type: "error", error: describeWriteError(e, filePath) };
+  }
 
   try {
     const newStat = await stat(filePath);
-    ctx.readFileState?.set(filePath, { mtime: newStat.mtimeMs, content: finalContent });
+    ctx.readFileState?.set(fileStateKey(filePath), { mtime: newStat.mtimeMs, content: finalContent });
   } catch {}
 
   if (isUnderEmberState(filePath)) {
@@ -381,8 +452,22 @@ export const writeTool = Object.assign(
 Write complete content to a file. Creates the file if it does not exist, or replaces it entirely.
 - Prefer the Edit tool for modifying specific sections of an existing file.
 - For new files or complete rewrites, use Write.
-- Always read an existing file before writing to it.
+- An existing file must be Read first: writing over a file you have not read (or that changed since) is refused.
+- A path outside the working directory needs the operator's approval every time.
 - Absolute paths only.`,
+
+    // A write that leaves the working directory asks every time, even after "always allow Write" (FO-22).
+    checkPermissions: async (input: WriteInput, ctx: ToolUseContext) => {
+      const cwd = ctx.cwd ?? process.cwd();
+      const filePath = resolveFilePath(input.file_path, cwd);
+      if (isDenied(filePath, ctx)) {
+        return { behavior: "deny" as const, updatedInput: input, message: `Write denied by session rules: ${filePath}` };
+      }
+      if (isOutsideCwd(filePath, cwd)) {
+        return { behavior: "ask" as const, updatedInput: input, message: outsideCwdMessage(filePath, cwd) };
+      }
+      return { behavior: "allow" as const, updatedInput: input };
+    },
 
     call: async (args: WriteInput, ctx: ToolUseContext) => {
       const data = await writeFile_(args, ctx);
@@ -401,7 +486,9 @@ Write complete content to a file. Creates the file if it does not exist, or repl
       return {
         type: "tool_result" as const,
         tool_use_id: toolUseId,
-        content: JSON.stringify(content),
+        content: content.type === "create"
+          ? `Created ${content.filePath} (${(content.content ?? "").split("\n").length} lines).`
+          : summarizeFileChange("Updated", content.filePath ?? "", content.structuredPatch),
       };
     },
 
@@ -409,3 +496,21 @@ Write complete content to a file. Creates the file if it does not exist, or repl
   }),
   { searchHint: "write complete file content to disk", getPath: (i: WriteInput) => i.file_path } as const,
 );
+
+/** What the model gets back after a successful write: a short confirmation and the changed lines,
+ *  never the whole file (blind test: one Edit of a 5000-line file sent the full 80 KB back). */
+export function summarizeFileChange(verb: string, filePath: string, patch: HunkPatch[] | undefined): string {
+  const head = `${verb} ${filePath}.`;
+  if (!patch || patch.length === 0) return head;
+  const out: string[] = [];
+  let budget = 40;
+  for (const h of patch) {
+    if (budget <= 0) break;
+    out.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
+    for (const line of h.lines) {
+      if (budget-- <= 0) { out.push("..."); break; }
+      out.push(line.length > 300 ? line.slice(0, 300) + "..." : line);
+    }
+  }
+  return `${head}\n${out.join("\n")}`;
+}

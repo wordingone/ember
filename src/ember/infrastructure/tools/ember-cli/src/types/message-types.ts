@@ -16,6 +16,9 @@ export type EmberContentBlock =
       type: "tool_result";
       tool_use_id: string;
       content: string | Array<{ type: "text"; text: string }>;
+      /** Images produced by the tool (e.g. Computer screenshots). The OpenAI
+       *  adapter forwards them as image_url parts only when EMBER_VISION=1. */
+      images?: Array<{ media_type: string; data: string }>;
     }
   | { type: "image"; source: { media_type: string; data: string } };
 

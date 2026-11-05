@@ -1,0 +1,10 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "Ember-Open.cmd",
+  "artifact_sha256": "67390dad1ac8ce149f284d6902ccbfc8560bef103af664fa239eb6695c278f0c"
+}

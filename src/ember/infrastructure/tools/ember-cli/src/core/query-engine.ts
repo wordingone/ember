@@ -20,10 +20,22 @@ import {
   type CallModelParams,
 } from "../query/query-loop-support.ts";
 import type { PermissionBehavior, Tool, ToolUseContext } from "./tool-interface.ts";
-import { createAutocompact } from "../services/compaction.ts";
+import { reportToolEnd, reportToolStart } from "./tool-progress.ts";
+import {
+  createAutocompact,
+  estimateMessageTokens,
+  type Autocompact,
+  type CompactionOutcome,
+  type CompactRunOptions,
+} from "../services/compaction.ts";
+import { getContextWindowTokens } from "../services/context-window.ts";
+import type { MessageChange } from "../services/session-store.ts";
 import { markPostCompaction } from "../session-state.ts";
+import { RepeatFailureGuard } from "./repeat-failure-guard.ts";
+import { badToolArgumentsMessage } from "./tool-input-check.ts";
 import { shouldRetry, computeRetryDelay, MAX_RETRY_ATTEMPTS } from "../api-backend.ts";
 import { ModelHttpError, CHARS_PER_TOKEN_ESTIMATE } from "../services/api-openai-adapter.ts";
+import { getActiveHookRunner, preToolUseBlockMessage, reportHookWarnings } from "../extensions/hooks.ts";
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -43,6 +55,33 @@ interface ToolResultBlock {
   tool_use_id: string;
   content: string;
   is_error?: boolean;
+  /** Tool-produced images (base64). Kept out of `content` so truncation,
+   *  eviction and size estimation never see the base64 payload as text. */
+  images?: Array<{ media_type: string; data: string }>;
+}
+
+/** Splits a tool's result content array into text + images. */
+function splitToolContent(content: unknown): {
+  text: string;
+  images: Array<{ media_type: string; data: string }>;
+} {
+  if (typeof content === "string") return { text: content, images: [] };
+  if (!Array.isArray(content)) return { text: JSON.stringify(content), images: [] };
+  const images: Array<{ media_type: string; data: string }> = [];
+  const texts: unknown[] = [];
+  for (const b of content) {
+    const blk = b as { type?: string; source?: { media_type?: string; data?: string } };
+    if (blk?.type === "image" && typeof blk.source?.data === "string") {
+      images.push({ media_type: blk.source.media_type ?? "image/png", data: blk.source.data });
+    } else if (blk?.type === "text" && typeof (blk as { text?: unknown }).text === "string") {
+      texts.push((blk as unknown as { text: string }).text);
+    } else {
+      texts.push(JSON.stringify(b));
+    }
+  }
+  // Pure-text arrays keep their historical JSON shape.
+  if (images.length === 0) return { text: JSON.stringify(content), images };
+  return { text: texts.join(" "), images };
 }
 
 /** Shape of a message in the engine's internal conversation log. */
@@ -55,6 +94,35 @@ export interface EngineMessage {
   message?: ModelResponse;
   /** Only on tool-result user messages — the tool result blocks. */
   toolUseResult?: ToolResultBlock[];
+}
+
+/** Adds a query event's message to the turn being collected: the assistant response or the
+ *  tool-result user message. Other events (result, progress) carry no log message. */
+export function collectTurnMessage(event: QueryEvent, into: EngineMessage[], newUuid: () => string): void {
+  if (event.type === "assistant") {
+    into.push({
+      role: "assistant",
+      content: Array.isArray(event.message.content) ? event.message.content : [],
+      uuid: newUuid(),
+      timestamp: new Date().toISOString(),
+      message: event.message,
+    });
+  } else if (event.type === "user") {
+    into.push(event.message);
+  }
+}
+
+/** Removes trailing assistant messages whose tool calls have no tool result after them. */
+export function dropUnansweredToolCalls(turn: EngineMessage[]): EngineMessage[] {
+  const out = [...turn];
+  while (out.length > 0) {
+    const last = out[out.length - 1]!;
+    const hasCall = last.role === "assistant" &&
+      last.content.some((b) => (b as { type?: string } | null)?.type === "tool_use");
+    if (!hasCall) break;
+    out.pop();
+  }
+  return out;
 }
 
 /** Description options passed to tool.description() during schema assembly. */
@@ -211,8 +279,20 @@ function getConversationMaxChars(ctx: ToolUseContext): number {
   return ctx.toolResultBudget?.conversationMaxChars ?? DEFAULT_CONVERSATION_MAX_CHARS;
 }
 
+/** Vision-token cost of one image, in chars (~1500 tokens). */
+const IMAGE_CHARS_ESTIMATE = Math.floor(1500 * CHARS_PER_TOKEN_ESTIMATE);
+
 function estimateConversationChars(messages: unknown[], systemPrompt: string): number {
-  return systemPrompt.length + JSON.stringify(messages).length;
+  // Image base64 is not text context: count a fixed vision-token cost per image.
+  let imageCount = 0;
+  const json = JSON.stringify(messages, (key, value) => {
+    if (key === "images" && Array.isArray(value)) {
+      imageCount += value.length;
+      return undefined;
+    }
+    return value;
+  });
+  return systemPrompt.length + json.length + imageCount * IMAGE_CHARS_ESTIMATE;
 }
 
 const EVICTED_MARKER_PREFIX = "[evicted:";
@@ -232,16 +312,35 @@ function describeToolUse(messages: unknown[], upToIndex: number, toolUseId: stri
     );
     if (!block) continue;
     const name = String(block["name"] ?? "tool");
-    const input = block["input"] as Record<string, unknown> | undefined;
-    const target =
-      typeof input?.["file_path"] === "string" ? input["file_path"]
-      : typeof input?.["path"] === "string" ? input["path"]
-      : typeof input?.["pattern"] === "string" ? input["pattern"]
-      : typeof input?.["command"] === "string" ? input["command"]
-      : undefined;
+    const target = toolInputTarget(block["input"]);
     return target ? `${name} ${target}` : name;
   }
   return "tool result";
+}
+
+/** The one string that says what a tool call acts on (a path, a pattern, a command line). */
+function toolInputTarget(rawInput: unknown): string | undefined {
+  const input = rawInput as Record<string, unknown> | undefined;
+  return typeof input?.["file_path"] === "string" ? input["file_path"]
+    : typeof input?.["path"] === "string" ? input["path"]
+    : typeof input?.["pattern"] === "string" ? input["pattern"]
+    : typeof input?.["command"] === "string" ? input["command"]
+    : undefined;
+}
+
+/**
+ * What the model is told when a tool call is not run. It names the exact call (a 27B model that
+ * only sees a tool name does not connect "Bash was declined" to the next turn's "run it again")
+ * and says not to bring it back unless the user asks (blind test S32: the declined delete was
+ * proposed again in the next turn). The "Tool call not approved:" prefix is matched by the screen.
+ */
+export function declinedToolCallMessage(toolName: string, input: unknown, reason?: string): string {
+  const target = toolInputTarget(input)?.replace(/\s*[\r\n]+\s*/g, " ").trim();
+  const call = target ? `${toolName}(${target.length > 200 ? target.slice(0, 199) + "…" : target})` : toolName;
+  const why = reason ? ` Reason: ${reason}` : "";
+  return `Tool call not approved: ${call}.${why} The user declined it, or the current permission mode (plan or read-only) does not allow it. ` +
+    "Do not run it, and do not propose it again in this conversation unless the user asks for it. " +
+    "Tell the user what you wanted to do and ask how to proceed.";
 }
 
 /**
@@ -274,7 +373,8 @@ function evictOldestToolResults(
       if (r.content.startsWith(EVICTED_MARKER_PREFIX)) return r;
       const estTokens = Math.ceil(r.content.length / CHARS_PER_TOKEN_ESTIMATE);
       const label = describeToolUse(next, i, r.tool_use_id);
-      return { ...r, content: `${EVICTED_MARKER_PREFIX} ${label} -- ${estTokens} tokens]` };
+      const { images: _dropped, ...rest } = r;
+      return { ...rest, content: `${EVICTED_MARKER_PREFIX} ${label} -- ${estTokens} tokens]` };
     });
     next[i] = { ...m, content: evictedResults, toolUseResult: evictedResults };
 
@@ -374,12 +474,20 @@ export type QueryEvent = AssistantEvent | UserEvent | ResultEvent;
 // Query params
 // ---------------------------------------------------------------------------
 
+/** A refusal that says why (shown to the model, so it does not retry blindly). */
+export interface ToolRefusal {
+  allowed: false;
+  reason: string;
+}
+
 /** Predicate that gates whether a given tool may be called. */
 export type CanUseToolFn = (
   tool: Tool<any, any>,
   input: unknown,
   behavior: PermissionBehavior,
-) => Promise<boolean>;
+  /** The tool's own explanation for an "ask" (what it wants to do and why it needs approval). */
+  message?: string,
+) => Promise<boolean | ToolRefusal>;
 
 export interface QueryParams {
   messages: unknown[];
@@ -559,6 +667,7 @@ export async function* query(
   buildLoopConfig(); // reads env; result unused at loop level (reserved for future use)
 
   let messages = [...params.messages];
+  const repeatGuard = new RepeatFailureGuard();
   let completeModelTurns = 0;
   const maxTurns = params.maxTurns ?? 100;
   const startTime = Date.now();
@@ -683,9 +792,47 @@ export async function* query(
           continue;
         }
 
+        const badArgs = badToolArgumentsMessage(tool, block.input);
+        if (badArgs) {
+          toolResultContent.push({ type: "tool_result", tool_use_id: block.id, content: badArgs, is_error: true });
+          continue;
+        }
+
+        const blocked = repeatGuard.shouldBlock(block.name, block.input);
+        if (blocked) {
+          toolResultContent.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: blocked,
+            is_error: true,
+          });
+          continue;
+        }
+        const resultsBefore = toolResultContent.length;
+
         let retries = 0;
         while (retries <= 1) {
           try {
+            // PreToolUse hooks (settings "hooks"): exit code 2 blocks the call and its stderr
+            // is the reason the model reads. A hook that cannot run never blocks the call.
+            const hookRunner = retries === 0 ? getActiveHookRunner() : null;
+            if (hookRunner?.hasHooks("PreToolUse")) {
+              const pre = await hookRunner
+                .run("PreToolUse", { tool_input: block.input }, tool.name)
+                .catch(() => null);
+              if (pre) {
+                reportHookWarnings(pre);
+                if (pre.blocked) {
+                  toolResultContent.push({
+                    type: "tool_result",
+                    tool_use_id: block.id,
+                    content: preToolUseBlockMessage(tool.name, pre),
+                    is_error: true,
+                  });
+                  break;
+                }
+              }
+            }
             const permission = await tool.checkPermissions(
               block.input,
               params.toolUseContext,
@@ -700,39 +847,65 @@ export async function* query(
               break;
             }
 
-            const sessionAllowed = params.canUseTool
-              ? await params.canUseTool(tool, permission.updatedInput, permission.behavior)
+            const decision = params.canUseTool
+              ? await params.canUseTool(tool, permission.updatedInput, permission.behavior, permission.message)
               : permission.behavior === "allow";
+            const sessionAllowed = typeof decision === "boolean" ? decision : decision.allowed;
             if (!sessionAllowed) {
+              // Say why: the predicate's own reason, else the tool's reason for asking (outside the
+              // working directory, deletes data in bulk, reaches a private address).
+              const reason = typeof decision === "object" ? decision.reason
+                : permission.behavior === "ask" ? permission.message : undefined;
               toolResultContent.push({
                 type: "tool_result",
                 tool_use_id: block.id,
-                content: `Tool blocked by the active sandbox permission mode: ${tool.name}`,
+                content: declinedToolCallMessage(tool.name, permission.updatedInput, reason),
                 is_error: true,
               });
               break;
             }
 
-            const result = await tool.call(
-              permission.updatedInput,
-              params.toolUseContext,
-              params.canUseTool,
-              undefined,
-            );
+            // The screen names the running tool and shows its output tail (blind test S24); the
+            // tool learns which call it is, so it can report output against it.
+            reportToolStart(block.id, tool.name, permission.updatedInput);
+            let result: Awaited<ReturnType<typeof tool.call>>;
+            try {
+              result = await tool.call(
+                permission.updatedInput,
+                { ...params.toolUseContext, toolUseId: block.id },
+                params.canUseTool,
+                undefined,
+              );
+            } finally {
+              reportToolEnd(block.id);
+            }
             const blockParam = tool.mapToolResultToToolResultBlockParam(result.data, block.id);
-            const rawContent =
-              typeof blockParam.content === "string"
-                ? blockParam.content
-                : JSON.stringify(blockParam.content);
+            const split = splitToolContent(blockParam.content);
             toolResultContent.push({
               type: "tool_result",
               tool_use_id: block.id,
               content: truncateToolResultContent(
-                rawContent,
+                split.text,
                 getToolResultMaxChars(params.toolUseContext),
               ),
               is_error: blockParam.is_error,
+              ...(split.images.length > 0 ? { images: split.images } : {}),
             });
+            // PostToolUse hooks run after the call; exit code 2 appends the hook's stderr
+            // to the result the model reads (the call itself already happened).
+            const postRunner = getActiveHookRunner();
+            if (postRunner?.hasHooks("PostToolUse")) {
+              const post = await postRunner
+                .run("PostToolUse", { tool_input: block.input, tool_response: split.text }, tool.name)
+                .catch(() => null);
+              if (post) {
+                reportHookWarnings(post);
+                const produced = toolResultContent[toolResultContent.length - 1];
+                if (post.blocked && produced && typeof produced.content === "string") {
+                  produced.content += "\n\nPostToolUse hook: " + (post.reason ?? "blocked");
+                }
+              }
+            }
             break;
           } catch (err) {
             if (
@@ -756,6 +929,10 @@ export async function* query(
             });
             break;
           }
+        }
+        const produced = toolResultContent[resultsBefore];
+        if (produced && typeof produced.content === "string") {
+          produced.content = repeatGuard.record(block.name, block.input, produced.is_error === true, produced.content);
         }
       }
 
@@ -836,7 +1013,27 @@ export interface QueryEngineConfig {
   /** issue #197: notified before each retry's backoff wait; see RetryAttemptInfo. */
   onRetryAttempt?: (info: RetryAttemptInfo) => void;
   /** Test-only override for the conversation-store-bound autocompact. */
-  autocompact?: () => Promise<void>;
+  autocompact?: (opts?: CompactRunOptions) => Promise<unknown>;
+  /**
+   * The model server's context size in tokens, which auto-compaction measures the prompt
+   * against (default threshold 85%). Defaults to the size session-init probed from /props;
+   * with neither known, auto-compaction falls back to a message-count rule.
+   */
+  nCtx?: number | (() => number | null | undefined);
+  /** Standing compaction instructions (settings / EMBER.md), read at each compaction. */
+  compactInstructions?: () => string | undefined | Promise<string | undefined>;
+  /**
+   * Called with every change to the message log -- each message as it joins it, and the whole
+   * new log when a compaction replaces it -- so the host can persist the session (#2373).
+   * Not called for `initialMessages`, which the host already has.
+   */
+  onMessagesChanged?: (change: MessageChange) => void;
+  /** Subagent nesting depth of this engine (0 = main session). Surfaced to tools via ToolUseContext. */
+  agentDepth?: number;
+  /** Agent id of this engine when it is a subagent. */
+  agentId?: string;
+  /** External abort (parent cancel / subagent timeout); aborts the in-flight turn. */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -852,7 +1049,7 @@ export class QueryEngine {
   private messages: unknown[];
   private _replayQueue: unknown[];
   private testDeps: LoopDepsOverrides | undefined;
-  private _autocompact: (() => Promise<void>) | null = null;
+  private _autocompact: ((opts?: CompactRunOptions) => Promise<unknown>) | null = null;
 
   constructor(config: QueryEngineConfig, testDeps?: LoopDepsOverrides) {
     this.config = config;
@@ -874,7 +1071,7 @@ export class QueryEngine {
    * own message log via a model-generated summary. Built lazily and cached; a
    * config-provided override (tests) takes precedence.
    */
-  private _getAutocompact(deps: LoopDeps): () => Promise<void> {
+  private _getAutocompact(deps: LoopDeps): (opts?: CompactRunOptions) => Promise<unknown> {
     if (this.config.autocompact) return this.config.autocompact;
     if (!this._autocompact) {
       this._autocompact = createAutocompact({
@@ -882,12 +1079,52 @@ export class QueryEngine {
         getMessages: () => this.messages,
         setMessages: (m) => {
           this.messages = m;
+          this._emit({ type: "replace", messages: m });
         },
         markPostCompaction,
         model: this.config.userSpecifiedModel,
+        nCtx: () => {
+          const n = typeof this.config.nCtx === "function" ? this.config.nCtx() : this.config.nCtx;
+          return n ?? getContextWindowTokens();
+        },
+        ...(this.config.compactInstructions ? { getStandingInstructions: this.config.compactInstructions } : {}),
+        overheadTokens: () => this._promptOverheadTokens(),
       });
     }
     return this._autocompact;
+  }
+
+  private _emit(change: MessageChange): void {
+    try {
+      this.config.onMessagesChanged?.(change);
+    } catch {
+      // a failing observer (a full disk) never ends the turn
+    }
+  }
+
+  /** Tokens every request carries besides the messages: the system prompt and tool schemas. */
+  private _promptOverheadTokens(): number {
+    let schemas = 0;
+    try {
+      schemas = estimateMessageTokens(toolsToEmberDefs(this.config.tools ?? []));
+    } catch {
+      schemas = 0;
+    }
+    return Math.ceil((this.config.customSystemPrompt ?? "").length / 4) + schemas;
+  }
+
+  /**
+   * Compacts the conversation now (the /compact command): everything but a leading system
+   * message is folded into one model-written summary. `instructions` is appended to the
+   * summary prompt for this run only.
+   */
+  async compact(instructions?: string): Promise<CompactionOutcome> {
+    const run = this._getAutocompact(createLoopDeps(this.testDeps));
+    const outcome = await run({ force: true, ...(instructions ? { instructions } : {}) });
+    const known = outcome as CompactionOutcome | undefined;
+    return known && typeof known === "object" && "status" in known
+      ? known
+      : { status: "skipped", reason: "no-conversation" };
   }
 
   /**
@@ -896,13 +1133,16 @@ export class QueryEngine {
    *
    * Replays any queued initial user messages before processing the live turn.
    */
-  async *submitMessage(userMessage: string): AsyncGenerator<QueryEvent> {
+  /** `opts.abortSignal` interrupts this turn only (the REPL's Esc / Ctrl+C); the
+   *  config-level signal still governs the whole engine. */
+  async *submitMessage(userMessage: string, opts: { abortSignal?: AbortSignal } = {}): AsyncGenerator<QueryEvent> {
     const deps = createLoopDeps(this.testDeps);
 
     // --- Replay phase: process queued initial messages first ---
     while (this._replayQueue.length > 0) {
       const replayMsg = this._replayQueue.shift() as EngineMessage;
       this.messages = [...this.messages, replayMsg];
+      this._emit({ type: "append", messages: [replayMsg] });
 
       const replayAbort = new AbortController();
       const replayCtx = this._buildToolUseContext(replayAbort);
@@ -923,21 +1163,14 @@ export class QueryEngine {
       };
 
       const replayTurnMessages: EngineMessage[] = [];
-      for await (const event of query(replayParams, this.testDeps, replayConfigExtras)) {
-        yield event;
-        if (event.type === "assistant") {
-          replayTurnMessages.push({
-            role: "assistant",
-            content: Array.isArray(event.message.content) ? event.message.content : [],
-            uuid: deps.generateUuid(),
-            timestamp: new Date().toISOString(),
-            message: event.message,
-          });
-        } else if (event.type === "user") {
-          replayTurnMessages.push(event.message);
+      try {
+        for await (const event of query(replayParams, this.testDeps, replayConfigExtras)) {
+          collectTurnMessage(event, replayTurnMessages, deps.generateUuid);
+          yield event;
         }
+      } finally {
+        this._commitTurn(replayTurnMessages);
       }
-      this.messages = [...this.messages, ...replayTurnMessages];
     }
 
     // --- Live turn: add the user message and run the loop ---
@@ -948,6 +1181,7 @@ export class QueryEngine {
       timestamp: new Date().toISOString(),
     };
     this.messages = [...this.messages, userMsg];
+    this._emit({ type: "append", messages: [userMsg] });
 
     // Auto-compaction: when the conversation has grown large, condense the older
     // portion into a model-generated summary before running the turn. No-ops when
@@ -955,6 +1189,11 @@ export class QueryEngine {
     await this._getAutocompact(deps)();
 
     const abortController = new AbortController();
+    for (const extSignal of [this.config.abortSignal, opts.abortSignal]) {
+      if (!extSignal) continue;
+      if (extSignal.aborted) abortController.abort();
+      else extSignal.addEventListener("abort", () => abortController.abort(), { once: true });
+    }
     const toolUseContext = this._buildToolUseContext(abortController);
     const params: QueryParams = {
       messages: this.messages,
@@ -972,22 +1211,29 @@ export class QueryEngine {
       onRetryAttempt: this.config.onRetryAttempt,
     };
 
+    // #2382: each message is collected BEFORE it is yielded and the turn is committed in a
+    // `finally`. The REPL stops iterating at the result event (and on Esc), which closes this
+    // generator at its `yield`; code after the loop never ran there, so the model's replies
+    // never joined the history and every later request carried only the user's messages.
     const turnMessages: EngineMessage[] = [];
-    for await (const event of query(params, this.testDeps, configExtras)) {
-      yield event;
-      if (event.type === "assistant") {
-        turnMessages.push({
-          role: "assistant",
-          content: Array.isArray(event.message.content) ? event.message.content : [],
-          uuid: deps.generateUuid(),
-          timestamp: new Date().toISOString(),
-          message: event.message,
-        });
-      } else if (event.type === "user") {
-        turnMessages.push(event.message);
+    try {
+      for await (const event of query(params, this.testDeps, configExtras)) {
+        collectTurnMessage(event, turnMessages, deps.generateUuid);
+        yield event;
       }
+    } finally {
+      this._commitTurn(turnMessages);
     }
-    this.messages = [...this.messages, ...turnMessages];
+  }
+
+  /** Appends a finished (or interrupted) turn's messages to the log and reports them (#2382).
+   *  An interrupted turn can end on a tool call whose result never arrived; a tool_use with
+   *  no tool_result would make every later request invalid, so trailing calls are dropped. */
+  private _commitTurn(turnMessages: EngineMessage[]): void {
+    const kept = dropUnansweredToolCalls(turnMessages);
+    if (kept.length === 0) return;
+    this.messages = [...this.messages, ...kept];
+    this._emit({ type: "append", messages: kept });
   }
 
   /** Returns the full message history accumulated so far. */
@@ -1032,6 +1278,9 @@ export class QueryEngine {
       globLimits: { maxResults: 1000 },
       toolUseId: deps.generateUuid(),
       setSDKStatus: this.config.setSDKStatus,
+      loopDeps: this.testDeps,
+      agentDepth: this.config.agentDepth ?? 0,
+      ...(this.config.agentId !== undefined ? { agentId: this.config.agentId } : {}),
     };
   }
 }

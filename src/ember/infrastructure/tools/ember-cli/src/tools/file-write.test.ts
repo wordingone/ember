@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // TDD tests for the Write tool — one test per AC from specs/tools/file-write.md
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { writeTool } from "./file-write.ts";
@@ -12,6 +12,12 @@ import type { ToolUseContext } from "../core/tool-use-context.ts";
 
 function makeTmpDir(): string {
   return join(tmpdir(), `ember-write-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+}
+
+/** Records a Read of the file, as the Read tool does: Write refuses to overwrite unread files. */
+async function markRead(ctx: ToolUseContext, filePath: string): Promise<void> {
+  const st = await stat(filePath);
+  ctx.readFileState?.set(filePath, { mtime: st.mtimeMs, content: await readFile(filePath, "utf-8") });
 }
 
 function makeContext(
@@ -76,6 +82,7 @@ describe("AC2: overwrite existing file", () => {
     const filePath = join(tmpDir, "existing.txt");
     await writeFile(filePath, "old content\nline two");
     const ctx = makeContext();
+    await markRead(ctx, filePath);
     const result = await writeTool.call(
       { file_path: filePath, content: "new content\nline two\nline three" },
       ctx,
@@ -157,6 +164,7 @@ describe("AC6: line ending preservation", () => {
     const filePath = join(tmpDir, "crlf.txt");
     await writeFile(filePath, "line one\r\nline two\r\n");
     const ctx = makeContext();
+    await markRead(ctx, filePath);
     const result = await writeTool.call(
       { file_path: filePath, content: "line one\nline two\nline three" },
       ctx,
@@ -173,6 +181,7 @@ describe("AC6: line ending preservation", () => {
     const filePath = join(tmpDir, "lf.txt");
     await writeFile(filePath, "line one\nline two\n");
     const ctx = makeContext();
+    await markRead(ctx, filePath);
     await writeTool.call(
       { file_path: filePath, content: "line one\nline two\nline three" },
       ctx,
@@ -255,5 +264,52 @@ describe("mapToolResultToToolResultBlockParam", () => {
     ) as { data: WriteOutput };
     const block = writeTool.mapToolResultToToolResultBlockParam(result.data, "tu-2");
     expect(block.is_error).toBe(true);
+  });
+});
+
+// Regression (open-weights harness live test 2026-11-02): a bare relative path
+// reached mkdir(".") and Bun on Windows threw EEXIST, so a local model could
+// never create a file in its working directory.
+describe("relative paths resolve against the agent cwd", () => {
+  test("Write('hello.py') creates the file inside ctx.cwd", async () => {
+    const ctx = makeContext({ cwd: tmpDir } as Partial<ToolUseContext>);
+    const result = await writeTool.call(
+      { file_path: "hello.py", content: "print(2 + 3)\n" },
+      ctx,
+      async () => true,
+      undefined
+    ) as { data: WriteOutput };
+    expect(result.data.type).toBe("create");
+    expect(await readFile(join(tmpDir, "hello.py"), "utf-8")).toBe("print(2 + 3)\n");
+  });
+});
+
+// Blind test FO-09: Write overwrote an existing file the model had never read.
+describe("overwrite guard", () => {
+  test("refuses to overwrite a file that was not read", async () => {
+    const filePath = join(tmpDir, "unread.txt");
+    await writeFile(filePath, "keep me");
+    const ctx = makeContext();
+    const result = await writeTool.call({ file_path: filePath, content: "x" }, ctx, async () => true, undefined) as { data: WriteOutput };
+    expect(result.data.type).toBe("error");
+    expect(result.data.error).toContain("has not been read");
+    expect(await readFile(filePath, "utf-8")).toBe("keep me");
+  });
+
+  test("refuses when the file changed after it was read", async () => {
+    const filePath = join(tmpDir, "changed.txt");
+    await writeFile(filePath, "v1");
+    const ctx = makeContext();
+    ctx.readFileState?.set(filePath, { mtime: 1, content: "v1" });
+    const result = await writeTool.call({ file_path: filePath, content: "x" }, ctx, async () => true, undefined) as { data: WriteOutput };
+    expect(result.data.error).toContain("changed on disk");
+  });
+
+  test("a file it wrote itself can be written again", async () => {
+    const filePath = join(tmpDir, "twice.txt");
+    const ctx = makeContext();
+    await writeTool.call({ file_path: filePath, content: "a" }, ctx, async () => true, undefined);
+    const result = await writeTool.call({ file_path: filePath, content: "b" }, ctx, async () => true, undefined) as { data: WriteOutput };
+    expect(result.data.type).toBe("update");
   });
 });
