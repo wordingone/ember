@@ -26,7 +26,7 @@ create --path <name-or-path> --branch <branch> --owner <name> --purpose "<text>"
 bare name is rooted on the governed B: volume under `M/ember-wt` (or
 `EMBER_WORKTREE_ROOT`); an explicit C:-volume destination fails closed unless the operator supplies
 `--allow-c-drive`. B: is the default work-product, worktree, and tool-cache
-volume. C: is reserved for the operating system and the runner's 150 GiB
+volume. C: is reserved for the operating system and the runner's 40 GiB
 admission floor. `audit --strict` mechanically reports every registered
 worktree still resolving onto C: (`c_drive_registration`): a managed row
 reached C: without a recorded `--allow-c-drive` override is an error (it
