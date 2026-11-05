@@ -325,5 +325,62 @@ class WeightedDocumentLossDeviceClauses(unittest.TestCase):
         self.assertIn("EXECUTED {'cce_calls': 1, 'cce_rows': 20, 'cce_weight_total': 32}", result.stdout)
 
 
+# The governed arm's shape: the hidden comes out of a CUDA-GRAPHED producer (make_graphed_callables, the mechanism
+# SegmentedStep uses for the decoder segments) and the weighted loss runs EAGERLY on it every step. Two steps write
+# different weights into the SAME weight buffer; each receipt must report its own step's device sum.
+_CAPTURED_CASE = r"""
+import sys
+import torch
+import torch.nn.functional as F
+sys.path.insert(0, sys.argv[1])
+from ember.model import ember_v0_streamed_loss as m
+torch.manual_seed(1945)
+dev = torch.device('cuda')
+producer = torch.nn.Linear(5, 5).to(dev)
+x = torch.randn(22, 5, device=dev, requires_grad=True)
+graphed = torch.cuda.make_graphed_callables(producer, (x,))
+c = torch.randn(11, 5, device=dev, requires_grad=True)
+y = torch.zeros(22, dtype=torch.long, device=dev)
+rows = torch.tensor([0, 2, 4, 5], device=dev)
+weights = torch.empty(4, device=dev)  # one buffer, rewritten per step
+def dense(e, cc, t, ww=None):
+    nll = F.cross_entropy(e @ cc.T, t, reduction='sum' if ww is None else 'none')
+    return nll if ww is None else (nll * ww).sum()
+seen = []
+for step, values in enumerate(([1.0, 7.0, 1.0, 7.0], [1.0, 1.0, 200.0, 1.0], [3.0, 3.0, 3.0, 3.0])):
+    weights.copy_(torch.tensor(values))
+    count = int(sum(values))
+    hidden = graphed(x)  # graph replay
+    loss = m.weighted_document_streamed_loss(hidden, c, y, (6, 5, 7, 4), count + 16, operator=dense,
+                                             selections=((rows, weights, count), None, None, None))
+    loss.backward()
+    torch.cuda.synchronize()
+    seen.append((count + 16, m.executed_values(loss.cce_executed)['cce_weight_total']))
+print('STEPS', seen)
+graph = torch.cuda.CUDAGraph()
+hidden = graphed(x).detach()
+try:
+    with torch.cuda.graph(graph):
+        m.weighted_document_streamed_loss(hidden, c, y, (6, 5, 7, 4), 32, operator=dense,
+                                          selections=((rows, weights, 16), None, None, None))
+    print('CAPTURED-WITHOUT-REFUSAL')
+except ValueError as exc:
+    print('REFUSED', exc)
+"""
+
+
+@unittest.skipUnless(torch.cuda.is_available(), 'needs a CUDA device')
+class WeightedDocumentLossBesideCapture(unittest.TestCase):
+    def test_receipt_tracks_each_step_beside_a_graphed_producer_and_refuses_inside_capture(self):
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
+        env.pop('CUDA_LAUNCH_BLOCKING', None)
+        result = subprocess.run([sys.executable, '-B', '-c', _CAPTURED_CASE, str(ROOT / 'src')], env=env,
+                                capture_output=True, text=True, timeout=180)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('STEPS [(32, 32), (219, 219), (28, 28)]', result.stdout)
+        self.assertIn('REFUSED cce-document-v2 loss is eager and refuses under CUDA graph capture', result.stdout)
+        self.assertNotIn('CAPTURED-WITHOUT-REFUSAL', result.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -307,6 +307,11 @@ def weighted_document_streamed_loss(hidden, classifier, targets, lengths, denomi
     (e, c, targets, weights) when weighted.
     """
     lengths = tuple(lengths)
+    # The loss is an EAGER callback (SegmentedStep graphs only the decoder segments). Its executed receipt is
+    # host-side Python plus a per-call pinned copy, which a CUDA graph replay would not re-run: refuse rather than
+    # record a capture-time value that every replay would then repeat.
+    if hidden.device.type == 'cuda' and torch.cuda.is_current_stream_capturing():
+        raise ValueError('cce-document-v2 loss is eager and refuses under CUDA graph capture')
     if (hidden.ndim != 2 or classifier.ndim != 2 or targets.ndim != 1
             or hidden.shape[1] != classifier.shape[1] or len(targets) != len(hidden)
             or targets.dtype != torch.int64 or hidden.dtype != classifier.dtype
