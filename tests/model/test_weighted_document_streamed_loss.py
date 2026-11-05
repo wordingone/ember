@@ -1,0 +1,326 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""cce-document-v2 (one weighted CCE call per update) against the cce-document-v1 repeated-row path, loss only.
+
+The v1 path repeats every answer row (weight - 1) extra times and calls the operator once per document; v2 calls it
+once over unique rows with a per-row multiplier. In float64 with a dense operator the two are the same function, so
+loss, hidden gradient and classifier gradient agree to rounding. Selections here are built by hand for one fixed
+micro-step; the runner that stages them is tested in tests/ember_restart_model/test_cce_document_v2_runner.py."""
+import importlib
+import os
+from pathlib import Path
+import subprocess
+import sys
+import unittest
+
+import torch
+import torch.nn.functional as F
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
+loss_module = importlib.import_module('ember.model.ember_v0_streamed_loss')
+
+IGNORE = -100
+WEIGHT = 7
+
+
+def dense(e, c, y, w=None):
+    if w is None:
+        return F.cross_entropy(e @ c.T, y, reduction='sum')
+    return (F.cross_entropy(e @ c.T, y, reduction='none') * w.to(e.dtype)).sum()
+
+
+class Counting:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args):
+        self.calls.append(len(args))
+        return dense(*args)
+
+
+def micro(order='image-first'):
+    """Four documents; the answer-bearing (image-text style) document is FIRST, not last, to pin general order.
+    Document 2 is fully loss-bearing but holds an answer row: it must still be weighted."""
+    lengths = (6, 5, 7, 4)
+    starts = [0, 6, 11, 18]
+    targets = [3, IGNORE, 1, IGNORE, 4, 0,    # doc0: selected, answer rows 2 and 5
+               2, 2, 9, 1, 0,                # doc1: whole, no answer
+               IGNORE, 5, 6, IGNORE, 7, 8, 1,  # doc2: selected, no answer
+               0, 3, 2, 4]                   # doc3: whole, answer row 20
+    if order != 'image-first':
+        raise ValueError(order)
+    return dict(token_ids=list(range(22)), target_ids=targets, positions=list(range(22)),
+                document_starts=starts, answer_rows=(2, 5, 20)), lengths
+
+
+
+def folded_selection():
+    """cce-document-v2 selections for micro(), by hand: unique loss-bearing rows, one FP32 weight per row
+    (1 + (WEIGHT - 1) for each answer naming it) and the weight total. Document 1 is whole and unweighted."""
+    def entry(rows, weights):
+        return torch.tensor(rows), torch.tensor(weights, dtype=torch.float32), sum(weights)
+    w = WEIGHT
+    selections = (entry([0, 2, 4, 5], [1, w, 1, w]), None, entry([12, 13, 15, 16, 17], [1] * 5),
+                  entry([18, 19, 20, 21], [1, 1, w, 1]))
+    return {'selections': selections, 'denominator': 5 + sum(s[2] for s in selections if s is not None)}
+
+
+def repeated_selection():
+    """The cce-document-v1 selections for the same micro(): every answer row repeated WEIGHT - 1 extra times."""
+    def entry(rows):
+        return torch.tensor(rows), len(rows)
+    r = WEIGHT - 1
+    selections = (entry([0, 2, 4, 5] + [2] * r + [5] * r), None, entry([12, 13, 15, 16, 17]),
+                  entry([18, 19, 20, 21] + [20] * r))
+    return {'selections': selections, 'denominator': 5 + sum(s[1] for s in selections if s is not None)}
+
+
+class WeightedDocumentLoss(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        torch.set_num_threads(1)
+
+    def operands(self, seed=194599):
+        torch.manual_seed(seed)
+        hidden = torch.randn(22, 5, dtype=torch.float64, requires_grad=True)
+        owner = torch.randn(11, 5, dtype=torch.float64, requires_grad=True)
+        return hidden, owner
+
+
+    def run_v1(self, lengths, targets):
+        sel = repeated_selection()
+        h, c = self.operands()
+        loss = loss_module.document_streamed_loss(h, c, targets, lengths, sel['denominator'], operator=dense,
+                                                  selections=sel['selections'])
+        loss.backward()
+        return loss.detach(), h.grad, c.grad, sel['denominator']
+
+    def run_v2(self, sel, lengths, targets, operator=dense):
+        h, c = self.operands()
+        loss = loss_module.weighted_document_streamed_loss(h, c, targets, lengths, sel['denominator'],
+                                                           operator=operator, selections=sel['selections'])
+        loss.backward()
+        return loss, h.grad, c.grad
+
+    def test_merged_folded_forward_and_backward_equal_repeated_row_path(self):
+        m, lengths = micro()
+        targets = torch.tensor(m['target_ids']).clamp(min=0)
+        v1_loss, v1_h, v1_c, denominator = self.run_v1(lengths, targets)
+        sel = folded_selection()
+        self.assertEqual(sel['denominator'], denominator)
+        counting = Counting()
+        loss, h, c = self.run_v2(sel, lengths, targets, counting)
+        self.assertEqual(counting.calls, [4])  # ONE weighted call for all four documents
+        torch.testing.assert_close(loss.detach(), v1_loss, atol=1e-13, rtol=1e-13)
+        torch.testing.assert_close(h, v1_h, atol=1e-13, rtol=1e-13)
+        torch.testing.assert_close(c, v1_c, atol=1e-13, rtol=1e-13)
+        # unselected rows (ignored targets) receive an exact zero hidden gradient
+        for row in (1, 3, 11, 14):
+            self.assertTrue(bool((h[row] == 0).all()))
+
+    def test_unweighted_text_only_update_is_one_call_without_multiplier(self):
+        torch.manual_seed(194598)
+        h = torch.randn(8, 5, dtype=torch.float64, requires_grad=True)
+        c = torch.randn(11, 5, dtype=torch.float64, requires_grad=True)
+        h1, c1 = h.detach().clone().requires_grad_(), c.detach().clone().requires_grad_()
+        y = torch.arange(8) % 11
+        counting = Counting()
+        loss = loss_module.weighted_document_streamed_loss(h, c, y, (2, 2, 2, 2), 8, operator=counting)
+        loss.backward()
+        self.assertEqual(counting.calls, [3])
+        reference = loss_module.document_streamed_loss(h1, c1, y, (2, 2, 2, 2), 8, operator=dense)
+        reference.backward()
+        torch.testing.assert_close(loss.detach(), reference.detach(), atol=1e-14, rtol=1e-14)
+        torch.testing.assert_close(h.grad, h1.grad, atol=1e-14, rtol=1e-14)
+        torch.testing.assert_close(c.grad, c1.grad, atol=1e-14, rtol=1e-14)
+        self.assertEqual(loss.cce_executed, dict(cce_calls=1, cce_rows=8, cce_weight_total=8))
+
+    def test_executed_receipt_is_read_back_from_the_call(self):
+        m, lengths = micro()
+        targets = torch.tensor(m['target_ids']).clamp(min=0)
+        sel = folded_selection()
+        loss, _, _ = self.run_v2(sel, lengths, targets)
+        unique = sum(1 for t in m['target_ids'] if t != IGNORE)
+        expected = dict(cce_calls=1, cce_rows=unique, cce_weight_total=unique + (WEIGHT - 1) * len(m['answer_rows']))
+        # the weight total is the sum of the weight tensor the operator received, not the declared count
+        self.assertIsInstance(loss.cce_executed['cce_weight_total'], torch.Tensor)
+        self.assertEqual(loss_module.executed_values(loss.cce_executed), expected)
+        self.assertEqual(expected['cce_weight_total'], sel['denominator'])
+
+    def test_executed_weight_total_comes_from_the_weights_not_the_declared_count(self):
+        # A declared count that disagrees with the weights is refused by the count clause, so the only way to
+        # see the receipt diverge is an operator-received weight vector: forge one after validation.
+        m, lengths = micro()
+        targets = torch.tensor(m['target_ids']).clamp(min=0)
+        sel = folded_selection()
+        def doubling(e, c, y, w=None):
+            if w is not None:
+                w.mul_(2)  # what the operator received is what the receipt must report
+            return dense(e, c, y, w)
+        h, c = self.operands()
+        loss = loss_module.weighted_document_streamed_loss(h, c, targets, lengths, sel['denominator'],
+                                                           operator=doubling, selections=sel['selections'])
+        self.assertEqual(loss_module.executed_values(loss.cce_executed)['cce_weight_total'], 2 * sel['denominator'])
+
+    def test_count_must_equal_weight_total_and_rows_must_be_unique(self):
+        h, c = self.operands()
+        y = torch.zeros(22, dtype=torch.long)
+        lengths = (6, 5, 7, 4)
+        def forbidden(*args):
+            self.fail('invalid weighted selection reached the operator')
+        rows = torch.tensor([0, 2, 4, 5])
+        w = torch.tensor([1.0, 7.0, 1.0, 7.0])
+        good = (rows, w, 16)
+        cases = {
+            'count below weight total': (rows, w, 15),
+            'count above weight total': (rows, w, 17),
+            'repeated row': (torch.tensor([0, 2, 2, 5]), w, 16),
+            'descending rows': (torch.tensor([5, 4, 2, 0]), w, 16),
+            'row outside document': (torch.tensor([0, 2, 4, 6]), w, 16),
+            'weight below one': (rows, torch.tensor([1.0, 7.0, 0.5, 7.5]), 16),
+            'v1 entry shape': (rows, 4),
+            'fp64 weights': (rows, w.double(), 16),
+            'length mismatch': (rows, w[:3], 16),
+        }
+        named = {
+            'count below weight total': 'count differs from its weight total',
+            'count above weight total': 'count differs from its weight total',
+            'repeated row': 'rows are not unique and ascending',
+            'descending rows': 'rows are not unique and ascending',
+            'row outside document': 'row is outside its document',
+            'weight below one': 'weight is below one',
+        }
+        for name, entry in cases.items():
+            with self.subTest(name):
+                with self.assertRaisesRegex(ValueError, named.get(name, '')):
+                    loss_module.weighted_document_streamed_loss(h, c, y, lengths, 100, operator=forbidden,
+                                                                selections=(entry, None, None, None))
+        with self.assertRaises(ValueError):  # denominator below the weight total
+            loss_module.weighted_document_streamed_loss(h, c, y, lengths, 16 + 5 + 7 + 4 - 1, operator=forbidden,
+                                                        selections=(good, None, None, None))
+        loss_module.weighted_document_streamed_loss(h, c, y, lengths, 16 + 5 + 7 + 4, operator=dense,
+                                                    selections=(good, None, None, None))
+
+# Each bad selection violates exactly ONE device clause. A device assert poisons the CUDA context, so every case
+# runs in its own process.
+_CUDA_CASE = r"""
+import os, sys
+import torch
+import torch.nn.functional as F
+sys.path.insert(0, sys.argv[1])
+from ember.model import ember_v0_streamed_loss as m
+case = sys.argv[2]
+dev = torch.device('cuda')
+h = torch.randn(22, 5, device=dev, requires_grad=True)
+c = torch.randn(11, 5, device=dev, requires_grad=True)
+y = torch.zeros(22, dtype=torch.long, device=dev)
+rows, w, count = [0, 2, 4, 5], [1.0, 7.0, 1.0, 7.0], 16
+if case == 'count': count = 15
+if case == 'weight': w = [1.0, 7.0, 0.5, 7.5]
+if case == 'ascending': rows = [0, 2, 2, 5]
+if case == 'outside': rows = [0, 2, 4, 6]
+entry = (torch.tensor(rows, device=dev), torch.tensor(w, device=dev), count)
+def dense(e, cc, t, ww=None):
+    nll = F.cross_entropy(e @ cc.T, t, reduction='sum' if ww is None else 'none')
+    return nll if ww is None else (nll * ww).sum()
+loss = m.weighted_document_streamed_loss(h, c, y, (6, 5, 7, 4), 32, operator=dense, selections=(entry, None, None, None))
+loss.backward()
+torch.cuda.synchronize()
+print('EXECUTED', m.executed_values(loss.cce_executed))
+"""
+
+
+@unittest.skipUnless(torch.cuda.is_available(), 'needs a CUDA device')
+class WeightedDocumentLossDeviceClauses(unittest.TestCase):
+    def run_case(self, case, blocking):
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
+        env.pop('CUDA_LAUNCH_BLOCKING', None)
+        if blocking:
+            env['CUDA_LAUNCH_BLOCKING'] = '1'
+        return subprocess.run([sys.executable, '-B', '-c', _CUDA_CASE, str(ROOT / 'src'), case], env=env,
+                              capture_output=True, text=True, timeout=180)
+
+    def test_each_device_clause_fires_and_names_itself_under_launch_blocking(self):
+        for case, message in (('count', 'count differs from its weight total'),
+                              ('weight', 'weight is below one'),
+                              ('ascending', 'rows are not unique and ascending'),
+                              ('outside', 'row is outside its document')):
+            with self.subTest(case):
+                result = self.run_case(case, blocking=True)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn('EXECUTED', result.stdout)
+                self.assertIn('device assertion failed: Weighted selection ' + message, result.stderr)
+
+    def test_device_clause_fires_asynchronously_without_launch_blocking(self):
+        result = self.run_case('count', blocking=False)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('EXECUTED', result.stdout)
+        self.assertIn('device-side assert triggered', result.stderr)
+
+    def test_valid_selection_reports_the_device_reduced_weight_total(self):
+        result = self.run_case('good', blocking=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("EXECUTED {'cce_calls': 1, 'cce_rows': 20, 'cce_weight_total': 32}", result.stdout)
+
+
+# The governed arm's shape: the hidden comes out of a CUDA-GRAPHED producer (make_graphed_callables, the mechanism
+# SegmentedStep uses for the decoder segments) and the weighted loss runs EAGERLY on it every step. Two steps write
+# different weights into the SAME weight buffer; each receipt must report its own step's device sum.
+_CAPTURED_CASE = r"""
+import sys
+import torch
+import torch.nn.functional as F
+sys.path.insert(0, sys.argv[1])
+from ember.model import ember_v0_streamed_loss as m
+torch.manual_seed(1945)
+dev = torch.device('cuda')
+producer = torch.nn.Linear(5, 5).to(dev)
+x = torch.randn(22, 5, device=dev, requires_grad=True)
+graphed = torch.cuda.make_graphed_callables(producer, (x,))
+c = torch.randn(11, 5, device=dev, requires_grad=True)
+y = torch.zeros(22, dtype=torch.long, device=dev)
+rows = torch.tensor([0, 2, 4, 5], device=dev)
+weights = torch.empty(4, device=dev)  # one buffer, rewritten per step
+def dense(e, cc, t, ww=None):
+    nll = F.cross_entropy(e @ cc.T, t, reduction='sum' if ww is None else 'none')
+    return nll if ww is None else (nll * ww).sum()
+seen = []
+for step, values in enumerate(([1.0, 7.0, 1.0, 7.0], [1.0, 1.0, 200.0, 1.0], [3.0, 3.0, 3.0, 3.0])):
+    weights.copy_(torch.tensor(values))
+    count = int(sum(values))
+    hidden = graphed(x)  # graph replay
+    loss = m.weighted_document_streamed_loss(hidden, c, y, (6, 5, 7, 4), count + 16, operator=dense,
+                                             selections=((rows, weights, count), None, None, None))
+    loss.backward()
+    torch.cuda.synchronize()
+    seen.append((count + 16, m.executed_values(loss.cce_executed)['cce_weight_total']))
+print('STEPS', seen)
+graph = torch.cuda.CUDAGraph()
+hidden = graphed(x).detach()
+try:
+    with torch.cuda.graph(graph):
+        m.weighted_document_streamed_loss(hidden, c, y, (6, 5, 7, 4), 32, operator=dense,
+                                          selections=((rows, weights, 16), None, None, None))
+    print('CAPTURED-WITHOUT-REFUSAL')
+except ValueError as exc:
+    print('REFUSED', exc)
+"""
+
+
+@unittest.skipUnless(torch.cuda.is_available(), 'needs a CUDA device')
+class WeightedDocumentLossBesideCapture(unittest.TestCase):
+    def test_receipt_tracks_each_step_beside_a_graphed_producer_and_refuses_inside_capture(self):
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
+        env.pop('CUDA_LAUNCH_BLOCKING', None)
+        result = subprocess.run([sys.executable, '-B', '-c', _CAPTURED_CASE, str(ROOT / 'src')], env=env,
+                                capture_output=True, text=True, timeout=180)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('STEPS [(32, 32), (219, 219), (28, 28)]', result.stdout)
+        self.assertIn('REFUSED cce-document-v2 loss is eager and refuses under CUDA graph capture', result.stdout)
+        self.assertNotIn('CAPTURED-WITHOUT-REFUSAL', result.stdout)
+
+
+if __name__ == '__main__':
+    unittest.main()
