@@ -24,6 +24,15 @@ if str(MODULE_DIR) not in sys.path:
 import checkpoint_prune_closure_gate as gate  # noqa: E402
 
 
+BS = chr(92)  # the backslash
+
+
+def _mixed(path: str) -> str:
+    """Alternate separators segment by segment, the way the hub INDEX and receipts spell paths."""
+    parts = path.replace(BS, '/').split('/')
+    return ''.join(part + ('/' if i % 2 else BS) for i, part in enumerate(parts[:-1])) + parts[-1]
+
+
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
@@ -127,17 +136,48 @@ class ClosureGateTests(unittest.TestCase):
         self.assertEqual(result['protected_hits'], [])
 
     def test_separator_and_case_spelling_does_not_slip_past(self):
-        candidate = Tree.objects(self.tree.parent_dir)[0].replace('/', '\\').upper()
+        original = Tree.objects(self.tree.parent_dir)[0]
+        for candidate in (original.replace(BS, '/').upper(), original.replace('/', BS).upper(),
+                          _mixed(original).upper()):
+            with self.subTest(candidate=candidate):
+                _assert_refuses(self, gate.evaluate([candidate], self.closure))
+
+    def test_dot_dot_spelling_does_not_slip_past(self):
+        objects = self.tree.parent_dir / 'objects'
+        name = Tree.objects(self.tree.parent_dir)[0].replace(BS, '/').rsplit('/', 1)[1]
+        candidate = str(objects).replace(BS, '/') + '/../objects/./' + name
         _assert_refuses(self, gate.evaluate([candidate], self.closure))
 
-    def test_deliberate_red_gate_disabled_lets_the_parent_deletion_through(self):
-        """With the refusal clause suppressed, the same candidate set reads PASS and the refusal assertion fails."""
+    def test_a_directory_candidate_above_a_protected_file_is_a_hit(self):
+        for directory in (self.tree.parent_dir / 'objects', self.tree.parent_dir, self.tree.parent_dir.parent,
+                          self.tree.parent_dir.parent.parent, self.tree.head_hour, self.tree.base):
+            with self.subTest(directory=directory):
+                _assert_refuses(self, gate.evaluate([str(directory)], self.closure))
+        # an unrelated checkpoint's directory still passes
+        self.assertEqual(gate.evaluate([str(self.tree.other_dir.parent.parent)], self.closure)['verdict'], 'PASS')
+
+    def test_pointer_and_head_hour_result_are_protected(self):
+        for name in (self.tree.base / 'selected-continuation-head.json', self.tree.head_hour / 'hour-result.json'):
+            with self.subTest(name=name):
+                _assert_refuses(self, gate.evaluate([str(name)], self.closure))
+
+    def test_a_relative_candidate_refuses(self):
+        result = gate.evaluate(['objects/x.pt'], self.closure)
+        _assert_refuses(self, result, gate.CLAUSE_CANDIDATE)
+
+    def test_deliberate_red_an_empty_protected_index_lets_the_parent_deletion_through(self):
+        """The red removes what the refusal rests on (the protected index), with no switch in the shipped code: the same
+        candidates then read PASS and the refusal assertion fails."""
         candidates = Tree.objects(self.tree.parent_dir)
-        disabled = gate.evaluate(candidates, self.closure, enforce=False)
-        self.assertEqual(disabled['verdict'], 'PASS')
-        self.assertTrue(disabled['protected_hits'])  # the hits are still computed; only the clause is gone
+        original = gate._protected_index
+        try:
+            gate._protected_index = lambda closure: ({}, [])
+            red = gate.evaluate(candidates, self.closure)
+        finally:
+            gate._protected_index = original
+        self.assertEqual(red['verdict'], 'PASS')
         with self.assertRaises(AssertionError):
-            _assert_refuses(self, disabled)
+            _assert_refuses(self, red)
 
     def test_cli_refuses_with_exit_3_and_writes_a_receipt_row(self):
         listing = self.tree.base / 'candidates.txt'
@@ -222,6 +262,98 @@ class ClosureGateTests(unittest.TestCase):
         candidates = gate.replay_candidates(receipts, index_file)
         self.assertEqual(len(candidates), 1)
         self.assertTrue(candidates[0].endswith('trained-child/objects/a.pt'))
+
+    def _real_shaped_replay_inputs(self) -> tuple[Path, Path]:
+        """A receipts file and a hub INDEX in the shapes of the 2026-10-10 class-4 receipts and the lineage-2119 INDEX
+        (field names and value spellings copied; every path and digest synthetic): the root and the parent are marked
+        DELETE (one dry and one wet intent plus an outcome each), the head is KEEP."""
+        checkpoints = {}
+        rows = []
+        gate_block = {'restore_pass_mail': 1, 'package_verified_mail': 2, 'note': 'synthetic'}
+        nodes = list(reversed(self.closure['nodes']))  # root -> head
+        for lineage_index, node in enumerate(nodes):
+            directory = Path(node['directory'])
+            hub_dir = f'checkpoints/lineage-2119/step{lineage_index * 5}-{node["manifest_sha256"][:12]}'
+            parent = nodes[lineage_index - 1] if lineage_index else None
+            files = []
+            for name in node['files']:
+                big = name.startswith('objects/') or name in gate.STATE_FILES
+                files.append({'path': name, 'bytes': (3 << 20) if big else 512, 'sha256': _sha(name.encode())})
+            checkpoints[hub_dir] = {
+                'step': str(lineage_index * 5), 'manifest_sha256': node['manifest_sha256'],
+                'parent_manifest_sha256': parent['manifest_sha256'] if parent else None, 'lineage_index': str(lineage_index),
+                'original_root': str(directory).replace('/', BS),
+                'parent_checkpoint_path': str(parent['directory']).replace('/', BS) if parent else None, 'files': files}
+            root = str(directory).replace('/', BS)
+            if node is nodes[-1]:
+                rows.append({'kind': 'intent', 'klass': 4, 'checkpoint': hub_dir, 'verdict': 'KEEP_SELECTED_OR_S4',
+                             'ts': '2026-10-10T22:00:00+00:00'})
+                continue
+            payload = [f for f in files if f['bytes'] >= gate.REPLAY_MIN_BYTES]
+            for dry in (True, False):
+                rows.append({'bytes': sum(f['bytes'] for f in payload), 'checkpoint': hub_dir, 'dry': dry,
+                             'files': len(payload), 'gate': gate_block, 'kind': 'intent', 'klass': 4, 'root': root,
+                             'skipped': [], 'ts': '2026-10-10T22:13:12+00:00', 'verdict': gate.REPLAY_VERDICT})
+            rows.append({'bytes_deleted': sum(f['bytes'] for f in payload), 'checkpoint': hub_dir, 'errors': [],
+                         'files_deleted': len(payload), 'kind': 'outcome', 'klass': 4, 'root': root,
+                         'ts': '2026-10-10T22:13:32+00:00'})
+        index_file = self.tree.base / 'INDEX.json'
+        index_file.write_text(json.dumps({'schema': 'synthetic-index', 'checkpoints': checkpoints}), encoding='utf-8')
+        receipts = self.tree.base / 'closeout-delete-receipts.jsonl'
+        receipts.write_text(''.join(json.dumps(r, sort_keys=True) + '\n' for r in rows), encoding='utf-8')
+        return receipts, index_file
+
+    def test_replay_of_a_real_shaped_prune_refuses_end_to_end(self):
+        receipts, index_file = self._real_shaped_replay_inputs()
+        candidates = gate.replay_candidates(receipts, index_file)
+        self.assertEqual(len(candidates), 2 * 5)  # root and parent: optimizer, replay, core, two experts each
+        result = gate.evaluate(candidates, self.closure)
+        _assert_refuses(self, result)
+        hit_nodes = {h['protected_by_node'] for h in result['protected_hits']}
+        self.assertEqual(hit_nodes, {self.closure['nodes'][1]['manifest_sha256'], self.closure['nodes'][2]['manifest_sha256']})
+        self.assertEqual(len(result['protected_hits']), len(candidates))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = gate.main(['--receipts-root', str(self.tree.base), '--replay-receipts', str(receipts),
+                              '--replay-index', str(index_file)])
+        self.assertEqual(code, gate.EXIT_REFUSED)
+        self.assertEqual(json.loads(out.getvalue())['clause'], gate.CLAUSE_PROTECTED)
+
+    def test_unreadable_replay_input_refuses_without_a_traceback(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = gate.main(['--receipts-root', str(self.tree.base), '--replay-receipts', str(self.tree.base / 'absent.jsonl'),
+                              '--replay-index', str(self.tree.base / 'absent.json')])
+        self.assertEqual(code, gate.EXIT_REFUSED)
+        self.assertEqual(json.loads(out.getvalue())['clause'], gate.CLAUSE_INPUT)
+        broken = self.tree.base / 'broken.json'
+        broken.write_text('{not json', encoding='utf-8')
+        with redirect_stdout(io.StringIO()):
+            code = gate.main(['--receipts-root', str(self.tree.base), '--replay-receipts', str(broken),
+                              '--replay-index', str(broken)])
+        self.assertEqual(code, gate.EXIT_REFUSED)
+
+    def test_dry_run_exits_3_when_a_node_has_a_problem(self):
+        for item in self.tree.parent_dir.glob('expert-index-*.json'):
+            item.unlink()
+        with redirect_stdout(io.StringIO()):
+            code = gate.main(['--receipts-root', str(self.tree.base), '--dry-run'])
+        self.assertEqual(code, gate.EXIT_REFUSED)
+
+    def test_lineage_null_is_malformed_not_a_root(self):
+        manifest = self.tree.head_dir / 'checkpoint-manifest.json'
+        payload = json.loads(manifest.read_bytes())
+        payload['lineage'] = None
+        raw = json.dumps(payload, sort_keys=True).encode()
+        manifest.write_bytes(raw)
+        hour_raw = json.dumps({'child_manifest_sha256': _sha(raw)}).encode()
+        (self.tree.head_hour / 'hour-result.json').write_bytes(hour_raw)
+        pointer_file = self.tree.base / 'selected-continuation-head.json'
+        pointer = json.loads(pointer_file.read_text(encoding='utf-8'))
+        pointer.update(lineage_checkpoint_manifest_sha256=_sha(raw), hour_result_sha256=_sha(hour_raw))
+        pointer_file.write_text(json.dumps(pointer), encoding='utf-8')
+        with self.assertRaisesRegex(gate.ClosureUnresolvable, 'lineage is not an object'):
+            gate.protected_closure(self.tree.base)
 
 
 if __name__ == '__main__':
