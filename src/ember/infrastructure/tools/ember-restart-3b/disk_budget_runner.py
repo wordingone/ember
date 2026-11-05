@@ -18,7 +18,7 @@ from typing import Mapping, Sequence
 
 
 GIB = 1024 ** 3
-OPERATING_RESERVES_GIB = {"C": 150.0, "B": 250.0}
+OPERATING_RESERVES_GIB = {"C": 40.0, "B": 250.0}  # C: measured per-hour churn <= 0.46 GiB (see PR); reversible by this line
 FINAL_RECEIPT_RESERVATION_BYTES = 64 * 1024
 
 _CHILD_ENV_BOOTSTRAP = """

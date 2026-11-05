@@ -267,7 +267,7 @@ _SOURCE_NAMES = (
     "parameter_counter.py",
     "native_compute_screen.py",
 )
-_OPERATING_FLOORS_GIB = {"B": 250.0, "C": 150.0}
+_OPERATING_FLOORS_GIB = {"B": 250.0, "C": 40.0}
 _MAX_WRITE_GIB = {"B": 0.1, "C": 0.1}
 _MAX_SCHEDULE_FUTURE_SKEW_MS = 60_000
 
