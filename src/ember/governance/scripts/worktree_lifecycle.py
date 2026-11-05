@@ -225,18 +225,93 @@ def common_dir(repo: Path) -> Path:
     return Path(result.stdout.strip()).resolve(strict=True)
 
 
+LOCK_WAIT_ENV = "EMBER_LIFECYCLE_LOCK_WAIT_SECONDS"
+LOCK_BACKOFF_ENV = "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS"
+DEFAULT_LOCK_WAIT_SECONDS = 120.0
+DEFAULT_LOCK_BACKOFF_SECONDS = 2.0
+
+
+def _lock_setting(explicit: float | None, env_name: str, default: float) -> float:
+    """Resolve one lock timing: explicit argument, then environment, then default.
+
+    A malformed or negative value refuses rather than falling back to the default -- a
+    typo in the environment must not silently turn a 5 s budget into 120 s or into 0.
+    """
+    if explicit is not None:
+        value = float(explicit)
+        source = "argument"
+    else:
+        raw = os.environ.get(env_name)
+        if raw is None or raw.strip() == "":
+            return default
+        source = env_name
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise LifecycleError("LIFECYCLE_LOCK_CONFIG", f"{source}={raw!r} is not a number") from exc
+    if value != value or value < 0 or value == float("inf"):
+        raise LifecycleError(
+            "LIFECYCLE_LOCK_CONFIG", f"{source}={value!r} must be a finite non-negative number"
+        )
+    return value
+
+
 class RepositoryLock(AbstractContextManager["RepositoryLock"]):
-    def __init__(self, path: Path):
+    """Repo-wide exclusive lock on byte 0 of the lifecycle lock file, with a bounded wait.
+
+    Every seat's create/retire/renew/audit -- and therefore every pre-commit and pre-push
+    hook -- takes this one lock, so with several seats a fail-fast acquire made pushes
+    collide about hourly (four LIFECYCLE_LOCKED refusals on 2026-11-05 alone). Contention
+    now waits up to ``wait_seconds`` (default 120, env EMBER_LIFECYCLE_LOCK_WAIT_SECONDS),
+    polling every ``backoff_seconds`` (default 2, env EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS).
+    Still fail-closed: when the wait expires it raises LIFECYCLE_LOCKED, naming the
+    recorded holder, and the caller never runs unlocked.
+
+    File layout: byte 0 is the lock byte (``b"0"``, unchanged, so a pre-change copy of
+    this tool on another seat still locks the same region). After acquiring, the holder
+    writes a newline plus one JSON object ``{"acquired": ISO, "pid": N}`` from byte 1 on,
+    and truncates it away before releasing. Waiters read only from byte 1: on Windows the
+    held byte 0 is a mandatory lock and reading it from another handle fails.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        wait_seconds: float | None = None,
+        backoff_seconds: float | None = None,
+        notify: Any = None,
+    ):
         self.path = path
+        self.wait_seconds = _lock_setting(wait_seconds, LOCK_WAIT_ENV, DEFAULT_LOCK_WAIT_SECONDS)
+        self.backoff_seconds = _lock_setting(
+            backoff_seconds, LOCK_BACKOFF_ENV, DEFAULT_LOCK_BACKOFF_SECONDS
+        )
+        self.notify = notify if notify is not None else self._stderr_line
         self.handle: Any = None
 
-    def __enter__(self) -> "RepositoryLock":
+    @staticmethod
+    def _stderr_line(line: str) -> None:
+        # stderr, never stdout: emit() prints JSON on stdout and callers parse it.
+        print(line, file=sys.stderr, flush=True)
+
+    def _open(self) -> Any:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = self.path.open("a+b")
-        self.handle.seek(0, os.SEEK_END)
-        if self.handle.tell() == 0:
-            self.handle.write(b"0")
-            self.handle.flush()
+        # r+b, not a+b: append mode writes at EOF whatever the position, which would
+        # make it impossible to place the holder record at byte 1.
+        fd = os.open(str(self.path), os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o666)
+        handle = os.fdopen(fd, "r+b")
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        return handle
+
+    def _try_lock(self) -> bool:
+        """One non-blocking attempt. False on contention; any other OSError propagates."""
+        import errno
+
         self.handle.seek(0)
         try:
             if os.name == "nt":
@@ -248,14 +323,81 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
 
                 fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
+            # Same discipline as loop_graph/_atomic.py::ExclusiveLock: only "held by
+            # someone else" is retryable; a bad fd or disk error is a real fault.
+            if exc.errno in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
+                return False
+            raise
+        return True
+
+    def holder(self) -> str:
+        """The recorded holder as ``pid=N acquired=ISO``, or ``unknown``.
+
+        ``unknown`` covers a holder running a pre-change copy of this tool (bare ``b"0"``
+        file) and the instant between another holder's acquire and its record write.
+        """
+        try:
+            with self.path.open("rb") as reader:
+                reader.seek(1)
+                raw = reader.read(4096)
+            record = json.loads(raw.decode("utf-8").strip())
+            return f"pid={int(record['pid'])} acquired={record['acquired']}"
+        except (OSError, ValueError, KeyError, TypeError):
+            return "unknown"
+
+    def _write_holder(self) -> None:
+        record = {
+            "acquired": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "pid": os.getpid(),
+        }
+        self.handle.seek(1)
+        self.handle.truncate()
+        self.handle.write(b"\n" + json.dumps(record, sort_keys=True).encode("utf-8") + b"\n")
+        self.handle.flush()
+
+    def __enter__(self) -> "RepositoryLock":
+        import time
+
+        self.handle = self._open()
+        try:
+            deadline = time.monotonic() + self.wait_seconds
+            if not self._try_lock():
+                self.notify(f"waiting for lifecycle lock held by {self.holder()}")
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise LifecycleError(
+                            "LIFECYCLE_LOCKED",
+                            f"{self.path} still held by {self.holder()} after waiting "
+                            f"{self.wait_seconds:g}s",
+                        )
+                    time.sleep(min(self.backoff_seconds, remaining))
+                    if self._try_lock():
+                        break
+        except LifecycleError:
             self.handle.close()
             self.handle = None
-            raise LifecycleError("LIFECYCLE_LOCKED", str(self.path)) from exc
+            raise
+        except OSError as exc:
+            self.handle.close()
+            self.handle = None
+            raise LifecycleError("LIFECYCLE_LOCKED", f"{self.path}: {exc}") from exc
+        try:
+            self._write_holder()
+        except OSError:
+            # The record is advisory; the lock itself is held, which is what matters.
+            pass
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         if self.handle is None:
             return
+        try:
+            self.handle.seek(1)
+            self.handle.truncate()
+            self.handle.flush()
+        except OSError:
+            pass
         self.handle.seek(0)
         if os.name == "nt":
             import msvcrt
@@ -266,6 +408,7 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
 
             fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
         self.handle.close()
+        self.handle = None
 
 
 def validate_state(payload: Any) -> dict[str, Any]:
@@ -1503,6 +1646,24 @@ def build_parser() -> argparse.ArgumentParser:
             "HEAD version (issue #1696); explicit, acknowledged operator exception only"
         ),
     )
+    parser.add_argument(
+        "--lock-wait-seconds",
+        type=float,
+        default=None,
+        help=(
+            "how long to wait for another seat's lifecycle lock before LIFECYCLE_LOCKED "
+            f"(default: ${LOCK_WAIT_ENV}, else {DEFAULT_LOCK_WAIT_SECONDS:g})"
+        ),
+    )
+    parser.add_argument(
+        "--lock-backoff-seconds",
+        type=float,
+        default=None,
+        help=(
+            "poll interval while waiting for the lifecycle lock "
+            f"(default: ${LOCK_BACKOFF_ENV}, else {DEFAULT_LOCK_BACKOFF_SECONDS:g})"
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     install_parser = subparsers.add_parser("install")
@@ -1642,7 +1803,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo = Path(canonical_path(args.repo))
         common = common_dir(repo)
         state_file = common / STATE_NAME
-        with RepositoryLock(common / LOCK_NAME):
+        with RepositoryLock(
+            common / LOCK_NAME,
+            wait_seconds=args.lock_wait_seconds,
+            backoff_seconds=args.lock_backoff_seconds,
+        ):
             if args.command == "install":
                 payload = install(repo, state_file, args.target)
                 emit(payload, False)

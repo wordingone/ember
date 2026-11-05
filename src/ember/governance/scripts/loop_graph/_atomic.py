@@ -16,7 +16,7 @@ read the same base file, and whichever os.replace lands second silently
 drops the other's row. ExclusiveLock is a real cross-process/cross-thread
 mutual-exclusion primitive (msvcrt.locking on Windows, fcntl.flock on POSIX
 -- same lock mechanism as worktree_lifecycle.py's RepositoryLock, but
-blocking instead of fail-fast, since appenders should queue rather than
+blocking instead of a bounded wait, since appenders should queue rather than
 error out). Appends are serialized under this lock and use a real `open(...,
 "a")`, so concurrent appends from multiple processes are true appends: every
 row from every writer survives, in some serialized order.
@@ -51,9 +51,9 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 class ExclusiveLock(AbstractContextManager["ExclusiveLock"]):
     """Blocking cross-process/cross-thread exclusive lock on a sidecar file.
 
-    Unlike src/ember/governance/scripts/worktree_lifecycle.py's RepositoryLock (fail-fast, one
-    repo-wide lock), this blocks until acquired -- callers here (concurrent
-    appenders, concurrent claimants) are expected to queue, not fail.
+    Unlike src/ember/governance/scripts/worktree_lifecycle.py's RepositoryLock (one
+    repo-wide lock, bounded wait then LIFECYCLE_LOCKED), this blocks until acquired --
+    callers here (concurrent appenders, concurrent claimants) are expected to queue, not fail.
     """
 
     def __init__(self, path: Path):
