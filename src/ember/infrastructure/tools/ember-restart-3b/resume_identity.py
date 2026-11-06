@@ -13,7 +13,9 @@ Proofs, each a refusal:
     its ledger row's `sha256`;
   - sidecar: labels for the trained rows are byte-equal to the parent sidecar's rows; every extension row is
     epoch 0, never repeat-declared;
-  - cursor: the parent's trained end lies inside the composed ledger and inside the parent's last row.
+  - cursor: taken from the parent's continuation-hour.json terminal_data_cursor (what the trainer consumed,
+    never the planned span); continuation-next-pack.json cursor_before must equal it, and it must lie inside
+    the parent's trained rows.
 Stdlib only, CPU only. Never starts a process.
 """
 from __future__ import annotations
@@ -72,15 +74,6 @@ def field_diff(template: dict, out: dict) -> list[str]:
     return sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
 
 
-def cursor_for(rows: list[dict], end: int) -> tuple[int, int]:
-    pos = 0
-    for i, r in enumerate(rows):
-        if pos <= end < pos + r["n_tokens"]:
-            return i, end - pos
-        pos += r["n_tokens"]
-    refuse(f"trained end {end} is outside the composed ledger ({pos} tokens)")
-
-
 def extend_root(parent_receipt: dict, new_root: Path, ext_rows: list[dict], ext_src: dict[str, Path]) -> dict:
     old_root = Path(parent_receipt["root"])
     old_list = parent_receipt["digest_list"].rstrip("\n")
@@ -137,14 +130,18 @@ def build(a) -> dict:
     composed_bytes = a.composed_ledger.read_bytes()
     rows = [json.loads(x) for x in composed_bytes.decode("utf-8").splitlines() if x.strip()]
     ledger_sha = sha_bytes(composed_bytes)
-    hour = json.loads(a.parent_hour_result.read_text(encoding="utf-8"))
-    end = int(hour["input_binding"]["span"]["token_end"])
+    tc = json.loads(a.parent_continuation_hour.read_text(encoding="utf-8"))["terminal_data_cursor"]
+    nb = json.loads(a.parent_next_pack.read_text(encoding="utf-8"))["cursor_before"]
+    shard_index, token_offset = int(tc["shard"]), int(tc["record_index"])
+    if (int(nb["shard_index"]), int(nb["token_offset"])) != (shard_index, token_offset):
+        refuse(f"next-pack cursor_before {nb} differs from terminal_data_cursor {tc}")
     n_trained = len(json.loads(a.parent_sidecar.read_text(encoding="utf-8"))["rows"])
-    trained_tokens = sum(r["n_tokens"] for r in rows[:n_trained])
-    if not trained_tokens - rows[n_trained - 1]["n_tokens"] <= end <= trained_tokens:
-        refuse(f"trained end {end} is not inside the parent's last row")
+    if not (0 <= shard_index < n_trained and 0 <= token_offset < rows[shard_index]["n_tokens"]):
+        refuse(f"terminal cursor {tc} is not inside the parent's trained rows")
+    end = sum(r["n_tokens"] for r in rows[:shard_index]) + token_offset
+    if "token_start" in rows[shard_index] and int(rows[shard_index]["token_start"]) + token_offset != end:
+        refuse("composed ledger token_start disagrees with the summed row lengths")
     total = sum(r["n_tokens"] for r in rows)
-    shard_index, token_offset = cursor_for(rows, end)
     a.out.mkdir(parents=True, exist_ok=True)
     ext_src = {}
     for d in a.intake:
@@ -193,7 +190,7 @@ def build(a) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    for f in ("--template", "--parent-sidecar", "--parent-root-receipt", "--parent-cap", "--parent-hour-result",
+    for f in ("--template", "--parent-sidecar", "--parent-root-receipt", "--parent-cap", "--parent-continuation-hour", "--parent-next-pack",
               "--composed-ledger", "--shards-root", "--out"):
         ap.add_argument(f, required=True, type=Path)
     ap.add_argument("--intake", action="append", required=True, type=Path)

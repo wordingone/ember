@@ -58,9 +58,11 @@ def fixture(tmp: Path):
                                                    "receipt_sha256": "q"}}}
     (tmp / "tmpl.json").write_text(json.dumps(tmpl))
     (tmp / "cap.json").write_text(json.dumps({"cap": 1}))
-    (tmp / "hour.json").write_text(json.dumps({"input_binding": {"span": {"token_end": 6}}}))
+    (tmp / "hour.json").write_text(json.dumps({"terminal_data_cursor": {"shard": 1, "record_index": 2}}))
+    (tmp / "next.json").write_text(json.dumps({"cursor_before": {"shard_index": 1, "token_offset": 2}}))
     return SimpleNamespace(template=tmp / "tmpl.json", parent_sidecar=tmp / "side.json", parent_root_receipt=tmp / "root.json",
-                           parent_cap=tmp / "cap.json", parent_hour_result=tmp / "hour.json", composed_ledger=composed,
+                           parent_cap=tmp / "cap.json", parent_continuation_hour=tmp / "hour.json",
+                           parent_next_pack=tmp / "next.json", composed_ledger=composed,
                            shards_root=tmp / "new-root", out=tmp / "out", intake=[intake])
 
 
@@ -102,11 +104,20 @@ def test_refuses_non_hardlink_in_root(tmp_path):
         m.build(a)
 
 
-def test_refuses_cursor_outside_last_trained_row(tmp_path):
+def test_refuses_cursor_outside_trained_rows(tmp_path):
     m = load()
     a = fixture(tmp_path)
-    a.parent_hour_result.write_text(json.dumps({"input_binding": {"span": {"token_end": 2}}}))
-    with pytest.raises(SystemExit, match="last row"):
+    a.parent_continuation_hour.write_text(json.dumps({"terminal_data_cursor": {"shard": "2", "record_index": 0}}))
+    a.parent_next_pack.write_text(json.dumps({"cursor_before": {"shard_index": 2, "token_offset": 0}}))
+    with pytest.raises(SystemExit, match="not inside the parent's trained rows"):
+        m.build(a)
+
+
+def test_refuses_next_pack_cursor_mismatch(tmp_path):
+    m = load()
+    a = fixture(tmp_path)
+    a.parent_next_pack.write_text(json.dumps({"cursor_before": {"shard_index": 1, "token_offset": 1}}))
+    with pytest.raises(SystemExit, match="differs from terminal_data_cursor"):
         m.build(a)
 
 
