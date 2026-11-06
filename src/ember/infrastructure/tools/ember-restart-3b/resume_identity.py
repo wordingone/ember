@@ -1,0 +1,205 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Derive the next hour's mixture identity, epoch sidecar, shards root and cap from the parent hour's.
+
+The template is the parent hour's mixture identity. Only the fields in WHITELIST may differ from it; every
+other leaf must stay byte-equal, or the build refuses. The template's sha and the field diff are recorded in
+`resume_derivation`. Changing any other field is a code change with its own review, never an edit at run time.
+
+Proofs, each a refusal:
+  - shards root: the new root's digest list starts with the parent root's digest list verbatim (a proven
+    superset); every file is a hard link (same file id as its source); every extension shard's sha256 equals
+    its ledger row's `sha256`;
+  - sidecar: labels for the trained rows are byte-equal to the parent sidecar's rows; every extension row is
+    epoch 0, never repeat-declared;
+  - cursor: the parent's trained end lies inside the composed ledger and inside the parent's last row.
+Stdlib only, CPU only. Never starts a process.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+WHITELIST = frozenset({
+    "data.cursor.shard_index", "data.cursor.token_offset",
+    "data.shard_ledger_path", "data.shard_ledger_sha256", "data.shards_root",
+    "stream.hour_start_token", "stream.ledger_rows", "stream.total_stream_tokens",
+    "stream.tokens_available_from_cursor",
+    "h35_source_binding.consumer_ledger.sha256", "h35_source_binding.consumer_ledger.epoch_label_sidecar_sha256",
+    "h35_source_binding.shards_root.path", "h35_source_binding.shards_root.files",
+    "h35_source_binding.shards_root.digest_list_sha256", "h35_source_binding.shards_root.receipt_path",
+    "h35_source_binding.shards_root.receipt_sha256",
+})
+DERIVATION_KEY = "resume_derivation"
+CAP_RATE = 21.812776  # updates/s: the H22 maximum the parent cap used
+CAP_CEILING = 131072
+SEQ = 3072
+
+
+def sha_bytes(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def sha_file(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def refuse(why: str):
+    raise SystemExit(f"REFUSE {why}")
+
+
+def leaves(o, p=""):
+    if isinstance(o, dict):
+        for k in sorted(o):
+            yield from leaves(o[k], f"{p}.{k}" if p else k)
+    else:
+        yield p, json.dumps(o, sort_keys=True)
+
+
+def field_diff(template: dict, out: dict) -> list[str]:
+    a = {k: v for k, v in leaves(template) if not k.startswith(DERIVATION_KEY)}
+    b = {k: v for k, v in leaves(out) if not k.startswith(DERIVATION_KEY)}
+    return sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
+
+
+def cursor_for(rows: list[dict], end: int) -> tuple[int, int]:
+    pos = 0
+    for i, r in enumerate(rows):
+        if pos <= end < pos + r["n_tokens"]:
+            return i, end - pos
+        pos += r["n_tokens"]
+    refuse(f"trained end {end} is outside the composed ledger ({pos} tokens)")
+
+
+def extend_root(parent_receipt: dict, new_root: Path, ext_rows: list[dict], ext_src: dict[str, Path]) -> dict:
+    old_root = Path(parent_receipt["root"])
+    old_list = parent_receipt["digest_list"].rstrip("\n")
+    old_names = [ln.split("  ", 1)[1] for ln in old_list.splitlines()]
+    new_root.mkdir(parents=True, exist_ok=True)
+    lines = [old_list]
+    for name in old_names:
+        _link(old_root / name, new_root / name)
+    for r in ext_rows:
+        dst = new_root / r["name"]
+        _link(ext_src[r["name"]], dst)
+        if sha_file(dst) != r["sha256"]:
+            refuse(f"extension shard {r['name']} sha does not match its ledger row")
+        lines.append(f"{r['sha256']}  {r['name']}")
+    digest_list = "\n".join(lines) + "\n"
+    if not digest_list.startswith(old_list + "\n"):
+        refuse("new digest list does not start with the parent digest list verbatim")
+    return {"schema": "ember-resume-root-receipt-v1", "root": str(new_root).replace("\\", "/"),
+            "count": len(old_names) + len(ext_rows), "parent_root": str(old_root).replace("\\", "/"),
+            "parent_count": len(old_names), "digest_list": digest_list, "digest_list_sha256": sha_bytes(digest_list.encode()),
+            "hard_links_only": True}
+
+
+def _link(src: Path, dst: Path) -> None:
+    if dst.exists():
+        if os.stat(dst).st_ino != os.stat(src).st_ino or os.stat(dst).st_dev != os.stat(src).st_dev:
+            refuse(f"{dst} exists and is not a hard link of {src}")
+        return
+    os.link(src, dst)
+
+
+def sidecar(parent: dict, rows: list[dict], n_trained: int, ledger_sha: str) -> dict:
+    prev = parent["rows"]
+    if len(prev) != n_trained:
+        refuse(f"parent sidecar has {len(prev)} rows, the trained ledger {n_trained}")
+    out_rows = [dict(r) for r in prev]
+    for r in rows[n_trained:]:
+        out_rows.append({"cls": "fresh", "epoch": 0, "index": r["index"], "ledger_pass_index": 0,
+                         "n_tokens": r["n_tokens"], "name": r["name"], "repeat_declared": False,
+                         "row_sha256": r["row_sha256"], "token_start": r["token_start"]})
+    for a, b in zip(prev, out_rows):
+        if json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
+            refuse(f"sidecar label for trained row {a.get('index')} changed")
+    if any(x["epoch"] != 0 or x["repeat_declared"] for x in out_rows[n_trained:]):
+        refuse("an extension row is not epoch 0")
+    out = {k: v for k, v in parent.items() if k != "rows"}
+    out.update(ledger_sha256=ledger_sha, rows=out_rows)
+    return out
+
+
+def build(a) -> dict:
+    template_bytes = a.template.read_bytes()
+    template = json.loads(template_bytes)
+    composed_bytes = a.composed_ledger.read_bytes()
+    rows = [json.loads(x) for x in composed_bytes.decode("utf-8").splitlines() if x.strip()]
+    ledger_sha = sha_bytes(composed_bytes)
+    hour = json.loads(a.parent_hour_result.read_text(encoding="utf-8"))
+    end = int(hour["input_binding"]["span"]["token_end"])
+    n_trained = len(json.loads(a.parent_sidecar.read_text(encoding="utf-8"))["rows"])
+    trained_tokens = sum(r["n_tokens"] for r in rows[:n_trained])
+    if not trained_tokens - rows[n_trained - 1]["n_tokens"] <= end <= trained_tokens:
+        refuse(f"trained end {end} is not inside the parent's last row")
+    total = sum(r["n_tokens"] for r in rows)
+    shard_index, token_offset = cursor_for(rows, end)
+    a.out.mkdir(parents=True, exist_ok=True)
+    ext_src = {}
+    for d in a.intake:
+        for r in (json.loads(x) for x in (d / "ledger.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()):
+            ext_src[r["name"]] = d / "shards" / r["name"]
+    root = extend_root(json.loads(a.parent_root_receipt.read_text(encoding="utf-8")), a.shards_root, rows[n_trained:], ext_src)
+    root_path = a.out / "root-receipt.json"
+    root_path.write_text(json.dumps(root, indent=1, sort_keys=True), encoding="utf-8")
+    side = sidecar(json.loads(a.parent_sidecar.read_text(encoding="utf-8")), rows, n_trained, ledger_sha)
+    side_path = a.out / "epoch-labels.json"
+    side_path.write_text(json.dumps(side, indent=1, sort_keys=True), encoding="utf-8")
+    m = json.loads(template_bytes)
+    d, s, b = m["data"], m["stream"], m["h35_source_binding"]
+    d["cursor"] = {"shard_index": shard_index, "token_offset": token_offset}
+    d["shard_ledger_path"] = str(a.composed_ledger).replace("\\", "/")
+    d["shard_ledger_sha256"] = ledger_sha
+    d["shards_root"] = root["root"]
+    s.update(hour_start_token=end, ledger_rows=len(rows), total_stream_tokens=total,
+             tokens_available_from_cursor=total - end)
+    b["consumer_ledger"]["sha256"] = ledger_sha
+    b["consumer_ledger"]["epoch_label_sidecar_sha256"] = sha_file(side_path)
+    b["shards_root"].update(path=root["root"], files=root["count"], digest_list_sha256=root["digest_list_sha256"],
+                            receipt_path=str(root_path).replace("\\", "/"), receipt_sha256=sha_file(root_path))
+    diff = field_diff(template, m)
+    outside = [k for k in diff if k not in WHITELIST]
+    if outside:
+        refuse(f"fields outside the frozen whitelist changed: {outside}")
+    m[DERIVATION_KEY] = {"template_sha256": sha_bytes(template_bytes), "changed_fields": diff,
+                         "whitelist": sorted(WHITELIST)}
+    ident_path = a.out / "mixture-identity.json"
+    ident_path.write_text(json.dumps(m, indent=1, sort_keys=True), encoding="utf-8")
+    avail = total - end
+    data_cap = math.floor((avail - 1) / SEQ) - 2
+    rate_cap = math.ceil(CAP_RATE * 3600 * 1.25)
+    cap = min(rate_cap, data_cap, CAP_CEILING)
+    cap_rec = json.loads(a.parent_cap.read_text(encoding="utf-8"))
+    cap_rec.update(cap=cap, rate_cap=rate_cap, data_cap=data_cap, data_bound=cap == data_cap, ledger_sha256=ledger_sha,
+                   interleaved_available_tokens=avail, interleave_end_abs=total,
+                   derivation=f"cap = min(ceil({CAP_RATE} x 3600 x 1.25), floor(({avail} - 1)/{SEQ}) - 2 = {data_cap}, {CAP_CEILING}) = {cap}")
+    cap_path = a.out / "cap.json"
+    cap_path.write_text(json.dumps(cap_rec, indent=1, sort_keys=True), encoding="utf-8")
+    return {"mixture_identity_sha256": sha_file(ident_path), "template_sha256": sha_bytes(template_bytes),
+            "changed_fields": diff, "cursor": d["cursor"], "cap": cap, "root_count": root["count"],
+            "epoch_labels_sha256": sha_file(side_path), "cap_sha256": sha_file(cap_path)}
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    for f in ("--template", "--parent-sidecar", "--parent-root-receipt", "--parent-cap", "--parent-hour-result",
+              "--composed-ledger", "--shards-root", "--out"):
+        ap.add_argument(f, required=True, type=Path)
+    ap.add_argument("--intake", action="append", required=True, type=Path)
+    print(json.dumps(build(ap.parse_args(argv)), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
