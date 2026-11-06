@@ -22,6 +22,12 @@ pub const CERTIFICATE_SCHEMA: &str = "ember-lab-run-certificate-v1";
 pub const CERTIFICATE_ENV: &str = "EMBER_RUN_CERTIFICATE_SHA256";
 /// Trainer entrypoints. A manifest whose program file name is one of these needs a certificate.
 pub const TRAINER_ENTRYPOINTS: &[&str] = &["cia_step_runner.py", "certified_train_launch.py"];
+/// Repo-relative directory that holds the trainer entrypoints.
+pub const TRAINER_DIR: &str = "src/ember/infrastructure/tools/ember-restart-3b";
+/// Opening docstring lines of the trainer entrypoints: a renamed copy still carries them.
+const TRAINER_FINGERPRINTS: &[&str] = &[
+    "\"\"\"Daemon-dispatched CIA-3B step measurements; no checkpoint or qualification credit.\"\"\"",
+];
 const BOUND: &[&str] = &[
     "ledger_sha256",
     "c1c2_receipt_sha256",
@@ -125,6 +131,86 @@ pub fn issue(conn: &Connection, certificate_bytes: &[u8], now_ms: i64) -> Result
     Ok(sha)
 }
 
+fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// True when a program imports a trainer module or carries a trainer's opening docstring.
+pub fn reaches_trainer(text: &str) -> bool {
+    let modules: Vec<&str> = TRAINER_ENTRYPOINTS
+        .iter()
+        .map(|e| e.trim_end_matches(".py"))
+        .collect();
+    text.lines().any(|line| {
+        let t = line.trim();
+        TRAINER_FINGERPRINTS.contains(&t)
+            || modules.iter().any(|m| {
+                t.starts_with(&format!("import {m}"))
+                    || t.starts_with(&format!("from {m} "))
+                    || t.contains(&format!("import_module(\"{m}\""))
+                    || t.contains(&format!("import_module('{m}'"))
+                    || t.contains(&format!("\"{m}.py\""))
+            })
+    })
+}
+
+/// A program needs a certificate when its name is a trainer entrypoint or its bytes reach the trainer.
+pub fn needs_certificate(program: &Path) -> bool {
+    is_trainer_entrypoint(program)
+        || std::fs::read(program).is_ok_and(|b| reaches_trainer(&String::from_utf8_lossy(&b)))
+}
+
+/// A certified program must be a trainer entrypoint at its own path inside a git checkout whose HEAD is the
+/// certified tree and whose working tree is clean (untracked files included).
+fn check_code_tree(program: &Path, code_tree_sha: &str) -> Result<(), String> {
+    let canon =
+        std::fs::canonicalize(program).map_err(|e| format!("{}: {e}", program.display()))?;
+    let refuse_copy = || {
+        format!(
+            "{} is not a trainer entrypoint under {TRAINER_DIR}; copies are refused",
+            canon.display()
+        )
+    };
+    if !is_trainer_entrypoint(&canon) {
+        return Err(refuse_copy());
+    }
+    let dir = canon.parent().ok_or("program has no parent directory")?;
+    let top = std::fs::canonicalize(
+        git(dir, &["rev-parse", "--show-toplevel"]).map_err(|_| refuse_copy())?,
+    )
+    .map_err(|e| format!("repo root: {e}"))?;
+    let name = canon
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    let expected = std::fs::canonicalize(top.join(TRAINER_DIR).join(name)).ok();
+    if !is_trainer_entrypoint(&canon) || expected.as_deref() != Some(canon.as_path()) {
+        return Err(format!(
+            "{} is not a trainer entrypoint under {TRAINER_DIR}; copies are refused",
+            canon.display()
+        ));
+    }
+    let head = git(&top, &["rev-parse", "HEAD"])?;
+    if head != code_tree_sha {
+        return Err(format!(
+            "checkout HEAD {head} is not the certified code tree {code_tree_sha}"
+        ));
+    }
+    if !git(&top, &["status", "--porcelain", "--untracked-files=all"])?.is_empty() {
+        return Err("checkout has uncommitted or untracked changes".into());
+    }
+    Ok(())
+}
+
 pub fn is_trainer_entrypoint(program: &Path) -> bool {
     program
         .file_name()
@@ -147,7 +233,7 @@ pub fn admit(
     job_id: &str,
     now_ms: i64,
 ) -> Result<Option<String>, String> {
-    if !is_trainer_entrypoint(program) {
+    if !needs_certificate(program) {
         return Ok(None);
     }
     let refuse = |why: &str| {
@@ -161,15 +247,15 @@ pub fn admit(
             "manifest env lacks {CERTIFICATE_ENV}; training starts only from ember-lab resume"
         ));
     };
-    let row: Option<(String, Option<String>)> = conn
+    let row: Option<(String, String, String, Option<String>)> = conn
         .query_row(
-            "SELECT ledger_sha256, consumed_by_job_id FROM run_certificates WHERE certificate_sha256=?1",
+            "SELECT ledger_sha256, parent_manifest_sha256, code_tree_sha, consumed_by_job_id FROM run_certificates WHERE certificate_sha256=?1",
             params![sha],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    let Some((ledger, consumed)) = row else {
+    let Some((ledger, parent, code_tree, consumed)) = row else {
         return refuse("certificate was not issued by this ember-lab");
     };
     if let Some(j) = consumed {
@@ -177,6 +263,12 @@ pub fn admit(
     }
     if !binding_shas.iter().any(|b| *b == ledger) {
         return refuse("manifest does not bind the certified data ledger");
+    }
+    if !binding_shas.iter().any(|b| *b == parent) {
+        return refuse("manifest does not bind the certified parent manifest");
+    }
+    if let Err(why) = check_code_tree(program, &code_tree) {
+        return refuse(&why);
     }
     let n = conn
         .execute(
@@ -194,55 +286,138 @@ pub fn admit(
 mod tests {
     use super::*;
     use serde_json::json;
-    fn cert(ledger: &str) -> Vec<u8> {
+    fn cert(ledger: &str, parent: &str, tree: &str) -> Vec<u8> {
         json!({"schema_version": CERTIFICATE_SCHEMA, "ledger_sha256": ledger, "c1c2_receipt_sha256": "b".repeat(64),
-               "parent_manifest_sha256": "c".repeat(64), "code_tree_sha": "d".repeat(40)})
+               "parent_manifest_sha256": parent, "code_tree_sha": tree})
         .to_string()
         .into_bytes()
+    }
+    fn sh(dir: &Path, args: &[&str]) {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
     }
     #[test]
     fn wall_a() {
         let c = Connection::open_in_memory().unwrap();
         migrate(&c).unwrap();
-        let led = "a".repeat(64);
-        let trainer = Path::new("x/ember-restart-3b/cia_step_runner.py");
+        let root = std::env::temp_dir().join(format!("walla-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let repo = root.join("repo");
+        std::fs::create_dir_all(repo.join(TRAINER_DIR)).unwrap();
+        let trainer = repo.join(TRAINER_DIR).join("cia_step_runner.py");
+        let body = format!(
+            "{}
+print('train')
+",
+            TRAINER_FINGERPRINTS[0]
+        );
+        std::fs::write(&trainer, &body).unwrap();
+        sh(&repo, &["init", "-q"]);
+        sh(
+            &repo,
+            &["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"],
+        );
+        sh(
+            &repo,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-qm",
+                "t",
+            ],
+        );
+        let head = git(&repo, &["rev-parse", "HEAD"]).unwrap();
+        let (led, par) = ("a".repeat(64), "c".repeat(64));
+        let b = [led.as_str(), par.as_str()];
         let mut env = BTreeMap::new();
         // non-trainer programs are untouched
+        std::fs::write(
+            root.join("score.py"),
+            "print(1)
+",
+        )
+        .unwrap();
         assert_eq!(
-            admit(&c, Path::new("x/score.py"), &env, &[], "j0", 1),
+            admit(&c, &root.join("score.py"), &env, &[], "j0", 1),
             Ok(None)
         );
-        // no certificate
-        assert!(admit(&c, trainer, &env, &[&led], "j1", 1)
-            .unwrap_err()
-            .contains("lacks"));
-        // unissued certificate
+        // a renamed copy, and an importer, both need a certificate
+        let copy = root.join("renamed.py");
+        std::fs::write(&copy, &body).unwrap();
+        let importer = root.join("wrap.py");
+        std::fs::write(
+            &importer,
+            "import cia_step_runner
+",
+        )
+        .unwrap();
+        for p in [&trainer, &copy, &importer] {
+            assert!(admit(&c, p, &env, &b, "j1", 1)
+                .unwrap_err()
+                .contains("lacks"));
+        }
         env.insert(CERTIFICATE_ENV.into(), "e".repeat(64));
-        assert!(admit(&c, trainer, &env, &[&led], "j1", 1)
+        assert!(admit(&c, &trainer, &env, &b, "j1", 1)
             .unwrap_err()
             .contains("not issued"));
-        // bad certificate refused at issuance
         assert!(issue(&c, b"{}", 1).is_err());
-        let sha = issue(&c, &cert(&led), 1).unwrap();
+        let sha = issue(&c, &cert(&led, &par, &head), 1).unwrap();
         env.insert(CERTIFICATE_ENV.into(), sha.clone());
-        // ledger not bound
-        assert!(admit(&c, trainer, &env, &[&"f".repeat(64)], "j1", 1)
+        // ledger or parent not bound
+        assert!(admit(&c, &trainer, &env, &[&par], "j1", 1)
             .unwrap_err()
-            .contains("ledger"));
-        // admitted once
+            .contains("data ledger"));
+        assert!(admit(&c, &trainer, &env, &[&led], "j1", 1)
+            .unwrap_err()
+            .contains("parent manifest"));
+        // a copy outside the trainer path is refused even with a valid certificate
+        assert!(admit(&c, &copy, &env, &b, "j1", 1)
+            .unwrap_err()
+            .contains("copies are refused"));
+        // an edited trainer (dirty tree) and an untracked file are refused
+        std::fs::write(
+            &trainer,
+            format!(
+                "{body}#x
+"
+            ),
+        )
+        .unwrap();
+        assert!(admit(&c, &trainer, &env, &b, "j1", 1)
+            .unwrap_err()
+            .contains("uncommitted"));
+        std::fs::write(&trainer, &body).unwrap();
+        std::fs::write(repo.join(TRAINER_DIR).join("extra.py"), "").unwrap();
+        assert!(admit(&c, &trainer, &env, &b, "j1", 1)
+            .unwrap_err()
+            .contains("untracked"));
+        std::fs::remove_file(repo.join(TRAINER_DIR).join("extra.py")).unwrap();
+        // a certificate for another tree is refused
+        let other = issue(&c, &cert(&led, &par, &"d".repeat(40)), 1).unwrap();
+        env.insert(CERTIFICATE_ENV.into(), other);
+        assert!(admit(&c, &trainer, &env, &b, "j1", 1)
+            .unwrap_err()
+            .contains("not the certified code tree"));
+        // admitted once, never twice
+        env.insert(CERTIFICATE_ENV.into(), sha.clone());
         assert_eq!(
-            admit(&c, trainer, &env, &[&led], "j1", 2),
+            admit(&c, &trainer, &env, &b, "j1", 2),
             Ok(Some(sha.clone()))
         );
-        // never twice
-        assert!(admit(&c, trainer, &env, &[&led], "j2", 3)
+        assert!(admit(&c, &trainer, &env, &b, "j2", 3)
             .unwrap_err()
             .contains("already admitted job j1"));
-        // case-insensitive entrypoint match (Windows paths parse as paths only on Windows)
         #[cfg(windows)]
-        assert!(is_trainer_entrypoint(Path::new(
-            "C:\\t\\CIA_STEP_RUNNER.PY"
-        )));
+        assert!(is_trainer_entrypoint(Path::new(r"C:\t\CIA_STEP_RUNNER.PY")));
+        let _ = std::fs::remove_dir_all(&root);
     }
     #[test]
     fn issuance_rehashes_inputs() {
