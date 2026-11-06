@@ -59,7 +59,9 @@ def fixture(tmp: Path):
     (tmp / "tmpl.json").write_text(json.dumps(tmpl))
     (tmp / "cap.json").write_text(json.dumps({"cap": 1}))
     (tmp / "hour.json").write_text(json.dumps({"terminal_data_cursor": {"shard": 1, "record_index": 2}}))
-    (tmp / "hres.json").write_text(json.dumps({"input_binding": {"image_text": {"manifest_sha256": "m1", "grammar": "g"}}}))
+    (tmp / "hres.json").write_text(json.dumps({"input_binding": {"image_text": {"manifest_sha256": "m1", "grammar": "g",
+                                                                   "manifest_path": str(tmp / "img.jsonl")}}}))
+    (tmp / "img.jsonl").write_text(("{}" + chr(10)) * 200000)
     (tmp / "next.json").write_text(json.dumps({"cursor_before": {"shard_index": 1, "token_offset": 2}}))
     return SimpleNamespace(template=tmp / "tmpl.json", parent_sidecar=tmp / "side.json", parent_root_receipt=tmp / "root.json",
                            parent_cap=tmp / "cap.json", parent_continuation_hour=tmp / "hour.json",
@@ -147,6 +149,16 @@ def test_image_slot_binds_parent_manifest_on_pass(tmp_path):
     a.image_receipt = tmp_path / "rc.json"
     a.image_receipt.write_text(json.dumps({"verdict": "PASS", "inputs": {"candidate_sha256": "m1"}}))
     assert m.build(a)["image_text"]["manifest_sha256"] == "m1"
+
+
+def test_image_slot_unbinds_small_manifest(tmp_path):
+    m = load()
+    a = fixture(tmp_path)
+    (tmp_path / "img.jsonl").write_text(("{}" + chr(10)) * 38330)
+    a.image_receipt = tmp_path / "rc.json"
+    a.image_receipt.write_text(json.dumps({"verdict": "PASS", "inputs": {"candidate_sha256": "m1"}}))
+    r = m.build(a)
+    assert r["image_text"] is None
 
 
 @pytest.mark.parametrize("rc,match", [({"verdict": "REFUSE", "inputs": {"candidate_sha256": "m1"}}, "not PASS"),

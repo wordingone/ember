@@ -18,6 +18,7 @@ Proofs, each a refusal:
     the parent's trained rows.
   - image slot: the manifest comes from the parent hour's input_binding.image_text, never from a script default. It
     binds only with a C1/C2 receipt whose verdict is PASS and whose candidate_sha256 is that manifest's sha;
+    and the manifest must not be re-read more than MAX_IMAGE_PASSES times per hour at the rate cap;
     otherwise the hour is text-only (image_text None, every document from the text stream), recorded in
     resume_derivation. Unverified rows are never trained to keep the recipe identical.
 Stdlib only, CPU only. Never starts a process.
@@ -45,6 +46,8 @@ WHITELIST = frozenset({
 DERIVATION_KEY = "resume_derivation"
 CAP_RATE = 21.812776  # updates/s: the H22 maximum the parent cap used
 CAP_CEILING = 131072
+PAIRS_PER_UPDATE = 8  # image-text pairs in the one image document of an update
+MAX_IMAGE_PASSES = 4  # bind the image slot only if the manifest is not re-read more than this per hour
 DOC = 1024  # positions per document; 4 documents per update, one of them image-text when bound
 
 
@@ -139,7 +142,13 @@ def image_slot(parent_hour: dict, receipt_path: Path | None) -> dict:
         refuse(f"image manifest receipt verdict is {r.get('verdict')}, not PASS")
     if r.get("inputs", {}).get("candidate_sha256") != parent["manifest_sha256"]:
         refuse("image manifest receipt names a different manifest than the parent hour bound")
-    return {"image_text": dict(parent), "reason": "C1/C2 PASS", "receipt_sha256": sha_file(receipt_path)}
+    rows = sum(1 for ln in Path(parent["manifest_path"]).read_text(encoding="utf-8").splitlines() if ln.strip())
+    passes = PAIRS_PER_UPDATE * math.ceil(CAP_RATE * 3600 * 1.25) / rows
+    if passes > MAX_IMAGE_PASSES:
+        return {"image_text": None, "reason": f"{rows} rows give {passes:.2f} passes per hour at the rate cap (> {MAX_IMAGE_PASSES})",
+                "parent_manifest_sha256": parent["manifest_sha256"], "receipt_sha256": sha_file(receipt_path)}
+    return {"image_text": dict(parent), "reason": "C1/C2 PASS", "receipt_sha256": sha_file(receipt_path),
+            "rows": rows, "passes_per_hour_at_rate_cap": passes}
 
 
 def build(a) -> dict:
