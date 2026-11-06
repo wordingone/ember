@@ -98,7 +98,12 @@ def extend_root(parent_receipt: dict, new_root: Path, ext_rows: list[dict], ext_
     digest_list = "\n".join(lines) + "\n"
     if not digest_list.startswith(old_list + "\n"):
         refuse("new digest list does not start with the parent digest list verbatim")
+    files = []
+    for ln in digest_list.splitlines():
+        digest, name = ln.split("  ", 1)
+        files.append({"name": name, "sha256": digest, "bytes": os.stat(new_root / name).st_size})
     return {"schema": "ember-resume-root-receipt-v1", "root": str(new_root).replace("\\", "/"),
+            "files": files, "pinned_matches": len(files),
             "count": len(old_names) + len(ext_rows), "parent_root": str(old_root).replace("\\", "/"),
             "parent_count": len(old_names), "digest_list": digest_list, "digest_list_sha256": sha_bytes(digest_list.encode()),
             "hard_links_only": True}
