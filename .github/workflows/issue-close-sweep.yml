@@ -102,7 +102,7 @@ jobs:
             --expected-master-sha "${GITHUB_SHA}" \
             --packet-master-is-ancestor \
             --output "${RUNNER_TEMP}/issue-close-execution.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: issue-close-sweep-${{ github.run_id }}-${{ github.sha }}
           path: ${{ runner.temp }}/issue-close-execution.json
