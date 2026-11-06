@@ -5,11 +5,12 @@
 
 Composes the next ledger (resume_compose.py), splits out the extension rows, merges the intakes' source manifests,
 runs the C1/C2 gate on the extension, and writes a run certificate binding the composed ledger, the gate receipt,
-the parent checkpoint manifest and the code tree (a clean checkout is required). The daemon re-hashes the ledger and
+the parent checkpoint manifest and the trainer tree: --trainer-checkout must be clean, at the trainer_tree pinned in
+resume-lineage.json, and that tree must carry its lineage tag. The daemon re-hashes the ledger and
 receipt before it records the certificate (`ember-lab issue-certificate`). Refuses at the first failed step.
 
   python -I resume.py --trained L --trained-end N --intake DIR ... --seed S --add-tokens N --shards-root DIR
-         --parent-manifest FILE --out DIR --pipe PIPE --ember-lab EXE
+         --parent-manifest FILE --out DIR --pipe PIPE --ember-lab EXE --trainer-checkout DIR
 """
 from __future__ import annotations
 
@@ -40,15 +41,26 @@ def run(cmd: list[str]) -> str:
     return p.stdout
 
 
-def code_tree_sha() -> str:
-    if run(["git", "-C", str(HERE), "status", "--porcelain", "--untracked-files=no"]).strip():
-        raise SystemExit("REFUSE code tree is dirty; a certificate names a committed tree only")
-    return run(["git", "-C", str(HERE), "rev-parse", "HEAD"]).strip()
+LINEAGE = HERE / "resume-lineage.json"
+
+
+def code_tree_sha(checkout: Path) -> str:
+    """The trainer checkout's HEAD, which must be the pinned lineage tree, clean, and tagged."""
+    pin = json.loads(LINEAGE.read_text(encoding="utf-8"))
+    head = run(["git", "-C", str(checkout), "rev-parse", "HEAD"]).strip()
+    if head != pin["trainer_tree"]:
+        raise SystemExit(f"REFUSE trainer checkout HEAD {head} is not the pinned trainer_tree {pin['trainer_tree']}")
+    tagged = run(["git", "-C", str(checkout), "rev-parse", pin["trainer_tag"] + "^{commit}"]).strip()
+    if tagged != head:
+        raise SystemExit(f"REFUSE tag {pin['trainer_tag']} names {tagged}, not the pinned trainer_tree")
+    if run(["git", "-C", str(checkout), "status", "--porcelain", "--untracked-files=all"]).strip():
+        raise SystemExit("REFUSE trainer checkout has uncommitted or untracked changes")
+    return head
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    for f in ("--trained", "--shards-root", "--parent-manifest", "--out", "--ember-lab"):
+    for f in ("--trained", "--shards-root", "--parent-manifest", "--out", "--ember-lab", "--trainer-checkout"):
         ap.add_argument(f, required=True, type=Path)
     ap.add_argument("--intake", action="append", required=True, type=Path)
     ap.add_argument("--trained-end", required=True, type=int)
@@ -56,7 +68,7 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", required=True)
     ap.add_argument("--pipe", required=True)
     a = ap.parse_args(argv)
-    tree = code_tree_sha()
+    tree = code_tree_sha(a.trainer_checkout)
     a.out.mkdir(parents=True, exist_ok=True)
     py = [sys.executable, "-I"]
     run(py + [str(HERE / "resume_compose.py"), "--trained", str(a.trained), "--trained-end", str(a.trained_end),
@@ -78,7 +90,7 @@ def main(argv=None) -> int:
             "ledger_sha256": sha(a.out / "composed-ledger.jsonl"), "extension_ledger_sha256": sha(ext),
             "c1c2_receipt_path": str(receipt), "c1c2_receipt_sha256": sha(receipt),
             "parent_manifest_path": str(a.parent_manifest), "parent_manifest_sha256": sha(a.parent_manifest),
-            "code_tree_sha": tree, "trained_end": a.trained_end, "composition_sha256": sha(a.out / "composition.json"),
+            "code_tree_sha": tree, "trainer_checkout": str(a.trainer_checkout), "trained_end": a.trained_end, "composition_sha256": sha(a.out / "composition.json"),
             "seed": a.seed, "added_tokens": comp["added_tokens"]}
     cp = a.out / "run-certificate.json"
     cp.write_text(json.dumps(cert, sort_keys=True, indent=1), encoding="utf-8")
