@@ -238,7 +238,8 @@ mod tests {
         assert!(admit(&c, trainer, &env, &[&led], "j2", 3)
             .unwrap_err()
             .contains("already admitted job j1"));
-        // case-insensitive entrypoint match (Windows paths)
+        // case-insensitive entrypoint match (Windows paths parse as paths only on Windows)
+        #[cfg(windows)]
         assert!(is_trainer_entrypoint(Path::new(
             "C:\\t\\CIA_STEP_RUNNER.PY"
         )));
