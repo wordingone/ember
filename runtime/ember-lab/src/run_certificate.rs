@@ -50,6 +50,46 @@ fn is_hex(v: &str, len: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+fn file_sha256(path: &str) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+    Ok(format!("{:x}", Sha256::digest(&bytes)))
+}
+
+/// Daemon-side issuance: the certificate must name `ledger_path` and `c1c2_receipt_path`; their bytes are
+/// re-hashed here and must equal the certified shas, and the receipt must say PASS for this ledger. The caller's
+/// own belief about either sha is never trusted.
+pub fn issue_verified(
+    conn: &Connection,
+    certificate_bytes: &[u8],
+    now_ms: i64,
+) -> Result<String, String> {
+    let cert: Value = serde_json::from_slice(certificate_bytes)
+        .map_err(|e| format!("certificate is not JSON: {e}"))?;
+    let path = |k: &str| {
+        cert[k]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| format!("certificate lacks {k}"))
+    };
+    let (ledger_path, receipt_path) = (path("ledger_path")?, path("c1c2_receipt_path")?);
+    if file_sha256(&ledger_path)? != cert["ledger_sha256"].as_str().unwrap_or_default() {
+        return Err("composed ledger bytes do not match ledger_sha256".into());
+    }
+    if file_sha256(&receipt_path)? != cert["c1c2_receipt_sha256"].as_str().unwrap_or_default() {
+        return Err("C1/C2 receipt bytes do not match c1c2_receipt_sha256".into());
+    }
+    let receipt: Value =
+        serde_json::from_slice(&std::fs::read(&receipt_path).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("C1/C2 receipt is not JSON: {e}"))?;
+    if receipt["verdict"] != "PASS" {
+        return Err("C1/C2 receipt verdict is not PASS".into());
+    }
+    if receipt["inputs"]["candidate_sha256"] != cert["extension_ledger_sha256"] {
+        return Err("C1/C2 receipt was not computed on this certificate's extension rows".into());
+    }
+    issue(conn, certificate_bytes, now_ms)
+}
+
 /// Records a certificate and returns its sha256 (over the exact bytes).
 pub fn issue(conn: &Connection, certificate_bytes: &[u8], now_ms: i64) -> Result<String, String> {
     let cert: Value = serde_json::from_slice(certificate_bytes)
@@ -202,5 +242,38 @@ mod tests {
         assert!(is_trainer_entrypoint(Path::new(
             "C:\\t\\CIA_STEP_RUNNER.PY"
         )));
+    }
+    #[test]
+    fn issuance_rehashes_inputs() {
+        let c = Connection::open_in_memory().unwrap();
+        migrate(&c).unwrap();
+        let d = std::env::temp_dir().join(format!("runcert-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let sha = |b: &[u8]| format!("{:x}", Sha256::digest(b));
+        let (led, ext) = (b"ledger\n".to_vec(), b"ext\n".to_vec());
+        std::fs::write(d.join("l.jsonl"), &led).unwrap();
+        let mk = |verdict: &str, cand: &str| {
+            let r = json!({"verdict": verdict, "inputs": {"candidate_sha256": cand}}).to_string();
+            std::fs::write(d.join("r.json"), &r).unwrap();
+            json!({"schema_version": CERTIFICATE_SCHEMA, "ledger_path": d.join("l.jsonl"), "ledger_sha256": sha(&led),
+                   "c1c2_receipt_path": d.join("r.json"), "c1c2_receipt_sha256": sha(r.as_bytes()),
+                   "extension_ledger_sha256": sha(&ext), "parent_manifest_sha256": "c".repeat(64), "code_tree_sha": "d".repeat(40)})
+            .to_string()
+        };
+        assert!(issue_verified(&c, mk("REFUSE", &sha(&ext)).as_bytes(), 1)
+            .unwrap_err()
+            .contains("not PASS"));
+        assert!(
+            issue_verified(&c, mk("PASS", &"0".repeat(64)).as_bytes(), 1)
+                .unwrap_err()
+                .contains("extension")
+        );
+        let mut bad: Value = serde_json::from_str(&mk("PASS", &sha(&ext))).unwrap();
+        bad["ledger_sha256"] = json!("e".repeat(64));
+        assert!(issue_verified(&c, bad.to_string().as_bytes(), 1)
+            .unwrap_err()
+            .contains("ledger bytes"));
+        assert!(issue_verified(&c, mk("PASS", &sha(&ext)).as_bytes(), 1).is_ok());
+        std::fs::remove_dir_all(&d).ok();
     }
 }

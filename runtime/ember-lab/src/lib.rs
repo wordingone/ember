@@ -6291,6 +6291,14 @@ impl Daemon {
         })
     }
 
+    /// Wall A issuance: see `run_certificate::issue_verified`.
+    pub fn issue_run_certificate(&self, certificate_bytes: &[u8]) -> Result<String> {
+        let conn = self.conn()?;
+        run_certificate::migrate(&conn)?;
+        run_certificate::issue_verified(&conn, certificate_bytes, now_ms())
+            .map_err(|detail| EmberLabError::InvalidDispatchManifest { detail })
+    }
+
     pub fn record_launch_context(
         &self,
         job_id: &str,
