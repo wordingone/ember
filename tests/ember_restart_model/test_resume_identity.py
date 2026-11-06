@@ -59,10 +59,12 @@ def fixture(tmp: Path):
     (tmp / "tmpl.json").write_text(json.dumps(tmpl))
     (tmp / "cap.json").write_text(json.dumps({"cap": 1}))
     (tmp / "hour.json").write_text(json.dumps({"terminal_data_cursor": {"shard": 1, "record_index": 2}}))
+    (tmp / "hres.json").write_text(json.dumps({"input_binding": {"image_text": {"manifest_sha256": "m1", "grammar": "g"}}}))
     (tmp / "next.json").write_text(json.dumps({"cursor_before": {"shard_index": 1, "token_offset": 2}}))
     return SimpleNamespace(template=tmp / "tmpl.json", parent_sidecar=tmp / "side.json", parent_root_receipt=tmp / "root.json",
                            parent_cap=tmp / "cap.json", parent_continuation_hour=tmp / "hour.json",
-                           parent_next_pack=tmp / "next.json", composed_ledger=composed,
+                           parent_next_pack=tmp / "next.json",
+                           parent_hour_result=tmp / "hres.json", image_receipt=None, composed_ledger=composed,
                            shards_root=tmp / "new-root", out=tmp / "out", intake=[intake])
 
 
@@ -129,3 +131,30 @@ def test_sidecar_refuses_changed_trained_label():
     assert out["rows"][0] == {"index": 0, "epoch": 1}
     with pytest.raises(SystemExit, match="1 rows, the trained ledger 2"):
         m.sidecar(parent, rows, 2, "L")
+
+
+def test_image_slot_unbinds_without_receipt(tmp_path):
+    m = load()
+    r = m.build(fixture(tmp_path))
+    assert r["image_text"] is None
+    ident = json.loads((tmp_path / "out" / "mixture-identity.json").read_text())
+    assert ident["resume_derivation"]["image_slot"]["parent_manifest_sha256"] == "m1"
+
+
+def test_image_slot_binds_parent_manifest_on_pass(tmp_path):
+    m = load()
+    a = fixture(tmp_path)
+    a.image_receipt = tmp_path / "rc.json"
+    a.image_receipt.write_text(json.dumps({"verdict": "PASS", "inputs": {"candidate_sha256": "m1"}}))
+    assert m.build(a)["image_text"]["manifest_sha256"] == "m1"
+
+
+@pytest.mark.parametrize("rc,match", [({"verdict": "REFUSE", "inputs": {"candidate_sha256": "m1"}}, "not PASS"),
+                                      ({"verdict": "PASS", "inputs": {"candidate_sha256": "other"}}, "different manifest")])
+def test_image_slot_refuses_bad_receipt(tmp_path, rc, match):
+    m = load()
+    a = fixture(tmp_path)
+    a.image_receipt = tmp_path / "rc.json"
+    a.image_receipt.write_text(json.dumps(rc))
+    with pytest.raises(SystemExit, match=match):
+        m.build(a)

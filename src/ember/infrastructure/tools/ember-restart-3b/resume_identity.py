@@ -16,6 +16,10 @@ Proofs, each a refusal:
   - cursor: taken from the parent's continuation-hour.json terminal_data_cursor (what the trainer consumed,
     never the planned span); continuation-next-pack.json cursor_before must equal it, and it must lie inside
     the parent's trained rows.
+  - image slot: the manifest comes from the parent hour's input_binding.image_text, never from a script default. It
+    binds only with a C1/C2 receipt whose verdict is PASS and whose candidate_sha256 is that manifest's sha;
+    otherwise the hour is text-only (image_text None, every document from the text stream), recorded in
+    resume_derivation. Unverified rows are never trained to keep the recipe identical.
 Stdlib only, CPU only. Never starts a process.
 """
 from __future__ import annotations
@@ -41,7 +45,7 @@ WHITELIST = frozenset({
 DERIVATION_KEY = "resume_derivation"
 CAP_RATE = 21.812776  # updates/s: the H22 maximum the parent cap used
 CAP_CEILING = 131072
-SEQ = 3072
+DOC = 1024  # positions per document; 4 documents per update, one of them image-text when bound
 
 
 def sha_bytes(b: bytes) -> str:
@@ -124,6 +128,20 @@ def sidecar(parent: dict, rows: list[dict], n_trained: int, ledger_sha: str) -> 
     return out
 
 
+def image_slot(parent_hour: dict, receipt_path: Path | None) -> dict:
+    parent = parent_hour["input_binding"].get("image_text")
+    if parent is None:
+        return {"image_text": None, "reason": "parent hour bound no image_text"}
+    if receipt_path is None:
+        return {"image_text": None, "reason": "no C1/C2 receipt for the parent image manifest", "parent_manifest_sha256": parent["manifest_sha256"]}
+    r = json.loads(receipt_path.read_text(encoding="utf-8"))
+    if r.get("verdict") != "PASS":
+        refuse(f"image manifest receipt verdict is {r.get('verdict')}, not PASS")
+    if r.get("inputs", {}).get("candidate_sha256") != parent["manifest_sha256"]:
+        refuse("image manifest receipt names a different manifest than the parent hour bound")
+    return {"image_text": dict(parent), "reason": "C1/C2 PASS", "receipt_sha256": sha_file(receipt_path)}
+
+
 def build(a) -> dict:
     template_bytes = a.template.read_bytes()
     template = json.loads(template_bytes)
@@ -169,31 +187,35 @@ def build(a) -> dict:
     outside = [k for k in diff if k not in WHITELIST]
     if outside:
         refuse(f"fields outside the frozen whitelist changed: {outside}")
+    img = image_slot(json.loads(a.parent_hour_result.read_text(encoding="utf-8")), a.image_receipt)
     m[DERIVATION_KEY] = {"template_sha256": sha_bytes(template_bytes), "changed_fields": diff,
-                         "whitelist": sorted(WHITELIST)}
+                         "whitelist": sorted(WHITELIST), "image_slot": img}
     ident_path = a.out / "mixture-identity.json"
     ident_path.write_text(json.dumps(m, indent=1, sort_keys=True), encoding="utf-8")
     avail = total - end
-    data_cap = math.floor((avail - 1) / SEQ) - 2
+    stream_per_update = DOC * (3 if img["image_text"] is not None else 4)
+    data_cap = math.floor((avail - 1) / stream_per_update) - 2
     rate_cap = math.ceil(CAP_RATE * 3600 * 1.25)
     cap = min(rate_cap, data_cap, CAP_CEILING)
     cap_rec = json.loads(a.parent_cap.read_text(encoding="utf-8"))
     cap_rec.update(cap=cap, rate_cap=rate_cap, data_cap=data_cap, data_bound=cap == data_cap, ledger_sha256=ledger_sha,
                    interleaved_available_tokens=avail, interleave_end_abs=total,
-                   derivation=f"cap = min(ceil({CAP_RATE} x 3600 x 1.25), floor(({avail} - 1)/{SEQ}) - 2 = {data_cap}, {CAP_CEILING}) = {cap}")
+                   derivation=f"cap = min(ceil({CAP_RATE} x 3600 x 1.25), floor(({avail} - 1)/{stream_per_update}) - 2 = {data_cap}, {CAP_CEILING}) = {cap}")
     cap_path = a.out / "cap.json"
     cap_path.write_text(json.dumps(cap_rec, indent=1, sort_keys=True), encoding="utf-8")
     return {"mixture_identity_sha256": sha_file(ident_path), "template_sha256": sha_bytes(template_bytes),
             "changed_fields": diff, "cursor": d["cursor"], "cap": cap, "root_count": root["count"],
-            "epoch_labels_sha256": sha_file(side_path), "cap_sha256": sha_file(cap_path)}
+            "epoch_labels_sha256": sha_file(side_path), "cap_sha256": sha_file(cap_path),
+            "image_text": img["image_text"]}
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    for f in ("--template", "--parent-sidecar", "--parent-root-receipt", "--parent-cap", "--parent-continuation-hour", "--parent-next-pack",
+    for f in ("--template", "--parent-sidecar", "--parent-root-receipt", "--parent-cap", "--parent-continuation-hour", "--parent-next-pack", "--parent-hour-result",
               "--composed-ledger", "--shards-root", "--out"):
         ap.add_argument(f, required=True, type=Path)
     ap.add_argument("--intake", action="append", required=True, type=Path)
+    ap.add_argument("--image-receipt", type=Path, default=None)
     print(json.dumps(build(ap.parse_args(argv)), sort_keys=True))
     return 0
 
