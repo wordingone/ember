@@ -35,7 +35,8 @@ def sha(p: Path) -> str:
 def run(cmd: list[str]) -> str:
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
-        raise SystemExit(f"REFUSE {Path(cmd[2] if len(cmd) > 2 else cmd[0]).name} rc {p.returncode}: {(p.stderr or p.stdout)[-600:]}")
+        step = Path(cmd[2] if cmd[1:2] == ["-I"] else cmd[0]).name
+        raise SystemExit(f"REFUSE {step} rc {p.returncode}: {(p.stderr or p.stdout)[-600:]}")
     return p.stdout
 
 
