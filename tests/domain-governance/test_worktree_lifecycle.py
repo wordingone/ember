@@ -1933,9 +1933,18 @@ def test_renew_respects_the_repository_lock(tmp_path: Path) -> None:
 
     lock = state_path(repo).with_name("ember-worktree-lifecycle.lock")
     with module.RepositoryLock(lock):
-        result = lifecycle(repo, "renew", "--path", str(managed), "--days", "7", check=False)
+        # A short bounded wait (the default is 120 s): contention still refuses, fail-closed,
+        # after printing ONE waiting line that names this process as the recorded holder.
+        result = lifecycle_with_env(
+            repo,
+            "renew", "--path", str(managed), "--days", "7",
+            env={"EMBER_LIFECYCLE_LOCK_WAIT_SECONDS": "1", "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS": "0.2"},
+            check=False,
+        )
     assert result.returncode == 2
     assert "LIFECYCLE_LOCKED" in result.stderr
+    assert result.stderr.count("waiting for lifecycle lock held by") == 1
+    assert f"held by pid={os.getpid()} acquired=" in result.stderr
     assert read_state(repo)["managed"][path_key_of(managed)]["expires"] == "2099-01-01"
 
 
