@@ -1813,6 +1813,9 @@ enum Command {
     DataCatalogStatus {
         db: PathBuf,
     },
+    DataCensus {
+        config: PathBuf,
+    },
     DataCatalogImport {
         db: PathBuf,
         manifest: PathBuf,
@@ -2206,6 +2209,33 @@ fn parse_args() -> Result<Command, String> {
         }
         return Ok(Command::Runbook {
             output: PathBuf::from(output),
+        });
+    }
+
+    if command == "data-census" {
+        let flag = args.next().ok_or_else(|| {
+            format!(
+                "missing --config
+{}",
+                usage()
+            )
+        })?;
+        let config = args.next().ok_or_else(|| {
+            format!(
+                "missing value for {flag}
+{}",
+                usage()
+            )
+        })?;
+        if flag != "--config" || args.next().is_some() {
+            return Err(format!(
+                "arguments do not match data-census
+{}",
+                usage()
+            ));
+        }
+        return Ok(Command::DataCensus {
+            config: PathBuf::from(config),
         });
     }
 
@@ -3372,6 +3402,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &diagnostic_receipt_sha256,
                 )?)?
             );
+        }
+        Command::DataCensus { config } => {
+            let report = ember_lab::data_census::census(&config).map_err(|e| e.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
         }
         Command::DataCatalogStatus { db } => {
             println!(
