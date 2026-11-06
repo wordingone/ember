@@ -25,6 +25,7 @@ pub mod data_catalog;
 pub mod data_census;
 pub mod rehearsal;
 pub mod rpc;
+pub mod run_certificate;
 pub mod scratch;
 pub mod server_supervisor;
 pub mod storage_retention;
@@ -4252,6 +4253,30 @@ impl Daemon {
                     detail: format!("dispatch manifest schema is invalid: {error}"),
                 }
             })?;
+        {
+            // Wall A: a trainer entrypoint dispatches only under an ember-lab-issued run certificate.
+            let conn = self
+                .db
+                .lock()
+                .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                    detail: "daemon database lock poisoned".into(),
+                })?;
+            run_certificate::migrate(&conn)?;
+            let shas: Vec<&str> = manifest
+                .bindings
+                .iter()
+                .map(|b| b.sha256.as_str())
+                .collect();
+            run_certificate::admit(
+                &conn,
+                &manifest.program.path,
+                &manifest.env,
+                &shas,
+                &manifest.job_id,
+                now_ms(),
+            )
+            .map_err(|detail| EmberLabError::InvalidDispatchManifest { detail })?;
+        }
         if matches!(
             manifest.schema_version.as_str(),
             "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5"
@@ -6264,6 +6289,14 @@ impl Daemon {
             stdout_sha256: actual_stdout_sha256,
             stderr_sha256: actual_stderr_sha256,
         })
+    }
+
+    /// Wall A issuance: see `run_certificate::issue_verified`.
+    pub fn issue_run_certificate(&self, certificate_bytes: &[u8]) -> Result<String> {
+        let conn = self.conn()?;
+        run_certificate::migrate(&conn)?;
+        run_certificate::issue_verified(&conn, certificate_bytes, now_ms())
+            .map_err(|detail| EmberLabError::InvalidDispatchManifest { detail })
     }
 
     pub fn record_launch_context(
