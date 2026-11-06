@@ -66,7 +66,15 @@ fn object_extents(ledger: &Path, end: Option<u64>) -> Result<BTreeMap<String, u6
         let sp = spans(&row)?;
         let b0 = sp.first().map(|s| s.1).unwrap_or(0);
         for (sha, a, b) in sp {
-            let g0 = pos + a - b0;
+            let g0 = a
+                .checked_sub(b0)
+                .and_then(|d| pos.checked_add(d))
+                .ok_or_else(|| {
+                    format!(
+                        "{}: span {sha} starts below its row's first span",
+                        ledger.display()
+                    )
+                })?;
             if end.is_none_or(|e| g0 < e) {
                 let cut = end.map_or(b, |e| b.min(a + (e - g0)));
                 iv.entry(sha).or_default().push((a, cut));
@@ -278,7 +286,9 @@ mod tests {
         .unwrap();
         fs::write(
             i.join("ledger.jsonl"),
-            row(&[("C", 0, 40), ("U", 0, 30), ("A", 0, 10)]) + &row(&[("C", 40, 70), ("C", 0, 20)]),
+            row(&[("C", 0, 40), ("U", 0, 30), ("A", 0, 10)])
+                + &row(&[("C", 40, 70)])
+                + &row(&[("C", 0, 20)]),
         )
         .unwrap();
         fs::write(
@@ -302,6 +312,14 @@ mod tests {
         assert_eq!(t["admitted_untrained_tokens"], 70);
         assert_eq!(t["unsourced_tokens"], 30);
         assert_eq!(r["heldout"][0]["sentence_hashes"], 42);
+        // a span starting below its row's first span is refused, not wrapped
+        fs::write(d.join("bad.jsonl"), row(&[("A", 50, 60), ("B", 10, 20)])).unwrap();
+        let bad = json!({"trained_ledger": d.join("bad.jsonl"), "trained_end": 10, "exclusions": [], "intakes": [], "heldout": []});
+        fs::write(d.join("cb.json"), bad.to_string()).unwrap();
+        assert!(census(&d.join("cb.json"))
+            .unwrap_err()
+            .to_string()
+            .contains("starts below"));
         fs::remove_dir_all(&d).ok();
     }
 }
