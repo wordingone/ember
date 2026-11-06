@@ -22,6 +22,7 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod data_catalog;
+pub mod data_census;
 pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
