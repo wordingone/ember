@@ -706,7 +706,7 @@ atexit.register(_write_loss_widen_receipt)
 
 def training_head(identity):
     selected = identity.get('training_head', 'native')
-    if type(selected) is not str or selected not in ('native', 'cce-document-v1'):
+    if type(selected) is not str or selected not in ('native', 'cce-document-v1', 'cce-document-v2'):
         raise ValueError('training head is outside its fixed set')
     if selected != 'native' and execution_mode(identity) is None:
         raise ValueError('streamed training head requires explicit resident capture')
@@ -765,13 +765,23 @@ def capture_loss_kwargs(model, identity, lengths):
     import torch
     if training_head(identity) == 'native':
         return dict(loss_fn=_native_loss)
-    from ember.model.ember_v0_streamed_loss import document_streamed_loss
+    head = training_head(identity)
     os.environ['CCE_AUTOTUNE'] = '0'
     lengths = tuple(lengths)
-    def loss(hidden, targets, selections=None, denominator=None):
-        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
-                                      sum(lengths) if denominator is None else denominator, selections=selections)
+    if head == 'cce-document-v2':
+        # One weighted CCE call per update; staged_inputs(fold=True) supplies (rows, weights, count) selections.
+        from ember.model.ember_v0_streamed_loss import weighted_document_streamed_loss
+        def loss(hidden, targets, selections=None, denominator=None):
+            return weighted_document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                                   sum(lengths) if denominator is None else denominator,
+                                                   selections=selections)
+    else:
+        from ember.model.ember_v0_streamed_loss import document_streamed_loss
+        def loss(hidden, targets, selections=None, denominator=None):
+            return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                          sum(lengths) if denominator is None else denominator, selections=selections)
     loss.experiment_binding = experiment_fields(identity)
+    loss.training_head = head
     return dict(head_output='hidden', loss_fn=loss)
 
 
@@ -1802,14 +1812,14 @@ def prefetch_position(pack, image_start, ahead):
     return image_start + pack.get('index', 0) + ahead
 
 
-def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0):
+def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0, fold=False):
     """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream).
 
     Returns (inputs, (rows, patches), patches_source, two_ahead_position). The last is the GLOBAL image-text position
     whose decode this call started two updates ahead, or None when it started none (no image text, or two-ahead not in
     effect on this call). The step reads it back as the two-ahead decode's EXECUTION; the EMBER_DECODE_TWO_AHEAD
     request is not consulted for it."""
-    staged = (staged_inputs(next_pack, device),
+    staged = (staged_inputs(next_pack, device, fold=fold),
               load_image_text_module().load_patches(next_pack, device, pinned=True)
               if next_pack.get('images') else (None, None),
               load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
@@ -1951,8 +1961,21 @@ def _weighted_rows(rows, answer_rows, weight):
     return list(rows) + [row for row in inside for _ in range(weight - 1)]
 
 
-def loss_selection(micro, device):
-    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections."""
+def _folded_rows(rows, answer_rows, weight):
+    """The fold of _weighted_rows (cce-document-v2): rows unchanged (each once) and one integer weight per row,
+    1 + (weight - 1) x (times the row is named in answer_rows) -- so sum(weights) == len(_weighted_rows(...))."""
+    named = {}
+    if weight > 1:
+        for row in answer_rows:
+            named[row] = named.get(row, 0) + 1
+    return list(rows), [1 + (weight - 1) * named.get(row, 0) for row in rows]
+
+
+def loss_selection(micro, device, *, fold=False):
+    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections.
+
+    fold=False (cce-document-v1): (rows with answer repeats, count). fold=True (cce-document-v2): (unique rows,
+    FP32 weights, weight total). The denominator is the same number either way."""
     import torch
     targets = micro['target_ids']
     if IGNORE_TARGET not in targets:
@@ -1963,6 +1986,14 @@ def loss_selection(micro, device):
         rows = [row for row in range(lo, hi) if targets[row] != IGNORE_TARGET]
         if not rows:
             raise ValueError('a document carries no loss-bearing target')
+        if fold:
+            rows, weights = _folded_rows(rows, micro.get('answer_rows', ()), answer_weight())
+            count += sum(weights)
+            selections.append(None if rows == list(range(lo, hi)) and all(w == 1 for w in weights) else
+                              (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True),
+                               torch.tensor(weights, dtype=torch.float32).to(device, non_blocking=True),
+                               sum(weights)))
+            continue
         rows = _weighted_rows(rows, micro.get('answer_rows', ()), answer_weight())
         count += len(rows)
         selections.append(None if len(rows) == hi - lo and rows == list(range(lo, hi)) else
@@ -1970,12 +2001,14 @@ def loss_selection(micro, device):
     return {'selections': tuple(selections), 'denominator': count}
 
 
-def staged_inputs(micro, device):
-    """tokens, targets, positions and loss_selection(micro, device), through ONE pinned host array and ONE copy.
+def staged_inputs(micro, device, *, fold=False):
+    """tokens, targets, positions and loss_selection(micro, device, fold=fold), through ONE pinned host array and
+    ONE copy.
 
     Same values and dtypes as the three torch.tensor(list, device=...) calls plus loss_selection: the selection rows
     are the indices whose target is not IGNORE_TARGET within each document, in order, and a fully loss-bearing
-    document keeps None exactly as loss_selection does."""
+    document keeps None exactly as loss_selection does. With fold=True (cce-document-v2) the integer row weights
+    ride in the same pinned array after every selection's rows and are cast to FP32 once on the device."""
     import numpy
     import torch
     targets_host = numpy.asarray(micro['target_ids'], dtype=numpy.int64)
@@ -1988,11 +2021,21 @@ def staged_inputs(micro, device):
     spans, weight, answers = None, answer_weight(), micro.get('answer_rows', ())
     if (targets_host == IGNORE_TARGET).any():
         starts = list(micro['document_starts']) + [n]
-        spans, offset = [], end
+        spans, offset, weight_parts = [], end, []
         for lo, hi in zip(starts, starts[1:]):
             rows = lo + numpy.flatnonzero(targets_host[lo:hi] != IGNORE_TARGET)
             if rows.shape[0] == 0:
                 raise ValueError('a document carries no loss-bearing target')
+            if fold:
+                weights = numpy.asarray(_folded_rows(rows.tolist(), answers, weight)[1], dtype=numpy.int64)
+                if rows.shape[0] == hi - lo and bool((weights == 1).all()):
+                    spans.append(None)
+                else:
+                    spans.append((offset, rows.shape[0], int(weights.sum())))
+                    parts.append(rows.astype(numpy.int64))
+                    weight_parts.append(weights)
+                    offset += rows.shape[0]
+                continue
             if weight > 1 and answers:
                 rows = numpy.asarray(_weighted_rows(rows.tolist(), answers, weight), dtype=numpy.int64)
             # loss_selection's whole-document predicate, verbatim: the document's own rows in order with no
@@ -2003,12 +2046,27 @@ def staged_inputs(micro, device):
                 spans.append((offset, rows.shape[0]))
                 parts.append(rows.astype(numpy.int64))
                 offset += rows.shape[0]
+        weights_at = offset
+        parts.extend(weight_parts)
     host = torch.from_numpy(numpy.concatenate(parts))
     if device.type == 'cuda':
         host = host.pin_memory()
     staged = host.to(device, non_blocking=True)
     selection = None
-    if spans is not None:
+    if spans is not None and fold:
+        weights_device = staged[weights_at:].to(torch.float32)  # every selection's weights, one cast
+        entries, cursor = [], 0
+        for span in spans:
+            if span is None:
+                entries.append(None)
+                continue
+            at, count, total = span
+            entries.append((staged[at:at + count], weights_device[cursor:cursor + count], total))
+            cursor += count
+        selection = {'selections': tuple(entries),
+                     'denominator': sum(span[2] for span in spans if span is not None) +
+                                    sum(hi - lo for (lo, hi), s in zip(zip(starts, starts[1:]), spans) if s is None)}
+    elif spans is not None:
         selection = {'selections': tuple(None if span is None else (staged[span[0]:span[0] + span[1]], span[1])
                                          for span in spans),
                      'denominator': sum(length for *_, length in (s for s in spans if s is not None)) +
@@ -2028,6 +2086,32 @@ def exposure_fields(pack, wall):
             'positions_per_second': loss_bearing / wall, 'decoder_positions_per_second': len(targets) / wall,
             'images_per_second': len(images) / wall,
             'rate_basis': 'loss-bearing-decoder-targets'}
+
+
+def _row_training_head(capture):
+    """The row's declared head: native unless the capture streams hidden; then the selected loss's own head name
+    (a loss callback without one is the original cce-document-v1 callback)."""
+    if capture is None or getattr(capture, '_cia_head_output', 'logits') != 'hidden':
+        return 'native'
+    return getattr(getattr(capture, 'loss_fn', None), 'training_head', 'cce-document-v1')
+
+
+def _require_cce_receipt(loss):
+    """cce-document-v2, first line: right after the loss returns and BEFORE its backward, the loss must carry
+    its own executed receipt, so an update whose loss did not report its execution is never applied."""
+    from ember.model.ember_v0_streamed_loss import require_executed
+    require_executed(getattr(loss, 'cce_executed', None))
+
+
+def _cce_executed_fields(executed):
+    """cce-document-v2 executed receipt for one update, second line: summed over its micro-steps from the
+    receipts the loss attached to its own outputs, read after the update synchronized (the weight total is the
+    device-reduced sum of the weights the operator received). A missing receipt refuses the row."""
+    from ember.model.ember_v0_streamed_loss import executed_values
+    if not executed:
+        raise ValueError('weighted document loss did not report its execution')
+    values = [executed_values(item) for item in executed]
+    return {key: sum(item[key] for item in values) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
@@ -2129,6 +2213,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
+    head = _row_training_head(capture)
+    fold = head == 'cce-document-v2'  # unique rows + per-row weights; the loss reports its own execution
+    executed = []
     two_ahead_position = None   # set from the staging this call produces; the row reads it back
 
     def _prepare(micro, staged_ahead):
@@ -2138,7 +2225,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                                                                     staged_ahead['patches'])
             patches_source = staged_ahead['patches_source']
         else:
-            tokens, targets, positions, selection = staged_inputs(micro, device)
+            tokens, targets, positions, selection = staged_inputs(micro, device, fold=fold)
             image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
                                          if micro.get('images') else (None, None))
             patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
@@ -2207,6 +2294,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             with recording:
                 logits, routes, loss, micro_started, micro_forwarded = (
                     pre['launched'] if pre is not None else _launch(prep, micro_index, events))
+                if fold:
+                    _require_cce_receipt(loss)  # refused before backward: the update is never applied
                 if segment_optimizer is not None:
                     # The verdict and the unrouted gate are final once the forward is enqueued, so each segment's
                     # owners are stepped (gated) on the side stream as the backward finishes that segment.
@@ -2225,10 +2314,11 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                     # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
                     if not stage_after_optimizer:
                         staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead,
-                                                         image_start=image_start)
+                                                         image_start=image_start, fold=fold)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
+            executed.append(getattr(loss, 'cce_executed', None))
             deferred_buffers = None
             if buffers is not None:
                 if micro_index == len(micros) - 1 and not verify_routes:
@@ -2300,7 +2390,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if stage_next and staged_early is None:
         # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
         staged_early = _stage_next_early(next_pack, device, image_text, pack,
-                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1', image_start=image_start)
+                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1', image_start=image_start, fold=fold)
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
@@ -2387,7 +2477,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if route_snapshot is not None:
         route_snapshot.update(buffers=buffers, snapshot=snapshot)
     return {'index': pack.get('index', 0), 'phase': pack['phase'], 'batch_documents': batch_documents,
-            'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
+            'training_head': head,
+            **(_cce_executed_fields(executed) if fold else {}),
             **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
             **exposure_fields(pack, wall),
