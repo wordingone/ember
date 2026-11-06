@@ -9,7 +9,13 @@ the parent checkpoint manifest and the trainer tree: --trainer-checkout must be 
 resume-lineage.json, and that tree must carry its lineage tag. The daemon re-hashes the ledger and
 receipt before it records the certificate (`ember-lab issue-certificate`). Refuses at the first failed step.
 
-  python -I resume.py --trained L --trained-end N --intake DIR ... --seed S --add-tokens N --shards-root DIR
+The trained end is never an input: it is the parent trainer's terminal_data_cursor (continuation-hour.json),
+cross-checked with continuation-next-pack.json (resume_identity.parent_cursor). The next hour's mixture identity,
+epoch sidecar, shards root receipt, cap and image slot are derived by resume_identity.py into OUT/identity.
+
+  python -I resume.py --trained L --parent-continuation-hour F --parent-next-pack F --parent-hour-result F
+         --parent-sidecar F --parent-root-receipt F --parent-cap F --template F [--image-receipt F]
+         --intake DIR ... --seed S --add-tokens N --shards-root DIR
          --parent-manifest FILE --out DIR --pipe PIPE --ember-lab EXE --trainer-checkout DIR
 """
 from __future__ import annotations
@@ -22,6 +28,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import resume_identity  # noqa: E402
 SCHEMA = "ember-lab-run-certificate-v1"
 
 
@@ -60,15 +68,22 @@ def code_tree_sha(checkout: Path) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    for f in ("--trained", "--shards-root", "--parent-manifest", "--out", "--ember-lab", "--trainer-checkout"):
+    for f in ("--trained", "--shards-root", "--parent-manifest", "--out", "--ember-lab", "--trainer-checkout",
+              "--parent-continuation-hour", "--parent-next-pack", "--parent-hour-result", "--parent-sidecar",
+              "--parent-root-receipt", "--parent-cap", "--template"):
         ap.add_argument(f, required=True, type=Path)
     ap.add_argument("--intake", action="append", required=True, type=Path)
-    ap.add_argument("--trained-end", required=True, type=int)
+    ap.add_argument("--image-receipt", type=Path, default=None)
     ap.add_argument("--add-tokens", required=True, type=int)
     ap.add_argument("--seed", required=True)
     ap.add_argument("--pipe", required=True)
     a = ap.parse_args(argv)
     tree = code_tree_sha(a.trainer_checkout)
+    trained_rows = [json.loads(x) for x in open(a.trained, encoding="utf-8") if x.strip()]
+    n_side = len(json.loads(a.parent_sidecar.read_text(encoding="utf-8"))["rows"])
+    if n_side != len(trained_rows):
+        raise SystemExit(f"REFUSE parent sidecar has {n_side} rows, the trained ledger {len(trained_rows)}")
+    *_, a.trained_end = resume_identity.parent_cursor(trained_rows, n_side, a.parent_continuation_hour, a.parent_next_pack)
     a.out.mkdir(parents=True, exist_ok=True)
     py = [sys.executable, "-I"]
     run(py + [str(HERE / "resume_compose.py"), "--trained", str(a.trained), "--trained-end", str(a.trained_end),
@@ -85,6 +100,15 @@ def main(argv=None) -> int:
     receipt = a.out / "c1c2-receipt.json"
     run(py + [str(HERE / "c1c2_interim_gate.py"), "--trained", str(a.trained), "--trained-end", str(a.trained_end),
               "--candidate", str(ext), "--sources", str(sources), "--out", str(receipt)])
+    ident = [*py, str(HERE / "resume_identity.py"), "--template", a.template, "--parent-sidecar", a.parent_sidecar,
+             "--parent-root-receipt", a.parent_root_receipt, "--parent-cap", a.parent_cap,
+             "--parent-continuation-hour", a.parent_continuation_hour, "--parent-next-pack", a.parent_next_pack,
+             "--parent-hour-result", a.parent_hour_result, "--composed-ledger", a.out / "composed-ledger.jsonl",
+             "--shards-root", a.shards_root, "--out", a.out / "identity",
+             *sum((["--intake", d] for d in a.intake), [])]
+    if a.image_receipt is not None:
+        ident += ["--image-receipt", a.image_receipt]
+    run([str(x) for x in ident])
     comp = json.loads((a.out / "composition.json").read_text(encoding="utf-8"))
     cert = {"schema_version": SCHEMA, "ledger_path": str(a.out / "composed-ledger.jsonl"),
             "ledger_sha256": sha(a.out / "composed-ledger.jsonl"), "extension_ledger_sha256": sha(ext),

@@ -131,6 +131,22 @@ def sidecar(parent: dict, rows: list[dict], n_trained: int, ledger_sha: str) -> 
     return out
 
 
+def parent_cursor(rows: list[dict], n_trained: int, continuation_hour: Path, next_pack: Path) -> tuple[int, int, int]:
+    """(shard_index, token_offset, absolute end) of what the parent trainer consumed: its terminal_data_cursor,
+    cross-checked with the next pack's cursor_before, inside the first n_trained rows of `rows`."""
+    tc = json.loads(continuation_hour.read_text(encoding="utf-8"))["terminal_data_cursor"]
+    nb = json.loads(next_pack.read_text(encoding="utf-8"))["cursor_before"]
+    shard_index, token_offset = int(tc["shard"]), int(tc["record_index"])
+    if (int(nb["shard_index"]), int(nb["token_offset"])) != (shard_index, token_offset):
+        refuse(f"next-pack cursor_before {nb} differs from terminal_data_cursor {tc}")
+    if not (0 <= shard_index < n_trained and 0 <= token_offset < rows[shard_index]["n_tokens"]):
+        refuse(f"terminal cursor {tc} is not inside the parent's trained rows")
+    end = sum(r["n_tokens"] for r in rows[:shard_index]) + token_offset
+    if "token_start" in rows[shard_index] and int(rows[shard_index]["token_start"]) + token_offset != end:
+        refuse("ledger token_start disagrees with the summed row lengths")
+    return shard_index, token_offset, end
+
+
 def image_slot(parent_hour: dict, receipt_path: Path | None) -> dict:
     parent = parent_hour["input_binding"].get("image_text")
     if parent is None:
@@ -157,17 +173,8 @@ def build(a) -> dict:
     composed_bytes = a.composed_ledger.read_bytes()
     rows = [json.loads(x) for x in composed_bytes.decode("utf-8").splitlines() if x.strip()]
     ledger_sha = sha_bytes(composed_bytes)
-    tc = json.loads(a.parent_continuation_hour.read_text(encoding="utf-8"))["terminal_data_cursor"]
-    nb = json.loads(a.parent_next_pack.read_text(encoding="utf-8"))["cursor_before"]
-    shard_index, token_offset = int(tc["shard"]), int(tc["record_index"])
-    if (int(nb["shard_index"]), int(nb["token_offset"])) != (shard_index, token_offset):
-        refuse(f"next-pack cursor_before {nb} differs from terminal_data_cursor {tc}")
     n_trained = len(json.loads(a.parent_sidecar.read_text(encoding="utf-8"))["rows"])
-    if not (0 <= shard_index < n_trained and 0 <= token_offset < rows[shard_index]["n_tokens"]):
-        refuse(f"terminal cursor {tc} is not inside the parent's trained rows")
-    end = sum(r["n_tokens"] for r in rows[:shard_index]) + token_offset
-    if "token_start" in rows[shard_index] and int(rows[shard_index]["token_start"]) + token_offset != end:
-        refuse("composed ledger token_start disagrees with the summed row lengths")
+    shard_index, token_offset, end = parent_cursor(rows, n_trained, a.parent_continuation_hour, a.parent_next_pack)
     total = sum(r["n_tokens"] for r in rows)
     a.out.mkdir(parents=True, exist_ok=True)
     ext_src = {}
