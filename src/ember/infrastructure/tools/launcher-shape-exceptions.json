@@ -99,6 +99,31 @@
       "path": "src/ember/governance/scripts/cia_conformance_launch.py",
       "sha256": "7d7683e5d1b98d9bf5a51bfe34871500290f3a75b3d72cb653681948db593aa0",
       "reason": "Authenticated daemon run body, not a standalone launcher. The closed --daemon-run entry consumes the existing one-use daemon dispatch token and exact native job cap before creating its owned numerical workers. The numerical profile verifies exact argv, launcher/helper source bindings and custody; the consumer binds the actual daemon parent and binary/source identities. No hermetic-fixture or production-qualification exemption is claimed."
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_catalog_projection/run-fixture-script.ps1",
+      "sha256": "3df0465b14a31b2e069cc15dbcbdeaa50cf46bb97c825366cffc6701e360d6a5",
+      "reason": "fixture driver, not a launcher. It waits on a named event, then calls one caller-supplied fixture script in-process with splatted JSON arguments; the fixture it runs is a synthetic memory-cap fixture in a scratch directory. It never starts, selects or dispatches a training run."
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_catalog_projection/validate-memory-baseline-v1.ps1",
+      "sha256": "add3a60d928702a6a41effdfd345d3af42cf1605a5274e7aac261255f8ac4741",
+      "reason": "synthetic validator, not a launcher. Its call operators invoke sibling validation scripts and fixture runners on synthetic eight-membership catalogs in a scratch directory; it never starts, selects or dispatches a training run."
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_catalog_projection/validate-memory-baseline-v2.ps1",
+      "sha256": "d950c2818d158cb6f120d6787c03ecd25b6ed3d6b52117548eae4b08ae747414",
+      "reason": "synthetic validator, same standing as validate-memory-baseline-v1.ps1 (v2 repins the baseline comparison). It never starts, selects or dispatches a training run."
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_catalog_projection/validate-preselection-v2.ps1",
+      "sha256": "f0a7fe42734be4e2ae02d063b2fa5dcd2a3b789c891d7b3d7948a4491c3a0063",
+      "reason": "synthetic validator, not a launcher. Its call operators invoke sibling validation scripts on synthetic preselection fixtures in a scratch directory; it never starts, selects or dispatches a training run."
+    },
+    {
+      "path": "src/ember/governance/scripts/selected_catalog_projection/validate-terminal-budget-r1-v1.ps1",
+      "sha256": "ce49f2c8bec246a010328a55685fda400c1e9806ac5ca4fcc620e536bec3caa1",
+      "reason": "synthetic validator, not a launcher. Its call operator runs a scriptblock action to record the expected refusal text of a terminal-budget fixture; it never starts, selects or dispatches a training run."
     }
   ]
 }
