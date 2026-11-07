@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Compose the next hour's shard ledger for `ember-lab resume`.
 
-Inputs: the trained ledger (the chain the parent consumed), the trained end (the parent's data cursor), and the
+Inputs: the trained ledger (the chain the parent consumed), the trained end (the absolute position of the parent trainer's terminal data cursor; resume.py derives it), and the
 PASS intake dirs (each holds ledger.jsonl + shards/ and a C1/C2 PASS receipt). Output: the trained rows unchanged,
 then up to `--add-tokens` of intake rows, interleaved deterministically across intakes:
   - inside an intake, rows are ordered by sha256(row_sha256 || seed);
@@ -87,10 +87,11 @@ def main(argv=None) -> int:
         prev, running = r["row_sha256"], running + r["n_tokens"]
     if running < a.trained_end:
         raise SystemExit(f"REFUSE trained ledger ends at {running} < trained end {a.trained_end}")
-    # The parent's cursor must lie inside the last trained row (the stream resumes mid-row); a ledger that runs
-    # whole rows past the cursor carries rows the parent never read, which resume must not inherit unchecked.
-    if not running - trained[-1]["n_tokens"] <= a.trained_end <= running:
-        raise SystemExit(f"REFUSE parent cursor {a.trained_end} is not inside the last trained row [{running - trained[-1]['n_tokens']}, {running}]")
+    # The parent's cursor (what its trainer consumed) must lie inside the trained ledger. Rows after it were
+    # planned for the parent but not read; they are carried unchanged (byte-equal, the same chain verified above)
+    # and are read first, before any intake row.
+    if not 0 <= a.trained_end < running:
+        raise SystemExit(f"REFUSE parent cursor {a.trained_end} is not inside the trained ledger [0, {running})")
     sources, shard_dir = {}, {}
     for d in a.intake:
         name = d.name

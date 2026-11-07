@@ -80,7 +80,7 @@ def test_builds_within_whitelist(tmp_path):
     side = json.loads((tmp_path / "out" / "epoch-labels.json").read_text())
     assert side["rows"][2]["epoch"] == 0 and side["rows"][0]["cls"] == "older"
     root = json.loads((tmp_path / "out" / "root-receipt.json").read_text())
-    assert root["count"] == 3
+    assert root["count"] == 3 and root["pinned_matches"] == 3 and {f["name"] for f in root["files"]} >= {"e0.bin"}
 
 
 def test_refuses_field_outside_whitelist(tmp_path, monkeypatch):
