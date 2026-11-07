@@ -1,0 +1,14 @@
+{
+  "schema": "ember-specification-publication-map-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "original_sha256": "6a3599d95e0fc44c26e527d8bbf73b9e8a5d4ed8834c657b9e7e3eb76202fe06",
+  "original_bytes": 15617,
+  "published_path": "docs/domains/governance/operator/native-operation-contract-v1.json",
+  "published_sha256": "981089a3d408aaf76181353c6c052479c1dc0bb358caf2fe6aa2fba1378db22b",
+  "published_bytes": 16659,
+  "changed_fields": "Author references, schema prefix, artifact authority and publication provenance only",
+  "original_retained": true,
+  "runtime_credit": false
+}

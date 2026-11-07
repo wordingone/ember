@@ -1,0 +1,12 @@
+{
+  "schema_version": "ember-current-subject-v2",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "subject": {
+    "architecture_revision": "CIA3-R1-N61",
+    "checkpoint_manifest_sha256": "d9c6a349e73d5ea773adb1c94347abe1f248bfd5269561a017ffe9bb61d813a0"
+  }
+}

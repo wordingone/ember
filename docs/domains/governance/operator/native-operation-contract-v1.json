@@ -1,0 +1,168 @@
+{
+  "schema": "ember.native_operation_launch_contract.v1",
+  "status": "PROPOSED_OWNER_HANDOFF_NOT_EXECUTED",
+  "created_utc": "2026-10-09 17:58:33 UTC",
+  "title": "Ember native launch, lineage choice, corpus access and useful operation",
+  "authority": [
+    "Authenticated operator messages1558167981807370312,1558168019316772875,1558168024228565003, received in75255/75265/75278",
+    "coordinator75325 adopts three outcomes",
+    "Delivered founder-public envelope75386 assigns launch-path synthesis"
+  ],
+  "intended_outcome": "A user launches the correct host binary, activates the current authorized Ember lineage or creates a fresh one, and operates training, inference, evaluation and data sourcing without writing dispatch code. Initial ML/CS/SE/DS specialization supports verifiable improvements to Ember itself. Minimize measured time to useful competence without changing existing acceptance requirements.",
+  "selected_approach": {
+    "recommendation": "Expose one native operation service through the useful CLI first and a minimal GUI using the same commands, state and evidence. Reuse verified runtime components. Keep UI construction independent from model-development capability.",
+    "alternatives": [
+      {
+        "approach": "Wrap existing manual dispatch entry points as a transition",
+        "tradeoff": "Can shorten first operator path if the application owns invocation and custody, but each unintegrated operation remains explicitly unproved."
+      },
+      {
+        "approach": "Shared native service with thin CLI and minimal GUI",
+        "tradeoff": "One owner for lineage, operations and data identity; UI can stay small while the runtime becomes demonstrable. Recommended."
+      },
+      {
+        "approach": "Build a full GUI and separate operational backend",
+        "tradeoff": "Adds implementation and duplicated control paths before useful operation; no evidence presently justifies that cost."
+      }
+    ],
+    "implementation_choice": "Exact modules and reuse decisions remain with runtime owner/CLI owner/projection implementer in their assigned scope; this document creates no implementation branch or runtime allocation."
+  },
+  "claim_outcomes": [
+    {
+      "id": "OPERATES",
+      "meaning": "The application itself completes the requested operation with correct lineage, inputs, process identity and terminal evidence. A window, command list, queue acknowledgement or source implementation alone is insufficient."
+    },
+    {
+      "id": "COMPETENCE",
+      "meaning": "The selected checkpoint satisfies the applicable frozen task/evaluation contract on eligible separated data, with actual scoring, population/uncertainty and failure conditions. The current accepted evaluator shapes are not executed competence. No new arbitrary threshold is invented here."
+    },
+    {
+      "id": "ACCEPTED_SELF_IMPROVEMENT",
+      "meaning": "The selected Ember checkpoint proposes a concrete useful change; assigned owners realize and independently assess it with comparative evidence and existing correctness/resource/recovery requirements. A change written by our seats cannot be labeled model-proposed merely because it was intended for Ember."
+    }
+  ],
+  "operator_flow": [
+    {
+      "step": 1,
+      "action": "Launch the appropriate host binary",
+      "user_visible": "Show available instance choices and an honest operational state.",
+      "required_evidence": "Binary/source/config identity; successful launch from the supported clean installation or checkout path; required resources and hidden actual child creation. No operator-authored script or manual path repair.",
+      "current_gap": "runtime owner75326 names a binary but holds no code-free activation receipt. participant75366 reports a source-level launcher path mismatch at00d7a277; runtime reproduction and owner repair remain unheld."
+    },
+    {
+      "step": 2,
+      "action": "Choose CURRENT or FRESH explicitly",
+      "user_visible": "Clearly distinguish continuation from creation; show the selected instance and its checkpoint/status.",
+      "required_evidence": "CURRENT resolves the current authorized continuation head, ancestry, checkpoint, architecture, tokenizer and optimizer/continuation state under its actual eligibility ruling. FRESH records distinct lineage/genesis/config/seed identities and independent history, preserving current artifacts. No implicit transfer of v2 weights, target credit or certificates to CIA; selected family remains CIA-3B unless changed by authority.",
+      "current_gap": "A native authoritative CURRENT selector, FRESH genesis transaction and actual switch/restore evidence are unheld. Existing manual run scripts are not this flow."
+    },
+    {
+      "step": 3,
+      "action": "Choose the held corpus or an authorized additional source",
+      "user_visible": "Show source availability, eligibility and exact missing prerequisite in plain language. Users do not manually supply internal hashes or compose code.",
+      "required_evidence": "The resolver internally binds revision, objects, local replicas, representation, admission and real-reader interface. Separate remote reference, acquired bytes, admitted supply and consumed positive-loss targets.",
+      "current_gap": "projection implementer75346 holds wordingone/ember-corpus@7d6d91a1823455a53cba77548ce0540ba2ad97e7. Application resolver and reader consumption receipts are unheld; tokenizer/model configuration cannot be inferred from a path prefix."
+    },
+    {
+      "step": 4,
+      "action": "Start or supervise an eligible training, inference, evaluation or sourcing operation",
+      "user_visible": "Show whether work started, is waiting on a named prerequisite, failed, or completed; expose the reason and next available action.",
+      "required_evidence": "One shared service records request, selected lineage, configuration/input IDs, actual process instance, resource allocation, progress and terminal result. Packaged helpers count only when the application invokes/owns them under current controls. A manually authored follow-up dispatch leaves that operation outside the demonstrated flow.",
+      "current_gap": "Recent H32–H36/legA evidence uses hand-authored dispatch; native inference-serving ledger is unheld; decision-making is unbuilt per coordinator's delivered assignment."
+    },
+    {
+      "step": 5,
+      "action": "Inspect a result, pause/resume when supported, or request the next task",
+      "user_visible": "Report actual result and continuity; preserve incomplete and unknown states.",
+      "required_evidence": "Same process/lineage custody across supported control transitions, real checkpoint reload and output binding. No restart, deletion, silent fallback or alternate actor after a refused action. Required failed checks suspend only the affected action.",
+      "current_gap": "Source commands for controls do not establish successful control/recovery behavior; actual receipts must bind each demonstrated operation."
+    }
+  ],
+  "native_decision_contract": {
+    "minimum": "The harness consumes current model/run/data/resource state, determines which already-authorized actions are eligible, selects or proposes an action, executes it through the owned operation interface, evaluates the actual outcome, and records the next decision. It keeps a reason and evidence for both action and inaction.",
+    "first_demonstration": "A real request leads from observation through one appropriate allowed tool/operation to an evaluated terminal outcome without hand-authored dispatch. Record which choice was deterministic policy and which was produced by the selected Ember checkpoint; do not call a fixed scheduler learned decision-making.",
+    "usefulness": "For a consequential choice, name the expected benefit, comparator or prior state, and measured result. For model-proposed development, preserve proposal/checkpoint identity, resulting diff and accepted before/after evidence. Existing evaluation and independent-review ownership applies.",
+    "tool_boundary": "Typed data/source, training, inference, evaluation and development operations share one service. Existing owner/resource/rights/custody permissions remain effective; an interface exposes no new approval or execution authority.",
+    "prohibited_inference": "Do not use another teacher model for Ember inference, evaluation, selection or stopping, and do not count seat-authored output as evidence of Ember competence. Deterministic tools remain bound in the trace. No training data may come from our seats or a model any of us runs."
+  },
+  "corpus_resolver_contract": {
+    "inputs": [
+      "Explicit CURRENT/FRESH selection and selected ancestry or genesis identity",
+      "Checkpoint/initialization, architecture/config, tokenizer and target/loss-mask contract pins",
+      "Repository/revision and per-object path, length and cryptographic identity",
+      "Declared local mirror mapping or exact remote reference, explicit location preference and existing acquisition scope",
+      "Rights/provenance/origin, protected population/screening, canonical deduplication, admission and reader receipts"
+    ],
+    "outputs": {
+      "resolution": "RESOLVED_REFERENCE / UNRESOLVED / IDENTITY_MISMATCH plus exact selected location and identity evidence",
+      "availability": "VERIFIED_PRESENT / REMOTE_REFERENCE_ONLY / UNVERIFIED",
+      "admission": "ACCEPTED / REJECTED / UNDETERMINED with missing evidence",
+      "consumption": "PROVEN / UNPROVEN with actual run/update/ancestry, target identities and positive-loss masks/counters",
+      "accounting": "Separate measured unique admitted targets, actual applied loss targets and unique budget-eligible credit; preserve UNDETERMINED when required evidence is missing."
+    },
+    "held_source_limit": "Oct8 21:30:58Z root-mirror manifest8b6e166f is PARTIAL and stale. All six logical B roots are unbound to physical A/C mirrors, H33 sibling shards provisional/unavailable and C corpus root unnamed. Two individually pinned metadata files do not prove payload identity or reader use; the third catalog receipt is not pinned for identity use.",
+    "eligibility": "Published source metadata/downloads do not grant admission. Preserve current rights/origin/protected/dedup/reader rules. New governed AI/mixed/UNKNOWN lots retain20M unique-admission ceiling and10% hourly actual positive-loss applied share with whole-uncertain-slice charge absent exact evidence. Disclose legacy origins separately. No denominator substitution from physical positions.",
+    "selected_ancestry_accounting": "Unique credit follows the first actual positive-loss occurrence on the selected ancestry. Replay after an original FALSE/UNDETERMINED occurrence supplies no fresh credit; only a dated correction applicable to that original occurrence can revise it. Diagnostic siblings and discarded branches do not transfer credit.",
+    "negative_observations": [
+      "Unavailable requested revision/object must not silently resolve to newer/latest/different content.",
+      "Missing lineage or representation pins cannot be inferred from tokens/2c557e7f/90618b33.",
+      "An unbound logical root or unnamed mirror cannot be reported as a usable physical input.",
+      "Metadata pins plus revision/size alone cannot establish missing payload identity, admission or reader use.",
+      "Reader load, replay or physical-position counts cannot establish fresh positive-loss credit or cap compliance."
+    ]
+  },
+  "acceptance_observations": [
+    "Retain a complete code-free operator invocation through actual terminal operation; interface-only launch remains separately labeled.",
+    "Verify actual loaded CURRENT checkpoint/ancestry/config against its authorized selector; reject a mismatched checkpoint before training/serving.",
+    "Create FRESH with distinct genesis and no inherited CURRENT weights, optimizer state, consumption ledger or ancestry; preserve CURRENT custody.",
+    "Resolve pinned corpus objects through the actual reader with separate source/availability/admission/consumption states.",
+    "Record one real native inference request and response bound to the loaded checkpoint and serving process.",
+    "Show shared command/state behavior for each implemented interface; no duplicated hidden dispatch state.",
+    "Missing functions or evidence stay explicit; queue submission, unrelated receipt or retry through another actor cannot become success.",
+    "Bind any competence or useful-improvement claim to the selected model and accepted comparative evidence, independently of operator usability."
+  ],
+  "utilization": {
+    "owner": "runtime owner collects once; independent reviewer supplies the assigned single review; contract author synthesizes, CLI owner corrects the published measure. No additional raw timeline scan by contract author/helpers.",
+    "metric": "Rolling86400s host wall interval with exact endpoints. Union actual bound intervals, separate training updates, warmup/probes, inference, evaluation, checkpoint/save/restore, other covered waits and unknown coverage. Preserve concurrency explicitly without double-counting unioned wall.",
+    "training_meaning": "Report actual training execution and productive retained-lineage training separately. An arm/card reservation, live process or checkpoint wall cannot establish either. Do not convert unknown gaps into zero/idle.",
+    "current_review": "independent reviewer75385: Oct8 10:29AM–Oct9 10:29AM LA; logged card union2071s=2.3970% includes662s evaluation and1409s checkpoint probe. Full-window actual training fraction UNKNOWN. Owner-reported3 probe-update walls sum36.852s, per-update rows not independently read and productive retained status unproved.",
+    "time_to_useful_operation": "Measure activation-to-first executed train/infer/eval, activation-to-accepted competence and activation-to-first accepted model-proposed improvement separately. No numeric competence ETA is supported by present evidence."
+  },
+  "handoff": [
+    {
+      "owner": "runtime owner",
+      "next": "Map CURRENT/FRESH selectors and each native operation to the existing runtime; identify the first already-authorized end-to-end executable slice and its missing interface/state bindings. Keep existing training progressing under its current allocation."
+    },
+    {
+      "owner": "projection implementer",
+      "next": "After his active count repair, bind the held corpus metadata to the application resolver/reader with runtime owner; return actual config and physical-input identities or exact unresolved dependencies. No new acquisition/runtime is granted by this contract."
+    },
+    {
+      "owner": "CLI owner / coordinator assignment",
+      "next": "Resolve the reported launcher-path source defect with one owner and a clean-path operation receipt; bind delivery to the application service without duplicating runtime owner's runtime work."
+    },
+    {
+      "owner": "independent reviewer",
+      "next": "Retain the existing bounded independent review scope; do not open a second utilization review or invent an additional gate."
+    },
+    {
+      "owner": "contract author",
+      "next": "Maintain this contract and follow owner evidence through OPERATES, COMPETENCE and ACCEPTED_SELF_IMPROVEMENT; recheck new named defects only."
+    },
+    {
+      "owner": "coordinator",
+      "next": "Adopt or amend this concrete contract and bind the immediate implementation ownership/release scope. Existing direct operator intent already authorizes the outcome; do not ask operator to repeat it."
+    }
+  ],
+  "limits": "This is a concrete contract handoff, not shipped functionality, a training launch, a changed acceptance bar, a source-rights ruling or new review/resource scope. The continuing200B/all-modality/capability/correctness/resource/recovery assignment remains active.",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "publication_provenance": {
+    "original_sha256": "6a3599d95e0fc44c26e527d8bbf73b9e8a5d4ed8834c657b9e7e3eb76202fe06",
+    "original_bytes": 15617,
+    "copy_kind": "ROLE_NEUTRAL_PUBLIC_SPECIFICATION",
+    "transformation": "Author references replaced with ownership roles; schema prefix made project-specific; artifact authority and this provenance annotation added. Contract conditions, gaps, evidence requirements and proposed-not-executed state retained.",
+    "adopted_scope": "Authenticated operator/coordinator contract adopted through assignment75467; this publication grants no execution or capability credit."
+  }
+}

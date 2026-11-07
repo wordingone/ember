@@ -124,6 +124,8 @@ def update_current_subject(
     candidate_payload: dict[str, Any],
     expected_parent_checkpoint_manifest_sha256: str,
     current_subject_path: Path | None = None,
+    selected_pointer: Path | None = None,
+    selected_pointer_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Atomically advance the durable selected-continuation record.
 
@@ -132,6 +134,14 @@ def update_current_subject(
     changes nothing on disk when any check fails.
     """
 
+    if candidate_payload.get("schema_version") == "ember-current-subject-v2":
+        return update_current_architecture_subject(
+            repo_root=repo_root, published_checkpoint_root=published_checkpoint_root,
+            candidate_payload=candidate_payload,
+            expected_parent_checkpoint_manifest_sha256=expected_parent_checkpoint_manifest_sha256,
+            current_subject_path=current_subject_path, selected_pointer=selected_pointer,
+            selected_pointer_sha256=selected_pointer_sha256,
+        )
     repo_root = Path(repo_root)
     published_checkpoint_root = Path(published_checkpoint_root)
     target_path = (
@@ -218,14 +228,98 @@ def update_current_subject(
     return candidate
 
 
-def _read_json(path: Path) -> Any:
+
+def update_current_architecture_subject(
+    *, repo_root, published_checkpoint_root, candidate_payload,
+    expected_parent_checkpoint_manifest_sha256, current_subject_path=None,
+    selected_pointer=None, selected_pointer_sha256=None,
+):
+    """Write v2 from a decoded candidate and full selected metadata bytes.
+
+    This library API accepts a dict and cannot detect duplicate original JSON
+    fields. The CLI v2 mode performs strict bounded raw decoding first. Library
+    callers reading JSON must use load_subject(bounded_read(...)) themselves.
+    """
+    repo_root = Path(repo_root)
+    target_path = (Path(current_subject_path) if current_subject_path is not None
+                   else repo_root / "manifests" / "ember-current-subject-v2.json")
+    if target_path.name == "ember-current-subject-v1.json":
+        raise ValueError("V2_CANNOT_OVERWRITE_HISTORICAL_V1")
+    for extra in (str(_SCRIPT_DIR), str(repo_root),
+                  str(repo_root / "src/ember/infrastructure/tools/ember-restart-3b")):
+        if extra not in sys.path:
+            sys.path.insert(0, extra)
+    import durable_io
+    import gen_readme_status
+    from selected_subject_architecture import (
+        SCHEMA, bounded_read, decode, architecture, lint_selected_architecture, one,
+    )
+    pointer_path = one([selected_pointer] if selected_pointer is not None else None, "selected_pointer")
+    pointer_pin = one([selected_pointer_sha256] if selected_pointer_sha256 is not None else None,
+                      "approved_selected_pointer")
+    pointer_raw = bounded_read(pointer_path, "selected_pointer")
+    manifest_raw = bounded_read(Path(published_checkpoint_root) / "checkpoint-manifest.json",
+                                "selected_manifest")
+    actual_revision = architecture(decode(manifest_raw, "selected_manifest").get("architecture_revision"),
+                                   "selected_manifest")
+    candidate = json.loads(json.dumps(candidate_payload))
+    subject = candidate.get("subject")
+    if not isinstance(subject, dict):
+        raise ValueError("candidate payload is missing its subject object")
+    if subject.get("architecture_revision") != actual_revision:
+        raise ValueError("CANONICAL_SUBJECT_ARCHITECTURE_MISMATCH")
+    import hashlib
+    computed_sha256 = hashlib.sha256(manifest_raw).hexdigest()
+    if subject.get("checkpoint_manifest_sha256") != computed_sha256:
+        raise ValueError("CANONICAL_SUBJECT_SELECTED_HEAD_MISMATCH")
+    candidate_raw = (json.dumps(candidate, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    lint_selected_architecture(candidate_raw, pointer_raw, manifest_raw, pointer_pin)
+    if target_path.exists():
+        current = gen_readme_status.load_current_subject(str(target_path))
+        if current["schema_version"] != SCHEMA:
+            raise ValueError("V2_CANNOT_OVERWRITE_HISTORICAL_RECORD")
+        if current["subject"]["checkpoint_manifest_sha256"] != expected_parent_checkpoint_manifest_sha256:
+            raise StaleParentError("stale parent: canonical architecture subject changed")
+    elif expected_parent_checkpoint_manifest_sha256 != GENESIS_SENTINEL:
+        raise StaleParentError("no v2 subject exists; expected parent must be GENESIS")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    staged_path = target_path.parent / f".{target_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    try:
+        with open(staged_path, "xb") as handle:
+            handle.write(candidate_raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        gen_readme_status.load_current_subject(str(staged_path))
+        if bounded_read(pointer_path, "selected_pointer") != pointer_raw:
+            raise StaleParentError("selected pointer changed before promotion")
+        durable_io.atomic_replace_durable(staged_path, target_path)
+    finally:
+        try:
+            staged_path.unlink()
+        except FileNotFoundError:
+            pass
+    return candidate
+
+def _read_json(path: Path, schema: str = "ember-current-subject-v1") -> Any:
+    if schema == "ember-current-subject-v2":
+        from selected_subject_architecture import bounded_read, load_subject
+        # The strict bounded decoder sees original bytes before any dict exists.
+        return load_subject(bounded_read(path, "candidate_payload"))
     with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+        payload = json.load(handle)
+    if isinstance(payload, dict) and payload.get("schema_version") == "ember-current-subject-v2":
+        raise ValueError("V2_CANDIDATE_REQUIRES_EXPLICIT_RAW_SCHEMA")
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=_REPO_ROOT_DEFAULT)
+    parser.add_argument("--selected-pointer", type=Path)
+    parser.add_argument("--selected-pointer-sha256")
+    parser.add_argument("--candidate-schema", choices=("ember-current-subject-v1", "ember-current-subject-v2"),
+                        default="ember-current-subject-v1",
+                        help="V2 requires explicit schema selection so bounded raw decoding precedes dict conversion; v1 retains historical decoding.")
     parser.add_argument(
         "--published-checkpoint-root",
         type=Path,
@@ -280,16 +374,21 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.verify_only:
-        _, _, gen_readme_status = _import_siblings(repo_root)
+        if str(_SCRIPT_DIR) not in sys.path:
+            sys.path.insert(0, str(_SCRIPT_DIR))
+        import gen_readme_status
         current = gen_readme_status.load_current_subject(str(target_path))
         subject = current["subject"]
+        summary = ({"schema_version": current["schema_version"],
+                    "checkpoint_manifest_sha256": subject["checkpoint_manifest_sha256"],
+                    "architecture_revision": subject["architecture_revision"],
+                    "status": "SCHEMA_VALIDATED_ONLY"}
+                   if current["schema_version"] == "ember-current-subject-v2"
+                   else {"checkpoint_manifest_sha256": subject["checkpoint_manifest_sha256"],
+                         "predecessor": subject["predecessor"], "token_cursor": subject["token_cursor"]})
         print(
             json.dumps(
-                {
-                    "checkpoint_manifest_sha256": subject["checkpoint_manifest_sha256"],
-                    "predecessor": subject["predecessor"],
-                    "token_cursor": subject["token_cursor"],
-                },
+                summary,
                 indent=2,
                 sort_keys=True,
             )
@@ -306,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
             "unless --verify-only"
         )
 
-    candidate_payload = _read_json(args.candidate_payload)
+    candidate_payload = _read_json(args.candidate_payload, args.candidate_schema)
     written = update_current_subject(
         repo_root=repo_root,
         published_checkpoint_root=args.published_checkpoint_root,
@@ -314,7 +413,11 @@ def main(argv: list[str] | None = None) -> int:
         expected_parent_checkpoint_manifest_sha256=(
             args.expected_parent_checkpoint_manifest_sha256
         ),
-        current_subject_path=target_path,
+        current_subject_path=(args.current_subject_path
+                              if candidate_payload.get("schema_version") == "ember-current-subject-v2"
+                              else target_path),
+        selected_pointer=args.selected_pointer,
+        selected_pointer_sha256=args.selected_pointer_sha256,
     )
     print(
         json.dumps(
@@ -322,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
                 "checkpoint_manifest_sha256": written["subject"][
                     "checkpoint_manifest_sha256"
                 ],
-                "target_path": str(target_path),
+                "target_path": str(args.current_subject_path or (repo_root / ("manifests/ember-current-subject-v2.json" if written["schema_version"] == "ember-current-subject-v2" else CURRENT_SUBJECT_RELATIVE_PATH))),
             },
             indent=2,
             sort_keys=True,
