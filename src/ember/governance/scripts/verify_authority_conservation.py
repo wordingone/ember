@@ -196,17 +196,49 @@ def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     )
 
 
+# GOAL §6 (model-assisted training amendment, 2026-11-07): external models may train a lineage as a DECLARED
+# resource; creation follows the declared lineage (docs/authority/INVARIANT-v2.md clauses 3 and 4, public succession
+# 2026-11-07; v1 bytes untouched).
+# Still forbidden outright: borrowed weights (backbone, §4) and undeclared (hidden) external cognition.
 FORBIDDEN_MODEL_SIGNALS = [
     "weights",
-    "outputs",
-    "teachers",
-    "judges",
-    "filters",
-    "ranks",
-    "curricula",
-    "stopping_decisions",
     "hidden_external_cognition",
 ]
+MODEL_ASSISTED_CONDITIONS = [
+    "licence_recorded",
+    "per_hour_declaration",
+    "boundary_recorded_at_first_declared_hour",
+    "frozen_declared_judges",
+    "contamination_scrub_on_teacher_data",
+]
+CREATION_RULE = "invariant_v2_clause_3_declared_lineage"
+MODEL_FREE_BASELINE = "every_hour_before_the_first_declared_model_resource"
+DECLARED_SIGNAL_ROLES = {"teacher", "data_generator", "judge", "filter", "ranker", "curriculum"}
+
+
+def declared_model_signal_errors(signals):
+    """Return the reasons a config's model_mediated_signals list is not a fully declared model-assisted input.
+
+    An empty list is model-free. Each entry must be an object naming the model, its version or sha, a role in
+    DECLARED_SIGNAL_ROLES, licence_recorded true and a share in (0, 1]. A bare string, a weights role, or any missing
+    field is an undeclared model-mediated signal and refuses (GOAL §6 condition 2)."""
+    if not isinstance(signals, list):
+        return ["model_mediated_signals must be a list"]
+    out = []
+    for i, entry in enumerate(signals):
+        if not isinstance(entry, dict):
+            out.append(f"entry {i} is not a declared object")
+            continue
+        if not str(entry.get("model", "")).strip() or not str(entry.get("version", "")).strip():
+            out.append(f"entry {i} lacks model or version")
+        if entry.get("role") not in DECLARED_SIGNAL_ROLES:
+            out.append(f"entry {i} role {entry.get('role')!r} is not a declared role")
+        if entry.get("licence_recorded") is not True:
+            out.append(f"entry {i} has no recorded licence")
+        share = entry.get("share")
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
+            out.append(f"entry {i} share is not in (0, 1]")
+    return out
 REASONING_AXES = [
     "multi_step",
     "compositional",
@@ -240,7 +272,7 @@ MUTATION_CLASSES = [
     "missing_native_modality",
     "missing_native_reasoning",
     "borrowed_backbone",
-    "model_mediated_signal",
+    "undeclared_model_mediated_signal",
     "mechanism_erasure",
     "missing_totality_member",
     "ambiguous_identity",
@@ -695,9 +727,25 @@ def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[st
     expect(
         errors,
         4,
-        lineage.get("borrowed_models_role") == "frozen_reference_only",
+        lineage.get("borrowed_models_role") == "declared_training_resource",
         "policy.borrowed_role",
-        "borrowed models are frozen references only",
+        "external models are declared training resources only (GOAL §6)",
+    )
+    expect(
+        errors,
+        4,
+        lineage.get("model_assisted_conditions") == MODEL_ASSISTED_CONDITIONS,
+        "policy.model_assisted_conditions",
+        "model-assisted conditions drifted (GOAL §6)",
+    )
+    expect(
+        errors,
+        4,
+        lineage.get("creation_rule") == CREATION_RULE
+        and lineage.get("creation_claims_state_model_assisted") is True
+        and lineage.get("model_free_baseline") == MODEL_FREE_BASELINE,
+        "policy.creation_boundary",
+        "creation follows the declared lineage and claims state model-assisted hours (INVARIANT-v2 clauses 3/4)",
     )
     expect(
         errors,
@@ -1725,7 +1773,7 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
             if authority.get("lineage_ingress") is not False:
                 errors.append(finding(4, "config.borrowed_lineage_ingress", rel))
             if authority.get("model_mediated_signals"):
-                errors.append(finding(4, "config.model_mediated_signal", rel))
+                errors.append(finding(4, "config.undeclared_model_mediated_signal", rel))
             continue
         if artifact_class not in {"research_candidate", "model_milestone"}:
             errors.append(finding(4, "config.artifact_class_invalid", f"{rel}: {artifact_class}"))
@@ -1742,14 +1790,8 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
         if backbone not in ("", "none"):
             errors.append(finding(4, "config.borrowed_backbone", f"{rel}: {backbone}"))
         signals = authority.get("model_mediated_signals")
-        if not isinstance(signals, list) or signals:
-            errors.append(
-                finding(
-                    4,
-                    "config.model_mediated_signal",
-                    f"{rel}: model_mediated_signals must be an explicit empty list",
-                )
-            )
+        for why in declared_model_signal_errors(signals):
+            errors.append(finding(4, "config.undeclared_model_mediated_signal", f"{rel}: {why}"))
     for rel in sorted(set(classifications) - seen_paths):
         errors.append(finding(4, "config.classification_target_missing", rel))
 

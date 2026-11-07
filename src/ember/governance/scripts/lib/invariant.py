@@ -104,6 +104,66 @@ def stamp(artifact: Dict[str, Any], repo_root: str = None) -> Dict[str, Any]:
     return artifact
 
 
+# ---------------------------------------------------------------------------
+# Public succession (docs/authority/SUCCESSION-2026-11-07.md). INVARIANT.md (v1) bytes stay untouched and keep
+# verifying against INVARIANT_SHA256; INVARIANT-v2.md governs records stamped after the succession. Historic receipts
+# are never rewritten: a record verifies against the invariant in force at its own timestamp.
+INVARIANT_V2_PATH = "docs/authority/INVARIANT-v2.md"
+INVARIANT_V2_SHA256 = "48b692eba6ebcc57b2170c035e40aed60efb3382178d11416711ce2785216b6a"
+SUCCESSION_PATH = "docs/authority/SUCCESSION-2026-11-07.md"
+SUCCESSION_AT_UTC = "2026-11-07T12:49:30Z"  # the operator's declared public succession
+RECORD_TS_FIELDS = ("ts", "timestamp", "created_at", "generated_at", "stamped_at")
+
+
+def verify_v2(repo_root: str) -> str:
+    """Verify v1 still verifies (bytes untouched) and docs/authority/INVARIANT-v2.md matches INVARIANT_V2_SHA256."""
+    verify(repo_root)
+    p = Path(repo_root) / INVARIANT_V2_PATH
+    if not p.exists():
+        raise FileNotFoundError(f"{INVARIANT_V2_PATH} not found at {p}")
+    got = _compute_hash(p.read_bytes())
+    if got != INVARIANT_V2_SHA256:
+        raise ValueError(f"{INVARIANT_V2_PATH} hash mismatch: expected {INVARIANT_V2_SHA256}, got {got}")
+    return got
+
+
+def _norm_ts(value: Any) -> str:
+    if not isinstance(value, str) or len(value) < 20 or value[4] != "-" or value[10] != "T":
+        raise ValueError(f"record timestamp {value!r} is not an ISO-8601 UTC string")
+    v = value.replace("+00:00", "Z")
+    if not v.endswith("Z"):
+        raise ValueError(f"record timestamp {value!r} is not UTC")
+    return v[:19] + "Z"
+
+
+def expected_invariant_for(ts: str) -> str:
+    """The invariant hash a record stamped at ts must carry: v1 before the succession, v2 at or after it."""
+    return INVARIANT_SHA256 if _norm_ts(ts) < SUCCESSION_AT_UTC else INVARIANT_V2_SHA256
+
+
+def verify_record(record: Dict[str, Any]) -> str:
+    """Verify a record's invariant_sha256 against the invariant in force at the record's own timestamp.
+
+    Fail-closed: a record with no timestamp, an unparseable one, or a pin that is not the invariant in force at that
+    time refuses (ValueError). A post-succession record pinned to v1 refuses; a pre-succession record pinned to v1
+    verifies; a pre-succession record pinned to v2 refuses (no backdating)."""
+    ts = next((record[f] for f in RECORD_TS_FIELDS if f in record), None)
+    if ts is None:
+        raise ValueError("record has no timestamp field; cannot choose the invariant in force")
+    want = expected_invariant_for(ts)
+    got = record.get("invariant_sha256")
+    if got != want:
+        era = "v1 (pre-succession)" if want == INVARIANT_SHA256 else "v2 (post-succession)"
+        raise ValueError(f"record at {ts} must pin {era} {want}, got {got!r}")
+    return got
+
+
+def stamp_v2(artifact: Dict[str, Any], repo_root: str = None) -> Dict[str, Any]:
+    """Stamp a post-succession artifact with the v2 hash (verifies v1 untouched and v2 bytes first)."""
+    artifact["invariant_sha256"] = verify_v2(repo_root or os.getcwd())
+    return artifact
+
+
 def _selftest():
     """Self-test for invariant module.
 

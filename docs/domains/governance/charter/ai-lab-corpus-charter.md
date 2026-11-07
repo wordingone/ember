@@ -37,8 +37,10 @@ and diversity. This charter is the corpus floor.
   suites before any training use. Quality is receipted per acquisition, never asserted.
 - **Diversity**: within each domain, multiple independent sources and registers
   (textbook, paper, reference, applied); a domain fed from a single source fails the bar.
-- **Anti-distillation (L3, absolute)**: connectors FETCH; no external model authors,
-  filters, ranks, scores, or selects a training token in any role. All curation is local.
+- **Declared model assistance (L3, superseded 2026-11-07 by GOAL §6)**: connectors FETCH; an
+  external model may author, filter, rank, score or select training tokens only as a declared,
+  licence-recorded resource whose rows carry role and model id and pass the contamination scrub.
+  Undeclared model involvement is refused; model-assisted data never supports a creation claim.
 - **Zero-cost (L5)**: free/public tiers only.
 
 ## Programmatic access (first-class lab equipment)

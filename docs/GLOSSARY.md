@@ -9,8 +9,13 @@ it; superseded and historical pages are visibly non-current.
 **Claim source.** A public authority, implementation, execution receipt, explicit target, or
 editorial/navigation source bound to a stable claim ID and content hash.
 
-**Clean genesis.** Ember's target lineage excludes borrowed learned or evaluative signals. Frozen
-references may be used only within the governing authority boundary.
+**Clean genesis.** A lineage with no external-model contribution in its training signal; the only
+lineage that can state "trained without external models". Every hour before the first hour that
+declares an external-model resource is clean-genesis (H1 through H40 declared none).
+
+**Model-assisted.** A lineage hour that used a declared, licence-recorded external model as a training
+resource (GOAL §6). Allowed; its products can be Ember's creation when declared and scrubbed
+(docs/authority/INVARIANT-v2.md clause 3), and claims about them name the model-assisted hours.
 
 **Ember Lab.** The cross-domain integration and experiment surface. Lab uses declared domain
 interfaces and does not replace their ownership.
