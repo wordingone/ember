@@ -81,6 +81,13 @@ pub fn issue_verified(
     if file_sha256(&ledger_path)? != cert["ledger_sha256"].as_str().unwrap_or_default() {
         return Err("composed ledger bytes do not match ledger_sha256".into());
     }
+    if cert.get("kind").is_some() && cert["kind"] != KIND_FRESH {
+        if cert["kind"] != KIND_DECLARED_REPEAT {
+            return Err("certificate kind is neither fresh nor declared-repeat".into());
+        }
+        verify_declared_repeat(&cert, &ledger_path, &receipt_path)?;
+        return issue(conn, certificate_bytes, now_ms);
+    }
     if file_sha256(&receipt_path)? != cert["c1c2_receipt_sha256"].as_str().unwrap_or_default() {
         return Err("C1/C2 receipt bytes do not match c1c2_receipt_sha256".into());
     }
@@ -94,6 +101,107 @@ pub fn issue_verified(
         return Err("C1/C2 receipt was not computed on this certificate's extension rows".into());
     }
     issue(conn, certificate_bytes, now_ms)
+}
+
+/// Certificate kinds. A certificate without `kind` is fresh data under a C1/C2 receipt. A declared-repeat
+/// certificate is for an hour whose extension rows repeat admitted catalog text that earlier hours trained: its
+/// receipt comes from the declared-repeat gate (catalog_declared_repeat_gate.py), and `kind` is part of the
+/// certified bytes, so a repeat hour can never be presented as fresh data.
+pub const KIND_FRESH: &str = "fresh";
+pub const KIND_DECLARED_REPEAT: &str = "declared-repeat";
+
+/// Declared-repeat issuance. The daemon itself (a) re-hashes the ledger, epoch-label sidecar, declaration and
+/// receipt; (b) computes the extension sha from the ledger lines at and after `parent_rows`; (c) checks every
+/// sidecar row at and after `parent_rows` is `repeat_declared` with `ledger_pass_index >= 1`. It then requires
+/// the receipt to be a declared-repeat PASS over exactly those rows, bound to the same extension, declaration
+/// and sidecar, with zero unadmitted rows. Claim boundary: span-to-catalog membership is mapped python-side
+/// (map_ledger_spans over the catalog export named by sha in the receipt); the daemon trusts that mapping only
+/// through the receipt bytes it re-hashed.
+fn verify_declared_repeat(
+    cert: &Value,
+    ledger_path: &str,
+    receipt_path: &str,
+) -> Result<(), String> {
+    let s = |v: &Value, k: &str| {
+        v[k].as_str()
+            .map(str::to_string)
+            .ok_or_else(|| format!("declared-repeat certificate lacks {k}"))
+    };
+    let (side_path, decl_path) = (s(cert, "sidecar_path")?, s(cert, "declaration_path")?);
+    if file_sha256(&side_path)? != s(cert, "sidecar_sha256")? {
+        return Err("epoch-label sidecar bytes do not match sidecar_sha256".into());
+    }
+    if file_sha256(&decl_path)? != s(cert, "declaration_sha256")? {
+        return Err("declaration bytes do not match declaration_sha256".into());
+    }
+    let parent_rows = cert["parent_rows"]
+        .as_u64()
+        .ok_or("declared-repeat certificate lacks parent_rows")? as usize;
+    let ledger = std::fs::read(ledger_path).map_err(|e| e.to_string())?;
+    let lines: Vec<&[u8]> = ledger
+        .split(|b| *b == b'\n')
+        .filter(|l| !l.is_empty())
+        .collect();
+    if parent_rows >= lines.len() {
+        return Err("declared-repeat certificate has no extension rows".into());
+    }
+    let mut h = Sha256::new();
+    for l in &lines[parent_rows..] {
+        h.update(l);
+        h.update(b"\n");
+    }
+    let extension = format!("{:x}", h.finalize());
+    if cert["extension_ledger_sha256"].as_str() != Some(extension.as_str()) {
+        return Err("extension_ledger_sha256 is not the ledger rows after parent_rows".into());
+    }
+    let side: Value =
+        serde_json::from_slice(&std::fs::read(&side_path).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("sidecar is not JSON: {e}"))?;
+    let rows = side["rows"].as_array().ok_or("sidecar lacks rows")?;
+    if rows.len() != lines.len() {
+        return Err("sidecar row count is not the ledger row count".into());
+    }
+    for (i, r) in rows.iter().enumerate().skip(parent_rows) {
+        if r["repeat_declared"] != true || r["ledger_pass_index"].as_u64().unwrap_or(0) < 1 {
+            return Err(format!(
+                "extension row {i} is not a declared repeat (repeat_declared and ledger_pass_index >= 1)"
+            ));
+        }
+    }
+    let receipt: Value =
+        serde_json::from_slice(&std::fs::read(receipt_path).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("declared-repeat receipt is not JSON: {e}"))?;
+    if receipt["kind"] != KIND_DECLARED_REPEAT || receipt["verdict"] != "PASS" {
+        return Err("receipt is not a declared-repeat PASS".into());
+    }
+    let n = (lines.len() - parent_rows) as u64;
+    let checks = [
+        (
+            receipt["extension_ledger_sha256"].as_str() == Some(extension.as_str()),
+            "extension rows",
+        ),
+        (
+            receipt["declaration_sha256"] == cert["declaration_sha256"],
+            "declaration",
+        ),
+        (
+            receipt["sidecar_sha256"] == cert["sidecar_sha256"],
+            "sidecar",
+        ),
+        (receipt["rows_checked"].as_u64() == Some(n), "row count"),
+        (
+            receipt["unadmitted_rows"].as_u64() == Some(0),
+            "zero unadmitted rows",
+        ),
+        (
+            receipt["c1_basis"] == "catalog-admitted",
+            "c1_basis catalog-admitted",
+        ),
+    ];
+    if let Some((_, what)) = checks.iter().find(|(ok, _)| !ok) {
+        return Err(format!("declared-repeat receipt does not bind {what}"));
+    }
+    Ok(())
 }
 
 /// Records a certificate and returns its sha256 (over the exact bytes).
@@ -450,6 +558,68 @@ print('train')
             .unwrap_err()
             .contains("ledger bytes"));
         assert!(issue_verified(&c, mk("PASS", &sha(&ext)).as_bytes(), 1).is_ok());
+        std::fs::remove_dir_all(&d).ok();
+    }
+    #[test]
+    fn declared_repeat_issuance() {
+        let c = Connection::open_in_memory().unwrap();
+        migrate(&c).unwrap();
+        let d = std::env::temp_dir().join(format!("runcert-dr-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let sha = |b: &[u8]| format!("{:x}", Sha256::digest(b));
+        let led = b"{\"r\":0}\n{\"r\":1}\n{\"r\":2}\n".to_vec();
+        let ext = sha(b"{\"r\":2}\n");
+        std::fs::write(d.join("l.jsonl"), &led).unwrap();
+        std::fs::write(d.join("decl.md"), b"declaration\n").unwrap();
+        let decl = sha(b"declaration\n");
+        // (sidecar row 2 repeat flag, row 2 pass index, receipt unadmitted rows, receipt kind)
+        let mk = |rep: bool, pass: u64, unadmitted: u64, rkind: &str| {
+            let side = json!({"rows": [{"repeat_declared": false, "ledger_pass_index": 0},
+                                       {"repeat_declared": true, "ledger_pass_index": 1},
+                                       {"repeat_declared": rep, "ledger_pass_index": pass}]})
+            .to_string();
+            std::fs::write(d.join("s.json"), &side).unwrap();
+            let r = json!({"kind": rkind, "verdict": "PASS", "extension_ledger_sha256": ext,
+                           "declaration_sha256": decl, "sidecar_sha256": sha(side.as_bytes()),
+                           "rows_checked": 1, "unadmitted_rows": unadmitted, "c1_basis": "catalog-admitted"})
+            .to_string();
+            std::fs::write(d.join("r.json"), &r).unwrap();
+            json!({"schema_version": CERTIFICATE_SCHEMA, "kind": KIND_DECLARED_REPEAT, "parent_rows": 2,
+                   "ledger_path": d.join("l.jsonl"), "ledger_sha256": sha(&led), "extension_ledger_sha256": ext,
+                   "c1c2_receipt_path": d.join("r.json"), "c1c2_receipt_sha256": sha(r.as_bytes()),
+                   "sidecar_path": d.join("s.json"), "sidecar_sha256": sha(side.as_bytes()),
+                   "declaration_path": d.join("decl.md"), "declaration_sha256": decl,
+                   "parent_manifest_sha256": "c".repeat(64), "code_tree_sha": "d".repeat(40)})
+            .to_string()
+        };
+        let err = |b: String| issue_verified(&c, b.as_bytes(), 1).unwrap_err();
+        // red: a fresh row inside a declared-repeat certificate
+        assert!(err(mk(false, 0, 0, KIND_DECLARED_REPEAT))
+            .contains("extension row 2 is not a declared repeat"));
+        assert!(err(mk(true, 0, 0, KIND_DECLARED_REPEAT)).contains("extension row 2"));
+        // red: an unadmitted row reported by the gate
+        assert!(err(mk(true, 1, 1, KIND_DECLARED_REPEAT)).contains("zero unadmitted rows"));
+        // red: a fresh-data receipt cannot back a declared-repeat certificate
+        assert!(err(mk(true, 1, 0, "c1c2")).contains("declared-repeat PASS"));
+        // red: an extension sha that is not the rows after parent_rows
+        let mut bad: Value = serde_json::from_str(&mk(true, 1, 0, KIND_DECLARED_REPEAT)).unwrap();
+        bad["extension_ledger_sha256"] = json!("0".repeat(64));
+        assert!(err(bad.to_string()).contains("rows after parent_rows"));
+        // red: an unknown kind
+        let mut bad: Value = serde_json::from_str(&mk(true, 1, 0, KIND_DECLARED_REPEAT)).unwrap();
+        bad["kind"] = json!("other");
+        assert!(err(bad.to_string()).contains("neither fresh nor declared-repeat"));
+        // pass, and the stored certificate carries the kind
+        let ok = mk(true, 1, 0, KIND_DECLARED_REPEAT);
+        let s = issue_verified(&c, ok.as_bytes(), 1).unwrap();
+        let stored: String = c
+            .query_row(
+                "SELECT certificate_json FROM run_certificates WHERE certificate_sha256=?1",
+                [&s],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(stored.contains("\"kind\":\"declared-repeat\""));
         std::fs::remove_dir_all(&d).ok();
     }
 }
