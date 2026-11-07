@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { REDIRECT, checkResumeHourArgs, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
+import { REDIRECT, checkResumeHourArgs, hourEnv, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 function world() {
@@ -79,5 +79,10 @@ describe("/resume-hour", () => {
     expect(resolveHourBash({ EMBER_RESUME_HOUR_BASH: "C:\\WINDOWS\\system32\\bash.exe" }, "win32")).toBe(null);
     expect(resolveHourBash({}, "linux")).toBe("/bin/bash");
     expect(resolveHourBash({ EMBER_RESUME_HOUR_BASH: "/usr/bin/bash" }, "linux")).toBe("/usr/bin/bash");
+  });
+
+  it("drops every EMBER_* variable from the hour's environment", () => {
+    const e = hourEnv({ EMBER_API_KEY: "k", ember_model_seat: "s", EMBER_STARTUP_RESUME_HOUR: "x", X5_RECEIPT: "r", PATH: "p" });
+    expect(e).toEqual({ X5_RECEIPT: "r", PATH: "p" });
   });
 });

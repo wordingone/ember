@@ -23,7 +23,7 @@ export const REDIRECT = 'exec bash "$0" >>"$1" 2>&1';
 export const DISPATCH_NAME = /^h\d+_dispatch_v\d+\.sh$/;
 
 export interface ResumeHourSpawn {
-  (command: string, args: string[], options: { detached: true; stdio: "ignore"; windowsHide: true }): {
+  (command: string, args: string[], options: { detached: true; stdio: "ignore"; windowsHide: true; env: Record<string, string> }): {
     pid?: number;
     unref: () => void;
   };
@@ -79,6 +79,18 @@ export function resolveHourBash(env: Record<string, string | undefined>, platfor
   return candidate;
 }
 
+/**
+ * The hour inherits the cockpit's environment minus every EMBER_* variable. The cockpit's own EMBER_* settings
+ * (model seat, API key, the startup entry itself) are not hour inputs; the governed preparer refuses any unlisted
+ * EMBER_* variable (receipted: H39 prep refused EMBER_API_KEY, EMBER_MODEL_SEAT, EMBER_STARTUP_RESUME_HOUR, ...).
+ * Every hour input is pinned inside the dispatch script, so nothing EMBER_* needs to pass through.
+ */
+export function hourEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) if (v !== undefined && !/^EMBER_/i.test(k)) out[k] = v;
+  return out;
+}
+
 export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryCommand {
   return {
     name: "resume-hour",
@@ -98,6 +110,7 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
         detached: true,
         stdio: "ignore",
         windowsHide: true,
+        env: hourEnv(process.env),
       });
       child.unref();
       if (!child.pid) return { type: "message", message: `REFUSED: bash did not start for ${check.script}` };
