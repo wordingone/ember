@@ -96,3 +96,14 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
     },
   };
 }
+
+/**
+ * One-shot startup entry: EMBER_STARTUP_RESUME_HOUR="<script> <sha256> <log>" makes the visible cockpit
+ * submit exactly one /resume-hour through the same governed slash path typed input takes. Only /resume-hour
+ * can be started this way; anything else (or an empty value) yields null.
+ */
+export function startupResumeHourInput(env: Record<string, string | undefined>): string | null {
+  const raw = env["EMBER_STARTUP_RESUME_HOUR"];
+  if (typeof raw !== "string" || raw.trim() === "" || /[\r\n]/.test(raw)) return null;
+  return `/resume-hour ${raw.trim()}`;
+}

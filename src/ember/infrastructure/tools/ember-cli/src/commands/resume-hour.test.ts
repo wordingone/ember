@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkResumeHourArgs, createResumeHourCommand } from "./resume-hour.ts";
+import { checkResumeHourArgs, createResumeHourCommand, startupResumeHourInput } from "./resume-hour.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 function world() {
@@ -66,5 +66,12 @@ describe("/resume-hour", () => {
     expect(o.detached).toBe(true);
     expect(unrefs).toBe(1);
     expect(existsSync(w.log)).toBe(true);
+  });
+
+  it("startup entry yields exactly one /resume-hour, and nothing for other or unsafe values", () => {
+    expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: " a b c " })).toBe("/resume-hour a b c");
+    expect(startupResumeHourInput({})).toBe(null);
+    expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: "  " })).toBe(null);
+    expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: "a b c\n/train" })).toBe(null);
   });
 });
