@@ -1813,6 +1813,13 @@ enum Command {
     DataCatalogStatus {
         db: PathBuf,
     },
+    DataCensus {
+        config: PathBuf,
+    },
+    IssueCertificate {
+        pipe: String,
+        certificate: PathBuf,
+    },
     DataCatalogImport {
         db: PathBuf,
         manifest: PathBuf,
@@ -2206,6 +2213,77 @@ fn parse_args() -> Result<Command, String> {
         }
         return Ok(Command::Runbook {
             output: PathBuf::from(output),
+        });
+    }
+
+    if command == "issue-certificate" {
+        let rest: Vec<String> = args.collect();
+        let (mut pipe, mut certificate) = (None, None);
+        let mut it = rest.into_iter();
+        while let Some(flag) = it.next() {
+            let value = it.next().ok_or_else(|| {
+                format!(
+                    "{flag} needs a value
+{}",
+                    usage()
+                )
+            })?;
+            match flag.as_str() {
+                "--pipe" if pipe.is_none() => pipe = Some(value),
+                "--certificate" if certificate.is_none() => {
+                    certificate = Some(PathBuf::from(value))
+                }
+                _ => {
+                    return Err(format!(
+                        "arguments do not match issue-certificate
+{}",
+                        usage()
+                    ))
+                }
+            }
+        }
+        return Ok(Command::IssueCertificate {
+            pipe: pipe.ok_or_else(|| {
+                format!(
+                    "missing --pipe
+{}",
+                    usage()
+                )
+            })?,
+            certificate: certificate.ok_or_else(|| {
+                format!(
+                    "missing --certificate
+{}",
+                    usage()
+                )
+            })?,
+        });
+    }
+
+    if command == "data-census" {
+        let flag = args.next().ok_or_else(|| {
+            format!(
+                "missing --config
+{}",
+                usage()
+            )
+        })?;
+        let config = args.next().ok_or_else(|| {
+            format!(
+                "missing value for {flag}
+{}",
+                usage()
+            )
+        })?;
+        if flag != "--config" || args.next().is_some() {
+            return Err(format!(
+                "arguments do not match data-census
+{}",
+                usage()
+            ));
+        }
+        return Ok(Command::DataCensus {
+            config: PathBuf::from(config),
         });
     }
 
@@ -3372,6 +3450,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &diagnostic_receipt_sha256,
                 )?)?
             );
+        }
+        Command::IssueCertificate { pipe, certificate } => {
+            let bytes = std::fs::read(&certificate)?;
+            let request = json!({"jsonrpc": "2.0", "id": 1, "method": "issue_run_certificate",
+                                 "params": {"certificate_json": String::from_utf8(bytes)?}});
+            println!(
+                "{}",
+                serde_json::to_string(&call_rpc(&pipe, &request, "issue-certificate")?)?
+            );
+        }
+        Command::DataCensus { config } => {
+            let report = ember_lab::data_census::census(&config).map_err(|e| e.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
         }
         Command::DataCatalogStatus { db } => {
             println!(

@@ -189,6 +189,12 @@ struct JobIdParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct IssueRunCertificateParams {
+    certificate_json: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct LaunchContextParams {
     job_id: String,
     daemon_mode: String,
@@ -620,6 +626,16 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
             };
             match daemon.job_result_encoded(&params.job_id) {
                 Ok(result) => (success(id, json!(result)), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "issue_run_certificate" => {
+            let params: IssueRunCertificateParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.issue_run_certificate(params.certificate_json.as_bytes()) {
+                Ok(sha) => (success(id, json!({"certificate_sha256": sha})), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
