@@ -65,6 +65,19 @@ export function checkResumeHourArgs(args: string, cwd: string): ResumeHourCheck 
   return { ok: true, script, sha256: actual, log };
 }
 
+/**
+ * The hour scripts are Git-for-Windows bash scripts. On Windows a bare "bash" on PATH can resolve to the
+ * Linux-subsystem shim (System32\bash.exe), which cannot run them and exits silently; so the shell is
+ * pinned, never PATH-resolved, and that shim is refused.
+ */
+export function resolveHourBash(env: Record<string, string | undefined>, platform: string = process.platform): string | null {
+  const pinned = env["EMBER_RESUME_HOUR_BASH"]?.trim();
+  const candidate = pinned || (platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash");
+  if (/system32[\\/]+bash\.exe$/i.test(candidate)) return null;
+  if (platform === "win32" && !existsSync(candidate)) return null;
+  return candidate;
+}
+
 export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryCommand {
   return {
     name: "resume-hour",
@@ -74,9 +87,11 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
     async execute(args: string, ctx: CommandContext): Promise<CommandResult> {
       const check = checkResumeHourArgs(args, ctx.cwd);
       if (!check.ok) return { type: "message", message: `REFUSED: ${check.reason}` };
+      const bash = deps.bash ?? resolveHourBash(process.env);
+      if (!bash) return { type: "message", message: "REFUSED: no Git bash (set EMBER_RESUME_HOUR_BASH; the System32 bash shim is refused)" };
       const fd = openSync(check.log, "a");
       const spawn = deps.spawn ?? (nodeSpawn as unknown as ResumeHourSpawn);
-      const child = spawn(deps.bash ?? "bash", [check.script], {
+      const child = spawn(bash, [check.script], {
         detached: true,
         stdio: ["ignore", fd, fd],
         windowsHide: true,
@@ -88,6 +103,7 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
         type: "message",
         message: [
           `RESUME_HOUR_STARTED pid=${child.pid}`,
+          `  bash:   ${bash}`,
           `  script: ${check.script}`,
           `  sha256: ${check.sha256}`,
           `  log:    ${check.log}`,

@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkResumeHourArgs, createResumeHourCommand, startupResumeHourInput } from "./resume-hour.ts";
+import { checkResumeHourArgs, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 function world() {
@@ -73,5 +73,11 @@ describe("/resume-hour", () => {
     expect(startupResumeHourInput({})).toBe(null);
     expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: "  " })).toBe(null);
     expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: "a b c\n/train" })).toBe(null);
+  });
+
+  it("never resolves the System32 bash shim", () => {
+    expect(resolveHourBash({ EMBER_RESUME_HOUR_BASH: "C:\\WINDOWS\\system32\\bash.exe" }, "win32")).toBe(null);
+    expect(resolveHourBash({}, "linux")).toBe("/bin/bash");
+    expect(resolveHourBash({ EMBER_RESUME_HOUR_BASH: "/usr/bin/bash" }, "linux")).toBe("/usr/bin/bash");
   });
 });
