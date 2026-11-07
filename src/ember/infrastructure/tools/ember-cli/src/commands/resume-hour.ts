@@ -19,10 +19,11 @@ import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs
 import { basename, resolve } from "node:path";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
 
+export const REDIRECT = 'exec bash "$0" >>"$1" 2>&1';
 export const DISPATCH_NAME = /^h\d+_dispatch_v\d+\.sh$/;
 
 export interface ResumeHourSpawn {
-  (command: string, args: string[], options: { detached: true; stdio: ["ignore", number, number]; windowsHide: true }): {
+  (command: string, args: string[], options: { detached: true; stdio: "ignore"; windowsHide: true }): {
     pid?: number;
     unref: () => void;
   };
@@ -89,14 +90,15 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
       if (!check.ok) return { type: "message", message: `REFUSED: ${check.reason}` };
       const bash = deps.bash ?? resolveHourBash(process.env);
       if (!bash) return { type: "message", message: "REFUSED: no Git bash (set EMBER_RESUME_HOUR_BASH; the System32 bash shim is refused)" };
-      const fd = openSync(check.log, "a");
+      // A detached child given file-descriptor stdio loses its output under the Windows Git bash launcher
+      // (receipted: the script runs, the log stays empty), so bash itself opens the log, and the log is created first.
+      closeSync(openSync(check.log, "a"));
       const spawn = deps.spawn ?? (nodeSpawn as unknown as ResumeHourSpawn);
-      const child = spawn(bash, [check.script], {
+      const child = spawn(bash, ["-c", REDIRECT, check.script, check.log], {
         detached: true,
-        stdio: ["ignore", fd, fd],
+        stdio: "ignore",
         windowsHide: true,
       });
-      closeSync(fd);
       child.unref();
       if (!child.pid) return { type: "message", message: `REFUSED: bash did not start for ${check.script}` };
       return {

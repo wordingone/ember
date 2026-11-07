@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkResumeHourArgs, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
+import { REDIRECT, checkResumeHourArgs, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 function world() {
@@ -62,7 +62,7 @@ describe("/resume-hour", () => {
     expect(calls.length).toBe(1);
     const [c, a, o] = calls[0] as [string, string[], { detached: boolean }];
     expect(c).toBe("bash-test");
-    expect(a).toEqual([w.script]);
+    expect(a).toEqual(["-c", REDIRECT, w.script, w.log]);
     expect(o.detached).toBe(true);
     expect(unrefs).toBe(1);
     expect(existsSync(w.log)).toBe(true);
