@@ -482,15 +482,8 @@ def main():
         args.parent_checkpoint, custody, selected_continuation_head, training_continuity_ledger,
         digest, read_json, args.from_genesis)
     if args.learning:
-        # Section 14 pair: a learning dispatch never defaults its parent. On a pre-#2119 head an
-        # omitted --parent-checkpoint resolves to a zero-parent above, which is exactly how the 09-28 genesis run started;
-        # absence, or any identity that differs from pair_parent_expected.json, refuses here before anything is frozen.
-        import pair_parent_binding
-        pair_binding = pair_parent_binding.verify_learning_parent(
-            chain, cursor, args.group_plan_sha256 if args.group_plan is not None else None, args.mixture_sha256,
-            stream_manifest_sha256=(image_text['manifest_sha256'] if args.image_text_manifest is not None else None))
-        custody.mkdir(parents=True, exist_ok=True)
-        (custody / 'pair-parent-binding.json').write_text(json.dumps(pair_binding, indent=1) + '\n', encoding='utf-8')
+        # The section 14 learning pair is not a resume path; its parent binding stays outside the repo.
+        raise ValueError('--learning is not supported by prepare_hour.py (resume path only)')
     # (H19 cursor finding): the declared cursor is never substituted (see checked_declared_cursor).
     checked_declared_cursor(data, cursor)
     if cursor is not None:
