@@ -52,7 +52,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_ROOT = os.path.dirname(HERE)          # .../scripts
-REPO_ROOT = os.path.dirname(SCRIPTS_ROOT)     # .../ember-goalforge
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_ROOT))))  # <root>/src/ember/governance/scripts -> <root>
 sys.path.insert(0, SCRIPTS_ROOT)
 
 from w1_collapse_control_run import (  # noqa: E402  (reused, never reimplemented)
