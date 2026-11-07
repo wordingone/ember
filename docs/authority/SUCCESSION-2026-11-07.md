@@ -22,8 +22,8 @@ leaves open.
 
 **Lineage facts at the boundary.**
 - v2's declared genesis checkpoint is the H39 child (checkpoint manifest
-  d4a908e3...), or the H40 child once it is promoted. It is a declared
-  starting input: the checkpoint lineage continues, the identity does not,
+  d4a908e3...). The H40 child (006350fd...) was scored and not promoted.
+  The genesis checkpoint is a declared starting input: the checkpoint lineage continues, the identity does not,
   and it inherits no v1 claim or creation credit.
 - Hours H1 through H40 declared no external-model contribution and trained
   no model-assisted input: they are model-free under v1 clause 3 as the
