@@ -209,18 +209,21 @@ VALID_POLICY = {
         "unrecovered_direct_names_minimum": 2,
     },
     "lineage": {
-        "borrowed_models_role": "frozen_reference_only",
+        "borrowed_models_role": "declared_training_resource",
+        "creation_claims_state_model_assisted": True,
+        "creation_rule": "invariant_v2_clause_3_declared_lineage",
         "forbidden_model_mediated_signals": [
             "weights",
-            "outputs",
-            "teachers",
-            "judges",
-            "filters",
-            "ranks",
-            "curricula",
-            "stopping_decisions",
             "hidden_external_cognition",
         ],
+        "model_assisted_conditions": [
+            "licence_recorded",
+            "per_hour_declaration",
+            "boundary_recorded_at_first_declared_hour",
+            "frozen_declared_judges",
+            "contamination_scrub_on_teacher_data",
+        ],
+        "model_free_baseline": "every_hour_before_the_first_declared_model_resource",
         "published_ideas_allowed": True,
         "transparent_deterministic_tools_allowed": True,
     },
@@ -275,7 +278,7 @@ VALID_POLICY = {
         "missing_native_modality",
         "missing_native_reasoning",
         "borrowed_backbone",
-        "model_mediated_signal",
+        "undeclared_model_mediated_signal",
         "mechanism_erasure",
         "missing_totality_member",
         "ambiguous_identity",
@@ -1412,7 +1415,7 @@ def test_policy_drift_mutations_are_rejected(tmp_path: Path, mutation, code: str
     [
         ({"total_parameters": 2_200_000_000}, "config.sub_3b_network"),
         ({"published_family_backbone": "llama"}, "config.borrowed_backbone"),
-        ({"model_mediated_signals": ["teachers"]}, "config.model_mediated_signal"),
+        ({"model_mediated_signals": ["teachers"]}, "config.undeclared_model_mediated_signal"),
     ],
 )
 def test_candidate_lineage_mutations_are_rejected(
@@ -1481,7 +1484,62 @@ def test_content_addressed_authority_sidecar_is_validated_without_model_semantic
     assert_rejected(tmp_path, "config.authority_sidecar_invalid")
 
 
-def test_any_declared_model_mediated_signal_is_rejected(tmp_path: Path) -> None:
+def _candidate_with_signals(tmp_path: Path, signals) -> None:
+    write_valid_fixture(tmp_path)
+    config = tmp_path / "configs" / "candidate.json"
+    config.write_text(
+        json.dumps(
+            {
+                "authority": {
+                    "artifact_class": "research_candidate",
+                    "execution_authority": "allowed",
+                    "goal_id": "EMBER-02",
+                    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+                    "total_parameters": 3_000_000_000,
+                    "native_capabilities": ["text", "image", "audio", "reasoning", "structured_tool_use"],
+                    "published_family_backbone": "none",
+                    "model_mediated_signals": signals,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+DECLARED_TEACHER = {"model": "open-teacher", "version": "sha256:" + "a" * 64, "role": "teacher", "licence_recorded": True, "share": 0.25}
+
+
+def test_declared_licence_recorded_model_signal_passes(tmp_path: Path) -> None:
+    """GOAL §6: a declared, licence-recorded model-assisted input is admissible."""
+    _candidate_with_signals(tmp_path, [DECLARED_TEACHER])
+    result = run_verifier(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "distillation",
+        {**DECLARED_TEACHER, "licence_recorded": False},
+        {k: v for k, v in DECLARED_TEACHER.items() if k != "version"},
+        {**DECLARED_TEACHER, "role": "weights"},
+        {**DECLARED_TEACHER, "share": 0},
+    ],
+)
+def test_undeclared_model_mediated_signal_is_rejected(tmp_path: Path, entry) -> None:
+    """GOAL §6 condition 2: a bare, unlicensed, unversioned, weights-role or zero-share signal refuses."""
+    _candidate_with_signals(tmp_path, [entry])
+    assert_rejected(tmp_path, "config.undeclared_model_mediated_signal")
+
+
+def test_policy_must_require_creation_claims_to_state_model_assisted_hours(tmp_path: Path) -> None:
+    """INVARIANT-v2 clauses 3/4: the policy may never drop the duty to state model-assisted hours in creation claims."""
+    write_valid_fixture(tmp_path)
+    rewrite_policy(tmp_path, lambda policy: policy["lineage"].update(creation_claims_state_model_assisted=False))
+    assert_rejected(tmp_path, "policy.creation_boundary")
+
+
+def test_any_declared_model_mediated_signal_is_rejected_legacy_name_retired(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     config = tmp_path / "configs" / "candidate.json"
     config.write_text(
@@ -1507,7 +1565,7 @@ def test_any_declared_model_mediated_signal_is_rejected(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    assert_rejected(tmp_path, "config.model_mediated_signal")
+    assert_rejected(tmp_path, "config.undeclared_model_mediated_signal")
 
 
 def test_borrowed_reference_requires_frozen_non_ingress_seat(tmp_path: Path) -> None:
