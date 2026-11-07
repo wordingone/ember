@@ -4,6 +4,7 @@
 
 // command-registry.ts — loads, caches, and queries the slash-command registry.
 
+import { createResumeHourCommand } from "./commands/resume-hour.ts";
 import type { RegistryCommand } from './types/command-types.ts';
 import { createObservatoryCommand } from './commands/observatory.ts';
 import { createWatchCommand } from './commands/watch.ts';
@@ -60,6 +61,7 @@ const defaultDeps: CommandRegistryDeps = {
     createFinetuneCommand(),
     createModelCommand(),
     createTrainCommand(),
+    createResumeHourCommand(),
     createVerifyCommand(),
     createVerifyTrainingCommand(),
     createAdmitCommand(),

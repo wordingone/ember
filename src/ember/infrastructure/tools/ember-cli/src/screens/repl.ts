@@ -113,6 +113,7 @@ import {
   tryDispatchSlashCommandSafely,
   parseSlashInput,
 } from "../services/slash-dispatch.ts";
+import { startupResumeHourInput } from "../commands/resume-hour.ts";
 import { consumePostCompaction } from "../session-state.ts";
 import { OperatorInjector } from "../services/operator-input.ts";
 import { startOperatorPipe } from "../services/operator-pipe.ts";
@@ -1908,6 +1909,16 @@ export function ReplScreen({
     }
   };
   submitPromptRef.current = submitPrompt;
+
+  // One-shot START entry (commands/resume-hour.ts): submitted once per process through the governed
+  // operator path, never re-read on re-render.
+  const startupResumeHourDoneRef = useRef(false);
+  useEffect(() => {
+    if (startupResumeHourDoneRef.current) return;
+    startupResumeHourDoneRef.current = true;
+    const input = startupResumeHourInput(process.env);
+    if (input !== null) void submitPromptRef.current(input, "operator");
+  }, []);
 
   // issue #283: flush a queued Enter-while-busy submission the instant busy
   // flips false -- the queue is cleared BEFORE the async submitPrompt call so
