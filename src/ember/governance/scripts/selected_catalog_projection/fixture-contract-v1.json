@@ -1,0 +1,34 @@
+{
+  "schema": "niko.terminal_budget_r1.fixture_contract.v1",
+  "authority": [
+    "Leo75391",
+    "Leo75425"
+  ],
+  "status": "PREPARED_NOT_EXECUTED",
+  "production_limit_bytes": 134217728,
+  "reservation_bytes": 8192,
+  "reservation_state": "RESERVED_PENDING_UNACCEPTED",
+  "synthetic_root_limit_bytes": 131072,
+  "max_total_fixture_written_bytes": 8388608,
+  "max_wall_seconds": 90,
+  "process_job_private_bytes": 536870912,
+  "compute_threads": 1,
+  "priority": "BelowNormal",
+  "C_floor_bytes": 161061273600,
+  "Python": false,
+  "B_payload_access": false,
+  "execute_only_after_owner_window_close": true,
+  "scope": [
+    "old unconditional terminal write reaches root overrun (expected red)",
+    "same-path reservation and preflight refused before writes when too large",
+    "actual changed source writer reaches exact synthetic root ceiling with reserved terminal",
+    "one byte beyond source capacity refuses before write; staging retained",
+    "success/refusal terminal replacement does not grow root",
+    "missing/truncated/tampered reserve refuses before promotion",
+    "oversized terminal becomes truthful bounded failure",
+    "final receipt and root bytes verified by readback"
+  ],
+  "no_scale_replay": true,
+  "no_production": true,
+  "no_automatic_retry": true
+}

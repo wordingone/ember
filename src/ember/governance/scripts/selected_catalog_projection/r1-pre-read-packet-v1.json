@@ -1,0 +1,66 @@
+{
+  "schema": "niko.memory_terminal_budget_r1.pre_read_packet.v1",
+  "status": "FILE_ONLY_PREPARED_RUNTIME_UNHELD",
+  "authority": [
+    "Leo75391",
+    "Leo75425"
+  ],
+  "original_review": {
+    "path": "C:/Users/Admin/AppData/Local/Temp/ember-kai-reviews/20261009/memory-successor-delta-review-1752Z.json",
+    "bytes": 4933,
+    "sha256": "e63a39969db7e243b776d0cd6a4d3812a4130abb8b8788ee7fa044dcac2b5a04",
+    "event_utc": "2026-10-09T17:51:28.2089991Z",
+    "verdict": "REDO_R1_ONLY"
+  },
+  "product_root": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-terminal-r1-leo75391-20261009T1800Z",
+  "product_root_initial_bytes": 114574,
+  "product_root_limit_bytes": 134217728,
+  "reservation_bytes": 8192,
+  "reservation_sha256": "0ace1e1d248552ef7c10eb951d56907c6f4da6f20025ddb1d61d3f8994fa5cb3",
+  "files": [
+    {
+      "name": "selected_projection_memory_r1.cs",
+      "bytes": 68236,
+      "sha256": "43f93066866ad44d9e2ec8fe06888d6d914321a3a18aa969affb5aaa5670a390"
+    },
+    {
+      "name": "run_selected_projection_memory_v1.ps1",
+      "bytes": 7338,
+      "sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+      "unchanged": true
+    },
+    {
+      "name": "binding-memory-r1.json",
+      "bytes": 13082,
+      "sha256": "8cd5c9311d7518e74e3b534da4e7aa18e88a4cf62b958fa1e8d6be2906ebbda6"
+    },
+    {
+      "name": "run-command-memory-r1.ps1",
+      "bytes": 25918,
+      "sha256": "4a8629dc5928c110bffbdc2b4b0b02e897a5342832c29712a8eec078390dc702"
+    }
+  ],
+  "unchanged_limits": {
+    "process_job_private_bytes": 536870912,
+    "input_total_bytes": 2415919104,
+    "export_max_bytes": 805306368,
+    "metadata_passes": 2,
+    "wall_seconds": 900,
+    "priority": "BelowNormal",
+    "compute_threads": 1,
+    "C_floor_bytes": 161061273600,
+    "marker_policy": "ABSENT_REQUIRED_NO_TENANT_OVERRIDE"
+  },
+  "accepted_predecessor_memory_suite_sha256": "2e702828e73daca85cba4bdaae895a227a313de17ba285f9cfa289df0bfbea87",
+  "accepted_algorithm_evidence_not_r1_execution": true,
+  "fixture_contract_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\fixture-contract-v1.json",
+  "fixture_contract_sha256": "7012f65c1e6f93eff00d6be6241574c1ace83bf707a8d7556a657e4af07e9238",
+  "red_green_execution": "UNHELD_UNTIL_OWNER_WINDOW_CLOSE",
+  "compilation": "UNHELD_UNTIL_OWNER_WINDOW_CLOSE",
+  "automatic_retry": false,
+  "scale_replay": false,
+  "production_executed": false,
+  "Kai_recheck": "changed budget/terminal code and four pins after one narrow fixture",
+  "publication": "one additional commit after owner window close via existing approved owned_process and wrappers; CI policy verdict perLeo75383",
+  "no_B_write_or_Python": true
+}

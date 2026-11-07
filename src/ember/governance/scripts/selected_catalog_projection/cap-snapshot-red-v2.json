@@ -1,0 +1,66 @@
+{
+  "schema": "niko.cap_failure_snapshot.synthetic.v1",
+  "status": "EXPECTED_RED_MISSING_CAP_SNAPSHOT",
+  "observed_utc": "2026-10-09T15:52:09.4726324Z",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\selected_projection_preselected_leo74705.cs",
+  "source_sha256": "e8f54c317ce8b275fe6778b37423f6b2a9a509319db3474e802186f4410351f2",
+  "test_threshold_bytes": 1,
+  "production_cap_bytes": 536870912,
+  "test_scope": "C-only real Scan row check at64; fixture callback lowers only synthetic binding; separate direct diagnostic cap; no production input/run",
+  "checks": {
+    "row_guard_CAP_PRIVATE": true,
+    "row_failure_snapshot_retained": false,
+    "row_failure_index_counts": false,
+    "row_failure_private_observation_above_cap": false,
+    "direct_cap_snapshot_retained": false,
+    "direct_guard_CAP_PRIVATE": true,
+    "measured_peak_retained": true,
+    "production_source_not_lowered": true
+  },
+  "row_refusal_diagnostics": {
+    "error_type": "System.Reflection.TargetInvocationException",
+    "reason_code": "System.InvalidOperationException",
+    "stack_trace": "System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.\r\n ---> System.InvalidOperationException: CAP_PRIVATE:metadata_row\r\n   at NikoSelectedProjection.Runner.Check(Binding b, Stopwatch sw, Int64 bytes, String where, Boolean markerCheckpoint)\r\n   at NikoSelectedProjection.Runner.Scan(FileStream fs, Binding b, Stopwatch sw, Int64& total, Boolean hashPass, Boolean rootOrderGate, Action`1 onRow, ScanState s, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   --- End of inner exception stack trace ---\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Run(String input)",
+    "a_input_bytes_read": 0,
+    "private_bytes_peak_observed": 106270720,
+    "private_usage_sample_count": 3,
+    "exception_chain": [
+      {
+        "type": "System.Reflection.TargetInvocationException",
+        "message": "Exception has been thrown by the target of an invocation.",
+        "hresult": -2146232828,
+        "stack_trace": "   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Run(String input)"
+      },
+      {
+        "type": "System.InvalidOperationException",
+        "message": "CAP_PRIVATE:metadata_row",
+        "hresult": -2146233079,
+        "stack_trace": "   at NikoSelectedProjection.Runner.Check(Binding b, Stopwatch sw, Int64 bytes, String where, Boolean markerCheckpoint)\r\n   at NikoSelectedProjection.Runner.Scan(FileStream fs, Binding b, Stopwatch sw, Int64& total, Boolean hashPass, Boolean rootOrderGate, Action`1 onRow, ScanState s, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)"
+      }
+    ],
+    "diagnostic_snapshots": []
+  },
+  "direct_refusal_diagnostics": {
+    "error_type": "System.Reflection.TargetInvocationException",
+    "reason_code": "System.InvalidOperationException",
+    "stack_trace": "System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.\r\n ---> System.InvalidOperationException: CAP_PRIVATE:diagnostic_snapshot:direct_cap\r\n   at NikoSelectedProjection.Runner.CaptureDiagnosticSnapshot(String checkpoint, ScanState state, Int64 maxPrivate, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   --- End of inner exception stack trace ---\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Direct()",
+    "a_input_bytes_read": 0,
+    "private_bytes_peak_observed": 106934272,
+    "private_usage_sample_count": 1,
+    "exception_chain": [
+      {
+        "type": "System.Reflection.TargetInvocationException",
+        "message": "Exception has been thrown by the target of an invocation.",
+        "hresult": -2146232828,
+        "stack_trace": "   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)\r\n   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\r\n   at System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)\r\n   at CapSnapshotFixture.Direct()"
+      },
+      {
+        "type": "System.InvalidOperationException",
+        "message": "CAP_PRIVATE:diagnostic_snapshot:direct_cap",
+        "hresult": -2146233079,
+        "stack_trace": "   at NikoSelectedProjection.Runner.CaptureDiagnosticSnapshot(String checkpoint, ScanState state, Int64 maxPrivate, Func`1 indexCounts)\r\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\r\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)"
+      }
+    ],
+    "diagnostic_snapshots": []
+  }
+}

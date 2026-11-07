@@ -1,0 +1,28 @@
+{
+  "schema": "niko.private_usage_observer.synthetic_validation.v1",
+  "status": "PASS",
+  "source_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-memory-successor-leo75037-20261009T1718Z\\selected_projection_memory_v1.cs",
+  "source_sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+  "started_utc": "2026-10-09T17:25:12.1844068Z",
+  "finished_utc": "2026-10-09T17:25:12.8116687Z",
+  "production_process_and_job_limit_bytes": 536870912,
+  "fixed_row_poll_interval": 64,
+  "steady_pass_peak_private_bytes": 91635712,
+  "steady_sample_count_after_63_rows": 0,
+  "steady_sample_count_after_64_rows": 1,
+  "steady_sample_count_after_pass_boundary": 2,
+  "synthetic_guard_threshold_bytes": 92749824,
+  "synthetic_overcap_observed_private_bytes": 109232128,
+  "injected_failure_reason_code": "OBSERVER_FAILED(System.ComponentModel.Win32Exception)",
+  "checks": {
+    "steady_pass_peak_recorded": true,
+    "fixed_64_row_poll_interval": true,
+    "pass_boundary_sampled": true,
+    "real_allocation_crossed_synthetic_threshold": true,
+    "synthetic_guard_refused_CAP_PRIVATE": true,
+    "production_512MiB_limit_unchanged": true,
+    "injected_query_failure_refuses_OBSERVER_FAILED": true,
+    "failure_schema_has_reason_chain_and_byte_count": true
+  },
+  "failure": ""
+}

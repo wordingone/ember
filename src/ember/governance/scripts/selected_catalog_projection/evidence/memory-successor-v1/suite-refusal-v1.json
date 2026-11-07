@@ -1,0 +1,30 @@
+{
+  "schema": "niko.selected_catalog_projection.memory_suite_validation.v1",
+  "status": "REFUSED_NOT_COMPLETE",
+  "start_utc": "2026-10-09T17:22:01.8839541Z",
+  "end_utc": "2026-10-09T17:22:05.1295976Z",
+  "elapsed_seconds": 3.2404264,
+  "c_free_before_bytes": 179951468544,
+  "legs": [
+    {
+      "exit_code": 1,
+      "timed_out": false,
+      "cleanup_verified": true,
+      "child_pid": 48656,
+      "start_utc": "2026-10-09T17:22:01.9873467Z",
+      "end_utc": "2026-10-09T17:22:05.1151562Z",
+      "stdout": "",
+      "stderr": "ParentContainsErrorRecordException: C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\fixture-boundary.ps1:48\r\nLine |\r\n  48 |  . String('N');$gate=[Threading.EventWaitHandle]::new($false,[Threading. .\r\n     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n     | Exception calling \".ctor\" with \"3\" argument(s): \"The filename, directory name, or volume label syntax is\r\n     | incorrect. : 'Local\\\\NikoMemoryFixture-71c6eec55600409f8a38ec5b39e12a21'.\"\r\n",
+      "active_job_processes": 0,
+      "process_memory_limit_bytes": 0,
+      "job_memory_limit_bytes": 0,
+      "name": "baseline-byte-equality-and-global-duplicate-refusals"
+    }
+  ],
+  "error": "System.Management.Automation.RuntimeException: FIXTURE_LEG_REFUSED:baseline-byte-equality-and-global-duplicate-refusals",
+  "source_sha256": "ea3078313f20ce7f03cda9766db44949ea0e6cd7d6574175ea42e444bbdc816f",
+  "runner_sha256": "a97416abebbaa13af387a18d418984182d829bd2efc8253be52ada705827bf52",
+  "automatic_retry": false,
+  "production_executed": false,
+  "admission_proved": false
+}

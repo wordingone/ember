@@ -1,0 +1,1 @@
+{"status":"PASS_R1_BOUNDARY_CONTROLLER","terminal":"C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\fixture-controller-terminal-v1.json","sha256":"c375b8a49bcfd5e8da963e2b7a26432874ac5f90275f92126700114d12fefd22","exit_code":0,"cleanup_verified":true,"active_job_processes":0}

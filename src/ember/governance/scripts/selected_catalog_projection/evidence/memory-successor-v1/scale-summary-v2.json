@@ -1,0 +1,187 @@
+{
+  "schema": "niko.selected_catalog_projection.summary.v1",
+  "status": "COMPLETE_SELECTED_CATALOG_PROJECTION",
+  "scope": "eight frozen dataset IDs only; not a global admitted total or current_208 selector",
+  "dataset_ids": [
+    "dataset:issue1581-bulk-train:scale-0",
+    "dataset:issue1581-bulk-train:scale-1",
+    "dataset:issue1581-bulk-train:scale-2",
+    "dataset:issue1581-bulk-train:scale-3",
+    "dataset:issue1581-bulk-train:scale-4",
+    "dataset:issue1581-bulk-train:scale-5",
+    "dataset:issue1581-bulk-train:scale-6",
+    "dataset:issue1581-bulk-train:scale-7"
+  ],
+  "selected_dataset_version_states": [
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-0",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-1",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-2",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-3",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-4",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-5",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-6",
+      "state": "admitted"
+    },
+    {
+      "dataset_id": "dataset:issue1581-bulk-train:scale-7",
+      "state": "admitted"
+    }
+  ],
+  "selected_membership_edge_rows": 130578,
+  "selected_membership_row_occurrences": 130578,
+  "unique_selected_membership_ids": 130578,
+  "duplicate_selected_membership_occurrences": 0,
+  "unique_selected_sha256s": 130103,
+  "unique_selected_object_digests": 130103,
+  "selected_source_record_rows": 264785,
+  "excluded_source_record_rows": 163274,
+  "nonselected_source_record_rows": 163274,
+  "selected_source_edge_rows": 260681,
+  "excluded_source_edge_rows": 0,
+  "nonselected_source_edge_rows": 0,
+  "global_analysis_context_edge_rows": 0,
+  "logical_export_row_counts": {
+    "records": {
+      "unit": "record",
+      "logical_rows": 428059,
+      "pass1_observations": 428059,
+      "pass2_observations": 428059,
+      "selected_rows": 264785,
+      "excluded_rows": 163274,
+      "nonselected_rows": 163274
+    },
+    "edges": {
+      "unit": "edge",
+      "logical_rows": 260681,
+      "pass1_observations": 260681,
+      "pass2_observations": 260681,
+      "selected_rows": 260681,
+      "excluded_rows": 0,
+      "nonselected_rows": 0
+    }
+  },
+  "per_kind_export_row_counts": {
+    "records": [
+      {
+        "kind": "string:dataset_version",
+        "unit": "record",
+        "logical_rows": 8,
+        "pass1_observations": 8,
+        "pass2_observations": 8,
+        "selected_rows": 8,
+        "excluded_rows": 0,
+        "nonselected_rows": 0
+      },
+      {
+        "kind": "string:immutable_object",
+        "unit": "record",
+        "logical_rows": 130103,
+        "pass1_observations": 130103,
+        "pass2_observations": 130103,
+        "selected_rows": 130103,
+        "excluded_rows": 0,
+        "nonselected_rows": 0
+      },
+      {
+        "kind": "string:membership",
+        "unit": "record",
+        "logical_rows": 293852,
+        "pass1_observations": 293852,
+        "pass2_observations": 293852,
+        "selected_rows": 130578,
+        "excluded_rows": 163274,
+        "nonselected_rows": 163274
+      },
+      {
+        "kind": "string:receipt",
+        "unit": "record",
+        "logical_rows": 4096,
+        "pass1_observations": 4096,
+        "pass2_observations": 4096,
+        "selected_rows": 4096,
+        "excluded_rows": 0,
+        "nonselected_rows": 0
+      }
+    ],
+    "edges": [
+      {
+        "kind": "string:object_receipt",
+        "unit": "edge",
+        "logical_rows": 130103,
+        "pass1_observations": 130103,
+        "pass2_observations": 130103,
+        "selected_rows": 130103,
+        "excluded_rows": 0,
+        "nonselected_rows": 0
+      },
+      {
+        "kind": "string:version_membership",
+        "unit": "edge",
+        "logical_rows": 130578,
+        "pass1_observations": 130578,
+        "pass2_observations": 130578,
+        "selected_rows": 130578,
+        "excluded_rows": 0,
+        "nonselected_rows": 0
+      }
+    ]
+  },
+  "count_class_semantics": "selected rows match the frozen selector or selected digest joins; excluded and nonselected are the same unmatched subset and overlap exactly, so do not add all three. Logical source rows count once; pass1_observations and pass2_observations are visits. evaluation_object edges remain global leakage context even though they are nonselected from the selected projection.",
+  "repeated_digest_membership_edges": 475,
+  "per_dataset_membership_edges": {
+    "dataset:issue1581-bulk-train:scale-0": 16323,
+    "dataset:issue1581-bulk-train:scale-1": 16323,
+    "dataset:issue1581-bulk-train:scale-2": 16322,
+    "dataset:issue1581-bulk-train:scale-3": 16322,
+    "dataset:issue1581-bulk-train:scale-4": 16322,
+    "dataset:issue1581-bulk-train:scale-5": 16322,
+    "dataset:issue1581-bulk-train:scale-6": 16322,
+    "dataset:issue1581-bulk-train:scale-7": 16322
+  },
+  "dataset_or_membership_state_mismatch_rows": 0,
+  "tokenizer_mismatch_rows": 0,
+  "invalid_or_missing_declared_window_rows": 0,
+  "missing_selected_objects": 0,
+  "duplicate_object_rows": 0,
+  "duplicate_selected_version_membership_edges": 0,
+  "selected_object_receipt_edge_rows": 130103,
+  "unresolved_receipt_edges": 0,
+  "selected_sha_intersections": {
+    "admitted_non_train": 0,
+    "quarantined_train": 0,
+    "protected_evaluation": 0,
+    "adjudicated_non_train": 0
+  },
+  "export_top_level_key_order": [
+    "records",
+    "edges"
+  ],
+  "export_root_array_order": [
+    "records",
+    "edges"
+  ],
+  "metadata_order_plan": "records_before_edges",
+  "candidate_key_type_counts": {},
+  "candidate_boundary": "direct property names/types only; values unread",
+  "content_boundary": "paths/captions/payloads/source text/token arrays/image bytes not materialized",
+  "current_208": "UNKNOWN"
+}

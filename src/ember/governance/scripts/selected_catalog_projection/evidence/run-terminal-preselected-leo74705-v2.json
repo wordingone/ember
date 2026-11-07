@@ -1,0 +1,22 @@
+{
+  "schema": "niko.selected_catalog_projection.outer_terminal.v1",
+  "status": "TERMINAL_FAILURE",
+  "outer_pid": 47856,
+  "child_pid": 49512,
+  "child_exit_code": 1,
+  "outer_exit_code": 1,
+  "reason": "CHILD_EXIT",
+  "start_utc": "2026-10-09T16:14:49.5149964Z",
+  "end_utc": "2026-10-09T16:15:03.9522946Z",
+  "elapsed_seconds": 14.4370878,
+  "cleanup_verified": true,
+  "active_job_processes": 0,
+  "private_usage_threshold_bytes": 536870912,
+  "process_memory_limit_bytes": 536870912,
+  "job_memory_limit_bytes": 536870912,
+  "preflight_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\final-launch-gate-preselected-leo74705-v2.json",
+  "preflight_sha256": "2a19d86912562c48998a3d27ee5471940eca00915ce71485e4abe3a3a037f0f0",
+  "command_sha256": "00dc6d1abeaa2ad2a5f69d7e76782c91f91edd2ddbc6d63a5b21f24f5c9ee5e9",
+  "binding_sha256": "2a53fa0bc152e474ddd7c2ba11bcf00985392c46a5e7ea1695ac04f4c1f63010",
+  "terminal_receipt_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-preselected-membership-leo74705-20261009T1530Z\\run-terminal-preselected-leo74705-v2.json"
+}

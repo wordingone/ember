@@ -1,0 +1,15 @@
+{
+  "schema": "niko.r1_outer_controller_terminal.v1",
+  "start_utc": "2026-10-09T18:21:06.0574925Z",
+  "end_utc": "2026-10-09T18:21:08.8994251Z",
+  "child_pid": 47592,
+  "exit_code": 0,
+  "completed_before_90_seconds": true,
+  "cleanup_verified": true,
+  "active_job_processes": 0,
+  "stdout_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\r1-outer-terminal-v1\\stdout.txt",
+  "stderr_path": "C:\\Users\\Admin\\.codex\\visualizations\\2026\\10\\01\\01a0f8e5-f04d-7141-af6f-51c1dac8a822\\1581-terminal-budget-r1-fixture-leo75391-20261009T1800Z\\r1-outer-terminal-v1\\stderr.txt",
+  "production_executed": false,
+  "automatic_retry": false,
+  "validation_runtime_read_write_boundary": "C only; no Python; each projection child has its own 512MiB process/job cap, scaffold job is kill-on-close only"
+}
