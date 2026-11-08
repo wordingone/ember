@@ -16,9 +16,7 @@ minimum_new_network_parameters: none
 >
 > **Plain-language reading guide.** *Clean genesis* means that the model
 > lineage begins without borrowed model weights, outputs, teachers, judges, or
-> hidden external cognition. Declared model-assisted training (GOAL §6) is
-> allowed, but a model-assisted lineage never earns this milestone's creation
-> credit. *Sufficiently trained* means useful capability is
+> hidden external cognition; declared model-assisted training (GOAL §6) never earns this milestone's creation credit. *Sufficiently trained* means useful capability is
 > demonstrated by the exact checkpoint, not merely that parameters were
 > allocated or a smoke run completed. *Native* means the owned model itself
 > performs the capability. *Checkpoint-bound evidence* ties a result to exact
