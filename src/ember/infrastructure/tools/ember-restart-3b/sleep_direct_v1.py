@@ -154,7 +154,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
         def logits(tokens):
             t = torch.tensor(tokens, dtype=torch.long, device=device)
             pos = torch.tensor([[i, 0, 0] for i in range(len(tokens))], dtype=torch.long, device=device)
-            with model.candidate_step():
+            with sleep.step_context(model, device):
                 return model(model.embed_text(t), pos, document_starts=(0,))
         return logits
 

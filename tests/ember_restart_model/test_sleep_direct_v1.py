@@ -79,3 +79,19 @@ def test_lineage_refuses_a_placement_left_with_training_flags():
     with pytest.raises(ValueError, match='placement differ'):
         counter._cia_derive_first_lineage('root', parent, _facts({'t': 'a', 'u': 'b', 'f': 'c'}, {'t': 10, 'u': 10}), child,
                                           _facts({'t': 'A', 'u': 'b', 'f': 'c'}, {'t': 13, 'u': 10}), owner_update_counts={'t': 3})
+
+
+def test_step_context_is_null_on_cpu_and_candidate_step_on_cuda():
+    sleep = importlib.import_module('sleep_consolidate_v1')
+
+    class Model:
+        def candidate_step(self):
+            raise AssertionError('cpu must not enter candidate_step')
+    with sleep.step_context(Model(), 'cpu'):
+        pass
+    marker = object()
+
+    class Cuda:
+        def candidate_step(self):
+            return marker
+    assert sleep.step_context(Cuda(), 'cuda:0') is marker
