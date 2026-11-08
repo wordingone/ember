@@ -58,6 +58,8 @@ GUARD_SUPPORT_FILES = [
     "src/ember/governance/scripts/receipt_check.py",
     "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
     "docs/authority/INVARIANT.md",
+    "docs/authority/INVARIANT-v2.md",
+    "docs/authority/SUCCESSION-2026-11-07.md",
     "docs/domains/governance/authority/STATE.md",
     "docs/domains/governance/authority/GOVERNANCE.md",
     "README.md",
