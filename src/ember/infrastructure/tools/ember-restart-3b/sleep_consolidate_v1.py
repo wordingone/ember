@@ -168,6 +168,36 @@ def step_context(model, device):
     return contextlib.nullcontext() if str(device) == 'cpu' else model.candidate_step()
 
 
+def torch_globals() -> dict:
+    """The process-wide torch state a forward depends on (logged before forwards; SLEEP-1 probe-2 rule)."""
+    return dict(default_dtype=str(torch.get_default_dtype()), grad=torch.is_grad_enabled(),
+                autocast_cuda=torch.is_autocast_enabled('cuda'), autocast_cpu=torch.is_autocast_enabled('cpu'))
+
+
+class GlobalScope:
+    """Restores the default dtype captured at construction around every forward and records each distinct global
+    state seen per caller, so a restore or optimizer path that flips process state cannot reach the teacher silently."""
+
+    def __init__(self, record):
+        self.dtype = torch.get_default_dtype()
+        self.record = record
+        self.seen = set()
+
+    @contextlib.contextmanager
+    def __call__(self, who):
+        state = torch_globals()
+        key = (who, tuple(sorted(state.items())))
+        if key not in self.seen:
+            self.seen.add(key)
+            self.record(dict(who=who, captured_default_dtype=str(self.dtype), **state))
+        previous = torch.get_default_dtype()
+        torch.set_default_dtype(self.dtype)
+        try:
+            yield
+        finally:
+            torch.set_default_dtype(previous)
+
+
 def count_routes(model, prefixes, device):  # pragma: no cover - GPU binding
     """Chosen-expert counts per layer on the teacher's own prefixes, once, before training (places the 2 expert deltas).
     Each decoder route is (document, layer, start, candidates, chosen)."""

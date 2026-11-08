@@ -122,6 +122,13 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
     teacher.eval()
     teacher.activate_cuda(device)
     torch.cuda.reset_peak_memory_stats(device)
+    globals_log = out / 'torch-globals.jsonl'
+
+    def record(row):
+        row['t'] = round(time.monotonic(), 2)
+        with globals_log.open('a', encoding='utf-8') as f:
+            f.write(json.dumps(row) + '\n')
+    scope = sleep.GlobalScope(record)   # captured right after the teacher build, before any student work
 
     # student: the parent's hour build, then the full restore (model + moments) at the parent's own lr
     sreceipt = artifacts.published_checkpoint_receipt(Path(args.student_root))
@@ -139,7 +146,13 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
                                                    max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
     cursor = restored['data_cursor']
 
-    routing = sleep.count_routes(teacher, prefixes, device)
+    record(dict(who='after_student_restore', **sleep.torch_globals()))
+    with scope('teacher_probe'), sleep.step_context(teacher, device):
+        probe = teacher.embed_text(torch.tensor(prefixes[0], dtype=torch.long, device=device))
+    record(dict(who='teacher_embed_after_restore', dtype=str(probe.dtype), shape=list(probe.shape), device=str(probe.device)))
+    del probe
+    with scope('teacher_count_routes'):
+        routing = sleep.count_routes(teacher, prefixes, device)
     (out / 'routing-counts.json').write_text(json.dumps(routing, indent=1) + '\n', encoding='utf-8')
     targets = list(FIXED_TARGETS) + pick_routed(routing, support['experts'])
     flags = {n: p.requires_grad for n, p in inventory.items()}
@@ -150,12 +163,15 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
         p.requires_grad_(n in targets); p.grad = None
     student.train()
 
-    def fn(model):
+    def fn(model, who):
         def logits(tokens):
             t = torch.tensor(tokens, dtype=torch.long, device=device)
             pos = torch.tensor([[i, 0, 0] for i in range(len(tokens))], dtype=torch.long, device=device)
-            with sleep.step_context(model, device):
-                return model(model.embed_text(t), pos, document_starts=(0,))
+            with scope(who), sleep.step_context(model, device):
+                embedded = model.embed_text(t)
+                if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= 4096:
+                    record(dict(who=who, refusal='embedded', dtype=str(embedded.dtype), length=len(embedded)))
+                return model(embedded, pos, document_starts=(0,))
         return logits
 
     ledger = sleep.Ledger(out / 'self-dream-ledger.jsonl', dict(teacher=args.teacher_manifest_sha256, student=args.student_manifest_sha256))
@@ -165,7 +181,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
             break
         t0 = time.perf_counter()
         batch = [prefixes[(step * args.batch + j) % len(prefixes)] for j in range(args.batch)]
-        terms = sleep.consolidation_step(fn(student), fn(teacher), [], optimizer, batch, cont_len=args.cont_len, seed=step, ledger=ledger)
+        terms = sleep.consolidation_step(fn(student, 'student'), fn(teacher, 'teacher'), [], optimizer, batch, cont_len=args.cont_len, seed=step, ledger=ledger)
         if not all(math.isfinite(v) for v in terms.values()):
             raise ValueError(f'non-finite loss at step {step}')
         for t in targets:
