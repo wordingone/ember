@@ -882,6 +882,41 @@ def validate_continuation(runner, identity):
     return dict(root=root, hour=hour, reference=reference, hour_binding=hour_binding, pack=pack, child=child)
 
 
+def parent_learning_rate(parent):
+    """The single lr every group of the parent checkpoint's optimizer identity carries."""
+    groups = (parent.get('optimizer_identity') or {}).get('param_groups')
+    lrs = {group['hyperparameters']['lr'] for group in groups} if isinstance(groups, list) and groups else set()
+    if len(lrs) != 1:
+        raise ValueError('parent optimizer identity does not carry one learning rate')
+    return next(iter(lrs))
+
+
+def restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner, load):
+    """Restore a chained parent, then apply a declared lr (#2119).
+
+    The parent is loaded at its own lr, so every restore identity check compares like with like and the moment
+    tensors load untouched. Only a governed declaration (hour.declared_lr equal to the identity's optimizer lr) may
+    change the lr after the restore; an undeclared difference refuses before anything is mutated."""
+    parent_lr = parent_learning_rate(parent)
+    target = definition['lr']
+    if parent_lr == target:
+        return load()
+    if hour.get('declared_lr') != target:
+        raise ValueError(f'chained hour lr {target} differs from parent lr {parent_lr} without a declared_lr')
+    # the CIA identity binds both the defaults and every group, so both are set for the restore and both move after
+    optimizer.defaults['lr'] = parent_lr
+    for group in optimizer.param_groups:
+        group['lr'] = parent_lr
+    restored = load()
+    optimizer.defaults['lr'] = target
+    for group in optimizer.param_groups:
+        group['lr'] = target
+    runner._write_new(custody / 'lr-override.json', dict(parent_lr=parent_lr, declared_lr=target,
+        applied_after_restore=True, groups=len(optimizer.param_groups),
+        claim='The parent restored at its own lr; the declared lr applies to every update of this hour.'))
+    return restored
+
+
 def run_continuation(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
     """A new native worker restores the hour checkpoint and independently executes its next update."""
     import torch
@@ -1071,8 +1106,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         parent = artifacts.published_checkpoint_receipt(parent_root)
         if parent['checkpoint_manifest_sha256'] != chain['manifest_sha256']:
             raise ValueError('chained hour parent manifest differs from its bound digest')
-        restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
-            max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
+        restored = restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner,
+            lambda: artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
+                max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB))
         cursor = parent['data_cursor']
         if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
