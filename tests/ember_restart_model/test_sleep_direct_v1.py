@@ -95,3 +95,20 @@ def test_step_context_is_null_on_cpu_and_candidate_step_on_cuda():
         def candidate_step(self):
             return marker
     assert sleep.step_context(Cuda(), 'cuda:0') is marker
+
+
+def test_global_scope_restores_a_flipped_default_dtype_and_records_it():
+    sleep = importlib.import_module('sleep_consolidate_v1')
+    rows = []
+    scope = sleep.GlobalScope(rows.append)
+    previous = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(torch.float64)   # a restore path flipping process state
+        with scope('teacher'):
+            assert torch.get_default_dtype() == previous
+        assert torch.get_default_dtype() == torch.float64
+        with scope('teacher'):
+            pass
+        assert len(rows) == 1 and rows[0]['default_dtype'] == 'torch.float64' and rows[0]['who'] == 'teacher'
+    finally:
+        torch.set_default_dtype(previous)
