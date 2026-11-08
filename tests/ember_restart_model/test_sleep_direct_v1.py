@@ -112,3 +112,11 @@ def test_global_scope_restores_a_flipped_default_dtype_and_records_it():
         assert len(rows) == 1 and rows[0]['default_dtype'] == 'torch.float64' and rows[0]['who'] == 'teacher'
     finally:
         torch.set_default_dtype(previous)
+
+
+def test_check_prefixes_refuses_an_empty_prefix_before_any_load():
+    direct.check_prefixes([[10, 11], [12]], cont_len=32)
+    with pytest.raises(ValueError, match='prefix 1 is empty'):
+        direct.check_prefixes([[10, 11], []], cont_len=32)
+    with pytest.raises(ValueError, match='exceeds'):
+        direct.check_prefixes([[1] * 4090], cont_len=32)
