@@ -86,14 +86,18 @@ def _write_new(path: Path, value) -> None:
         f.flush(); os.fsync(f.fileno())
 
 
-def check_prefixes(prefixes, cont_len, max_positions=4096):
-    """Every prefix is a non-empty list of int token ids whose prefix + continuation fits one packed forward.
-    (The first smoke paid a 24-minute load to learn that 4093 of 4096 prefixes were empty.)"""
-    if not prefixes:
-        raise ValueError('no prefixes')
+PREFIX_TOKENS = 64
+PREFIX_COUNT = 4096
+
+
+def check_prefixes(prefixes, cont_len, max_positions=4096, length=PREFIX_TOKENS, count=PREFIX_COUNT):
+    """Exactly `count` prefixes, each exactly `length` int token ids, prefix + continuation within one packed forward.
+    (Two smokes paid their loads to learn that 4093 of 4096 prefixes were empty.)"""
+    if len(prefixes) != count:
+        raise ValueError(f'{len(prefixes)} prefixes, not {count}')
     for i, p in enumerate(prefixes):
-        if not isinstance(p, list) or not p or not all(type(t) is int and t >= 0 for t in p):
-            raise ValueError(f'prefix {i} is empty or not a list of token ids')
+        if not isinstance(p, list) or len(p) != length or not all(type(t) is int and t >= 0 for t in p):
+            raise ValueError(f'prefix {i} is not exactly {length} token ids (len {len(p) if isinstance(p, list) else None})')
         if len(p) + cont_len > max_positions:
             raise ValueError(f'prefix {i} plus continuation exceeds {max_positions} positions')
 
