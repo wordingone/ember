@@ -905,6 +905,9 @@ def measurement_mode(identity):
     return True
 
 
+DECLARED_LR_MIN, DECLARED_LR_MAX = 1e-5, 1e-3
+
+
 def expected_optimizer(identity):
     """The one fixed optimizer definition an identity may carry. fused=True is a declared treatment: admitted for the
     trajectory Tfused arm, the hour treatment arm and the long-measurement fused arm, never by request alone."""
@@ -914,6 +917,8 @@ def expected_optimizer(identity):
             or (hour_mode(identity) and identity['hour']['arm'] == 'treatment')
             or (measurement_mode(identity) and identity['measurement']['arm'] == 'fused')):
         expected['fused'] = True
+    if hour_mode(identity) and 'declared_lr' in identity['hour']:
+        expected['lr'] = identity['hour']['declared_lr']
     return expected
 
 
@@ -1104,6 +1109,15 @@ def hour_mode(identity):
         if value['layer_template'] != canonical:
             raise ValueError('hour layer_template must be written in canonical form')
         fixed = fixed | {'layer_template'}
+    if isinstance(value, dict) and 'declared_lr' in value:
+        # Declared learning rate (#2119 H43): a chained hour or probe may train at a declared lr that differs
+        # from the parent's; the parent is restored at its own lr and the declared one applies after it (cia_hour).
+        lr = value['declared_lr']
+        if (value.get('schema') not in ('governed-hour-v1', 'checkpoint-probe-v1') or type(lr) is not float
+                or not math.isfinite(lr) or not DECLARED_LR_MIN <= lr <= DECLARED_LR_MAX):
+            raise ValueError(f'hour declared_lr is governed-hour-v1/checkpoint-probe-v1 only, a finite float in '
+                             f'[{DECLARED_LR_MIN}, {DECLARED_LR_MAX}]')
+        fixed = fixed | {'declared_lr'}
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != fixed
             or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
