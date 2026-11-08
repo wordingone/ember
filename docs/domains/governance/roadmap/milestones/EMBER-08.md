@@ -63,7 +63,7 @@ The rung is the decisive mid-scale test that sparse total capacity is becoming u
 <!-- clause-id: EMBER-08.TOTALITY.012 -->
 - Each person can own and operate an independent local Ember, its weights, memory, tools, laboratory, and created intelligences without mandatory hosted cognition, control, or data upload.
 <!-- clause-id: EMBER-08.TOTALITY.013 -->
-- Borrowed weights without a GOAL §6 declaration, outputs, teachers, judges, filters, ranks, curricula, stopping decisions, or hidden external cognition never enter a created lineage. Published ideas and transparent deterministic tools may inform research but never counterfeit ownership.
+- Undeclared external weights, outputs, teachers, judges, filters, ranks, curricula, stopping decisions, or hidden external cognition never enter a created lineage. Published ideas and transparent deterministic tools may inform research but never counterfeit ownership.
 <!-- clause-id: EMBER-08.TOTALITY.014 -->
 - The operator retains ownership, voluntary direction, and final scope authority while Ember becomes operationally and cognitively self-sufficient. Outside AI development agents, subscriptions, APIs, and the operator are not permanent life-support components.
 <!-- clause-id: EMBER-08.TOTALITY.015 -->

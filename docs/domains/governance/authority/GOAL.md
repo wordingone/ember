@@ -85,7 +85,7 @@ they cannot reduce, defer, replace, or reinterpret it.
   "architecture": {
     "headline_hypothesis": "Verified Expert Accretion",
     "owned_unified_decoder": true,
-    "published_family_backbone_allowed": false,
+    "published_family_backbone_allowed": true,
     "sparse_differentiated_capacity": true,
     "task_level_expert_routing": true
   },
@@ -189,7 +189,7 @@ they cannot reduce, defer, replace, or reinterpret it.
     "sub_3b_network",
     "missing_native_modality",
     "missing_native_reasoning",
-    "borrowed_backbone",
+    "undeclared_borrowed_backbone",
     "undeclared_model_mediated_signal",
     "mechanism_erasure",
     "missing_totality_member",
@@ -390,8 +390,8 @@ not a parallel CIA hierarchy.
 Raw image patches and audio frames project directly into decoder tokens. The
 interface uses soft-token splicing, multimodal-span attention, and
 two-dimensional rotary position structure. Published studies may motivate
-properties. No published model family or copied implementation becomes Ember's backbone. Borrowed open-weight
-model weights may initialize, form or shape a lineage only under §6 (Jun 2026-11-08); H1-H43 are the model-free
+properties. Any backbone or initialization, including a published model family, is allowed when declared
+under §6 (Jun 2026-11-08); copied code stays governed by its own licence. H1-H43 are the model-free
 baseline segment.
 
 The single headline causal hypothesis is Verified Expert Accretion: repeated

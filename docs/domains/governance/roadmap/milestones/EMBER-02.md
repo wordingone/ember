@@ -141,7 +141,7 @@ There is no smaller bootstrap-model milestone. Architecture, systems, data, and 
 <!-- clause-id: EMBER-02.TOTALITY.012 -->
 - Each person can own and operate an independent local Ember, its weights, memory, tools, laboratory, and created intelligences without mandatory hosted cognition, control, or data upload.
 <!-- clause-id: EMBER-02.TOTALITY.013 -->
-- Borrowed weights without a GOAL §6 declaration, teachers, judges, filters, ranks, curricula, stopping decisions, or hidden external cognition never enter a created lineage, and no output of a model the team runs is ever training data. Existing, published third-party AI-generated or mixed datasets enter only as marked, screened, separately counted data under the [training-data origin policy](#training-data-origin-policy). Published ideas and transparent deterministic tools may inform research but never counterfeit ownership.
+- Undeclared external weights, outputs, teachers, judges, filters, ranks, curricula, stopping decisions, or hidden external cognition never enter a created lineage. Existing, published third-party AI-generated or mixed datasets enter only as marked, screened, separately counted data under the [training-data origin policy](#training-data-origin-policy). Published ideas and transparent deterministic tools may inform research but never counterfeit ownership.
 <!-- clause-id: EMBER-02.TOTALITY.014 -->
 - The operator retains ownership, voluntary direction, and final scope authority while Ember becomes operationally and cognitively self-sufficient. Outside AI development agents, subscriptions, APIs, and the operator are not permanent life-support components.
 <!-- clause-id: EMBER-02.TOTALITY.015 -->
@@ -231,7 +231,7 @@ There is no smaller bootstrap-model milestone. Architecture, systems, data, and 
 <!-- clause-id: EMBER-02.PROHIBIT.002 -->
 - Initializing from any borrowed weights without a GOAL §6 per-hour declaration and a licence that permits derivatives.
 <!-- clause-id: EMBER-02.PROHIBIT.003 -->
-- Using the outputs of any model the team runs, or a teacher or judge model, anywhere in the training-signal path. The only AI-made data allowed is existing published third-party datasets admitted under the [training-data origin policy](#training-data-origin-policy).
+- Using the outputs of any model, or a teacher or judge model, anywhere in the training-signal path without a GOAL §6 declaration. Existing published third-party AI-generated datasets enter under the [training-data origin policy](#training-data-origin-policy).
 <!-- clause-id: EMBER-02.PROHIBIT.004 -->
 - Counting initialization, parameter allocation, a forward pass, a selftest, a short smoke run, falling loss alone, or endpoint loading as foundation-model birth.
 <!-- clause-id: EMBER-02.PROHIBIT.005 -->

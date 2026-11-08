@@ -1366,7 +1366,7 @@ def test_missing_discrepancy_is_rejected(tmp_path: Path) -> None:
         ),
         (
             lambda policy: policy["architecture"].update(
-                published_family_backbone_allowed=True
+                published_family_backbone_allowed=False
             ),
             "policy.published_backbone",
         ),
@@ -1414,7 +1414,8 @@ def test_policy_drift_mutations_are_rejected(tmp_path: Path, mutation, code: str
     ("authority_patch", "code"),
     [
         ({"total_parameters": 2_200_000_000}, "config.sub_3b_network"),
-        ({"published_family_backbone": "llama"}, "config.borrowed_backbone"),
+        ({"published_family_backbone": "llama"}, "config.undeclared_borrowed_backbone"),
+        ({"published_family_backbone": "qwen", "backbone_declaration": {"model": "qwen3", "version": "x", "licence_recorded": True}}, "config.undeclared_borrowed_backbone"),
         ({"model_mediated_signals": ["teachers"]}, "config.undeclared_model_mediated_signal"),
     ],
 )
@@ -2910,3 +2911,43 @@ def test_windows_cmd_control_is_admitted_only_by_its_exact_authority_sidecar(
         item["code"] for item in receipt["errors"]
     }, receipt
     assert hashlib.sha256(artifact.read_bytes()).hexdigest() != payload["artifact_sha256"]
+
+
+def test_declared_borrowed_backbone_is_admitted_in_era_2(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    authority = {
+        "artifact_class": "research_candidate",
+        "execution_authority": "allowed",
+        "goal_id": "EMBER-02",
+        "next_executed_outcome": "clean 3B birth",
+        "total_parameters": 3_000_000_000,
+        "native_capabilities": copy.deepcopy(VALID_POLICY["model_birth"]["required_native_capabilities"]),
+        "published_family_backbone": "qwen",
+        "backbone_declaration": {"model": "qwen3", "version": "sha-x", "licence_recorded": True,
+                                 "licence_permits_derivatives": True},
+        "model_mediated_signals": [],
+    }
+    config = tmp_path / "configs" / "candidate.json"
+    config.write_text(json.dumps({"authority": authority}), encoding="utf-8")
+    result = run_verifier(tmp_path)
+    codes = {item["code"] for item in json.loads(result.stdout).get("errors", [])}
+    assert "config.undeclared_borrowed_backbone" not in codes, result.stdout
+
+
+def test_goal_backbone_prose_agrees_with_the_machine_block() -> None:
+    """GOAL §4 prose and the machine contract must say the same thing about a borrowed backbone (#2428)."""
+    verifier = load_verifier_module()
+    parse_errors: list[dict] = []
+    policy = verifier.parse_goal_policy(REPO_ROOT, parse_errors)
+    assert parse_errors == [] and policy is not None
+    goal = (REPO_ROOT / "docs" / "domains" / "governance" / "authority" / "GOAL.md").read_text(encoding="utf-8")
+    prose = " ".join(goal.split())
+    allowed = policy["architecture"]["published_family_backbone_allowed"]
+    controls = policy["mutation_controls_required"]
+    if allowed:
+        assert "is allowed when declared under §6" in prose
+        assert "becomes Ember's backbone" not in prose
+        assert "undeclared_borrowed_backbone" in controls and "borrowed_backbone" not in controls
+    else:
+        assert "No published model family or copied implementation becomes Ember's backbone" in prose
+        assert "borrowed_backbone" in controls
