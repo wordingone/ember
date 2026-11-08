@@ -39,7 +39,11 @@ import sleep_consolidate_v1 as sleep  # noqa: E402
 
 FIXED_TARGETS = tuple(f'layers.11.shared.{p}.weight' for p in ('up', 'gate', 'down'))
 ROUTED_LAYER = 23
-DEVIATION = 'full-rank update on 5 weights, not rank-64 experts; paper-fidelity deferred to SLEEP-2'
+def deviation(n_targets):
+    return f'full-rank update on {n_targets} weights, not rank-64 experts; paper-fidelity deferred to SLEEP-2'
+
+
+DEVIATION = deviation(5)
 
 
 def pick_routed(routing_counts: dict, trainable_experts, k=2, layer=ROUTED_LAYER):
@@ -73,6 +77,7 @@ def parse_args(argv=None):
     ap.add_argument('--steps', type=int, required=True)
     ap.add_argument('--batch', type=int, default=4)
     ap.add_argument('--cont-len', type=int, default=32)
+    ap.add_argument('--routed-experts', type=int, default=2, choices=(1, 2))  # 1 at <=256-token forwards: segment 0 routes one expert
     ap.add_argument('--wall-seconds', type=int, default=3300)
     ap.add_argument('--device', default='cuda:0')
     ap.add_argument('--frozen-prediction', required=True, help='criteria text frozen into the receipt before step 1')
@@ -117,7 +122,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
     prefixes = [json.loads(l)['tokens'] for l in Path(args.prefixes).read_text(encoding='utf-8').splitlines() if l.strip()]
     check_prefixes(prefixes, args.cont_len)   # before any load: a malformed prefix must not cost a GPU window
     identity = json.loads(Path(args.student_prediction).read_text(encoding='utf-8'))['identity']
-    receipt = dict(kind='sleep-1-consolidation-direct', deviation=DEVIATION, frozen_prediction=args.frozen_prediction,
+    receipt = dict(kind='sleep-1-consolidation-direct', deviation=deviation(len(FIXED_TARGETS) + args.routed_experts), routed_experts=args.routed_experts, frozen_prediction=args.frozen_prediction,
                    teacher=args.teacher_manifest_sha256, student_in=args.student_manifest_sha256,
                    prefixes_sha256=args.prefixes_sha256, alpha=sleep.ALPHA, lambda_=sleep.LAMBDA, gamma=sleep.GAMMA, z0=sleep.Z0,
                    batch=args.batch, cont_len=args.cont_len, steps_requested=args.steps)
@@ -171,7 +176,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
     with scope('teacher_count_routes'):
         routing = sleep.count_routes(teacher, prefixes, device)
     (out / 'routing-counts.json').write_text(json.dumps(routing, indent=1) + '\n', encoding='utf-8')
-    targets = list(FIXED_TARGETS) + pick_routed(routing, support['experts'])
+    targets = list(FIXED_TARGETS) + pick_routed(routing, support['experts'], k=args.routed_experts)
     flags = {n: p.requires_grad for n, p in inventory.items()}
     if not all(flags[t] for t in targets):
         raise ValueError('a target is outside the parent update support')
