@@ -496,7 +496,7 @@ def run_readonly(command, *, timeout=20):
 
 def process_census():
     result = run_readonly(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-        "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited} }) | ConvertTo-Json -Compress"])
+        "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null }; try { $aff = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).ProcessorAffinity.ToInt64() } catch { $aff = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited;Affinity=$aff} }) | ConvertTo-Json -Compress"])
     rows = json.loads(result.stdout)
     if not isinstance(rows, list) or not rows:
         raise ValueError('process census is missing')
@@ -532,6 +532,18 @@ def resource_census():
     return rows
 
 
+TRAINER_CCD_MASK = 0xFFFF
+
+
+def lane_disjoint(row, gpu_pids, training):
+    """A non-trainer process pinned off the trainer's CCD (lane isolation): affinity & 0xFFFF == 0, not a GPU holder,
+    not a training command, not ember-lab. It contends for neither the trainer's CPUs nor its GPU. Host memory is NOT
+    exempted here: free commit stays governed by the commit gate at every phase. An unreadable affinity is never exempt."""
+    affinity = row.get('Affinity')
+    return (type(affinity) is int and affinity > 0 and affinity & TRAINER_CCD_MASK == 0 and row['ProcessId'] not in gpu_pids
+            and not training and 'ember-lab' not in str(row.get('Name', '')).lower())
+
+
 def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
     """Refuse a live, unowned Python process that holds model resources.
 
@@ -555,6 +567,8 @@ def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
         if row.get('PageFileUsage') is None or not row.get('CommandLine'):
             raise ValueError('cannot classify model process resources')
         argv = windows_command_args(row['CommandLine'])
+        if lane_disjoint(row, gpu_pids, any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
+            continue
         if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
                 or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
             raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]} '
