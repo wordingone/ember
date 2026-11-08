@@ -54,7 +54,7 @@ def headroom():
 
 def process_census():
     command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited} }) | ConvertTo-Json -Compress"]
+               "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | ForEach-Object { $exited = $null; if ($_.Name -match '^(python|pythonw|py)\\.exe$') { try { $exited = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).HasExited } catch { $exited = $null }; try { $aff = [System.Diagnostics.Process]::GetProcessById([int]$_.ProcessId).ProcessorAffinity.ToInt64() } catch { $aff = $null } }; [pscustomobject]@{ProcessId=$_.ProcessId;ParentProcessId=$_.ParentProcessId;Name=$_.Name;CommandLine=$_.CommandLine;ExecutablePath=$_.ExecutablePath;PageFileUsage=$_.PageFileUsage;CreationDate=$_.CreationDate;HasExited=$exited;Affinity=$aff} }) | ConvertTo-Json -Compress"]
     result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=20,
                             creationflags=subprocess.CREATE_NO_WINDOW)
     rows = json.loads(result.stdout)
@@ -90,6 +90,18 @@ def training_command(command):
     return any(Path(arg).name.lower() in entries or arg == 'ember.training.pretrain' for arg in args[1:])
 
 
+TRAINER_CCD_MASK = 0xFFFF
+
+
+def lane_disjoint(row, gpu_pids, training):
+    """A non-trainer process pinned off the trainer's CCD (lane isolation): affinity & 0xFFFF == 0, not a GPU holder,
+    not a training command, not ember-lab. It contends for neither the trainer's CPUs nor its GPU. Host memory is NOT
+    exempted here: free commit stays governed by the commit gate at every phase. An unreadable affinity is never exempt."""
+    affinity = row.get('Affinity')
+    return (type(affinity) is int and affinity > 0 and affinity & TRAINER_CCD_MASK == 0 and row['ProcessId'] not in gpu_pids
+            and not training and 'ember-lab' not in str(row.get('Name', '')).lower())
+
+
 def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
     by_pid = {row['ProcessId']: row for row in rows}
     ancestors = set()
@@ -119,6 +131,8 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
         # memory attribution. Device-list membership alone is not a trainer.
         # For Python it corroborates a potential model process; native desktop
         # allocation remains included in the total-device supervisor's ceiling.
+        if lane_disjoint(row, gpu_pids, training):
+            continue
         if pid in gpu_pids or int(commit_kib) >= 1024 ** 2 or training:
             conflicts.append(pid)
     if conflicts:
