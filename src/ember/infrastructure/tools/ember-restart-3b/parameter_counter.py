@@ -1696,10 +1696,51 @@ def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_byte
 _cia_parent_snapshot = _cia_operation_snapshot(_cia_parent_snapshot_reopened, _SELF_SOURCE_SHA256)
 
 
-def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None):
+def _cia_identity_without_lr(value):
+    if isinstance(value, dict):
+        return {k: _cia_identity_without_lr(v) for k, v in value.items() if k != 'lr'}
+    if isinstance(value, list):
+        return [_cia_identity_without_lr(v) for v in value]
+    return value
+
+
+def _cia_identity_lrs(value, found=None):
+    found = set() if found is None else found
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k == 'lr': found.add(v)
+            else: _cia_identity_lrs(v, found)
+    elif isinstance(value, list):
+        for v in value: _cia_identity_lrs(v, found)
+    return found
+
+
+def _cia_lr_transition(parent, child, declaration):
+    """#2119: an optimizer identity may differ from the parent's only in lr, and only under an hour declaration whose
+    declared_lr is the child's single lr. Returns the lineage record, or None when the identities are equal."""
+    before, after = parent.get('optimizer_identity'), child.get('optimizer_identity')
+    if after == before:
+        return None
+    if declaration is None or _cia_identity_without_lr(after) != _cia_identity_without_lr(before):
+        raise ValueError('CIA parent and child optimizer_identity differ')
+    if type(declaration) is not dict or set(declaration) != {'declared_lr','source'} or declaration['source'] != 'hour.declared_lr':
+        raise ValueError('CIA lr declaration schema mismatch')
+    parent_lrs, child_lrs = _cia_identity_lrs(before), _cia_identity_lrs(after)
+    if len(parent_lrs) != 1 or len(child_lrs) != 1 or child_lrs != {declaration['declared_lr']}:
+        raise ValueError('CIA declared lr is not the child optimizer lr')
+    return dict(parent_lr=next(iter(parent_lrs)), child_lr=next(iter(child_lrs)),
+                declared_lr=declaration['declared_lr'], source=declaration['source'])
+
+
+def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None,
+                              lr_declaration=None):
     """Derive one mechanical transition from reopened parent state and child bytes."""
-    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','optimizer_identity','placement'):
+    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','placement'):
         if child.get(name) != parent.get(name): raise ValueError('CIA parent and child '+name+' differ')
+    if lr_declaration is None:
+        recorded = child.get('lineage', {}).get('lr_declaration')
+        lr_declaration = None if recorded is None else {k: recorded.get(k) for k in ('declared_lr','source')}
+    lr_record = _cia_lr_transition(parent, child, lr_declaration)
     old, new = parent['data_cursor'], child['data_cursor']
     if any(type(cursor.get(name)) is not int or cursor[name] < 0
            for cursor in (old,new) for name in ('global_step','tokens_seen')):
@@ -1742,6 +1783,7 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
                 or recorded_counts != owner_update_counts):
             raise ValueError('recorded per-owner update counts differ from reopened optimizer clocks')
     return {**({'owner_update_counts': owner_update_counts} if sparse else {}),
+        **({'lr_declaration': lr_record} if lr_record is not None else {}),
         'schema_version':'ember-cia-first-descendant-v2' if sparse else 'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
         'parent_manifest_sha256':parent['checkpoint_manifest_sha256'],
         'parent_counter_receipt_sha256':parent['_parent_counter_receipt_sha256'],

@@ -3251,6 +3251,7 @@ def write_checkpoint_artifacts(
     specialist_lineage: Mapping[str, Any] | None = None,
     cia_parent_checkpoint: Path | None = None,
     cia_owner_update_counts: Mapping[str, int] | None = None,
+    cia_lr_declaration: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
@@ -3265,8 +3266,9 @@ def write_checkpoint_artifacts(
             contract_sha256=contract_sha256,expert_genesis_sha256=expert_genesis_sha256,
             max_serialized_bytes=max_serialized_bytes,max_transient_scratch_bytes=max_transient_scratch_bytes,
             host_commit_reserve_bytes=host_commit_reserve_bytes,pre_publish_verifier=pre_publish_verifier,
-            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts)
-    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None:
+            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts,
+            cia_lr_declaration=cia_lr_declaration)
+    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None or cia_lr_declaration is not None:
         raise ValueError('CIA parent checkpoint cannot supply v2 lineage')
     return _write_checkpoint_artifacts_impl(
         model,
@@ -4721,7 +4723,7 @@ def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_res
 def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_state, data_cursor,
         model_config_sha256, contract_sha256, expert_genesis_sha256, max_serialized_bytes,
         max_transient_scratch_bytes, pre_publish_verifier, host_commit_reserve_bytes=None,
-        cia_parent_checkpoint=None, cia_owner_update_counts=None):
+        cia_parent_checkpoint=None, cia_owner_update_counts=None, cia_lr_declaration=None):
     """Complete CIA publication through the existing quarantine admission authority.
 
     Caller owns exclusion from updates throughout capture. Native optimizer
@@ -4807,7 +4809,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
-                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts)
+                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts,
+                lr_declaration=None if cia_lr_declaration is None else dict(cia_lr_declaration))
         if (_cia_parameter_snapshot_identity(_cia_quiescent_parameters(model)) != before or cia_optimizer_identity(model,optimizer) != identity
                 or _cia_live_optimizer_state_identity(optimizer) != live_optimizer):
             raise ValueError('CIA model or optimizer identity changed during checkpoint capture')
