@@ -29,6 +29,7 @@ import json
 import math
 import random
 import time
+import contextlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -162,6 +163,11 @@ def consolidation_step(student_fn, teacher_fn, experts, optimizer, prefixes, *, 
     return dict(loss=float(loss.detach()), kl=float(kl.detach()), lti=float(pg.detach()), reward_mean=baseline)
 
 
+def step_context(model, device):
+    """CUDA forwards need a candidate_step; the CPU reference runs without one."""
+    return contextlib.nullcontext() if str(device) == 'cpu' else model.candidate_step()
+
+
 def count_routes(model, prefixes, device):  # pragma: no cover - GPU binding
     """Chosen-expert counts per layer on the teacher's own prefixes, once, before training (places the 2 expert deltas).
     Each decoder route is (document, layer, start, candidates, chosen)."""
@@ -170,7 +176,7 @@ def count_routes(model, prefixes, device):  # pragma: no cover - GPU binding
         for tokens in prefixes:
             t = torch.tensor(tokens, dtype=torch.long, device=device)
             pos = torch.tensor([[i, 0, 0] for i in range(len(tokens))], dtype=torch.long, device=device)
-            with model.candidate_step():
+            with step_context(model, device):
                 _logits, routes = model(model.embed_text(t), pos, document_starts=(0,), return_routes=True)
             for _doc, layer, _start, _candidates, chosen in routes:
                 key = f'{int(layer)}:{int(chosen)}'
@@ -245,7 +251,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
         def logits(tokens):
             t = torch.tensor(tokens, dtype=torch.long, device=device)
             pos = torch.tensor([[i, 0, 0] for i in range(len(tokens))], dtype=torch.long, device=device)
-            with model.candidate_step():
+            with step_context(model, device):
                 return model(model.embed_text(t), pos, document_starts=(0,))
         return logits
 
