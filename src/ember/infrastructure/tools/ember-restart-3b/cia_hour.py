@@ -186,8 +186,11 @@ def validate_checkpoint_probe(runner, identity):
     disk = bound_json(runner, root/'disk.json', reference['disk_sha256'])
     terminal = bound_json(runner, root/'worker-terminal.json', reference['worker_terminal_sha256'])
     prior = prediction['identity']
-    if (prior.get('hour') != dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
-                                 minimum_measured_steps=2)
+    expected_hour = dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
+                         minimum_measured_steps=2)
+    if 'declared_lr' in selection:  # a declared-lr hour consumes only a probe that declared the same lr (#2119)
+        expected_hour['declared_lr'] = selection['declared_lr']
+    if (prior.get('hour') != expected_hour or prior.get('optimizer') != identity.get('optimizer')
             or result.get('hour') != prior['hour'] or result.get('measured_updates') != 2
             or result.get('applied_positions') != 3*4096 or result.get('restored_state_matches') is not True
             or terminal.get('status') != 'completed' or terminal.get('applied_positions') != 3*4096
