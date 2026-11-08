@@ -115,7 +115,7 @@ class Ledger:
     """Every generated sample is a training token with provenance; nothing generated is untracked."""
 
     def __init__(self, path: Path, generator_sha256: dict):
-        self.path, self.generator_sha256, self.rows = path, generator_sha256, 0
+        self.path, self.generator_sha256, self.rows, self.tokens = path, generator_sha256, 0, 0
 
     def add(self, role, seed, prefix, tokens):
         row = dict(provenance=PROVENANCE, role=role, generator_checkpoint_sha256=self.generator_sha256[role], seed=seed,
@@ -123,6 +123,7 @@ class Ledger:
         with self.path.open('a', encoding='utf-8') as f:
             f.write(json.dumps(row) + '\n')
         self.rows += 1
+        self.tokens += len(tokens)
 
 
 def consolidation_step(student_fn, teacher_fn, experts, optimizer, prefixes, *, cont_len, seed, ledger, alpha=ALPHA):
