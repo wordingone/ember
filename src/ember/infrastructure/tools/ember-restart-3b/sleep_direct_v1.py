@@ -86,6 +86,18 @@ def _write_new(path: Path, value) -> None:
         f.flush(); os.fsync(f.fileno())
 
 
+def check_prefixes(prefixes, cont_len, max_positions=4096):
+    """Every prefix is a non-empty list of int token ids whose prefix + continuation fits one packed forward.
+    (The first smoke paid a 24-minute load to learn that 4093 of 4096 prefixes were empty.)"""
+    if not prefixes:
+        raise ValueError('no prefixes')
+    for i, p in enumerate(prefixes):
+        if not isinstance(p, list) or not p or not all(type(t) is int and t >= 0 for t in p):
+            raise ValueError(f'prefix {i} is empty or not a list of token ids')
+        if len(p) + cont_len > max_positions:
+            raise ValueError(f'prefix {i} plus continuation exceeds {max_positions} positions')
+
+
 def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governed run
     args = parse_args(argv)
     import cia_step_runner as runner
@@ -99,6 +111,7 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
     if hashlib.sha256(Path(args.prefixes).read_bytes()).hexdigest() != args.prefixes_sha256:
         raise ValueError('prefixes sha differs from its declaration')
     prefixes = [json.loads(l)['tokens'] for l in Path(args.prefixes).read_text(encoding='utf-8').splitlines() if l.strip()]
+    check_prefixes(prefixes, args.cont_len)   # before any load: a malformed prefix must not cost a GPU window
     identity = json.loads(Path(args.student_prediction).read_text(encoding='utf-8'))['identity']
     receipt = dict(kind='sleep-1-consolidation-direct', deviation=DEVIATION, frozen_prediction=args.frozen_prediction,
                    teacher=args.teacher_manifest_sha256, student_in=args.student_manifest_sha256,
