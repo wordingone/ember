@@ -32,7 +32,10 @@ from pathlib import Path
 
 import torch
 
-import sleep_consolidate_v1 as sleep
+for _p in (Path(__file__).resolve().parent, Path(__file__).resolve().parents[4]):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+import sleep_consolidate_v1 as sleep  # noqa: E402
 
 FIXED_TARGETS = tuple(f'layers.11.shared.{p}.weight' for p in ('up', 'gate', 'down'))
 ROUTED_LAYER = 23
@@ -210,5 +213,4 @@ def main(argv=None):  # pragma: no cover - GPU binding, exercised by the governe
 
 
 if __name__ == '__main__':  # pragma: no cover
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
     main()
