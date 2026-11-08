@@ -127,7 +127,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "e307a1afcf12d458569aadac2e4123b60a4227a6457bab0ecdf3311fc994afe0",
       "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "7EB7D89F573E251916B531A6D3139DEA1CA6D3EA6898A264DEF6AFC4717CDC75"
+      "docs/domains/governance/spec/conditions-v1.md": "3B32829835CE6C72DF94114ADDBAFCBF191703F912AB2FDB44D36DD4E3DE0380"
     }
   },
   "authority_only_goal": false,
@@ -390,8 +390,9 @@ not a parallel CIA hierarchy.
 Raw image patches and audio frames project directly into decoder tokens. The
 interface uses soft-token splicing, multimodal-span attention, and
 two-dimensional rotary position structure. Published studies may motivate
-properties. No published model family, copied implementation, or borrowed
-weights become Ember's backbone.
+properties. No published model family or copied implementation becomes Ember's backbone. Borrowed open-weight
+model weights may initialize, form or shape a lineage only under §6 (Jun 2026-11-08); H1-H43 are the model-free
+baseline segment.
 
 The single headline causal hypothesis is Verified Expert Accretion: repeated
 locally verified experience can grow useful persistent capacity beyond 27B
@@ -455,9 +456,11 @@ excluded, fail-closed. Five conditions bind every use:
    truthful backend identity).
 
 Published ideas and transparent deterministic tools remain allowed research
-inputs. Borrowed weights as Ember's backbone or initialization (§4) and weight
-merging remain forbidden. Removing every external model must not prevent
-creation, training, verification, or operation of the baseline lineage.
+inputs. External open-weight model weights may also shape a lineage (initialization or backbone, weight
+merging, task vectors, adapter or expert import, cross-model capability transplant) under the same five
+conditions; the licence must permit derivatives, and each use is declared per hour with the donor model, its
+sha, its licence, the parameters touched and the method (Jun 2026-11-08). Removing every external model must
+not prevent creation, training, verification, or operation of the baseline lineage (H1-H43).
 
 ## 7. Experience, memory, dreaming, tools, and world models
 
