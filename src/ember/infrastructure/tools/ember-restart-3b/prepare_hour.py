@@ -87,6 +87,10 @@ ARM_ENV_ALLOWLIST = (
     'EMBER_OPT_SHADOW',
     # 2026-10-01: stem-preserving caption carrier matched-arm settings: pair count and image row offset.
     'EMBER_PAIRS_PER_DOCUMENT', 'EMBER_IMAGE_ROW_START',
+    # 2026-11-09: archived-ancestor attestation (lead ruling 82046 (c)). The worker's end-of-hour child receipt
+    # (cia_hour.verify_checkpoint_restore) reopens the whole chain with no operation open; without this name the
+    # variable never reaches the worker and the hour trains for 33 minutes then dies at the closure check (H44 v2).
+    'EMBER_CIA_ANCESTOR_CUSTODY_DIR',
 )
 
 # EMBER_* variables legitimately exported in the calling shell for orchestration this preparer (or

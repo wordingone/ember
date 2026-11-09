@@ -85,7 +85,7 @@ they cannot reduce, defer, replace, or reinterpret it.
   "architecture": {
     "headline_hypothesis": "Verified Expert Accretion",
     "owned_unified_decoder": true,
-    "published_family_backbone_allowed": false,
+    "published_family_backbone_allowed": true,
     "sparse_differentiated_capacity": true,
     "task_level_expert_routing": true
   },
@@ -118,7 +118,7 @@ they cannot reduce, defer, replace, or reinterpret it.
     "authority_matrix_sha256": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
     "governing_surfaces_sha256": {
       "docs/domains/governance/authority/CONTINUITY.md": "DBA7F5E38EB76FF629585FB348B8490828E4D598D48800071CBC2F34F39AD60C",
-      "docs/domains/governance/authority/GOVERNANCE.md": "E46CA8F60BA2686D509A13BF42B0A51B4FB339B2D9627F98786F953EAD1E53EA",
+      "docs/domains/governance/authority/GOVERNANCE.md": "8619921D63D78C6AEDFB7931D57032F1BB04E821D4B8F6210D947491CA4C5AA9",
       "README.md": "C24B5A20A12330E4D0067F8C6E3F2CA13BB6AD045CB05641AE53A588AC3AE96A",
       "docs/domains/governance/authority/ember-authority-matrix.md": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
@@ -127,7 +127,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "e307a1afcf12d458569aadac2e4123b60a4227a6457bab0ecdf3311fc994afe0",
       "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "7EB7D89F573E251916B531A6D3139DEA1CA6D3EA6898A264DEF6AFC4717CDC75"
+      "docs/domains/governance/spec/conditions-v1.md": "3B32829835CE6C72DF94114ADDBAFCBF191703F912AB2FDB44D36DD4E3DE0380"
     }
   },
   "authority_only_goal": false,
@@ -151,19 +151,23 @@ they cannot reduce, defer, replace, or reinterpret it.
   ],
   "highest_amendable_authority": "docs/domains/governance/authority/GOAL.md",
   "invariant_sha256": "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6",
+  "invariant_v2_sha256": "48B692EBA6EBCC57B2170C035E40AED60EFB3382178D11416711CE2785216B6A",
   "lineage": {
-    "borrowed_models_role": "frozen_reference_only",
+    "borrowed_models_role": "declared_training_resource",
+    "creation_claims_state_model_assisted": true,
+    "creation_rule": "invariant_v2_clause_3_declared_lineage",
     "forbidden_model_mediated_signals": [
       "weights",
-      "outputs",
-      "teachers",
-      "judges",
-      "filters",
-      "ranks",
-      "curricula",
-      "stopping_decisions",
       "hidden_external_cognition"
     ],
+    "model_assisted_conditions": [
+      "licence_recorded",
+      "per_hour_declaration",
+      "boundary_recorded_at_first_declared_hour",
+      "frozen_declared_judges",
+      "contamination_scrub_on_teacher_data"
+    ],
+    "model_free_baseline": "every_hour_before_the_first_declared_model_resource",
     "published_ideas_allowed": true,
     "transparent_deterministic_tools_allowed": true
   },
@@ -185,8 +189,8 @@ they cannot reduce, defer, replace, or reinterpret it.
     "sub_3b_network",
     "missing_native_modality",
     "missing_native_reasoning",
-    "borrowed_backbone",
-    "model_mediated_signal",
+    "undeclared_borrowed_backbone",
+    "undeclared_model_mediated_signal",
     "mechanism_erasure",
     "missing_totality_member",
     "ambiguous_identity",
@@ -295,14 +299,23 @@ shell, or laboratory wrapper cannot substitute for the totality.
 
 - Ember means the complete project and conserved identity, not whichever
   component is currently visible.
-- Ember model means a sufficiently trained clean-genesis checkpoint that meets
-  the birth floor. Random weights, a smoke run, or allocated parameters do not.
+- Ember model means a sufficiently trained checkpoint of Ember's own lineage
+  that meets the birth floor. Random weights, a smoke run, or allocated
+  parameters do not. A creation milestone (§3, §11, §12) additionally requires
+  that every external-model contribution in its ancestry was declared and
+  scrubbed (docs/authority/INVARIANT-v2.md clause 3), and the claim states
+  whether its lineage includes model-assisted hours (clause 4).
 - Research candidate means an explicitly identified experimental network or
   mechanism with no milestone credit before admission.
 - Historical artifact means preserved evidence or implementation denied current
   execution and milestone authority.
-- Borrowed reference means a frozen external model used only to measure a
-  comparison point and never to supply learned or evaluative lineage signal.
+- Borrowed reference means a frozen external model used to measure a
+  comparison point. An external model used as a declared training resource
+  (§6) is a model-assisted input, not a borrowed reference.
+- Model-assisted hour means a lineage hour whose training signal includes a
+  declared external-model contribution (§6). Its products can be Ember's
+  creation under docs/authority/INVARIANT-v2.md clause 3 when the declaration
+  and scrub hold; claims about them name the model-assisted hours (clause 4).
 - Parameter count means total unique stored neural parameters. Trainable and
   episode-active parameters are reported separately.
 - Trained capacity means useful capacity supported by checkpoint-bound training
@@ -330,6 +343,10 @@ The first admissible 3B model and every 7B, 15B, and >27B rung are sufficiently
 trained native text-image-audio foundation models with native reasoning and
 structured tool use. No capability is deferred. Every rung binds to exact
 checkpoint bytes, passes each modality, and shows no cross-modality regression.
+Rung credit as Ember's creation requires a fully declared lineage
+(docs/authority/INVARIANT-v2.md clause 3): a checkpoint with any undeclared or
+unknown external-model contribution in its ancestry earns no creation milestone,
+and every rung claim states whether its lineage includes model-assisted hours.
 
 The destination is an owned model strictly above 27B total parameters,
 initially 30-35B, competitive with frozen 27B and 31B open-model references on
@@ -373,8 +390,9 @@ not a parallel CIA hierarchy.
 Raw image patches and audio frames project directly into decoder tokens. The
 interface uses soft-token splicing, multimodal-span attention, and
 two-dimensional rotary position structure. Published studies may motivate
-properties. No published model family, copied implementation, or borrowed
-weights become Ember's backbone.
+properties. Any backbone or initialization, including a published model family, is allowed when declared
+under §6 (Jun 2026-11-08); copied code stays governed by its own licence. H1-H43 are the model-free
+baseline segment.
 
 The single headline causal hypothesis is Verified Expert Accretion: repeated
 locally verified experience can grow useful persistent capacity beyond 27B
@@ -401,16 +419,48 @@ when memorization, leakage, shortcuts, or harness policy remain plausible.
 Hidden internal trace disclosure is not required; behavioral and causal
 evidence is.
 
-## 6. Clean genesis and frozen-reference boundary
+## 6. Model-assisted training and the provenance boundary
 
-No borrowed weights, outputs, teachers, judges, filters, ranks, curricula,
-stopping decisions, or hidden external cognition may shape an Ember lineage or
-any intelligence created by Ember's laboratory. Published ideas and transparent
-deterministic tools are allowed research inputs.
+External models may be used to train an Ember lineage as a declared resource:
+teacher outputs (generations, logits, soft labels), teacher-generated or
+teacher-rewritten data, judges, filters, rankers and reward models, and
+curricula and data selection. docs/authority/INVARIANT-v2.md (public
+succession, docs/authority/SUCCESSION-2026-11-07.md; v1 bytes untouched) governs
+this: a capability is Ember's creation when every element of its
+training-signal path is receipted and every external-model contribution is
+declared for the hour it entered and passed the contamination scrub (clause 3);
+attribution follows the declared lineage and every creation claim states whether
+it includes model-assisted hours (clause 4). Undeclared or unknown provenance is
+excluded, fail-closed. Five conditions bind every use:
 
-Borrowed models occupy explicit frozen reference seats only. Removing them must
-not prevent creation, training, verification, or operation. Baseline work is a
-bounded instrument and cannot displace owned creation.
+1. Licence. Each external model is an open-weight model whose licence permits
+   training other models on its outputs, or a service whose terms permit it.
+   The licence and terms are recorded per model; a model whose terms forbid
+   training a competing model is refused.
+2. Declaration. Every hour declares each external model it used: name,
+   version or sha, role (teacher, data generator, judge, filter, ranker or
+   curriculum) and share of the training signal, in the
+   `training_signal_provenance` and `provenance_share_per_update` fields. An
+   undeclared model-mediated signal is a refusal.
+3. Baseline boundary. The boundary is set by fact, not by date: every hour
+   before the first hour that declares an external-model resource is model-free
+   (H1 through H40 declared none). That first hour is recorded as the boundary
+   in the lineage record and named in every later creation claim. "Trained
+   without external models" is claimed only for hours before it.
+4. Evaluation integrity. Held-out evaluation, admission and stopping decisions
+   use an external judge only when it is declared and frozen. Teacher-generated
+   data passes the same held-out and benchmark contamination scrub as any other
+   data; a teacher producing benchmark items or answers is contamination.
+5. Ownership. A trained Ember checkpoint is Ember's own bytes. External models
+   stay separate artifacts and are never served under the Ember name (§2, §10,
+   truthful backend identity).
+
+Published ideas and transparent deterministic tools remain allowed research
+inputs. External open-weight model weights may also shape a lineage (initialization or backbone, weight
+merging, task vectors, adapter or expert import, cross-model capability transplant) under the same five
+conditions; the licence must permit derivatives, and each use is declared per hour with the donor model, its
+sha, its licence, the parameters touched and the method (Jun 2026-11-08). Removing every external model must
+not prevent creation, training, verification, or operation of the baseline lineage (H1-H43).
 
 ## 7. Experience, memory, dreaming, tools, and world models
 
@@ -473,7 +523,9 @@ floor is the complete predecessor CLI surface plus goal mode, model and
 training observation, typed tools, native multimodal interaction, memory
 inspection, laboratory control, and truthful backend identity. The owned model
 is the default once admissible. Until then, the interface states that no
-admissible Ember model exists. Borrowed models are explicit reference seats.
+admissible Ember model exists. Borrowed models are explicit reference seats;
+external models used as declared training resources (§6) are separate
+artifacts and are never served or labelled as Ember.
 
 Operational authority is dynamically configurable by operator, task, scope,
 consequence, reversibility, and demonstrated trust. Modes are explicit,
@@ -487,6 +539,8 @@ Every claim joins architecture, checkpoint bytes, total, trainable, and active
 parameters, trained tokens, tokenizer and data lineage, parentage, active
 mechanisms, backend, benchmark protocol, comparator, capability result, and
 deletion-sensitive evidence. The exact object is named at every boundary.
+Every claim also states whether the checkpoint's ancestry includes a
+model-assisted hour (§6); a creation claim requires that it does not.
 
 ### Conserved benchmark custody
 
@@ -521,11 +575,15 @@ every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts
 carry the machine-checked conservation header and fail closed on contradiction.
-Precedence is docs/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
+Precedence is the invariant in force (docs/authority/INVARIANT.md for records before the
+public succession of 2026-11-07, docs/authority/INVARIANT-v2.md after it), then
+docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
 then implementation and evidence, then history.
 
 No completion claim is valid unless the primitive, model, organism, body, and
 laboratory totality and every hard-rung requirement pass together.
+A completion or milestone claim of Ember's creation additionally requires a
+fully declared lineage and states whether it includes model-assisted hours (§3, §6).
 
 This master authority document itself creates, trains, evaluates, and serves
 no network and claims no model, training, benchmark, or capability completion.

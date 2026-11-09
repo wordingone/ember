@@ -522,24 +522,68 @@ def windows_command_args(command):
         kernel.LocalFree(values)
 
 
-def resource_census():
+def resource_census(fence_holder=None):
+    """Refuse an unowned process that can harm the run. `fence_holder` is the pid of a live tenant of the GPU fence that the
+    caller is about to WAIT for (gpu_lock_guard.holder_pid()): that process and its descendants are exempt from this
+    pre-fence call only. The census inside the fence is made without it, so whatever still holds the card once the fence is ours
+    is judged as before."""
     result = run_readonly(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'], timeout=5)
     values = [value.strip() for value in result.stdout.splitlines() if value.strip()]
     if any(not value.isdecimal() for value in values):
         raise ValueError('GPU process identity is unreadable')
     gpu_pids = {int(value) for value in values}
     rows = process_census()
-    reject_unowned_model_processes(rows, gpu_pids, os.getpid())
+    reject_unowned_model_processes(rows, gpu_pids, os.getpid(), exempt_pids=fence_tenant_pids(rows, fence_holder))
     return rows
 
 
-def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
-    """Refuse a live, unowned Python process that holds model resources.
+def fence_tenant_pids(rows, holder):
+    """The fence holder and every descendant of it in the census rows (empty when there is no holder)."""
+    if holder is None:
+        return frozenset()
+    children = {}
+    for row in rows:
+        children.setdefault(row.get('ParentProcessId'), []).append(row['ProcessId'])
+    tenants, pending = set(), [holder]
+    while pending:
+        pid = pending.pop()
+        if pid not in tenants:
+            tenants.add(pid)
+            pending.extend(children.get(pid, ()))
+    return frozenset(tenants)
 
-    Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py requires both
-    copies to agree). An EXITED Python object kept alive by a stray handle runs nothing, so it is not a tenant even when
-    nvidia-smi still lists its pid; its commit charge stays in the commit gate and its device memory in the total-device sample.
-    An unknown state (HasExited None or absent) and a live process are classified as before.
+
+UNREADABLE_REREADS = 3
+UNREADABLE_REREAD_SECONDS = 2.0
+
+
+def settle_unreadable_row(row, gpu_pids, reread, sleep):
+    """Same rule as cia_conformance_launch.settle_unreadable_row (lead ruling 81909): a process matters only if it holds GPU memory.
+    An unreadable row (no commit or command line: a short-lived python seen mid-start or mid-exit) that nvidia-smi does not list is
+    ignored; a GPU-listed one is re-read UNREADABLE_REREADS times over UNREADABLE_REREAD_SECONDS and is ignored if it vanished or
+    exited, classified if it became readable, refused if it stayed live and unreadable. Returns the row to classify, None to
+    ignore it, or False to refuse."""
+    pid = row['ProcessId']
+    if pid not in gpu_pids:
+        return None
+    for _ in range(UNREADABLE_REREADS):
+        sleep(UNREADABLE_REREAD_SECONDS / UNREADABLE_REREADS)
+        fresh = next((r for r in reread() if r['ProcessId'] == pid), None)
+        if fresh is None or fresh.get('HasExited') is True:
+            return None
+        if fresh.get('PageFileUsage') is not None and fresh.get('CommandLine'):
+            return fresh
+    return False
+
+
+def reject_unowned_model_processes(rows, gpu_pids, owner_pid, exempt_pids=frozenset(), reread=None, sleep=time.sleep):
+    """Refuse a live, unowned Python process that can harm the run: one that holds GPU memory or runs a training entry.
+
+    Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py and
+    tests/ember_restart_model/test_issue2119_worker_census_harm_only.py require both copies to agree). An EXITED Python object kept
+    alive by a stray handle runs nothing, so it is not a tenant even when nvidia-smi still lists its pid; its commit charge stays
+    in the commit gate and its device memory in the total-device sample. A large commit alone is not a refusal (lead ruling 81914).
+    An unreadable row is settled by settle_unreadable_row. `exempt_pids` are fence tenants the caller is waiting for.
     """
     by_pid = {row['ProcessId']: row for row in rows}
     current, ancestors = owner_pid, set()
@@ -549,16 +593,20 @@ def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
     training_entries = {'cia_step_runner.py', 'cia_conformance_launch.py', 'train.py', 'pretrain.py',
                         'certified_train_launch.py', 'timeshare_pretrain.py', 'train_multimodal_v0.py'}
     for row in rows:
-        if row['ProcessId'] in ancestors or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
+        pid = row['ProcessId']
+        if pid in ancestors or pid in exempt_pids or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
             continue
         if row.get('HasExited') is True:
             continue
         if row.get('PageFileUsage') is None or not row.get('CommandLine'):
-            raise ValueError('cannot classify model process resources')
+            row = settle_unreadable_row(row, gpu_pids, reread or process_census, sleep)
+            if row is None:
+                continue
+            if row is False:
+                raise ValueError(f'cannot classify model process resources: {pid}')
         argv = windows_command_args(row['CommandLine'])
-        if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
-                or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
-            raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]} '
+        if pid in gpu_pids or any(Path(arg).name.lower() in training_entries for arg in argv[1:]):
+            raise ValueError(f'unowned model resource process requires coordination: {pid} '
                              f'(name={row["Name"]} parent={row.get("ParentProcessId")} command={row["CommandLine"]})')
 
 
@@ -3092,6 +3140,16 @@ def launch_succeeded(result, supervisor_failure, custody):
     return isinstance(terminal, dict) and terminal.get('status') == 'completed'
 
 
+def record_fence_wait(custody, guard, holder_at_preflight):
+    """Queueing behind another fence tenant is a covariate of the hour (lead ruling 82032 E1): custody/gpu-fence-wait.json carries the
+    wait (seconds, attempts, holders seen) next to the hour's other receipts. A failed write is named on stderr and never fails the launch."""
+    try:
+        _write_new(custody / 'gpu-fence-wait.json', {'schema': 'ember-gpu-fence-wait-v1', 'wait': guard.last_wait(),
+                                                     'holder_at_preflight': holder_at_preflight, 'claim': CLAIM})
+    except Exception as error:  # noqa: BLE001 - evidence only
+        print(f'GPU_FENCE_WAIT_RECORD_DEGRADED {type(error).__name__}: {error}', file=sys.stderr, flush=True)
+
+
 def launch(args, dispatch):
     from ember.governance.scripts import cia_conformance_resources as resources, gpu_lock_guard
     from ember.governance.scripts.owned_process import OwnedProcessRunner
@@ -3115,7 +3173,8 @@ def launch(args, dispatch):
     helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
     hidden = args.hidden_helper.resolve(strict=True)
     preflight = wait_headroom()
-    census = resource_census()
+    fence_holder = gpu_lock_guard.holder_pid()  # a live fence tenant (eval, scorer) that the acquire below waits for; not a conflict
+    census = resource_census(fence_holder=fence_holder)
     _, prepared = prepare_execution(prediction)
     identity = prediction['identity']
     child_env = None
@@ -3143,7 +3202,8 @@ def launch(args, dispatch):
     gpu_uuid = prediction['identity']['gpu_uuid']
     # #1945: this one-shot preflight call had zero tolerance for a slow/failing nvidia-smi.
     # sample_device_at_launch() retries only here; the watcher's own tolerance is unchanged.
-    resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
+    if fence_holder is None:  # with a tenant on the fence the card is judged inside the fence, once it is ours
+        resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
     with (custody / 'prediction.json').open('xb') as stream:
         stream.write(prediction_bytes)
     _write_new(custody / 'preflight.json', {'headroom': preflight, 'processes': census,
@@ -3172,8 +3232,10 @@ def launch(args, dispatch):
     dispatch_started = time.time()
     try:
         with gpu_lock_guard.acquire(script=ENTRY):
+            record_fence_wait(custody, gpu_lock_guard, fence_holder)
             wait_headroom()
             resource_census()
+            resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
             result = OwnedProcessRunner(windows_job_factory=factory).run(command,
                 timeout_s=resource_limits(prediction['identity'])['wall_seconds'], cwd=ROOT, env=child_env)
     except BaseException as error:

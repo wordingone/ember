@@ -207,9 +207,37 @@ def check_dispatch_authority(
     backbone = str(authority.get("published_family_backbone", "")).strip().lower()
     if backbone not in {"", "none"}:
         return False, "published_family_backbone is forbidden"
-    if authority.get("model_mediated_signals"):
-        return False, "model_mediated_signals must be empty"
+    undeclared = undeclared_model_signal_reasons(authority.get("model_mediated_signals", []))
+    if undeclared:
+        return False, "undeclared model_mediated_signals: " + "; ".join(undeclared)
     return True, "authority binding passes"
+
+
+DECLARED_SIGNAL_ROLES = {"teacher", "data_generator", "judge", "filter", "ranker", "curriculum"}
+
+
+def undeclared_model_signal_reasons(signals) -> list:
+    """GOAL §6 condition 2 (same rule as verify_authority_conservation.declared_model_signal_errors): an empty list
+    is model-free; each entry must declare model, version, a declared role, licence_recorded true and a share in
+    (0, 1]. Anything else is an undeclared model-mediated signal. Declared entries never make a run Ember's creation
+    (docs/authority/INVARIANT-v2.md clauses 3/4); that boundary is carried by the lineage record, not by this gate."""
+    if not isinstance(signals, list):
+        return ["model_mediated_signals must be a list"]
+    out = []
+    for i, entry in enumerate(signals):
+        if not isinstance(entry, dict):
+            out.append(f"entry {i} is not a declared object")
+            continue
+        if not str(entry.get("model", "")).strip() or not str(entry.get("version", "")).strip():
+            out.append(f"entry {i} lacks model or version")
+        if entry.get("role") not in DECLARED_SIGNAL_ROLES:
+            out.append(f"entry {i} role {entry.get('role')!r} is not a declared role")
+        if entry.get("licence_recorded") is not True:
+            out.append(f"entry {i} has no recorded licence")
+        share = entry.get("share")
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
+            out.append(f"entry {i} share is not in (0, 1]")
+    return out
 
 
 def load_goal_policy(root: Path = ROOT) -> dict:
