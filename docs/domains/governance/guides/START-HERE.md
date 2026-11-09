@@ -9,12 +9,13 @@ Its operating constraint is one consumer GPU.
 
 ## First-reader facts
 
-- Ember is the complete clean-genesis sovereign foundation-intelligence project: the local
+- Ember is the complete sovereign foundation-intelligence project: the local
   foundation-model creation primitive, continuously improving organism, `ember-cli` operator body,
   and general local AI laboratory.
 - It addresses creating and operating owned local foundation intelligence on one consumer GPU.
-  Claims require verified public experience and receipts; borrowed learned or evaluative signals
-  are excluded from the target lineage.
+  Claims require verified public experience and receipts. Declared, licence-recorded external models
+  may assist training since 2026-11-07 (GOAL §6); an hour that uses one is model-assisted, and every claim
+  names whether its lineage includes such hours. Hours before the first declared model resource declared none.
 - `EMBER-01` is certified but grants no model-training or capability credit. `EMBER-02` is active,
   and no current checkpoint is an admitted Ember model. The target is an approximately 30–35B
   sparse unified text-image-audio decoder with native reasoning and structured-tool use.

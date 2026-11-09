@@ -26,15 +26,19 @@ pins: `minimum_new_network_parameters = 3,000,000,000` (3B),
 `destination_total_parameters > 27,000,000,000` (27B, via measured growth —
 see 05_GROWTH_AND_SCALING.md), `required_native_capabilities = text, image,
 audio, reasoning, structured_tool_use`, `borrowed_lineage =
-frozen_reference_only`, `mechanism_erasure = forbidden`.
+frozen_reference_only`, `mechanism_erasure = forbidden`. The `borrowed_lineage` token is a fixed header
+field that names the historical baseline boundary; it does not forbid declared open-weight use after the
+baseline hours (GOAL §6, README reading note).
 
 ## Lineage and provenance discipline
 
 `configs/ember-restart-3b.json`'s `lineage` block declares:
 `initialization: "random"`, `borrowed_weights: false`,
 `teacher_outputs: false`, `model_derived_data: false`,
-`external_judges: false` — an owned, from-scratch genesis by contract, not by
-narrative claim. Condition `C(-1)` (paid-API-spend discipline) requires
+`external_judges: false` — the baseline lineage, from-scratch by contract, not by narrative claim.
+Since 2026-11-07 a declared, licence-recorded external model may assist training (GOAL §6): the hour that
+uses one is declared and marked model-assisted, and any claim about the model names whether its lineage
+includes such hours. No checkpoint is admitted as an Ember model yet. Condition `C(-1)` (paid-API-spend discipline) requires
 every decisive-claim receipt to declare `api_spend_usd`/
 `paid_api_surface_used`; it was RED on the last render because 3 additional
 receipts had been merged that lacked the field despite an earlier fix PR
