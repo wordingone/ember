@@ -46,7 +46,6 @@ READER_INSTRUMENT_FIELDS = {
 }
 DOMAIN_AUTHORITY_PATH = Path("manifests/architecture/domain-authority-v1.json")
 INDEX_PATH = Path("docs/INDEX.md")
-FIRST_READER_IDENTITY_PATH = Path("manifests/documentation/first-reader-identity-v1.json")
 CONSERVATION_MARKER = "<!-- EMBER_CONSERVATION_V1"
 SOURCE_CLASSES = {
     "AUTHORITY_DERIVED",
@@ -95,6 +94,7 @@ REFERENCE_ROOT_PREFIXES = tuple(
         "tokenizer",
     )
 )
+FIRST_READER_IDENTITY_PATH = Path("manifests/documentation/first-reader-identity-v1.json")
 REQUIRED_METADATA_FIELDS = {
     "path",
     "title",
