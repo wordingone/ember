@@ -16,7 +16,7 @@ class FixedLaunchTests(unittest.TestCase):
                 {'ProcessId': 2, 'ParentProcessId': 1, 'Name': 'python.exe'}]
         launch.reject_resource_conflicts(rows, 2)
         rows.append({'ProcessId': 3, 'ParentProcessId': 0, 'Name': 'python.exe',
-                     'PageFileUsage': 1024**2, 'CommandLine': 'python.exe unknown.py'})
+                     'PageFileUsage': 1024**2, 'CommandLine': 'python.exe train.py'})
         with self.assertRaisesRegex(ValueError, 'resource-consuming'):
             launch.reject_resource_conflicts(rows, 2)
 
