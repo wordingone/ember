@@ -186,8 +186,11 @@ def validate_checkpoint_probe(runner, identity):
     disk = bound_json(runner, root/'disk.json', reference['disk_sha256'])
     terminal = bound_json(runner, root/'worker-terminal.json', reference['worker_terminal_sha256'])
     prior = prediction['identity']
-    if (prior.get('hour') != dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
-                                 minimum_measured_steps=2)
+    expected_hour = dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
+                         minimum_measured_steps=2)
+    if 'declared_lr' in selection:  # a declared-lr hour consumes only a probe that declared the same lr (#2119)
+        expected_hour['declared_lr'] = selection['declared_lr']
+    if (prior.get('hour') != expected_hour or prior.get('optimizer') != identity.get('optimizer')
             or result.get('hour') != prior['hour'] or result.get('measured_updates') != 2
             or result.get('applied_positions') != 3*4096 or result.get('restored_state_matches') is not True
             or terminal.get('status') != 'completed' or terminal.get('applied_positions') != 3*4096
@@ -578,7 +581,11 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             contract_sha256=identity['source_sha256']['src/ember/model/ember_v0_contract.py'],
             expert_genesis_sha256={}, max_serialized_bytes=cap, max_transient_scratch_bytes=cap,
             host_commit_reserve_bytes=16 * runner.GIB, pre_publish_verifier=verifier,
-            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None)
+            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None,
+            cia_lr_declaration=lr_declaration if parent else None)
+    hour = identity.get('hour') or {}
+    lr_declaration = (dict(declared_lr=hour['declared_lr'], source='hour.declared_lr')
+                      if parent_declares_lr(hour, identity) else None)
     return publish, owner_update_counts
 
 
@@ -923,6 +930,11 @@ def validate_continuation(runner, identity):
         if regenerated[key] != pack[key]:
             raise ValueError('continuation pack differs from the admitted stream: ' + key)
     return dict(root=root, hour=hour, reference=reference, hour_binding=hour_binding, pack=pack, child=child)
+
+
+def parent_declares_lr(hour, identity):
+    """A declared lr reaches the lineage only when it is the lr the optimizer identity actually carries."""
+    return 'declared_lr' in hour and hour['declared_lr'] == identity.get('optimizer', {}).get('lr')
 
 
 def parent_learning_rate(parent):
