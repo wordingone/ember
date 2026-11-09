@@ -298,7 +298,7 @@
     },
     {
       "document": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
-      "line": 45,
+      "line": 49,
       "target": "configs/v1-pretrain-config.json",
       "resolution": {
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
@@ -307,7 +307,7 @@
     },
     {
       "document": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
-      "line": 52,
+      "line": 56,
       "target": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_",
       "resolution": {
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -6154,5 +6154,5 @@
       }
     }
   ],
-  "rows_sha256": "404844ee7a1158b298be064f1840a51ea296f96cebeaa16c01d441cccd86655b"
+  "rows_sha256": "48efcd7a8d52fdaa69841dc9fadda1b5f59070dffcf4ab22eab160bb0294b453"
 }

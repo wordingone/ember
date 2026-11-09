@@ -46,6 +46,7 @@ READER_INSTRUMENT_FIELDS = {
 }
 DOMAIN_AUTHORITY_PATH = Path("manifests/architecture/domain-authority-v1.json")
 INDEX_PATH = Path("docs/INDEX.md")
+FIRST_READER_IDENTITY_PATH = Path("manifests/documentation/first-reader-identity-v1.json")
 CONSERVATION_MARKER = "<!-- EMBER_CONSERVATION_V1"
 SOURCE_CLASSES = {
     "AUTHORITY_DERIVED",
@@ -261,6 +262,40 @@ def validate_claim_map(root: Path, claim_map: dict[str, Any]) -> list[dict[str, 
             if sha256_file(path) != source["sha256"]:
                 raise DocsInfoError(f"STALE_CLAIM_SOURCE:{claim_id}:{source['path']}")
     return claims
+
+
+def validate_first_reader_identity(root: Path, value: Any) -> dict[str, int]:
+    """Refuse a retired identity claim on a first-reader surface (lead ruling 81952/81953)."""
+    if not isinstance(value, dict) or value.get("schema_version") != "ember-first-reader-identity-v1":
+        raise DocsInfoError("FIRST_READER_IDENTITY_SCHEMA_INVALID")
+    surfaces = value.get("surfaces")
+    rules = value.get("stale_rules")
+    if not isinstance(surfaces, list) or not surfaces or len(set(surfaces)) != len(surfaces):
+        raise DocsInfoError("FIRST_READER_IDENTITY_SURFACES_INVALID")
+    if not isinstance(rules, list) or not rules:
+        raise DocsInfoError("FIRST_READER_IDENTITY_RULES_INVALID")
+    compiled: list[tuple[str, re.Pattern[str]]] = []
+    for rule in rules:
+        if (
+            not isinstance(rule, dict)
+            or set(rule) != {"id", "pattern", "why"}
+            or not all(isinstance(rule[key], str) and rule[key] for key in rule)
+        ):
+            raise DocsInfoError("FIRST_READER_IDENTITY_RULE_INVALID")
+        try:
+            compiled.append((rule["id"], re.compile(rule["pattern"], re.IGNORECASE)))
+        except re.error as error:
+            raise DocsInfoError(f"FIRST_READER_IDENTITY_PATTERN_INVALID:{rule['id']}") from error
+    if len({rule_id for rule_id, _ in compiled}) != len(compiled):
+        raise DocsInfoError("FIRST_READER_IDENTITY_RULE_DUPLICATE")
+    for surface in surfaces:
+        if not isinstance(surface, str) or not (root / surface).is_file():
+            raise DocsInfoError(f"FIRST_READER_SURFACE_MISSING:{surface}")
+        text = (root / surface).read_text(encoding="utf-8")
+        for rule_id, pattern in compiled:
+            if pattern.search(text):
+                raise DocsInfoError(f"STALE_IDENTITY_PHRASE:{rule_id}:{surface}")
+    return {"first_reader_surface_count": len(surfaces), "first_reader_rule_count": len(compiled)}
 
 
 def validate_readme(path: Path) -> dict[str, int]:
@@ -1156,6 +1191,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
     rows = validate_metadata(root, metadata)
     claims = validate_claim_map(root, claims_value)
     readme_counts = validate_readme(root / "README.md")
+    first_reader = validate_first_reader_identity(root, load_json(root / FIRST_READER_IDENTITY_PATH))
     domains = validate_domains(root, rows, authority)
     retired = metadata.get("retired_paths", [])
     if not isinstance(retired, list):
@@ -1187,6 +1223,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
         "commands_executed": len(command_results),
         "command_results": command_results,
         **readme_counts,
+        **first_reader,
         **references,
         "metadata_raw_sha256": sha256_file(root / METADATA_PATH),
         "claim_map_raw_sha256": sha256_file(root / CLAIM_MAP_PATH),
@@ -1197,6 +1234,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
             root / CURRENT_REFERENCE_RECONCILIATION_PATH
         ),
         "reader_instrument_raw_sha256": sha256_file(root / READER_INSTRUMENT_PATH),
+        "first_reader_identity_raw_sha256": sha256_file(root / FIRST_READER_IDENTITY_PATH),
         "generated_index_sha256": sha256_file(index_path),
     }
 
