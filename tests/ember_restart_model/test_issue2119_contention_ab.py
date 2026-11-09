@@ -313,7 +313,8 @@ class CudaCoTenantRed(unittest.TestCase):
         x = torch.randn(8, 2048, width, device=device)
         per_row = 2048 * width * 4 * 6
         leave = int(per_row * 2.5)   # room for 2 rows of activations, not 4
-        filler = subprocess.Popen([sys.executable, '-I', '-c', (
+        # No -I: this host installs torch in the user site, which isolated mode drops, so the filler could not import it.
+        filler = subprocess.Popen([sys.executable, '-B', '-c', (
             'import torch,time,sys\n'
             'd=torch.device("cuda:0");f,t=torch.cuda.mem_get_info(d)\n'
             'k=torch.empty(max(0,f-%d-%d),dtype=torch.uint8,device=d);print("FILLED",flush=True);time.sleep(120)\n' % (leave, 512 * 1024 ** 2))],
