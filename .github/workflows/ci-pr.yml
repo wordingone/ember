@@ -81,6 +81,8 @@ jobs:
       - name: Run CIA checkpoint object and index mechanics (#2163)
         if: hashFiles('tests/ember_restart_model/domain-governance/test_issue2163_cia_*.py') != ''
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_issue2163_cia_*.py' -v
+      - name: Run CIA eval v0 model-only load, adoption and ledger mechanics (#2119)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_cia_eval_v0.py' -v
       - name: Verify bounded POSIX checkpoint ledger acquisition (#2211)
         run: >-
           python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 --
