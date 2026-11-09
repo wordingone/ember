@@ -413,6 +413,31 @@ class CIADecoder(nn.Module):
         self.parameter_inventory()
         return self
 
+    def adopt_cpu_tensors(self, tensors):
+        """Adopt one complete set of verified BF16 CPU tensors as the population, without any initialization.
+
+        The caller owns verification of the bytes (load_cia_checkpoint_model_only); this checks only that the names,
+        shapes and dtypes are exactly the equation inventory, then runs the same inventory validation as materialize_cpu.
+        Ownership of each tensor moves to the model; the caller must not keep or mutate them.
+        """
+        if self._parameter_device != "meta":
+            raise ValueError("adoption is allowed only once on a meta graph")
+        specs = equation_inventory()
+        if type(tensors) is not dict or set(tensors) != {spec.name for spec in specs}:
+            raise ValueError("adopted tensors must be exactly the equation inventory")
+        for spec in specs:
+            value = tensors[spec.name]
+            if (type(value) is not torch.Tensor or value.dtype != torch.bfloat16 or tuple(value.shape) != spec.shape
+                    or value.device.type != "cpu"):
+                raise ValueError("adopted tensor shape, dtype or device mismatch")
+        for spec in specs:
+            key = spec.name.replace(".", "__")
+            self.weights[key] = nn.Parameter(tensors[spec.name].contiguous(), requires_grad=self.weights[key].requires_grad)
+        self._parameter_device = "cpu"
+        self._execution_device = torch.device('cpu')
+        self.parameter_inventory()
+        return self
+
     def activate_cuda(self, device, *, resident_capacity=2, resident_experts=(), optimizer=None):
         """Activate bounded execution, optionally retaining an existing candidate optimizer.
 
