@@ -22,11 +22,11 @@ from typing import Any, Sequence
 
 STATE_NAME = "ember-worktree-lifecycle.json"
 LOCK_NAME = "ember-worktree-lifecycle.lock"
-PIN_DIRS_NAME = "worktree-pin-dirs"
-PIN_SUFFIX = ".treepin.json"
 DEFAULT_TARGET = 12
 RENEWAL_CAP_DAYS = 14
 DEFAULT_WORKTREE_ROOT = str(PureWindowsPath("B:" + chr(92), "M", "ember-wt"))
+PIN_DIRS_NAME = "worktree-pin-dirs"
+PIN_SUFFIX = ".treepin.json"
 
 # The exact commands the custody census runs per registered worktree
 # (`scripts/ember_01_custody/census.py`, `_git_material_paths`). The census's
