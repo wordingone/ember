@@ -14,7 +14,7 @@ the text below states and each training hour records. -->
 
 <a id="ember.claim.identity"></a>
 <a id="ember.claim.problem"></a>
-Ember is a project to build an AI model from scratch on one home computer with one consumer graphics
+Ember is a project to build its own AI model on one home computer with one consumer graphics
 card, and to run it locally. Training hours 1-43 are a from-scratch, model-free baseline: they use no
 borrowed model weights, teacher models or judge models, and every weight in them was learned here.
 Since early November 2026, declared open-weight teachers, judges, generated data, and open weights whose
