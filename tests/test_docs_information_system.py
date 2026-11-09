@@ -856,3 +856,64 @@ def test_reference_reconciliation_generator_matches_checked_in_bytes() -> None:
     assert module.build_current_reference_reconciliation(
         REPO_ROOT, dispositions, checked
     ) == checked
+
+
+STALE_FIRST_READER_SAMPLES = {
+    "clean-genesis-identity": "Ember is the complete clean-genesis sovereign foundation-intelligence project: the local",
+    "borrowed-signals-excluded": "Claims require verified public experience and receipts; borrowed learned or evaluative signals\nare excluded from the target lineage.",
+    "no-teacher-no-judge": "no external model weights, no teacher model and no judge model: every weight is learned here",
+    "owned-from-scratch-genesis": "`external_judges: false` — an owned, from-scratch genesis by contract",
+    "work-paused": "Work paused on 2026-10-10; this page is a snapshot from 2026-10-07.",
+    "unfinished-attempt": "Ember is an unfinished attempt to train a language model from scratch on one RTX 4090.",
+}
+
+
+def first_reader_fixture(tmp_path: Path, module, text: str) -> tuple[Path, dict]:
+    manifest = json.loads((REPO_ROOT / module.FIRST_READER_IDENTITY_PATH).read_text(encoding="utf-8"))
+    for surface in manifest["surfaces"]:
+        write(tmp_path / surface, "Ember is the sovereign foundation-intelligence project.\n")
+    write(tmp_path / manifest["surfaces"][3], text + "\n")
+    return tmp_path, manifest
+
+
+def test_first_reader_identity_has_a_red_for_every_rule(tmp_path: Path) -> None:
+    module = load_module()
+    manifest = json.loads((REPO_ROOT / module.FIRST_READER_IDENTITY_PATH).read_text(encoding="utf-8"))
+    assert {rule["id"] for rule in manifest["stale_rules"]} == set(STALE_FIRST_READER_SAMPLES)
+    for rule_id, sample in STALE_FIRST_READER_SAMPLES.items():
+        root = tmp_path / rule_id
+        root.mkdir()
+        root, value = first_reader_fixture(root, module, sample)
+        with pytest.raises(module.DocsInfoError, match=f"STALE_IDENTITY_PHRASE:{rule_id}:{value['surfaces'][3]}"):
+            module.validate_first_reader_identity(root, value)
+
+
+def test_first_reader_identity_accepts_the_current_wording_and_counts_surfaces(tmp_path: Path) -> None:
+    module = load_module()
+    root, value = first_reader_fixture(
+        tmp_path, module,
+        "Declared, licence-recorded external models may assist training; the hour is model-assisted.",
+    )
+    counts = module.validate_first_reader_identity(root, value)
+    assert counts == {"first_reader_surface_count": len(value["surfaces"]), "first_reader_rule_count": len(value["stale_rules"])}
+
+
+def test_first_reader_identity_refuses_a_malformed_manifest(tmp_path: Path) -> None:
+    module = load_module()
+    root, value = first_reader_fixture(tmp_path, module, "ok")
+    for broken, expected in (
+        ({**value, "schema_version": "other"}, "FIRST_READER_IDENTITY_SCHEMA_INVALID"),
+        ({**value, "surfaces": []}, "FIRST_READER_IDENTITY_SURFACES_INVALID"),
+        ({**value, "surfaces": value["surfaces"] + ["docs/NOPE.md"]}, "FIRST_READER_SURFACE_MISSING:docs/NOPE.md"),
+        ({**value, "stale_rules": value["stale_rules"] + [value["stale_rules"][0]]}, "FIRST_READER_IDENTITY_RULE_DUPLICATE"),
+        ({**value, "stale_rules": [{"id": "x", "pattern": "(", "why": "w"}]}, "FIRST_READER_IDENTITY_PATTERN_INVALID:x"),
+        ({**value, "stale_rules": [{"id": "x", "pattern": "p"}]}, "FIRST_READER_IDENTITY_RULE_INVALID"),
+    ):
+        with pytest.raises(module.DocsInfoError, match=expected):
+            module.validate_first_reader_identity(root, broken)
+
+
+def test_first_reader_surfaces_in_this_checkout_state_no_retired_claim() -> None:
+    module = load_module()
+    value = json.loads((REPO_ROOT / module.FIRST_READER_IDENTITY_PATH).read_text(encoding="utf-8"))
+    assert module.validate_first_reader_identity(REPO_ROOT, value)["first_reader_surface_count"] == len(value["surfaces"])
