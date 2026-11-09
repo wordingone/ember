@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[5]
 ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py'
 CONFIG = 'configs/ember-cia-3b.json'
 DISK_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py'
+CONTENTION_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/cia_contention.py'
 GIB = 1024 ** 3
 POPULATION = 3_082_539_008
 CLAIM = 'governed execution evidence; model qualification requires its separate acceptance gates'
@@ -625,8 +626,33 @@ def headroom():
     disks = {drive: shutil.disk_usage(drive + ':/').free for drive in ('C', 'B')}
     if (free < LIMITS['min_free_commit_bytes'] or disks['C'] < LIMITS['min_c_free_bytes']
             or disks['B'] < LIMITS['min_b_free_bytes']):
-        raise ValueError('measurement operating reserve is unavailable')
+        # Waitable: another lane's transient commit or disk use clears on its own (lead ruling 81914). Still a ValueError.
+        raise load_contention_module().ReserveUnavailable('measurement operating reserve is unavailable')
     return {'free_commit_bytes': free, 'free_disk_bytes': disks}
+
+
+def load_contention_module():
+    """cia_contention by file path, registered once under its import name so cia_hour's plain import shares it."""
+    cached = sys.modules.get('cia_contention')
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location('cia_contention', ROOT / CONTENTION_ENTRY)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _reserve_log(event):
+    print(json.dumps(event, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def wait_headroom(**wait):
+    """headroom() that backs off (1, 2, 4, 8, 16, 30 s, last repeating, bounded at 30 min) while the reserve is short,
+    logging every wait, then refuses with the wait named. Any other failure propagates at once. ``wait`` overrides
+    wait_for_reserve's sleep/clock/schedule/max_wait (tests)."""
+    value, _ = load_contention_module().wait_for_reserve(headroom, **{'log': _reserve_log, **wait})
+    return value
 
 
 def daemon_identity():
@@ -851,7 +877,7 @@ CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + 
     ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour_energy.py', 'boundary_energy_collector.py'))
+    ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_contention.py'))
 # ruling 67346: the verify-only entry is pinned by a tail prediction alone; an ordinary hour prediction neither requires nor binds it.
 TAIL_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_verify_tail.py',)
 
@@ -2787,7 +2813,7 @@ def verify_worker(binding, binding_path):
         raise ValueError(error)
     if os.environ.get('EMBER_GATE_AUTHORIZED') != '1':
         raise ValueError('explicit live gate condition missing')
-    headroom()
+    wait_headroom()
     resource_census()
     resources.sample_device(launch['gpu_uuid'], total_gpu_bytes=LIMITS['total_gpu_bytes'])
 
@@ -3146,7 +3172,7 @@ def launch(args, dispatch):
     tail_stamp(custody, 'segment_launch')  # typed wall start of the governed segment (#2119 accounting)
     helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
     hidden = args.hidden_helper.resolve(strict=True)
-    preflight = headroom()
+    preflight = wait_headroom()
     fence_holder = gpu_lock_guard.holder_pid()  # a live fence tenant (eval, scorer) that the acquire below waits for; not a conflict
     census = resource_census(fence_holder=fence_holder)
     _, prepared = prepare_execution(prediction)
@@ -3207,7 +3233,7 @@ def launch(args, dispatch):
     try:
         with gpu_lock_guard.acquire(script=ENTRY):
             record_fence_wait(custody, gpu_lock_guard, fence_holder)
-            headroom()
+            wait_headroom()
             resource_census()
             resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
             result = OwnedProcessRunner(windows_job_factory=factory).run(command,
