@@ -3,6 +3,10 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -53,7 +57,9 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
                 "cli",
                 "launcher",
                 "production-rung-replay",
+                "production-rung-replay-retry",
                 "owned-process-posix",
+                "owned-process-posix-retry",
             },
             {name for name, _ in checkouts},
         )
@@ -94,6 +100,75 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
             'human authority binding is not applicable"',
             workflow,
         )
+
+
+    def _aggregate_verdict(self, results: dict[str, str]) -> tuple[int, str]:
+        """Run the ci-pr aggregate's inline python on crafted `needs` results; return (exit code, stdout)."""
+        job = yaml.safe_load((ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(encoding="utf-8"))["jobs"]["ci-pr"]
+        run = next(step["run"] for step in job["steps"] if step.get("name") == "Stable aggregate verdict")
+        lines = run.splitlines()
+        start = next(i for i, line in enumerate(lines) if line.strip() == "python - <<'PY'") + 1
+        end = next(i for i in range(start, len(lines)) if lines[i].strip() == "PY")
+        needs = {name: {"result": result} for name, result in results.items()}
+        done = subprocess.run(
+            [sys.executable, "-B", "-c", chr(10).join(lines[start:end])],
+            capture_output=True, text=True, env=dict(os.environ, NEEDS_JSON=json.dumps(needs)),
+        )
+        self.assertEqual("", done.stderr)
+        return done.returncode, done.stdout
+
+    def _needs_names(self) -> list[str]:
+        workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(encoding="utf-8"))
+        return list(workflow["jobs"]["ci-pr"]["needs"])
+
+    def _all(self, **overrides: str) -> dict[str, str]:
+        results = {name: "success" for name in self._needs_names()}
+        for name in ("owned-process-posix-retry", "production-rung-replay-retry"):
+            results[name] = "skipped"
+        for key, value in overrides.items():
+            self.assertIn(key.replace("_", "-"), results)
+            results[key.replace("_", "-")] = value
+        return results
+
+    def test_aggregate_passes_when_every_job_succeeds_or_a_retry_is_skipped(self) -> None:
+        code, out = self._aggregate_verdict(self._all())
+        self.assertEqual(0, code)
+        self.assertNotIn("::warning::", out)
+
+    def test_aggregate_passes_a_failed_first_attempt_whose_retry_succeeded_and_says_so(self) -> None:
+        for first in ("failure", "cancelled", "skipped"):
+            code, out = self._aggregate_verdict(self._all(owned_process_posix=first, owned_process_posix_retry="success"))
+            self.assertEqual(0, code, first)
+            self.assertIn("::warning::owned-process-posix first attempt was " + first, out)
+        code, out = self._aggregate_verdict(self._all(production_rung_replay="failure", production_rung_replay_retry="success"))
+        self.assertEqual(0, code)
+        self.assertIn("::warning::production-rung-replay first attempt was failure", out)
+
+    def test_aggregate_fails_when_the_retry_also_fails_or_never_ran(self) -> None:
+        for retry in ("failure", "cancelled", "skipped"):
+            code, _ = self._aggregate_verdict(self._all(owned_process_posix="failure", owned_process_posix_retry=retry))
+            self.assertEqual(1, code, retry)
+        code, _ = self._aggregate_verdict(self._all(production_rung_replay="cancelled", production_rung_replay_retry="failure"))
+        self.assertEqual(1, code)
+
+    def test_aggregate_does_not_forgive_a_job_that_has_no_retry(self) -> None:
+        for name in self._needs_names():
+            if name.endswith("-retry") or name + "-retry" in self._needs_names():
+                continue
+            code, _ = self._aggregate_verdict(self._all(**{name.replace("-", "_"): "failure"}))
+            self.assertEqual(1, code, name)
+
+    def test_a_retry_job_runs_only_after_a_first_attempt_that_did_not_succeed(self) -> None:
+        jobs = yaml.safe_load((ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(encoding="utf-8"))["jobs"]
+        for base in ("owned-process-posix", "production-rung-replay"):
+            retry = jobs[base + "-retry"]
+            self.assertEqual(base, retry["needs"])
+            self.assertIn("!cancelled()", retry["if"])
+            self.assertIn("needs.%s.result != 'success'" % base, retry["if"])
+            self.assertNotIn(base + "-retry", jobs[base].get("needs", []))
+            first_steps = [{k: v for k, v in step.items() if k != "name"} for step in jobs[base]["steps"]]
+            retry_steps = [{k: v for k, v in step.items() if k != "name"} for step in retry["steps"]]
+            self.assertEqual(first_steps, retry_steps, base + ": the retry must run the same steps as the first attempt")
 
 
 if __name__ == "__main__":
