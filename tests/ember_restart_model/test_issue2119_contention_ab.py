@@ -299,11 +299,15 @@ class Attribution(unittest.TestCase):
 
 
 @unittest.skipUnless(torch.cuda.is_available(), 'CUDA')
-class CudaCoTenantRed(unittest.TestCase):
-    """A real foreign process fills the card; the elastic step must finish the update at a smaller micro-step and the
-    attribution sampler must call it contended. Needs a card window: refuses unless EMBER_CUDA_REDS=1."""
+class CudaCoTenantProbe(unittest.TestCase):
+    """PROBE, NOT the (B) red: (B) is UNEXERCISED on WDDM. A real foreign process fills the card and the run records what
+    this host shows (free bytes, whether more memory still allocates, OOM or not, the step-time ratio, which attribution
+    signal fired). Its throttle assertion is CONDITIONAL on the shortage being visible, a signal this host never produced
+    in four card runs, so it cannot fail here and proves nothing about the throttle. The real (B) red (a co-tenant that
+    slows the step must produce a throttle event) belongs to the step-time-trigger PR. Needs a card window: skipped unless
+    EMBER_CUDA_REDS=1."""
 
-    def test_real_gpu_filling_cotenant_forces_a_throttle_and_is_attributed(self):
+    def test_probe_records_what_the_host_shows_beside_a_filling_cotenant(self):
         if os.environ.get('EMBER_CUDA_REDS') != '1':
             self.skipTest('needs a card window: set EMBER_CUDA_REDS=1 inside one')
         device = torch.device('cuda:0')
