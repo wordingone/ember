@@ -4540,6 +4540,10 @@ def _cia_validate_parent_once(root, receipt):
     if operation is None:
         return _cia_validated_checkpoint(root, receipt)
     operation.visits['validated_calls'] += 1
+    if receipt.get('_attested_by_custody') is True and receipt.get('checkpoint_manifest_sha256') in operation.attested.values():
+        # Accepted by content address inside THIS operation (parameter_counter._cia_attest_chain): its bytes are not held,
+        # so there is nothing to walk; the use is disclosed through cia_attestation_disclosure.
+        return None
     key = ('parent-validation', str(root),
            hashlib.sha256(json.dumps(receipt, sort_keys=True, default=str).encode()).hexdigest())
     if key in operation.validated:
