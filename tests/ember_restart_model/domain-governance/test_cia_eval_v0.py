@@ -69,12 +69,30 @@ class ModelOnlyLoadTests(fixture.TransactionTests):
         self.assertIs(load['optimizer_loaded'], False)
         self.assertIs(load['replay_loaded'], False)
         self.assertIs(load['lineage_verified'], False)
-        self.assertEqual(load['objects_verified'], 26)
+        self.assertEqual(load['objects_verified'], 26)  # counted from the reads that completed: 1 core + 25 experts
         self.assertEqual(load['parameter_count'], 208)
         self.assertEqual(load['tensor_count'], 26)
         self.assertEqual(load['checkpoint_manifest_sha256'], self.manifest_sha())
         self.assertEqual(load['global_step'], 0)
         del receipt
+
+    def test_objects_verified_equals_the_completed_reads(self):
+        self.publish()
+        real = artifacts.read_cia_expert_object
+        calls = []
+
+        def counting(*args, **kwargs):
+            calls.append(kwargs.get('expert_id'))
+            return real(*args, **kwargs)
+        with patch.object(artifacts, 'read_cia_expert_object', counting):
+            _, load = artifacts.load_cia_checkpoint_model_only(self.root)
+        self.assertEqual(sorted(calls), list(range(25)))
+        self.assertEqual(load['objects_verified'], 1 + len(calls))
+        # a failed read raises and leaves no receipt, so on success the count is always the whole generation (1 + 25)
+        victim = self.expert_objects()[3]
+        victim.unlink()
+        with self.assertRaises(ValueError):
+            artifacts.load_cia_checkpoint_model_only(self.root)
 
     def test_never_opens_optimizer_or_replay_payloads(self):
         self.publish()
