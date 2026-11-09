@@ -256,6 +256,24 @@ def declared_model_signal_errors(signals):
         if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
             out.append(f"entry {i} share is not in (0, 1]")
     return out
+
+
+def declared_backbone_errors(declaration):
+    """Return the reasons a config's backbone_declaration is not a GOAL §6 declaration of a borrowed backbone or
+    initialization: an object naming the model and its version or sha, with licence_recorded true and
+    licence_permits_derivatives true. Copied code stays governed by its own licence, not by this declaration."""
+    if not isinstance(declaration, dict):
+        return ["backbone_declaration must be a declared object"]
+    out = []
+    if not str(declaration.get("model", "")).strip() or not str(declaration.get("version", "")).strip():
+        out.append("declaration lacks model or version")
+    if declaration.get("licence_recorded") is not True:
+        out.append("declaration has no recorded licence")
+    if declaration.get("licence_permits_derivatives") is not True:
+        out.append("declaration licence does not record that derivatives are permitted")
+    return out
+
+
 REASONING_AXES = [
     "multi_step",
     "compositional",
@@ -288,7 +306,7 @@ MUTATION_CLASSES = [
     "sub_3b_network",
     "missing_native_modality",
     "missing_native_reasoning",
-    "borrowed_backbone",
+    "{BACKBONE_MUTATION}",
     "{MODEL_SIGNAL_MUTATION}",
     "mechanism_erasure",
     "missing_totality_member",
@@ -567,8 +585,11 @@ def policy_era(root: Path, policy: dict[str, Any] | None, errors: list[dict[str,
 
 
 def mutation_classes(era: int) -> list[str]:
-    name = "model_mediated_signal" if era == 1 else "undeclared_model_mediated_signal"
-    return [name if c == "{MODEL_SIGNAL_MUTATION}" else c for c in MUTATION_CLASSES]
+    names = {
+        "{MODEL_SIGNAL_MUTATION}": "model_mediated_signal" if era == 1 else "undeclared_model_mediated_signal",
+        "{BACKBONE_MUTATION}": "borrowed_backbone" if era == 1 else "undeclared_borrowed_backbone",
+    }
+    return [names.get(c, c) for c in MUTATION_CLASSES]
 
 
 def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
@@ -758,16 +779,17 @@ def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[st
         "policy.verified_expert_accretion",
         "Verified Expert Accretion must be the headline causal hypothesis",
     )
+    lineage = policy.get("lineage") or {}
+    era = policy_era(root, policy, errors)
+    # Era 1 (H1-H43 model-free baseline): no published family may be the backbone. Era 2 (GOAL §4/§6, 2026-11-08):
+    # any backbone or initialization is allowed when declared under §6; check_configs checks each declaration.
     expect(
         errors,
         4,
-        architecture.get("published_family_backbone_allowed") is False,
+        architecture.get("published_family_backbone_allowed") is (era != 1),
         "policy.published_backbone",
-        "published model families may not become Ember's backbone",
+        "published_family_backbone_allowed must be false in era 1 and true (declared under GOAL §6) in era 2",
     )
-
-    lineage = policy.get("lineage") or {}
-    era = policy_era(root, policy, errors)
     if era == 1:
         expect(
             errors,
@@ -1850,7 +1872,11 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
             errors.append(finding(4, "config.native_capabilities", rel))
         backbone = str(authority.get("published_family_backbone", "")).strip().lower()
         if backbone not in ("", "none"):
-            errors.append(finding(4, "config.borrowed_backbone", f"{rel}: {backbone}"))
+            if era == 1:
+                errors.append(finding(4, "config.borrowed_backbone", f"{rel}: {backbone}"))
+            else:
+                for why in declared_backbone_errors(authority.get("backbone_declaration")):
+                    errors.append(finding(4, "config.undeclared_borrowed_backbone", f"{rel}: {backbone}: {why}"))
         signals = authority.get("model_mediated_signals")
         if era == 1:
             if not isinstance(signals, list) or signals:
