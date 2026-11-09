@@ -43,10 +43,12 @@ def _v2_lineage(policy: dict) -> None:
         creation_claims_state_model_assisted=True,
         model_free_baseline="every_hour_before_the_first_declared_model_resource",
     )
-    policy["mutation_controls_required"] = [
-        "undeclared_model_mediated_signal" if c == "model_mediated_signal" else c
-        for c in policy["mutation_controls_required"]
-    ]
+    policy["architecture"]["published_family_backbone_allowed"] = True
+    renames = {
+        "model_mediated_signal": "undeclared_model_mediated_signal",
+        "borrowed_backbone": "undeclared_borrowed_backbone",
+    }
+    policy["mutation_controls_required"] = [renames.get(c, c) for c in policy["mutation_controls_required"]]
 
 
 def _write_v2_docs(root: Path, monkeypatch, succession: bool = True) -> str:
@@ -162,3 +164,78 @@ def test_v2_era_config_with_an_undeclared_signal_refuses(tmp_path: Path, v2_sha,
     _v2_fixture(tmp_path, v2_sha, monkeypatch)
     _candidate(tmp_path, ["teachers"])
     assert "config.undeclared_model_mediated_signal" in _codes(tmp_path)
+
+
+def _backbone_candidate(root: Path, backbone: str, declaration) -> None:
+    authority = {
+        "artifact_class": "research_candidate",
+        "execution_authority": "allowed",
+        "goal_id": "EMBER-02",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        "total_parameters": 3_000_000_000,
+        "native_capabilities": ["text", "image", "audio", "reasoning", "structured_tool_use"],
+        "published_family_backbone": backbone,
+        "model_mediated_signals": [],
+    }
+    if declaration is not None:
+        authority["backbone_declaration"] = declaration
+    (root / "configs" / "candidate.json").write_text(json.dumps({"authority": authority}), encoding="utf-8")
+
+
+DECLARED_BACKBONE = {"model": "open-model", "version": "sha256:" + "b" * 64, "licence_recorded": True,
+                     "licence_permits_derivatives": True}
+
+
+def test_v1_era_config_with_a_declared_backbone_refuses(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    _backbone_candidate(tmp_path, "open-model", DECLARED_BACKBONE)
+    assert "config.borrowed_backbone" in _codes(tmp_path)
+
+
+def test_v2_era_config_with_a_declared_backbone_is_admitted(tmp_path: Path, v2_sha, monkeypatch) -> None:
+    _v2_fixture(tmp_path, v2_sha, monkeypatch)
+    _backbone_candidate(tmp_path, "open-model", DECLARED_BACKBONE)
+    result = run_verifier(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        None,
+        "qwen",
+        {**DECLARED_BACKBONE, "licence_recorded": False},
+        {**DECLARED_BACKBONE, "licence_permits_derivatives": False},
+        {k: v for k, v in DECLARED_BACKBONE.items() if k != "version"},
+        {k: v for k, v in DECLARED_BACKBONE.items() if k != "model"},
+    ],
+)
+def test_v2_era_config_with_an_undeclared_backbone_refuses(tmp_path: Path, v2_sha, monkeypatch, declaration) -> None:
+    _v2_fixture(tmp_path, v2_sha, monkeypatch)
+    _backbone_candidate(tmp_path, "open-model", declaration)
+    assert "config.undeclared_borrowed_backbone" in _codes(tmp_path)
+
+
+def test_v2_policy_must_allow_the_declared_backbone(tmp_path: Path, v2_sha, monkeypatch) -> None:
+    _v2_fixture(tmp_path, v2_sha, monkeypatch)
+    rewrite_policy(tmp_path, lambda p: p["architecture"].update(published_family_backbone_allowed=False))
+    assert "policy.published_backbone" in _codes(tmp_path)
+
+
+def test_v1_policy_may_not_allow_a_backbone(tmp_path: Path) -> None:
+    write_valid_fixture(tmp_path)
+    rewrite_policy(tmp_path, lambda p: p["architecture"].update(published_family_backbone_allowed=True))
+    assert "policy.published_backbone" in _codes(tmp_path)
+
+
+def test_v2_mutation_controls_name_the_undeclared_backbone(tmp_path: Path, v2_sha, monkeypatch) -> None:
+    _v2_fixture(tmp_path, v2_sha, monkeypatch)
+    rewrite_policy(
+        tmp_path,
+        lambda p: p.update(
+            mutation_controls_required=[
+                "borrowed_backbone" if c == "undeclared_borrowed_backbone" else c for c in p["mutation_controls_required"]
+            ]
+        ),
+    )
+    assert "policy.mutation_controls" in _codes(tmp_path)
