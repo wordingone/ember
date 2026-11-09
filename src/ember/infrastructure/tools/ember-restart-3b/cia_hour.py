@@ -493,6 +493,49 @@ def file_decode_prefetch_refusal(runner, custody, witness):
         print('DECODE_PREFETCH_SIDECAR_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
+def start_contention_sampler(device):
+    """(A) co-tenant attribution (lead ruling 81915): sample what else uses the card and the CPU once a second so every
+    measured update can be tagged. Evidence only: returns None when disabled (EMBER_CONTENTION_SAMPLER=0) or when it
+    cannot start, and never changes a row, a pin or the hour's outcome. Started after the capture so no CUDA query can
+    land inside graph capture."""
+    if os.environ.get('EMBER_CONTENTION_SAMPLER', '1') == '0':
+        return None
+    try:
+        import torch
+        import cia_contention
+        read = cia_contention.default_reader(
+            mem_info=lambda: torch.cuda.mem_get_info(device),
+            own_reserved=lambda: torch.cuda.memory_reserved(device),
+            own_cpu_percent=cia_contention.ProcessCpu().percent)
+        sampler = cia_contention.ContentionSampler(read, clock=time.perf_counter)
+        sampler.start()
+        return sampler, read
+    except Exception as error:   # evidence-only: anything here is named on stderr and the hour carries on
+        print('CONTENTION_SAMPLER_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+        return None
+
+
+def file_contention_attribution(runner, custody, started, rows):
+    """Stop the sampler and write custody/contention-attribution.json: raw positions/s beside the uncontended rate and
+    the contended fraction. A failure here is named on stderr and never propagates (see file_decode_prefetch_refusal)."""
+    if started is None:
+        return
+    sampler, read = started
+    try:
+        sampler.stop()
+        import cia_contention
+        receipt = cia_contention.attribution_receipt(rows, sampler_errors=sampler.errors)
+        receipt.update(schema='ember-contention-attribution-v1', sample_seconds=cia_contention.SAMPLE_SECONDS,
+            foreign_gpu_bytes_threshold=cia_contention.FOREIGN_GPU_BYTES,
+            foreign_cpu_percent_threshold=cia_contention.FOREIGN_CPU_PERCENT,
+            overhead_calibration='running_minimum_outside_this_allocator', overhead_bytes_final=read.overhead_bytes(),
+            claim='Attribution only: contended means another process was seen using the card or the CPU during the '
+                  'update; it changes no throughput claim, row or pin')
+        runner._write_new(custody / 'contention-attribution.json', receipt)
+    except Exception as error:   # evidence-only sidecar
+        print('CONTENTION_ATTRIBUTION_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+
+
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
@@ -1122,6 +1165,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     measured, positions, total_steps = 0, 0, 0
     started = None
     step_rates = []
+    contention, contention_rows = None, []
     gc_identity = dict(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'])
     with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
             (custody / 'gc-events.jsonl').open('xb') as gc_rows:
@@ -1202,9 +1246,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     gc.disable()  # bounded below: runner.bounded_collect every 64 steps
                 energy.begin()
                 started = time.perf_counter()
+                contention = start_contention_sampler(device)
             else:
                 measured += 1
                 step_rates.append(row['positions_per_second'])
+                if contention is not None:
+                    contention_rows.append(dict(update=total_steps, positions_per_second=row['positions_per_second'],
+                        contention=contention[0].classify(call_started, call_finished)))
                 elapsed = time.perf_counter() - started
                 if learning and total_steps in LEARNING_SNAPSHOTS:
                     # Training wall excludes snapshot writing; the snapshot reads parameters after the step completes.
@@ -1231,6 +1279,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         os.fsync(rows.fileno())
         # image_patches_source counted over every measured row (the assertion above covered only the first 64).
         runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=False))
+        file_contention_attribution(runner, custody, contention, contention_rows)
         gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
