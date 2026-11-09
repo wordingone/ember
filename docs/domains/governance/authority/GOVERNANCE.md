@@ -58,8 +58,10 @@ specific absolute paths, or private-repository locations. Public evidence uses
 repository-relative paths and redacted custody identifiers. Paper authorship is
 handled by the release process without weakening repository privacy.
 
-Borrowed models are frozen references only. External learned or evaluative
-signals never enter an owned lineage.
+Borrowed models used as references stay frozen. External models may enter a
+lineage only as declared, licence-recorded training resources (GOAL §6); an
+undeclared external signal refuses, and creation claims about model-assisted
+products name the model-assisted hours (docs/authority/INVARIANT-v2.md clauses 3 and 4).
 
 ## Repository hygiene (#488)
 

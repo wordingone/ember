@@ -56,7 +56,7 @@ The registry is a separate command-line input for both candidate and admission v
 
 A candidate must bind all of the following:
 
-- clean owned random initialization, null parent, and explicit false values for borrowed weights, teachers, judges, filters, and generated labels;
+- clean owned random initialization, null parent, and explicit values for borrowed weights (false for the H1-H43 baseline; a GOAL §6 declaration otherwise), teachers, judges, filters, and generated labels;
 - allocated, unique, total-trainable, and served parameter counts of at least 3,000,000,000; episode-active and episode-trainable counts are positive, bounded by total capacity, and strictly sparse; all six values must equal the validator's independent recomputation for the content-addressed `ember-sparse-3b-v2` model config and also match the output of a content-addressed counter executed in isolated Python mode against that config and exact checkpoint manifest, with the receipt bound to the counter-source bytes, active route, and expert-genesis shard hashes;
 - one `ember-unified-decoder` using raw image patches and audio frames, decoder soft-token splicing, multimodal-span attention, 2D-capable positional treatment, and no separate pretrained encoder;
 - a shared core with an always-active nonlinear SwiGLU text FFN plus exactly four asymmetric vision, audio, reasoning, and tool expert banks, each bound to its own content-addressed checkpoint shard with distinct verified bytes; exactly one route is active per episode: `shared` for semantic text or one declared domain expert in addition to the shared core;

@@ -71,6 +71,28 @@ def test_candidate_must_conserve_scale_modalities_and_lineage() -> None:
         assert ok is False
 
 
+DECLARED_TEACHER = {"model": "open-teacher", "version": "sha256:" + "a" * 64, "role": "teacher", "licence_recorded": True, "share": 0.25}
+
+
+def test_declared_licence_recorded_model_signal_passes() -> None:
+    """GOAL §6: a declared, licence-recorded model-assisted input is admissible at dispatch."""
+    ok, reason = check_dispatch_authority(candidate(model_mediated_signals=[DECLARED_TEACHER]), GOAL, OUTCOME)
+    assert ok is True, reason
+
+
+def test_undeclared_model_signal_variants_refuse() -> None:
+    """GOAL §6 condition 2: bare, unlicensed, unversioned, weights-role or zero-share signals refuse."""
+    for entry in (
+        "teachers",
+        {**DECLARED_TEACHER, "licence_recorded": False},
+        {k: v for k, v in DECLARED_TEACHER.items() if k != "version"},
+        {**DECLARED_TEACHER, "role": "weights"},
+        {**DECLARED_TEACHER, "share": 0},
+    ):
+        ok, reason = check_dispatch_authority(candidate(model_mediated_signals=[entry]), GOAL, OUTCOME)
+        assert ok is False and "undeclared" in reason, (entry, reason)
+
+
 def test_fully_bound_candidate_passes_config_specific_gate() -> None:
     ok, reason = check_dispatch_authority(candidate(), GOAL, OUTCOME)
     assert ok is True, reason
