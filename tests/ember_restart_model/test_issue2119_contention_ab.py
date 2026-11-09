@@ -9,10 +9,12 @@
     after the optimizer step began is not replayed; a shortage of host reserve waits with a bounded logged backoff.
 The CUDA red at the bottom needs a card window: it refuses unless EMBER_CUDA_REDS=1.
 """
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 import unittest
 
 import torch
@@ -313,6 +315,26 @@ class CudaCoTenantRed(unittest.TestCase):
         x = torch.randn(8, 2048, width, device=device)
         per_row = 2048 * width * 4 * 6
         leave = int(per_row * 2.5)   # room for 2 rows of activations, not 4
+
+        def step(pack, micro, mark):
+            layer.zero_grad(set_to_none=True)
+            for lo in range(0, len(x), micro):
+                layer(x[lo:lo + micro]).float().pow(2).sum().backward()
+            torch.cuda.synchronize()
+            mark()
+            return {'positions_per_second': 1.0}
+
+        def reset():
+            layer.zero_grad(set_to_none=True)
+            torch.cuda.empty_cache()
+
+        # Uncontended baseline (warm once, time once), then release the cache so the filler sizes against a clean card and
+        # the contended step has to allocate beside it (a cached block would hide the shortage).
+        step('pack', 8, lambda: None)
+        started_at = time.perf_counter()
+        step('pack', 8, lambda: None)
+        uncontended_seconds = time.perf_counter() - started_at
+        reset()
         # No -I: this host installs torch in the user site, which isolated mode drops, so the filler could not import it.
         filler = subprocess.Popen([sys.executable, '-B', '-c', (
             'import torch,time,sys\n'
@@ -327,25 +349,37 @@ class CudaCoTenantRed(unittest.TestCase):
             started = sampler._clock()
             sampler.sample_once()
 
-            def step(pack, micro, mark):
-                layer.zero_grad(set_to_none=True)
-                for lo in range(0, len(x), micro):
-                    layer(x[lo:lo + micro]).float().pow(2).sum().backward()
-                torch.cuda.synchronize()
-                mark()
-                return {'positions_per_second': 1.0}
-
-            def reset():
-                layer.zero_grad(set_to_none=True)
-                torch.cuda.empty_cache()
-            elastic = cc.ElasticStep(step, reset=reset, free_bytes=lambda: torch.cuda.mem_get_info(device)[0], floor_bytes=0,
+            # The floor is the 8-row step's own need (activations + grads, 6 float tensors of one row each): the headroom
+            # trigger must fire when the co-tenant leaves less than that. On this Windows host the driver may spill an
+            # over-full allocation to system memory instead of raising out-of-memory, so the OOM trigger alone cannot be
+            # relied on (the first card run, 2026-11-09 06:02Z, ran the 8-row step beside the filler with no OOM at all).
+            floor = per_row * 8
+            free_beside = torch.cuda.mem_get_info(device)[0]
+            elastic = cc.ElasticStep(step, reset=reset, free_bytes=lambda: torch.cuda.mem_get_info(device)[0], floor_bytes=floor,
                                      ladder=(8, 4, 2, 1), sleep=lambda s: None)
             row = elastic.run('pack', update=0)
             sampler.sample_once()
+            self.assertLess(free_beside, floor, 'the filler must leave less headroom than the 8-row step needs')
             self.assertLess(row['elastic']['micro_documents'], 8, 'the 8-row micro-step cannot fit beside the co-tenant')
-            self.assertTrue(any(e['reason'] == 'oom' for e in row['elastic']['events']))
+            self.assertTrue(any(e['reason'] in ('headroom', 'oom') for e in row['elastic']['events']), row['elastic'])
             verdict = sampler.classify(started, sampler._clock())
             self.assertTrue(verdict['contended'], verdict)
+            # Measured facts for the record (not assertions): does the un-throttled 8-row step raise OOM beside the filler, and
+            # how much slower is it than the uncontended baseline? A driver that spills to system memory shows up as the latter.
+            probe = {'free_beside_bytes': free_beside, 'floor_bytes': floor, 'events': row['elastic']['events'],
+                     'uncontended_8_row_seconds': uncontended_seconds}
+            reset()
+            started_at = time.perf_counter()
+            try:
+                step('pack', 8, lambda: None)
+                probe['unthrottled_8_row_oom'] = False
+            except BaseException as error:
+                if not cc.is_oom(error):
+                    raise
+                probe['unthrottled_8_row_oom'] = True
+            probe['unthrottled_8_row_seconds'] = time.perf_counter() - started_at
+            probe['slowdown_x'] = probe['unthrottled_8_row_seconds'] / max(uncontended_seconds, 1e-9)
+            print('CUDA_COTENANT_PROBE ' + json.dumps(probe, sort_keys=True), flush=True)
         finally:
             filler.kill()
             filler.wait()
