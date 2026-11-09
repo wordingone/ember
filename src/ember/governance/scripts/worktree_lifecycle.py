@@ -22,6 +22,8 @@ from typing import Any, Sequence
 
 STATE_NAME = "ember-worktree-lifecycle.json"
 LOCK_NAME = "ember-worktree-lifecycle.lock"
+PIN_DIRS_NAME = "worktree-pin-dirs"
+PIN_SUFFIX = ".treepin.json"
 DEFAULT_TARGET = 12
 RENEWAL_CAP_DAYS = 14
 DEFAULT_WORKTREE_ROOT = str(PureWindowsPath("B:" + chr(92), "M", "ember-wt"))
@@ -849,6 +851,52 @@ def safe_ref_component(value: str) -> str:
     return cleaned or "worktree"
 
 
+def pin_dirs_of(common: Path) -> list[Path]:
+    """Directories whose ``*.treepin.json`` files pin a worktree against retirement.
+
+    The list is machine-local config in the git common dir (``worktree-pin-dirs``, one
+    directory per line, ``#`` comments), so this tool names no operator path. An absent
+    file means no pin directories, which is the behaviour before this existed.
+    """
+    config = common / PIN_DIRS_NAME
+    if not config.is_file():
+        return []
+    dirs: list[Path] = []
+    for line in config.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            dirs.append(Path(line))
+    return dirs
+
+
+def pin_naming(common: Path, key: str) -> Path | None:
+    """The first live pin file whose ``path`` is the worktree ``key``, else None.
+
+    A pin is live while its file sits directly in a pin directory; releasing it is moving
+    it out (``released/`` below the directory is not scanned). Only ``*.treepin.json`` is
+    read, so ordinary JSON next to it is not a pin. A pin file that cannot be read, or has
+    no ``path``, refuses rather than being skipped: an unreadable pin may be the very one
+    that names this tree, and a skipped pin is how a live tree gets retired.
+    """
+    for directory in pin_dirs_of(common):
+        if not directory.is_dir():
+            continue
+        for pin in sorted(directory.glob(f"*{PIN_SUFFIX}")):
+            try:
+                named = json.loads(pin.read_text(encoding="utf-8"))["path"]
+                if not isinstance(named, str) or not named:
+                    raise ValueError("path is not a non-empty string")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise LifecycleError(
+                    "PIN_UNREADABLE",
+                    f"{pin} cannot be read as a worktree pin ({exc}); fix or release it "
+                    "before any retire, because it may name the worktree being retired",
+                ) from exc
+            if path_key(named) == key:
+                return pin
+    return None
+
+
 def retire_worktree(
     repo: Path,
     state_file: Path,
@@ -872,6 +920,18 @@ def retire_worktree(
         raise LifecycleError("MAIN_WORKTREE", row.path)
     if key not in state["legacy_paths"] and key not in state["managed"]:
         raise LifecycleError("UNMANAGED_WORKTREE", row.path)
+
+    # A live pin file means a derived script or cockpit launcher still names this tree as
+    # its working directory (the H44 cockpit-6 window died in two minutes because its
+    # worktree had been retired under it). No --force path: the act that clears this is
+    # releasing the pin. Checked before any state mutation, so a refusal changes nothing.
+    pinned_by = pin_naming(state_file.parent, key)
+    if pinned_by is not None:
+        raise LifecycleError(
+            "PINNED_WORKTREE",
+            f"{row.path} is named by the live pin {pinned_by}; release the pin "
+            "(move it out of its pin directory) before retiring this worktree",
+        )
 
     # A dirty worktree normally refuses retirement: residue may be someone's unsaved work.
     # `--force --owner <name>` narrows that refusal to worktrees this owner created, and
