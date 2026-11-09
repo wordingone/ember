@@ -56,11 +56,12 @@ class StepRunnerCensus(unittest.TestCase):
         self.check(base_rows() + [python_row(3, True)], gpu={3})
 
     def test_live_or_unknown_state_still_refuses(self):
+        # lead ruling 81914: own RAM commit is presence, not harm; a non-GPU live row passes, a GPU-listed one refuses.
         for exited in (False, None, ...):
-            for gpu in (set(), {3}):
-                with self.subTest(exited=exited, gpu=gpu):
-                    with self.assertRaisesRegex(ValueError, 'requires coordination'):
-                        self.check(base_rows() + [python_row(3, exited)], gpu)
+            with self.subTest(exited=exited):
+                self.check(base_rows() + [python_row(3, exited)], set())
+                with self.assertRaisesRegex(ValueError, 'requires coordination'):
+                    self.check(base_rows() + [python_row(3, exited)], {3})
 
     def test_live_small_gpu_listed_python_still_refuses(self):
         with self.assertRaisesRegex(ValueError, 'requires coordination'):

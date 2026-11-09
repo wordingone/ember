@@ -532,7 +532,29 @@ def resource_census():
     return rows
 
 
-def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
+UNREADABLE_REREADS = 3
+UNREADABLE_REREAD_SECONDS = 2.0
+
+
+def settle_unreadable_row(row, gpu_pids, reread, sleep):
+    """lead ruling 81909: a process matters only if it holds GPU memory. An unreadable row (no commit or command line, the shape of a
+    short-lived python seen mid-start or mid-exit) that nvidia-smi does not list is ignored. A GPU-listed unreadable row is
+    re-read UNREADABLE_REREADS times over UNREADABLE_REREAD_SECONDS; gone or exited -> ignored, readable -> classified,
+    still live and unreadable -> refused. Returns the row to classify, or None to ignore it."""
+    pid = row['ProcessId']
+    if pid not in gpu_pids:
+        return None
+    for _ in range(UNREADABLE_REREADS):
+        sleep(UNREADABLE_REREAD_SECONDS / UNREADABLE_REREADS)
+        fresh = next((r for r in reread() if r['ProcessId'] == pid), None)
+        if fresh is None or fresh.get('HasExited') is True:
+            return None
+        if fresh.get('PageFileUsage') is not None and fresh.get('CommandLine'):
+            return fresh
+    return False
+
+
+def reject_unowned_model_processes(rows, gpu_pids, owner_pid, reread=None, sleep=time.sleep):
     """Refuse a live, unowned Python process that holds model resources.
 
     Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py requires both
@@ -553,9 +575,13 @@ def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
         if row.get('HasExited') is True:
             continue
         if row.get('PageFileUsage') is None or not row.get('CommandLine'):
-            raise ValueError('cannot classify model process resources')
+            row = settle_unreadable_row(row, gpu_pids, reread or process_census, sleep)
+            if row is None:
+                continue
+            if row is False:
+                raise ValueError('cannot classify model process resources')
         argv = windows_command_args(row['CommandLine'])
-        if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
+        if (row['ProcessId'] in gpu_pids
                 or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
             raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]} '
                              f'(name={row["Name"]} parent={row.get("ParentProcessId")} command={row["CommandLine"]})')
