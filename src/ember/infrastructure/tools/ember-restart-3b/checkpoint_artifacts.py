@@ -4937,10 +4937,12 @@ def load_cia_checkpoint_model_only(root, *, expected_manifest_sha256=None, max_m
 
     def load_expert(expert_id):
         return read_cia_expert_object(index_path, expected_index_sha256=index['sha256'], expert_id=expert_id)
+    objects_read = 1  # the core object, read and verified above
     for expert in _cia_ordered_parallel(load_expert, range(25)):
         overlap = set(expert) & set(tensors)
         if overlap: raise ValueError('CIA model-only tensor name defined twice')
         tensors.update(expert)
+        objects_read += 1
         del expert
     placement = manifest['placement']
     if type(placement) is not dict or set(placement) != set(tensors):
@@ -4952,7 +4954,7 @@ def load_cia_checkpoint_model_only(root, *, expected_manifest_sha256=None, max_m
     receipt = {'schema_version': 'ember-cia-model-only-load-v1', 'checkpoint_manifest_sha256': digest,
                'global_step': cursor.get('global_step'), 'tokens_seen': cursor.get('tokens_seen'),
                'descendant': descendant, 'parent_walk_skipped': True, 'optimizer_loaded': False, 'replay_loaded': False,
-               'lineage_verified': False, 'objects_verified': 26, 'model_object_bytes': model_bytes,
+               'lineage_verified': False, 'objects_verified': objects_read, 'model_object_bytes': model_bytes,
                'tensor_count': len(tensors), 'parameter_count': total,
                'elapsed_seconds': round(time.monotonic() - started, 3)}
     return tensors, receipt
