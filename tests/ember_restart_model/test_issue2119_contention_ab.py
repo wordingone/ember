@@ -377,7 +377,7 @@ class CudaCoTenantRed(unittest.TestCase):
             # Measured facts for the record (not assertions): does the un-throttled 8-row step raise OOM beside the filler, and
             # how much slower is it than the uncontended baseline? A driver that spills to system memory shows up as the latter.
             probe = {'free_beside_bytes': free_beside, 'floor_bytes': floor, 'events': row['elastic']['events'],
-                     'filler_bytes': filler_bytes, 'headroom_visible': headroom_visible, 'sampler_contended': verdict['contended'],
+                     'filler_bytes': filler_bytes, 'headroom_visible': headroom_visible, 'sampler_contended': verdict['contended'], 'sampler_verdict': verdict,
                      'throttled': row['elastic']['micro_documents'] < 8, 'uncontended_8_row_seconds': uncontended_seconds}
             reset()
             # Can this process still allocate more than the visible headroom beside the filler? A success while mem_get_info
