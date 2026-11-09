@@ -1664,6 +1664,13 @@ def _cia_operation_snapshot(reopen, source_sha256):
     it (role: snapshot). Only a digest-bound call is cached; a value is stored only after the reopen succeeded."""
     def snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
         operation = _CIA_OPERATION.get()
+        if operation is None and expected_digest is not None and os.environ.get(ATTEST_CUSTODY_ENV):
+            # A bare admission (the fresh-session head load, the hour's child receipt) outside any publication operation:
+            # with a custody directory named in the environment it is its own operation, so it takes the same attested
+            # path as the publication. Without the variable nothing changes.
+            with cia_validation_operation():
+                return snapshot(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
+                                expected_digest=expected_digest)
         if operation is not None: operation.visits['snapshot_calls'] += 1
         if operation is None or expected_digest is None:
             if operation is not None: operation.visits['snapshot_reopened'] += 1

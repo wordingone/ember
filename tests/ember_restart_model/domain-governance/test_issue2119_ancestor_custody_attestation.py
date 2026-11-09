@@ -14,11 +14,13 @@ Custody records are built here from the LOCAL bytes of the published chain, stan
 records come from scripts/build_ancestor_custody_v1.py against the HF API."""
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_issue2163_cia_validation_operation import ValidationOperationTests as _Chain  # noqa: E402
@@ -137,6 +139,42 @@ class AncestorCustodyTests(_Chain):
         self.archive(nodes[3][0])                    # depth 0
         with self.assertRaises(ValueError) as refused:
             self.validate_tip(nodes)
+        self.assertIn('closure', str(refused.exception))
+
+    # ---- bare admission (the fresh-session head load and the hour's child receipt call the snapshot with no operation open)
+    def bare_snapshot(self, nodes):
+        root = nodes[-2][0]                           # the parent being extended
+        raw = (root / 'checkpoint-manifest.json').read_bytes()
+        return counter._cia_parent_snapshot(str(root), max_restore_payload_bytes=json.loads(raw)['max_restore_payload_bytes'],
+                                            expected_digest=hashlib.sha256(raw).hexdigest())
+
+    def test_bare_snapshot_with_the_environment_variable_is_attested(self):
+        nodes = self.archived_chain()
+        with mock.patch.dict(os.environ, {counter.ATTEST_CUSTODY_ENV: str(self.custody)}):
+            self.assertIsNone(counter._CIA_OPERATION.get())
+            parent, _facts = self.bare_snapshot(nodes)
+            self.assertIsNone(counter._CIA_OPERATION.get())      # the bare call's own operation is closed again
+        self.assertIsNotNone(parent)
+        rows = [json.loads(line) for line in (self.custody / 'attestation-uses.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(rows[-1]['ancestors_attested_by_custody'], [2, 3])
+        self.assertIs(rows[-1]['bytes_reverified'], False)
+
+    def test_bare_snapshot_without_the_environment_variable_refuses_the_closure(self):
+        nodes = self.archived_chain()
+        with mock.patch.dict(os.environ):
+            os.environ.pop(counter.ATTEST_CUSTODY_ENV, None)
+            with self.assertRaises(ValueError) as refused:
+                self.bare_snapshot(nodes)
+        self.assertIn('closure', str(refused.exception))
+        self.assertFalse((self.custody / 'attestation-uses.jsonl').exists())
+
+    def test_bare_snapshot_with_a_custody_dir_that_lacks_the_record_refuses(self):
+        nodes = self.archived_chain()
+        empty = Path(tempfile.mkdtemp(prefix='custody-empty-'))
+        self.addCleanup(shutil.rmtree, empty, True)
+        with mock.patch.dict(os.environ, {counter.ATTEST_CUSTODY_ENV: str(empty)}):
+            with self.assertRaises(ValueError) as refused:
+                self.bare_snapshot(nodes)
         self.assertIn('closure', str(refused.exception))
 
     # ---- refusals ------------------------------------------------------------------------------------------------
