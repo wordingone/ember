@@ -40,6 +40,11 @@
       "id": "unfinished-attempt",
       "pattern": "unfinished\\s+attempt",
       "why": "Retired lede; the page states what exists and what is admitted."
+    },
+    {
+      "id": "from-scratch-attempt",
+      "pattern": "(?:attempt|project)\\s+to\\s+(?:train|build)\\s+(?:a|an|the|its\\s+own)\\s+(?:language\\s+|AI\\s+)?model\\s+from\\s+scratch",
+      "why": "An unqualified from-scratch identity sentence is false once declared external-model resources are admitted (GOAL section 6); only the model-free baseline hours are from scratch, and the sentence must say so."
     }
   ]
 }

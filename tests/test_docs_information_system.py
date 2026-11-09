@@ -865,6 +865,7 @@ STALE_FIRST_READER_SAMPLES = {
     "owned-from-scratch-genesis": "`external_judges: false` — an owned, from-scratch genesis by contract",
     "work-paused": "Work paused on 2026-10-10; this page is a snapshot from 2026-10-07.",
     "unfinished-attempt": "Ember is an unfinished attempt to train a language model from scratch on one RTX 4090.",
+    "from-scratch-attempt": "Ember is an attempt to train a language model from scratch on one RTX 4090.",
 }
 
 
