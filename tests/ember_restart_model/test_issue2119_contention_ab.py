@@ -339,7 +339,9 @@ class CudaCoTenantRed(unittest.TestCase):
         filler = subprocess.Popen([sys.executable, '-B', '-c', (
             'import torch,time,sys\n'
             'd=torch.device("cuda:0");f,t=torch.cuda.mem_get_info(d)\n'
-            'k=torch.empty(max(0,f-%d-%d),dtype=torch.uint8,device=d);print("FILLED",flush=True);time.sleep(120)\n' % (leave, 512 * 1024 ** 2))],
+            # fill_ touches every page: on this Windows (WDDM) host an untouched torch.empty is reserved but not resident, so
+            # mem_get_info keeps reporting the card as free (the 2026-11-09 06:14Z run saw 23.7 GB free beside a "FILLED" filler).
+            'k=torch.empty(max(0,f-%d-%d),dtype=torch.uint8,device=d);k.fill_(1);torch.cuda.synchronize();print("FILLED",flush=True);time.sleep(120)\n' % (leave, 512 * 1024 ** 2))],
             stdout=subprocess.PIPE, text=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         try:
             self.assertEqual(filler.stdout.readline().strip(), 'FILLED')
