@@ -1565,6 +1565,131 @@ def _cia_counter_tensor(archive, tensor, shape, storage_type):
     return _tensor_raw_bytes(archive,tensor)
 
 
+def _cia_f32_facts_from_raw(raw):
+    """(sha256 of the fp32 bytes, sha256 of their high 16-bit halves, exact) for little-endian fp32 raw bytes. `exact` means every
+    low half is zero, i.e. the value is bf16-representable and the high halves ARE its bf16 narrowing (stdlib only: this counter
+    stays torch-free). The high-half digest is a bf16 view only when exact."""
+    n = len(raw) // 4
+    if len(raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
+    exact = raw[0::4].count(0) == n and raw[1::4].count(0) == n
+    high = bytearray(2 * n)
+    high[0::2] = raw[2::4]
+    high[1::2] = raw[3::4]
+    return hashlib.sha256(raw).hexdigest(), hashlib.sha256(high).hexdigest(), exact
+
+
+_F32_EXP_HI = bytes(1 if (b & 0x7F) == 0x7F else 0 for b in range(256))
+_F32_EXP_LO = bytes(1 if b & 0x80 else 0 for b in range(256))
+
+
+def _cia_f32_rne_bf16(raw):
+    """Round-to-nearest-even bf16 bytes of little-endian fp32 raw bytes, standard library only: one big-integer pass
+    (word + 0x7FFF + lsb) with the 32-bit lanes never carrying into each other because the value is finite. A non-finite
+    value is refused. This is the same narrowing torch's .to(torch.bfloat16) performs."""
+    n = len(raw) // 4
+    if len(raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
+    if n == 0: return b''
+    if int.from_bytes(raw[3::4].translate(_F32_EXP_HI), 'little') & int.from_bytes(raw[2::4].translate(_F32_EXP_LO), 'little'):
+        raise ValueError('CIA fp32 master weights must be finite')
+    word = int.from_bytes(raw, 'little')
+    total = word + int.from_bytes(b'\xff\x7f\x00\x00' * n, 'little') + ((word >> 16) & int.from_bytes(b'\x01\x00\x00\x00' * n, 'little'))
+    wide = total.to_bytes(4 * n, 'little')
+    out = bytearray(2 * n)
+    out[0::2] = wide[2::4]
+    out[1::2] = wide[3::4]
+    return bytes(out)
+
+
+_FP32_MASTER_SCHEMA = 'fp32_master_v1'
+
+
+def _cia_new_master_facts():
+    """The extra lineage facts of an fp32-master (schema v3) payload. master: sha256 of the fp32 master bytes; master_bf16:
+    sha256 of its round-to-nearest-even bf16 narrowing (the invariant is master_bf16[name] == parameters[name], the published
+    working weight); master_exact: every master value is bf16-representable; optimizer_view: step plus, per moment, the sha256 of
+    its bf16 narrowing when the fp32 moment is exactly bf16-representable, else None (compared with a native parent's bf16
+    digests to prove an inactive owner is an exact upcast). One builder serves the file read here and the in-memory payload in
+    checkpoint_artifacts, so capture-time and re-derived facts are one computation."""
+    return {'optimizer_schema': _FP32_MASTER_SCHEMA, 'master': {}, 'master_bf16': {}, 'master_exact': {}, 'optimizer_view': {}}
+
+
+def _cia_add_master_facts(extra, name, master_raw):
+    extra['master'][name], _, extra['master_exact'][name] = _cia_f32_facts_from_raw(master_raw)
+    extra['master_bf16'][name] = hashlib.sha256(_cia_f32_rne_bf16(master_raw)).hexdigest()
+
+
+def _cia_add_moment_view(extra, name, step, exp_avg_raw, exp_avg_sq_raw):
+    view = {'step': step}
+    for key, raw in (('exp_avg', exp_avg_raw), ('exp_avg_sq', exp_avg_sq_raw)):
+        _, high, exact = _cia_f32_facts_from_raw(raw)
+        view[key] = high if exact else None
+    extra['optimizer_view'][name] = view
+
+
+def _cia_master_check(facts):
+    """The fp32-master invariant over a facts dict: every master rounds to its published working weight, and the masters cover
+    exactly the owners that carry optimizer state."""
+    if set(facts['master']) != set(facts['optimizer']) or set(facts['optimizer_view']) != set(facts['optimizer']):
+        raise ValueError('CIA fp32 master weights must cover exactly the owners with optimizer state')
+    for name, digest in facts['master_bf16'].items():
+        if digest != facts['parameters'][name]:
+            raise ValueError('CIA fp32 master does not round to the checkpoint working weight')
+
+
+def _cia_counter_optimizer_facts(archive, payload, inventory, groups, master_mode):
+    """Read a placed optimizer payload's tensors from its archive. Returns (per-owner optimizer facts, fp32-master extra facts or
+    None). Native (v2): bf16 moments. Master (v3): fp32 moments, plus one fp32 master per owner that carries state."""
+    master_facts = _cia_new_master_facts() if master_mode else None
+    moment_storage = 'FloatStorage' if master_mode else 'BFloat16Storage'
+    optimizer = {}
+    for name,state in payload['state'].items():
+        if name not in inventory or type(state) is not dict: raise ValueError('CIA counter optimizer state membership mismatch')
+        if not state: continue
+        observed={}
+        moments={}
+        required={'step','exp_avg','exp_avg_sq'} | ({'max_exp_avg_sq'} if groups[name]['amsgrad'] else set())
+        if set(state)!=required: raise ValueError('CIA counter native optimizer fields mismatch')
+        if master_mode and groups[name]['amsgrad']: raise ValueError('CIA counter fp32 master optimizer cannot carry amsgrad state')
+        for key,tensor in state.items():
+            raw = _cia_counter_tensor(archive,tensor,() if key=='step' else inventory[name], 'FloatStorage' if key=='step' else moment_storage)
+            if key == 'step':
+                import math, struct
+                step = struct.unpack('<f',raw)[0]
+                if not math.isfinite(step) or step < 0 or not step.is_integer(): raise ValueError('CIA native optimizer clock mismatch')
+                observed[key] = int(step)
+            else:
+                observed[key] = hashlib.sha256(raw).hexdigest()
+                if master_mode: moments[key] = raw
+        if master_mode: _cia_add_moment_view(master_facts, name, observed['step'], moments['exp_avg'], moments['exp_avg_sq'])
+        optimizer[name]=observed
+    if master_mode:
+        masters = payload['master_weights']
+        stateful = {name for name,state in payload['state'].items() if state}
+        if type(masters) is not dict or not masters or set(masters) != stateful:
+            raise ValueError('CIA counter master weights must cover exactly the owners with optimizer state')
+        for name,tensor in masters.items():
+            _cia_add_master_facts(master_facts, name, _cia_counter_tensor(archive,tensor,inventory[name],'FloatStorage'))
+    return optimizer, master_facts
+
+
+def _cia_inactive_owner_unchanged(name, parent_facts, child_facts):
+    """An owner whose optimizer clock did not move must carry the parent's state unchanged. Same treatment: byte-equal digests
+    (and masters). Native parent, fp32-master child: only the exact upcast (moments bf16-representable and equal to the parent's,
+    master equal to the working weight)."""
+    parent_master = parent_facts.get('optimizer_schema') == _FP32_MASTER_SCHEMA
+    child_master = child_facts.get('optimizer_schema') == _FP32_MASTER_SCHEMA
+    before, after = parent_facts['optimizer'].get(name, {}), child_facts['optimizer'].get(name, {})
+    if parent_master and not child_master:
+        raise ValueError('CIA fp32-master lineage cannot return to native optimizer state')
+    if parent_master == child_master:
+        if after != before: return False
+        return not child_master or child_facts['master'].get(name) == parent_facts['master'].get(name)
+    if not before and not after: return True
+    return (bool(before) and bool(after) and child_facts['optimizer_view'].get(name) == before
+            and child_facts['master_exact'].get(name) is True
+            and child_facts['master_bf16'].get(name) == parent_facts['parameters'][name])
+
+
 _COUNTERS = {}
 
 
@@ -2062,6 +2187,9 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
         raise ValueError('CIA descendant genesis differs from the reopened parent')
     if set(child_facts['parameters']) != set(parent_facts['parameters']):
         raise ValueError('CIA descendant parameter inventory differs from parent')
+    if child_facts.get('optimizer_schema') == _FP32_MASTER_SCHEMA: _cia_master_check(child_facts)
+    elif parent_facts.get('optimizer_schema') == _FP32_MASTER_SCHEMA:
+        raise ValueError('CIA fp32-master lineage cannot return to native optimizer state')
     recorded_counts = owner_update_counts
     if recorded_counts is None:
         recorded_counts = child.get('lineage', {}).get('owner_update_counts')
@@ -2082,7 +2210,7 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
                 raise ValueError('CIA frozen parameter has optimizer update support')
             updated.append(name)
             owner_update_counts[name] = owner_delta
-        elif after != before:
+        elif not _cia_inactive_owner_unchanged(name, parent_facts, child_facts):
             raise ValueError('CIA descendant optimizer clock or inactive state differs from parent')
         if child_facts['parameters'][name] != parent_facts['parameters'][name]:
             if name not in updated: raise ValueError('CIA inactive parameter bytes differ from parent')
@@ -2224,24 +2352,16 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
             groups[name]=group['hyperparameters']
     if set(groups)!=set(inventory): raise ValueError('CIA counter optimizer full membership mismatch')
     with _cia_counter_component(root,'optimizer-state.pt',manifest['optimizer']) as (archive,payload):
-        if (set(payload)!={'schema_version','identity','placement','master_weights','state'} or payload['schema_version']!='ember-cia-placed-optimizer-state-v2'
-                or payload['identity']!=identity or payload['placement']!=placement or payload['master_weights'] is not None):
+        master_mode = type(payload) is dict and payload.get('schema_version') == 'ember-cia-placed-optimizer-state-v3'
+        if (set(payload)!={'schema_version','identity','placement','master_weights','state'}
+                or payload['schema_version'] not in ('ember-cia-placed-optimizer-state-v2','ember-cia-placed-optimizer-state-v3')
+                or payload['identity']!=identity or payload['placement']!=placement or (payload['master_weights'] is None) == master_mode):
             raise ValueError('CIA counter native optimizer identity mismatch')
-        for name,state in payload['state'].items():
-            if name not in inventory or type(state) is not dict: raise ValueError('CIA counter optimizer state membership mismatch')
-            if not state: continue
-            observed={}
-            required={'step','exp_avg','exp_avg_sq'} | ({'max_exp_avg_sq'} if groups[name]['amsgrad'] else set())
-            if set(state)!=required: raise ValueError('CIA counter native optimizer fields mismatch')
-            for key,tensor in state.items():
-                raw = _cia_counter_tensor(archive,tensor,() if key=='step' else inventory[name], 'FloatStorage' if key=='step' else 'BFloat16Storage')
-                if key == 'step':
-                    import math, struct
-                    step = struct.unpack('<f',raw)[0]
-                    if not math.isfinite(step) or step < 0 or not step.is_integer(): raise ValueError('CIA native optimizer clock mismatch')
-                    observed[key] = int(step)
-                else: observed[key] = hashlib.sha256(raw).hexdigest()
-            facts['optimizer'][name]=observed
+        optimizer_facts, master_facts = _cia_counter_optimizer_facts(archive, payload, inventory, groups, master_mode)
+        facts['optimizer'].update(optimizer_facts)
+        if master_mode:
+            facts.update(master_facts)
+            _cia_master_check(facts)
     with _cia_counter_component(root,'replay-state.pt',manifest['replay']) as (archive,payload):
         if set(payload)!={'rng_state','data_cursor'} or payload['data_cursor']!=manifest['data_cursor'] or set(payload['rng_state'])!={'cpu','cuda'}:
             raise ValueError('CIA counter replay binding mismatch')
