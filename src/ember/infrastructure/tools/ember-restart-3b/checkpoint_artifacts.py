@@ -3746,7 +3746,6 @@ def read_cia_expert_object(index_path, *, expected_index_sha256, expert_id):
     The activation owner must separately verify the complete generation and retain
     its request lease. No integer-only object lookup or mutable slot identity exists.
     """
-    import io
     from ember.model.ember_v0_inventory import equation_inventory
 
     if type(expert_id) is not int or not 0 <= expert_id < 25:
@@ -3780,13 +3779,10 @@ def read_cia_expert_object(index_path, *, expected_index_sha256, expert_id):
     path = root / "objects" / (record["sha256"] + ".pt")
     if _path_has_link(path, root):
         raise ValueError("CIA expert object is a symlink or reparse point")
-    # Deserialize the same bounded byte snapshot that was hashed, even if the
-    # pathname is changed concurrently. No check-then-reopen loading path.
-    with path.open("rb") as handle:
-        snapshot = handle.read(record["bytes"] + 1)
-    if len(snapshot) != record["bytes"] or hashlib.sha256(snapshot).hexdigest() != record["sha256"]:
-        raise ValueError("CIA expert object digest or size mismatch")
-    payload = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
+    # Deserialize the same bounded snapshot that was hashed, even if the pathname is changed concurrently. No check-then-reopen
+    # loading path: every chunk torch reads is re-verified against the digest pass (see _cia_load_verified), and the bytes are
+    # never held whole next to the tensors they become.
+    payload = _cia_load_verified(path, record["bytes"], record["sha256"], "CIA expert object digest or size mismatch")
     return _validate_cia_expert_payload(payload, expert_id=expert_id)
 
 
@@ -3952,7 +3948,6 @@ def read_cia_core_object(root, *, record, architecture_config):
     The caller must obtain this record from its verified complete checkpoint.
     Hash and deserialize one bounded snapshot, never reopen a checked pathname.
     """
-    import io
     from ember.model.ember_v0_contract import cia_architecture_sha256
     architecture_sha256 = cia_architecture_sha256(architecture_config)
     if type(record) is not dict or set(record) != {"sha256", "bytes", "architecture_sha256"}:
@@ -3967,11 +3962,7 @@ def read_cia_core_object(root, *, record, architecture_config):
     path = root / "objects" / (digest + ".pt")
     if _path_has_link(path, root):
         raise ValueError("CIA core object is a symlink or reparse point")
-    with path.open("rb") as handle:
-        snapshot = handle.read(record["bytes"] + 1)
-    if len(snapshot) != record["bytes"] or hashlib.sha256(snapshot).hexdigest() != digest:
-        raise ValueError("CIA core object digest or size mismatch")
-    payload = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
+    payload = _cia_load_verified(path, record["bytes"], digest, "CIA core object digest or size mismatch")
     return _validate_cia_core_payload(payload, architecture_sha256=architecture_sha256)
 
 
@@ -4580,8 +4571,21 @@ def _cia_checkpoint_replay(manifest, replay):
     torch.Generator(device='cpu').set_state(replay['rng_state']['cpu'])
 
 
+def _cia_load_verified(path, size, sha256, message):
+    """torch.load of one bounded, digest-verified snapshot without holding its bytes whole.
+
+    The file is hashed in one streaming pass (at most size + 1 bytes read; a longer, shorter or different file raises `message`),
+    keeping a digest per chunk; torch then reads through parameter_counter._CIAVerifiedFile, which re-verifies each chunk as it
+    serves it. So the tensors are built from exactly the bytes whose digest was checked (a change in between is refused), and the
+    peak is the loaded payload plus one chunk, not the payload plus a second copy of the file."""
+    import parameter_counter as cia_counter
+    digest, table, whole = cia_counter._cia_counter_digest_pass(path, size)
+    if not whole or digest != sha256:
+        raise ValueError(message)
+    return torch.load(cia_counter._CIAVerifiedFile(path, size, table), map_location='cpu', weights_only=True)
+
+
 def _cia_read_component(root, record):
-    import io
     if type(record) is not dict or set(record) != {'path', 'sha256', 'bytes'}:
         raise ValueError('CIA checkpoint component record schema mismatch')
     name = record['path']
@@ -4592,11 +4596,7 @@ def _cia_read_component(root, record):
         raise ValueError('CIA checkpoint component is a symlink or reparse point')
     if type(record['bytes']) is not int or record['bytes'] < 1:
         raise ValueError('CIA checkpoint component byte bound mismatch')
-    with path.open('rb') as handle:
-        snapshot = handle.read(record['bytes'] + 1)
-    if len(snapshot) != record['bytes'] or hashlib.sha256(snapshot).hexdigest() != record['sha256']:
-        raise ValueError('CIA checkpoint component digest mismatch')
-    return torch.load(io.BytesIO(snapshot), map_location='cpu', weights_only=True)
+    return _cia_load_verified(path, record['bytes'], record['sha256'], 'CIA checkpoint component digest mismatch')
 
 
 def _cia_ordered_parallel(function, items, *, workers=8):
@@ -4910,6 +4910,9 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
                 parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts,
                 lr_declaration=None if cia_lr_declaration is None else dict(cia_lr_declaration))
+        # The captured optimizer copy (master weights + both moments: ~5.3 GiB at 3B) is on disk and its facts are taken; admit's verifier
+        # re-reads the file, so nothing below needs the in-memory copy. Free it before the publish verify peaks (the H50 hour died there).
+        del optimizer_payload
         if (_cia_parameter_snapshot_identity(_cia_quiescent_parameters(model)) != before or cia_optimizer_identity(model,optimizer) != identity
                 or _cia_live_optimizer_state_identity(optimizer) != live_optimizer):
             raise ValueError('CIA model or optimizer identity changed during checkpoint capture')

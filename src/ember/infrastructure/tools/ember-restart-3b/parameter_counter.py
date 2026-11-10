@@ -799,20 +799,29 @@ def _storage_element_bytes(storage_type: str) -> int:
     return widths[storage_type]
 
 
-def _tensor_raw_bytes(archive: zipfile.ZipFile, tensor: _TensorMetadata) -> bytes:
+def _tensor_member(archive: zipfile.ZipFile, tensor: _TensorMetadata) -> tuple[str, int]:
+    """The ZIP member that holds a contiguous base-storage tensor and its byte size: the checks every raw read of a tensor shares."""
     if tensor.offset != 0 or tensor.stride != _contiguous_stride(tensor.shape):
         raise ValueError("shared expert genesis tensor is not a contiguous base storage")
     width = _storage_element_bytes(tensor.storage.storage_type)
     candidates = [name for name in archive.namelist() if name.endswith(f"data/{tensor.storage.key}")]
     if len(candidates) != 1:
         raise ValueError("shared expert genesis storage entry is ambiguous")
-    raw = archive.read(candidates[0]); expected = tensor.storage.size * width
-    if len(raw) != expected:
+    expected = tensor.storage.size * width
+    if archive.getinfo(candidates[0]).file_size != expected:
         raise ValueError("shared expert genesis storage byte size mismatch")
     required = width
     for dimension in tensor.shape: required *= dimension
-    if required != len(raw):
+    if required != expected:
         raise ValueError("shared expert genesis tensor does not own its full storage")
+    return candidates[0], expected
+
+
+def _tensor_raw_bytes(archive: zipfile.ZipFile, tensor: _TensorMetadata) -> bytes:
+    name, expected = _tensor_member(archive, tensor)
+    raw = archive.read(name)
+    if len(raw) != expected:
+        raise ValueError("shared expert genesis storage byte size mismatch")
     return raw
 
 
@@ -1539,22 +1548,109 @@ def _cia_counter_path(root, relative):
     return path
 
 
+_CIA_READ_CHUNK = 8 * 1024 * 1024    # a component is hashed, and then served to the ZIP reader, in chunks of this size
+_CIA_MATH_WINDOW = 1024 * 1024       # the fp32 digests and the bf16 narrowing run on windows of this size (a multiple of 4)
+
+
+def _cia_counter_digest_pass(path, size):
+    """One bounded streaming pass over a component file: (sha256 hex of its bytes, the sha256 digest of each _CIA_READ_CHUNK chunk,
+    whether the file is exactly `size` bytes). It reads at most size + 1 bytes, so a file longer than its record is refused
+    without being read whole (digest None). A shorter file returns ok False with the digest of what it holds."""
+    whole, table, total = hashlib.sha256(), [], 0
+    with path.open('rb') as handle:
+        while total <= size:
+            block = handle.read(min(_CIA_READ_CHUNK, size + 1 - total))
+            if not block: break
+            total += len(block)
+            if total > size: return None, table, False
+            whole.update(block)
+            table.append(hashlib.sha256(block).digest())
+    return whole.hexdigest(), table, total == size
+
+
+class _CIAVerifiedFile(io.RawIOBase):
+    """A read-only, seekable file of exactly `size` bytes whose every byte is re-verified as it is served.
+
+    The component's whole-file digest and one digest per chunk were taken in one streaming pass (_cia_counter_digest_pass). A read
+    re-reads the chunk it falls in, from the path, and serves it only if that chunk still hashes to the table entry. So the bytes
+    the ZIP reader and the tensor reads consume are, one chunk at a time, exactly the bytes whose whole-file digest equals the
+    record: a file changed, truncated, replaced or extended between the digest pass and a read is refused. The check is the same on
+    every platform and holds no file handle between reads (a handle held across the caller's with-body would block a rename or
+    delete of the checkpoint on Windows). Memory is one chunk."""
+
+    def __init__(self, path, size, table):
+        super().__init__()
+        self._path, self._size, self._table = path, size, table
+        self._pos, self._index, self._block = 0, -1, b''
+
+    def readable(self): return True
+    def seekable(self): return True
+    def tell(self): return self._pos
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        if whence not in (io.SEEK_SET, io.SEEK_CUR, io.SEEK_END): raise ValueError('invalid whence')
+        target = offset + (0, self._pos, self._size)[whence]
+        if target < 0: raise OSError('negative seek position')
+        self._pos = target
+        return target
+
+    def _chunk(self, index):
+        if index != self._index:
+            start = index * _CIA_READ_CHUNK
+            want = min(_CIA_READ_CHUNK, self._size - start)
+            with self._path.open('rb') as handle:
+                handle.seek(start)
+                block = handle.read(want)
+            if len(block) != want or hashlib.sha256(block).digest() != self._table[index]:
+                self._index, self._block = -1, b''
+                raise ValueError('CIA checkpoint component changed after its digest was verified')
+            self._index, self._block = index, block
+        return self._block
+
+    def readinto(self, buffer):
+        view = memoryview(buffer).cast('B')
+        end = min(self._size, self._pos + len(view))
+        done = 0
+        while self._pos < end:
+            index, offset = divmod(self._pos, _CIA_READ_CHUNK)
+            block = self._chunk(index)
+            take = min(len(block) - offset, end - self._pos)
+            view[done:done + take] = memoryview(block)[offset:offset + take]
+            done += take
+            self._pos += take
+        return done
+
+    def read(self, size=-1):
+        if self.closed: raise ValueError('I/O operation on closed file')
+        count = self._size - self._pos if size is None or size < 0 else min(size, self._size - self._pos)
+        out = bytearray(max(count, 0))
+        self.readinto(out)
+        return bytes(out)
+
+
 @contextmanager
-def _cia_counter_component(root, relative, record):
-    """Inspect the exact bounded object snapshot through the existing ZIP reader."""
+def _cia_verified_archive(root, relative, record):
+    """The bounded, digest-verified, ZIP_STORED-only archive of one component, read through _CIAVerifiedFile (never held whole)."""
     path = _cia_counter_path(root,relative)
     if type(record.get('bytes')) is not int or record['bytes'] < 1:
         raise ValueError('CIA checkpoint component byte bound mismatch')
-    with path.open('rb') as handle:
-        raw = handle.read(record['bytes'] + 1)
-    if len(raw) != record['bytes'] or hashlib.sha256(raw).hexdigest() != record['sha256']:
+    size = record['bytes']
+    digest, table, whole = _cia_counter_digest_pass(path, size)
+    if not whole or digest != record['sha256']:
         raise ValueError('CIA checkpoint component digest mismatch')
-    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+    with zipfile.ZipFile(_CIAVerifiedFile(path, size, table)) as archive:
         entries = archive.infolist()
         if (len({entry.filename for entry in entries}) != len(entries)
                 or any(entry.compress_type != zipfile.ZIP_STORED for entry in entries)
-                or sum(entry.file_size for entry in entries) > len(raw)):
+                or sum(entry.file_size for entry in entries) > size):
             raise ValueError('CIA checkpoint ZIP storage exceeds its bound')
+        yield archive
+
+
+@contextmanager
+def _cia_counter_component(root, relative, record):
+    """Inspect the exact bounded object snapshot through the existing ZIP reader, without ever holding it whole in memory."""
+    with _cia_verified_archive(root, relative, record) as archive:
         yield archive, _load_checkpoint_metadata(archive)
 
 
@@ -1565,29 +1661,87 @@ def _cia_counter_tensor(archive, tensor, shape, storage_type):
     return _tensor_raw_bytes(archive,tensor)
 
 
+def _cia_counter_chunks(archive, tensor, shape, storage_type):
+    """The streaming form of _cia_counter_tensor: the same checks, then the tensor's bytes in chunks of at most _CIA_READ_CHUNK."""
+    if (not isinstance(tensor,_TensorMetadata) or tensor.shape != shape
+            or tensor.storage.storage_type != storage_type):
+        raise ValueError('CIA tensor inventory mismatch')
+    name, remaining = _tensor_member(archive, tensor)
+    with archive.open(name) as stream:
+        while remaining:
+            block = stream.read(min(_CIA_READ_CHUNK, remaining))
+            if not block: raise ValueError('CIA checkpoint tensor ended before its declared bytes')
+            remaining -= len(block)
+            yield block
+
+
+def _cia_counter_sha256(archive, tensor, shape, storage_type):
+    digest = hashlib.sha256()
+    for block in _cia_counter_chunks(archive, tensor, shape, storage_type): digest.update(block)
+    return digest.hexdigest()
+
+
+class _CiaF32Facts:
+    """Streaming fp32 facts: feed little-endian fp32 bytes in blocks of any size, then finish(). Every step works on a window of at
+    most _CIA_MATH_WINDOW bytes, so the working set is a few windows however large the tensor is (the whole-tensor form held six
+    or seven copies of it at once). Stdlib only: this counter stays torch-free."""
+
+    def __init__(self, bf16=False):
+        self.raw, self.high = hashlib.sha256(), hashlib.sha256()
+        self.rne = hashlib.sha256() if bf16 else None
+        self.exact, self.pending = True, b''
+
+    def update(self, block):
+        view = memoryview(block).cast('B')
+        if self.pending: view, self.pending = memoryview(self.pending + view.tobytes()), b''
+        whole = len(view) - len(view) % 4
+        self.pending = view[whole:].tobytes()
+        for start in range(0, whole, _CIA_MATH_WINDOW):
+            self._window(view[start:min(start + _CIA_MATH_WINDOW, whole)].tobytes())
+
+    def _window(self, window):
+        n = len(window) // 4
+        self.raw.update(window)
+        if self.exact and not (window[0::4].count(0) == n and window[1::4].count(0) == n): self.exact = False
+        high = bytearray(2 * n)
+        high[0::2] = window[2::4]
+        high[1::2] = window[3::4]
+        self.high.update(high)
+        if self.rne is not None: self.rne.update(_cia_f32_rne_bf16_window(window))
+
+    def finish(self):
+        """(sha256 of the fp32 bytes, sha256 of their high halves, exact, sha256 of the RNE bf16 narrowing or None)."""
+        if self.pending: raise ValueError('CIA counter fp32 tensor byte length mismatch')
+        return (self.raw.hexdigest(), self.high.hexdigest(), self.exact, self.rne.hexdigest() if self.rne is not None else None)
+
+
 def _cia_f32_facts_from_raw(raw):
     """(sha256 of the fp32 bytes, sha256 of their high 16-bit halves, exact) for little-endian fp32 raw bytes. `exact` means every
     low half is zero, i.e. the value is bf16-representable and the high halves ARE its bf16 narrowing (stdlib only: this counter
     stays torch-free). The high-half digest is a bf16 view only when exact."""
-    n = len(raw) // 4
     if len(raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
-    exact = raw[0::4].count(0) == n and raw[1::4].count(0) == n
-    high = bytearray(2 * n)
-    high[0::2] = raw[2::4]
-    high[1::2] = raw[3::4]
-    return hashlib.sha256(raw).hexdigest(), hashlib.sha256(high).hexdigest(), exact
+    facts = _CiaF32Facts()
+    facts.update(raw)
+    return facts.finish()[:3]
+
+
+def _cia_counter_f32_facts(archive, tensor, shape, storage_type, *, bf16=False):
+    """_CiaF32Facts.finish() of one archived fp32 tensor, read in bounded chunks."""
+    facts = _CiaF32Facts(bf16)
+    for block in _cia_counter_chunks(archive, tensor, shape, storage_type): facts.update(block)
+    return facts.finish()
 
 
 _F32_EXP_HI = bytes(1 if (b & 0x7F) == 0x7F else 0 for b in range(256))
 _F32_EXP_LO = bytes(1 if b & 0x80 else 0 for b in range(256))
 
 
-def _cia_f32_rne_bf16(raw):
-    """Round-to-nearest-even bf16 bytes of little-endian fp32 raw bytes, standard library only: one big-integer pass
+def _cia_f32_rne_bf16_window(raw):
+    """Round-to-nearest-even bf16 bytes of one window of little-endian fp32 bytes, standard library only: one big-integer pass
     (word + 0x7FFF + lsb) with the 32-bit lanes never carrying into each other because the value is finite. A non-finite
-    value is refused. This is the same narrowing torch's .to(torch.bfloat16) performs."""
+    value is refused. This is the same narrowing torch's .to(torch.bfloat16) performs. The lanes are independent, so a tensor
+    narrowed window by window is byte-identical to one narrowed whole."""
     n = len(raw) // 4
-    if len(raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
     if n == 0: return b''
     if int.from_bytes(raw[3::4].translate(_F32_EXP_HI), 'little') & int.from_bytes(raw[2::4].translate(_F32_EXP_LO), 'little'):
         raise ValueError('CIA fp32 master weights must be finite')
@@ -1597,6 +1751,16 @@ def _cia_f32_rne_bf16(raw):
     out = bytearray(2 * n)
     out[0::2] = wide[2::4]
     out[1::2] = wide[3::4]
+    return bytes(out)
+
+
+def _cia_f32_rne_bf16(raw):
+    """Round-to-nearest-even bf16 bytes of little-endian fp32 raw bytes, narrowed in windows of _CIA_MATH_WINDOW bytes."""
+    if len(raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
+    view, out = memoryview(raw).cast('B'), bytearray(len(raw) // 2)
+    for start in range(0, len(view), _CIA_MATH_WINDOW):
+        window = view[start:start + _CIA_MATH_WINDOW].tobytes()
+        out[start // 2:(start + len(window)) // 2] = _cia_f32_rne_bf16_window(window)
     return bytes(out)
 
 
@@ -1613,9 +1777,16 @@ def _cia_new_master_facts():
     return {'optimizer_schema': _FP32_MASTER_SCHEMA, 'master': {}, 'master_bf16': {}, 'master_exact': {}, 'optimizer_view': {}}
 
 
+def _cia_set_master_facts(extra, name, raw_digest, exact, bf16_digest):
+    extra['master'][name], extra['master_exact'][name], extra['master_bf16'][name] = raw_digest, exact, bf16_digest
+
+
 def _cia_add_master_facts(extra, name, master_raw):
-    extra['master'][name], _, extra['master_exact'][name] = _cia_f32_facts_from_raw(master_raw)
-    extra['master_bf16'][name] = hashlib.sha256(_cia_f32_rne_bf16(master_raw)).hexdigest()
+    if len(master_raw) % 4: raise ValueError('CIA counter fp32 tensor byte length mismatch')
+    facts = _CiaF32Facts(bf16=True)
+    facts.update(master_raw)
+    raw_digest, _, exact, bf16_digest = facts.finish()
+    _cia_set_master_facts(extra, name, raw_digest, exact, bf16_digest)
 
 
 def _cia_add_moment_view(extra, name, step, exp_avg_raw, exp_avg_sq_raw):
@@ -1651,16 +1822,19 @@ def _cia_counter_optimizer_facts(archive, payload, inventory, groups, master_mod
         if set(state)!=required: raise ValueError('CIA counter native optimizer fields mismatch')
         if master_mode and groups[name]['amsgrad']: raise ValueError('CIA counter fp32 master optimizer cannot carry amsgrad state')
         for key,tensor in state.items():
-            raw = _cia_counter_tensor(archive,tensor,() if key=='step' else inventory[name], 'FloatStorage' if key=='step' else moment_storage)
             if key == 'step':
+                raw = _cia_counter_tensor(archive,tensor,(),'FloatStorage')
                 import math, struct
                 step = struct.unpack('<f',raw)[0]
                 if not math.isfinite(step) or step < 0 or not step.is_integer(): raise ValueError('CIA native optimizer clock mismatch')
                 observed[key] = int(step)
+            elif master_mode:
+                # One bounded pass per moment: its digest and its bf16 view digest come from the same chunks (never the whole tensor).
+                observed[key], high, exact, _ = _cia_counter_f32_facts(archive,tensor,inventory[name],moment_storage)
+                moments[key] = high if exact else None
             else:
-                observed[key] = hashlib.sha256(raw).hexdigest()
-                if master_mode: moments[key] = raw
-        if master_mode: _cia_add_moment_view(master_facts, name, observed['step'], moments['exp_avg'], moments['exp_avg_sq'])
+                observed[key] = _cia_counter_sha256(archive,tensor,inventory[name],moment_storage)
+        if master_mode: master_facts['optimizer_view'][name] = {'step': observed['step'], 'exp_avg': moments['exp_avg'], 'exp_avg_sq': moments['exp_avg_sq']}
         optimizer[name]=observed
     if master_mode:
         masters = payload['master_weights']
@@ -1668,7 +1842,8 @@ def _cia_counter_optimizer_facts(archive, payload, inventory, groups, master_mod
         if type(masters) is not dict or not masters or set(masters) != stateful:
             raise ValueError('CIA counter master weights must cover exactly the owners with optimizer state')
         for name,tensor in masters.items():
-            _cia_add_master_facts(master_facts, name, _cia_counter_tensor(archive,tensor,inventory[name],'FloatStorage'))
+            raw_digest, _, exact, bf16_digest = _cia_counter_f32_facts(archive,tensor,inventory[name],'FloatStorage',bf16=True)
+            _cia_set_master_facts(master_facts, name, raw_digest, exact, bf16_digest)
     return optimizer, master_facts
 
 
@@ -1691,6 +1866,14 @@ def _cia_inactive_owner_unchanged(name, parent_facts, child_facts):
 
 
 _COUNTERS = {}
+
+
+def _historic_component(module):
+    @contextmanager
+    def component(root, relative, record):
+        with _cia_verified_archive(root, relative, record) as archive:
+            yield archive, module._load_checkpoint_metadata(archive)
+    return component
 
 
 def _counter_for(digest):
@@ -1721,6 +1904,13 @@ def _counter_for(digest):
         # A parent accepted by content address (see _cia_attest_chain) has no tensor digests to compare, so the
         # historic derive is routed through the attested boundary check; every other parent keeps the verbatim derive.
         module._cia_derive_first_lineage = _cia_attesting_derive(module._cia_derive_first_lineage)
+        # A historic counter keeps its own derive logic and its own tensor classes, but never its whole-file read of a component:
+        # its component reader is replaced by the bounded, chunk-verified one (same contract: root, relative, record ->
+        # (archive, payload), payload decoded by THAT module's own metadata loader), and its fp32 helpers, where it has them, by
+        # the windowed ones (pure functions with byte-identical results, proven against every kept counter in the tests).
+        module._cia_counter_component = _historic_component(module)
+        for helper in ('_cia_f32_facts_from_raw', '_cia_f32_rne_bf16'):
+            if hasattr(module, helper): setattr(module, helper, globals()[helper])
         _COUNTERS[digest] = module
     return _COUNTERS[digest]
 
@@ -2329,8 +2519,7 @@ def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None,
             if set(state)!=set(shapes): raise ValueError('CIA tensor inventory mismatch')
             storage=set()
             for name,tensor in state.items():
-                raw = _cia_counter_tensor(archive,tensor,shapes[name],'BFloat16Storage')
-                digests[name] = hashlib.sha256(raw).hexdigest()
+                digests[name] = _cia_counter_sha256(archive,tensor,shapes[name],'BFloat16Storage')
                 if tensor.storage.key in storage: raise ValueError('CIA counter parameter storage alias')
                 storage.add(tensor.storage.key)
         return digests
