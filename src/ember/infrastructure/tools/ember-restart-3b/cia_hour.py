@@ -190,6 +190,8 @@ def validate_checkpoint_probe(runner, identity):
                          minimum_measured_steps=2)
     if 'declared_lr' in selection:  # a declared-lr hour consumes only a probe that declared the same lr (#2119)
         expected_hour['declared_lr'] = selection['declared_lr']
+    if 'precision_fix' in selection:  # an fp32-master hour consumes only a probe that ran the same treatment (#2119)
+        expected_hour['precision_fix'] = selection['precision_fix']
     if (prior.get('hour') != expected_hour or prior.get('optimizer') != identity.get('optimizer')
             or result.get('hour') != prior['hour'] or result.get('measured_updates') != 2
             or result.get('applied_positions') != 3*4096 or result.get('restored_state_matches') is not True
@@ -539,13 +541,20 @@ def file_contention_attribution(runner, custody, started, rows):
         print('CONTENTION_ATTRIBUTION_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
+def checkpoint_cap(runner, optimizer):
+    """Serialize and restore byte cap: 10 GiB for the native bf16 state, 16 GiB when the optimizer carries the fp32 master
+    treatment (fp32 moments plus masters, about 5.7 GB more than bf16 moments; lead ruling 82435)."""
+    import cia_fp32_master
+    return (16 if cia_fp32_master.enabled(optimizer) else 10) * runner.GIB
+
+
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
     helper = Path.home() / '.codex/headless-python.ps1'
     if runner.file_sha256(helper) != binding['launch']['helpers'][str(helper.resolve())]:
         raise ValueError('checkpoint counter launcher differs from dispatch')
-    cap = 10 * runner.GIB
+    cap = checkpoint_cap(runner, optimizer)
     def verifier(candidate, receipt):
         runner.tail_stamp(custody, 'quarantine')
         command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper), '--', '-I',
@@ -563,6 +572,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     owner_update_counts = {}
     def publish(name, *, steps, tokens, cursor, parent=None):
         torch.cuda.synchronize(device)
+        import cia_fp32_master
         optimizer.zero_grad(set_to_none=True)
         # A gated fused step runs _init_group on every parameter carrying a gradient, then found_inf skips it and
         # rolls its clock back to 0: state that no update ever applied (step 0, zero moments). Adam initialises
@@ -573,6 +583,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
                           and all(not torch.is_tensor(v) or v.dim() == 0 or not bool(v.any())
                                   for k, v in s.items() if k != 'step')]:
             del optimizer.state[parameter]
+            cia_fp32_master.masters(optimizer).pop(parameter, None)
         return artifacts.write_checkpoint_artifacts(model, optimizer, custody / name,
             launch_seed=identity['seed'], rng_state={'cpu': torch.get_rng_state(), 'cuda': torch.cuda.get_rng_state(device)},
             data_cursor=dict(shard=str(cursor['shard_index']), record_index=cursor['token_offset'],
@@ -592,7 +603,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
 def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
-    cap = 10 * runner.GIB
+    cap = checkpoint_cap(runner, optimizer)
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
         model_config_sha256=identity['config_sha256'], _facts=expected)
@@ -612,7 +623,7 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # Reopen full model and native moments, including inactive owners, through
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
-    facts = artifacts._cia_lineage_facts(inventory, native['state'])
+    facts = artifacts._cia_lineage_facts(inventory, native['state'], native.get('master_weights'))
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
 
@@ -763,8 +774,8 @@ def continuation_state(runner, model, optimizer, cursor, device):
     if device.type == 'cuda':
         torch.cuda.synchronize(device)
     native = artifacts.capture_cia_placed_optimizer_state(
-        model, optimizer, max_state_bytes=10 * runner.GIB)
-    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'])
+        model, optimizer, max_state_bytes=checkpoint_cap(runner, optimizer))
+    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'], native.get('master_weights'))
     del native
     states = {'cpu': torch.get_rng_state(),
               'cuda': torch.cuda.get_rng_state(device) if device.type == 'cuda'
@@ -1163,7 +1174,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             raise ValueError('chained hour parent manifest differs from its bound digest')
         restored = restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner,
             lambda: artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
-                max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB))
+                max_transient_scratch_bytes=checkpoint_cap(runner, optimizer), host_commit_reserve_bytes=16 * runner.GIB))
         cursor = parent['data_cursor']
         if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
