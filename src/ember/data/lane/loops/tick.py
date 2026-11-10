@@ -68,6 +68,15 @@ def cmdlines():
         _cmd = [x for x in out.splitlines() if x.strip()]
     return _cmd
 def alive(pat): return sum(1 for c in cmdlines() if pat in c and "tick.py" not in c)
+def scan_pids(name):
+    """PIDs of live `th_pack_scan.py <name> ` processes (pack_scan_status, lead 82613 item 3). Raises on a failed lookup: the caller reads that as unknown, never as running."""
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+    if out.returncode != 0: raise RuntimeError("process lookup rc=%d" % out.returncode)
+    pids = []
+    for ln in out.stdout.splitlines():
+        pid, _, c = ln.partition("	")
+        if ("th_pack_scan.py " + name + " ") in c and "tick.py" not in c and pid.strip().isdigit(): pids.append(int(pid))
+    return pids
 # ---- CPU cap (lead 81497, operator): the lane may use at most LANE_CORES logical cores in total; BelowNormal priority; no new job while total CPU > CPU_MAX %. ----
 LANE_CORES = 8; CPU_MAX = 85
 BELOW_NORMAL = 0x00004000
@@ -408,11 +417,13 @@ def upload():
             ts_p = ROOT + f"/logs/th-scan/{it['name']}.json"; ts_r = None
             try: ts_r = json.load(open(ts_p)) if os.path.exists(ts_p) else None
             except Exception: ts_r = None
-            if not ts_r or ts_r.get("signature") != th_pack_scan.signature(it["local"]):
-                if not alive(f"th_pack_scan.py {it['name']} "):
-                    if spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"): acts.append(f"{it['name']}: TruffleHog pre-upload scan started")
-                bad.append(f"{it['name']}: TruffleHog scan pending (push waits)"); continue
-            if not ts_r.get("clean"): bad.append(f"{it['name']}: TRUFFLEHOG REFUSED push (hits {ts_r.get('hits')}, error {ts_r.get('error')}); nothing uploaded"); continue
+            import pack_scan_status as _pss      # lead 82613 item 3: one function names the scan state; 'unknown' is never printed as 'running'
+            _st, _sd = _pss.pack_scan_status(it["name"], it["local"], ROOT + "/logs/th-scan", th_pack_scan.signature, scan_pids)
+            if _st == "unknown":
+                if "lookup failed" not in _sd and spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"): acts.append(f"{it['name']}: TruffleHog pre-upload scan started")
+                bad.append(_pss.status_line(it["name"], _st, _sd)); continue
+            if _st == "running": bad.append(_pss.status_line(it["name"], _st, _sd)); continue
+            if _st == "refused": bad.append(_pss.status_line(it["name"], _st, _sd)); continue
             if not it.get("started") or it.get("restarts", 0) < 5:   # class fix: a pack push that died/was stopped (wedged socket restart) is relaunched; hf upload is resumable and never overwrites; capped at 5 relaunches
                 if it.get("started"): it["restarts"] = it.get("restarts", 0) + 1
                 if spawn(f"hf upload {it['repo']} {it['local']} {it['path']} --repo-type dataset", ROOT + f"/logs/hf-upload-{it['name']}.log"): it["started"] = True; acts.append(f"{it['name']}: upload {'re' if it.get('restarts') else ''}started ({len(miss)} missing)")
