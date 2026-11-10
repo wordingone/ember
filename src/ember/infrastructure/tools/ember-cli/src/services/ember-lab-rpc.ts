@@ -83,6 +83,19 @@ function responseError(message: string): Error {
   return new Error("ember-lab RPC rejected: " + message);
 }
 
+/**
+ * A JSON-RPC error response. The message is the same generic text callers always saw; the server's error object
+ * (code, message, data) rides on `rpcError` so a typed wrapper (start_hour refusals) can read it.
+ */
+export class EmberLabRpcError extends Error {
+  readonly rpcError: Record<string, unknown>;
+  constructor(rpcError: Record<string, unknown>) {
+    super("ember-lab RPC rejected: response contains JSON-RPC error");
+    this.name = "EmberLabRpcError";
+    this.rpcError = rpcError;
+  }
+}
+
 function isAccessDenied(error: unknown): boolean {
   const code = typeof error === "object" && error !== null
     ? (error as NodeJS.ErrnoException).code
@@ -203,7 +216,12 @@ export async function callEmberLab(options: EmberLabRequestOptions): Promise<Rec
         return;
       }
       if ("error" in record) {
-        finish(responseError("response contains JSON-RPC error"));
+        const rpcError = record["error"];
+        finish(
+          rpcError && typeof rpcError === "object" && !Array.isArray(rpcError)
+            ? new EmberLabRpcError(rpcError as Record<string, unknown>)
+            : responseError("response contains JSON-RPC error"),
+        );
         return;
       }
       const result = record["result"];

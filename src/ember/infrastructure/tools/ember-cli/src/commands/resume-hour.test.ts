@@ -4,10 +4,10 @@
 
 import { describe, it, expect } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { REDIRECT, checkResumeHourArgs, hourEnv, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
+import { DISPATCH_NAME, REDIRECT, checkResumeHourArgs, hourEnv, createResumeHourCommand, resolveHourBash, startupResumeHourInput } from "./resume-hour.ts";
 import type { CommandContext } from "../types/command-types.ts";
 
 function world() {
@@ -84,5 +84,51 @@ describe("/resume-hour", () => {
   it("drops every EMBER_* variable from the hour's environment", () => {
     const e = hourEnv({ EMBER_API_KEY: "k", ember_model_seat: "s", EMBER_STARTUP_RESUME_HOUR: "x", X5_RECEIPT: "r", PATH: "p" });
     expect(e).toEqual({ X5_RECEIPT: "r", PATH: "p" });
+  });
+});
+
+// The shared golden fixture. ember-lab's `start_hour` (runtime/ember-lab/tests/hour_job_contract.rs) reads the same file:
+// a change to either implementation that breaks a case here or there fails a test.
+interface Contract {
+  schema: string;
+  redirect: string;
+  name_cases: Array<{ name: string; ok: boolean }>;
+  sha_cases: Array<{ sha: string; well_formed: boolean }>;
+  ember_key_cases: Array<{ key: string; ember: boolean }>;
+  env_cases: Array<{ in: Record<string, string>; out: Record<string, string> }>;
+  bash_shim_cases: string[];
+}
+const contract = JSON.parse(readFileSync(new URL("./resume-hour-contract.json", import.meta.url), "utf8")) as Contract;
+
+describe("/resume-hour shared contract fixture", () => {
+  it("is the v1 fixture and the redirect is byte-identical", () => {
+    expect(contract.schema).toBe("resume-hour-contract-v1");
+    expect(REDIRECT).toBe(contract.redirect);
+  });
+
+  it("dispatch names", () => {
+    expect(contract.name_cases.length).toBeGreaterThanOrEqual(10);
+    for (const c of contract.name_cases) expect([c.name, DISPATCH_NAME.test(c.name)]).toEqual([c.name, c.ok]);
+  });
+
+  it("sha256 shapes", () => {
+    const w = world();
+    for (const c of contract.sha_cases) {
+      const r = checkResumeHourArgs(`${w.script} ${c.sha} ${w.log}`, w.dir);
+      // An empty sha cannot be typed as a whitespace-separated argument: the command refuses it as wrong arity.
+      const malformed = !r.ok && (r.reason.includes("64 lowercase hex") || (c.sha === "" && r.reason.startsWith("usage:")));
+      expect([c.sha, !malformed]).toEqual([c.sha, c.well_formed]);
+    }
+  });
+
+  it("EMBER_* keys and the hour environment", () => {
+    for (const c of contract.ember_key_cases) {
+      expect([c.key, Object.keys(hourEnv({ [c.key]: "v" })).length === 0]).toEqual([c.key, c.ember]);
+    }
+    for (const c of contract.env_cases) expect(hourEnv(c.in)).toEqual(c.out);
+  });
+
+  it("the System32 shim in every golden spelling", () => {
+    for (const shim of contract.bash_shim_cases) expect([shim, resolveHourBash({ EMBER_RESUME_HOUR_BASH: shim }, "win32")]).toEqual([shim, null]);
   });
 });

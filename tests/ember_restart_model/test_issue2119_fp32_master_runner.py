@@ -69,6 +69,32 @@ class Declaration(unittest.TestCase):
             runner.hour_mode(treatment('learning-comparison-v1', precision_fix='fp32_master_v1'))
 
 
+class HourKind(unittest.TestCase):
+    """hour_kind (LOCATE | MOVE | BASELINE | LEARN, lead rulings 82495 and 82520): declared in the hour, validated before any model
+    exists, carried in the hour dict (so in every row and the hour result). It never changes the run."""
+
+    def test_the_four_kinds_are_admitted_alone_and_with_the_other_declarations(self):
+        self.assertEqual(runner.HOUR_KINDS, ('LOCATE', 'MOVE', 'BASELINE', 'LEARN'))
+        for kind in ('LOCATE', 'MOVE', 'BASELINE', 'LEARN'):
+            self.assertTrue(runner.hour_mode(dict(hour=hour(hour_kind=kind))), kind)
+            both = treatment(hour_kind=kind, declared_lr=1e-4, precision_fix='fp32_master_v1')
+            self.assertTrue(runner.hour_mode(both), kind)
+            self.assertEqual(both['hour']['hour_kind'], kind)
+
+    def test_other_values_and_schemas_refuse(self):
+        for bad in ('locate', 'learn', 'TRAIN', '', None, True, 3, ['LEARN']):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                runner.hour_mode(dict(hour=hour(hour_kind=bad)))
+        for schema in ('checkpoint-probe-v1', 'learning-comparison-v1'):
+            with self.assertRaises(ValueError, msg=schema):
+                runner.hour_mode(dict(hour=hour(schema, hour_kind='MOVE')))
+
+    def test_an_undeclared_hour_keeps_its_closed_key_set(self):
+        self.assertTrue(runner.hour_mode(dict(hour=hour())))
+        with self.assertRaises(ValueError):
+            runner.hour_mode(dict(hour=hour(unknown_kind='MOVE')))
+
+
 class Switch(unittest.TestCase):
     def test_apply_precision_fix_enables_only_the_declared_treatment(self):
         p = torch.nn.Parameter(torch.zeros(4, dtype=torch.bfloat16))
