@@ -1,19 +1,36 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Delete the local wikisource-20220501 dump and its derived files (lead 81781; refetch if we use it: https://archive.org/download/enwikisource-20220501/enwikisource-20220501-pages-articles.xml.bz2). NO copy is compared: this is
+the "ruled, no copy" path of verified_remove.py. Nothing runs on import; `python _ws_del.py` is a DRY RUN, `--go --ruling 'lead NNNNN' --manifest-sha256 <PLAN_SHA256 the dry run printed>` deletes (a different plan refuses everything): manifest of every file (path, size, sha256, mtime_ns, inode, ruling) fsynced before the first remove, each
+remove re-checks that the file is still the manifest's file, receipt row first, inside the dir with no link or junction on the way. The directory itself goes with os.rmdir only if it is empty afterwards."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT
-import os, json, hashlib, time, shutil
-D = (LANE_ROOT + "/wikisource-20220501"); M = (LANE_ROOT + "/logs/manifests-20261108/wikisource-manifest.jsonl")
-rows = []
-for f in sorted(os.listdir(D)):
-    p = D + "/" + f; h1 = hashlib.sha1(); h2 = hashlib.sha256()
-    with open(p, "rb") as fh:
-        for c in iter(lambda: fh.read(8 << 20), b""): h1.update(c); h2.update(c)
-    rows.append(dict(path=p, size=os.path.getsize(p), sha1=h1.hexdigest(), sha256=h2.hexdigest(), archive_url="https://archive.org/download/enwikisource-20220501/enwikisource-20220501-pages-articles.xml.bz2" if f.endswith(".xml.bz2") else None,
-        kind="raw dump" if f.endswith((".bz2", ".ok")) else "derived by scripts/wikisource_prep.py from the dump (regenerable after refetch)", note="deleted per lead 81781; refetch if we use it", ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
-os.makedirs(os.path.dirname(M), exist_ok=True)
-open(M, "w").write("".join(json.dumps(r) + "\n" for r in rows)); print("MANIFEST", len(rows), sum(r["size"] for r in rows))
-for r in rows: os.remove(r["path"])
-os.rmdir(D); print("DELETED", D)
+import os, sys, json, time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import verified_remove as VR
+D = (LANE_ROOT + "/wikisource-20220501"); MD = (LANE_ROOT + "/logs/manifests-20261108")
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    go = "--go" in argv; ruling = argv[argv.index("--ruling") + 1] if "--ruling" in argv else None
+    if not os.path.isdir(D): print("absent", D); return 0
+    files = [D + "/" + f for f in sorted(os.listdir(D)) if os.path.isfile(D + "/" + f)]
+    plan = VR.plan_sha(files)
+    print(("" if go else "DRY ") + "MANIFEST", len(files), sum(os.path.getsize(p) for p in files), "PLAN_SHA256", plan)
+    if not go: return 0
+    if not VR.ruling_ok(ruling): print("REFUSED: --go needs --ruling ID, a mail id such as 'lead 81781' (no copy is compared; the deletion rests on the ruling)"); return 5
+    pin = VR.pins_from_argv(argv).get("")
+    if not pin: print("REFUSED: --go needs --manifest-sha256 <the PLAN_SHA256 of the dry run the lead ruled on> (NO_PIN)"); return 5
+    rows, refused = VR.ruled_manifest(files, MD + "/wikisource-manifest.jsonl", ruling=ruling, note="lead 81781: refetch if we use it (archive.org enwikisource-20220501)", roots=[D], require_nlink=1, pin=pin)
+    if refused and refused[0][0] == "*": print("REFUSED:", refused[0][1]); return 6
+    n = sum(1 for r in rows if VR.remove_ruled(r, roots=[D], receipt=MD + "/wikisource-receipts.jsonl", require_nlink=1)["ok"])
+    try: os.rmdir(D); print("DELETED", D)
+    except OSError: print("directory kept (not empty):", D)
+    print("deleted", n, "of", len(rows), "refused", len(refused)); return 0 if n == len(rows) and not refused else 7
+
+
+if __name__ == "__main__":
+    sys.exit(main())
