@@ -13,8 +13,13 @@ Lockfile format (refcounted — daemon may hold while running multiple concurren
   {"daemon_pid": int, "side": "wsl2"|"windows", "active_jobs": int,
    "ts_first": "...", "ts_last": "..."}
 
-Fail-closed: held by live process with active_jobs>0 → exit(1).
-Corrupt/unreadable lock → exit(1). Fix-forward-on-headroom-violation ban applies.
+Fail-closed: held by live process with active_jobs>0 → exit(1) once the wait budget is spent.
+Corrupt/unreadable lock → exit(1) after a short budget. Fix-forward-on-headroom-violation ban applies.
+
+Waiting (lead ruling 82032 E1): a live holder is a queue, not a refusal. acquire() waits with a bounded, logged
+backoff (EMBER_GPU_LOCK_WAIT_SECONDS, default 3600 s; 0 = refuse at once) and then proceeds; the wait is a covariate,
+available from last_wait() for the caller's receipt. check_or_die() keeps the immediate refusal. The check/clear/write
+step is serialized by an O_EXCL mutex file beside the lock, so two waiters can never both take a freed fence.
 
 Usage (context manager):
     from gpu_lock_guard import acquire
@@ -32,6 +37,12 @@ import sys
 import time
 
 LOCK_PATH_ENV = "EMBER_GPU_LOCK_PATH"
+WAIT_ENV = "EMBER_GPU_LOCK_WAIT_SECONDS"
+DEFAULT_WAIT_SECONDS = 3600.0
+CORRUPT_WAIT_SECONDS = 30.0     # an unreadable lock is usually a replace in flight; a lasting one is a refusal
+BACKOFF_SECONDS = (1, 2, 4, 8, 16, 30)
+MUTEX_STALE_SECONDS = 30.0      # the mutex guards milliseconds of work; an older file is a dead owner's
+MUTEX_WAIT_SECONDS = 10.0
 
 
 def _configured_lock_path():
@@ -142,42 +153,157 @@ def _release_lock():
         pass
 
 
-def check_or_die(script=None):
-    """Acquire GPU lock or exit(1) if held by a live process with active jobs."""
-    path = _require_lock_path()
-    lock = _read_lock()
-    if lock is not None:
-        if not lock:
-            # corrupt / empty dict — fail-closed
-            print(
-                f"[gpu_lock_guard] HELD (corrupt lock at {path}) - refusing CUDA init",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+_LAST_WAIT = None
 
-        pid = lock.get("daemon_pid") or lock.get("pid")  # backward-compat with v1 format
-        side = lock.get("side", "windows")
-        active_jobs = lock.get("active_jobs", 1)
 
-        if pid and _is_pid_alive(pid, side) and active_jobs > 0:
-            print(
-                f"[gpu_lock_guard] HELD - {side} PID {pid}, active_jobs={active_jobs}, "
-                f"ts_last={lock.get('ts_last', '?')}",
-                file=sys.stderr,
-            )
-            print("[gpu_lock_guard] REFUSED - fix-forward-on-headroom-violation ban applies.",
-                  file=sys.stderr)
-            sys.exit(1)
-
-        # stale lock (holder PID dead or active_jobs=0)
-        print(f"[gpu_lock_guard] stale lock (PID {pid} dead or jobs=0) - clearing",
+def _wait_budget(wait_seconds):
+    """Seconds a caller may wait for a live holder: the argument, else EMBER_GPU_LOCK_WAIT_SECONDS, else the default.
+    A malformed or negative value refuses (a typo must never become an unbounded or silent immediate path)."""
+    if wait_seconds is None:
+        raw = os.environ.get(WAIT_ENV, "").strip()
+        if not raw:
+            return DEFAULT_WAIT_SECONDS
+        wait_seconds = raw
+    try:
+        value = float(wait_seconds)
+    except (TypeError, ValueError):
+        value = -1.0
+    if not (value >= 0.0) or value == float("inf"):
+        print(f"[gpu_lock_guard] REFUSED - {WAIT_ENV} must be a finite number of seconds >= 0, got {wait_seconds!r}",
               file=sys.stderr)
+        sys.exit(1)
+    return value
+
+
+@contextlib.contextmanager
+def _mutex(path):
+    """Serialize the read-decide-write step across processes on this side of the boundary.
+
+    An O_EXCL file beside the lock, never held across a sleep. A file older than MUTEX_STALE_SECONDS belongs to a dead
+    owner and is removed; two processes racing to remove the same stale file is a window of microseconds once per crash."""
+    mutex_path = path + ".mutex"
+    parent = os.path.dirname(mutex_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    deadline = time.monotonic() + MUTEX_WAIT_SECONDS
+    while True:
         try:
-            os.remove(path)
-        except FileNotFoundError:
+            fd = os.open(mutex_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except (FileExistsError, PermissionError):
+            try:
+                age = time.time() - os.path.getmtime(mutex_path)
+            except OSError:
+                continue            # it vanished between the open and the stat: retry at once
+            if age > MUTEX_STALE_SECONDS:
+                try:
+                    os.remove(mutex_path)
+                except OSError:
+                    pass
+                continue
+            if time.monotonic() >= deadline:
+                print(f"[gpu_lock_guard] REFUSED - could not take {mutex_path} within {MUTEX_WAIT_SECONDS:.0f}s",
+                      file=sys.stderr)
+                sys.exit(1)
+            time.sleep(0.05)
+            continue
+        break
+    try:
+        os.write(fd, str(os.getpid()).encode("ascii"))
+        os.close(fd)
+        yield
+    finally:
+        try:
+            os.remove(mutex_path)
+        except OSError:
             pass
 
-    _write_lock(script)
+
+def _try_take(script):
+    """One acquisition attempt under the mutex. Returns ('acquired', None), ('held', lock) or ('corrupt', None)."""
+    path = _require_lock_path()
+    with _mutex(path):
+        lock = _read_lock()
+        if lock is not None:
+            if not lock:
+                return "corrupt", None
+            pid = lock.get("daemon_pid") or lock.get("pid")  # backward-compat with v1 format
+            side = lock.get("side", "windows")
+            active_jobs = lock.get("active_jobs", 1)
+            if pid and _is_pid_alive(pid, side) and active_jobs > 0:
+                return "held", lock
+            # stale lock (holder PID dead or active_jobs=0)
+            print(f"[gpu_lock_guard] stale lock (PID {pid} dead or jobs=0) - clearing", file=sys.stderr)
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+        _write_lock(script)
+        return "acquired", None
+
+
+def _log_wait(event):
+    print(json.dumps(event, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def _acquire(script, wait_seconds, sleep, clock, log):
+    global _LAST_WAIT
+    path = _require_lock_path()
+    budget = _wait_budget(wait_seconds)
+    started = clock()
+    attempts, holders = 0, []
+    while True:
+        state, lock = _try_take(script)
+        if state == "acquired":
+            break
+        waited = clock() - started
+        limit = min(budget, CORRUPT_WAIT_SECONDS) if state == "corrupt" else budget
+        if state == "held":
+            holder = {"pid": lock.get("daemon_pid") or lock.get("pid"), "side": lock.get("side", "windows"),
+                      "script": lock.get("script"), "ts_first": lock.get("ts_first")}
+            if holder not in holders:
+                holders.append(holder)
+        if waited >= limit:
+            if state == "corrupt":
+                print(f"[gpu_lock_guard] HELD (corrupt lock at {path}) - refusing CUDA init", file=sys.stderr)
+            else:
+                print(f"[gpu_lock_guard] HELD - {lock.get('side', 'windows')} PID {lock.get('daemon_pid') or lock.get('pid')}, "
+                      f"active_jobs={lock.get('active_jobs', 1)}, ts_last={lock.get('ts_last', '?')}", file=sys.stderr)
+                print("[gpu_lock_guard] REFUSED - fix-forward-on-headroom-violation ban applies."
+                      + (f" Waited {waited:.0f}s of {budget:.0f}s." if budget > 0 else ""), file=sys.stderr)
+            sys.exit(1)
+        attempts += 1
+        delay = min(BACKOFF_SECONDS[min(attempts - 1, len(BACKOFF_SECONDS) - 1)], limit - waited)
+        log({"event": "GPU_FENCE_WAIT", "attempt": attempts, "state": state, "waited_seconds": round(waited, 3),
+             "next_sleep_seconds": delay, "budget_seconds": budget, "holders": holders})
+        sleep(delay)
+    _LAST_WAIT = {"waited_seconds": round(clock() - started, 3), "attempts": attempts, "budget_seconds": budget,
+                  "holders": holders, "acquired_utc": time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}
+
+
+def check_or_die(script=None):
+    """Acquire GPU lock or exit(1) at once if held by a live process with active jobs (no waiting)."""
+    _acquire(script, 0.0, time.sleep, time.monotonic, _log_wait)
+
+
+def last_wait():
+    """The wait of this process's latest successful acquisition (waited_seconds, attempts, budget_seconds, holders), else None.
+    Callers record it in their receipt: queueing behind another tenant is a covariate of the run, never hidden."""
+    return dict(_LAST_WAIT) if _LAST_WAIT else None
+
+
+def holder_pid():
+    """The live Windows-side pid holding the fence right now, else None. Read-only: lets a pre-fence census exempt the tenant
+    the caller is about to wait for (the census inside the fence stays the harm check)."""
+    if not LOCK_PATH:
+        return None
+    lock = _read_lock()
+    if not lock:
+        return None
+    pid = lock.get("daemon_pid") or lock.get("pid")
+    if (pid and lock.get("side", "windows") == "windows" and lock.get("active_jobs", 1) > 0
+            and _is_pid_alive(pid, "windows")):
+        return int(pid)
+    return None
 
 
 def release():
@@ -186,9 +312,9 @@ def release():
 
 
 @contextlib.contextmanager
-def acquire(script=None):
-    """Context manager: acquire lock on enter, release on exit (including exceptions)."""
-    check_or_die(script)
+def acquire(script=None, wait_seconds=None, sleep=time.sleep, clock=time.monotonic, log=_log_wait):
+    """Context manager: wait (bounded, logged backoff) for the fence, hold it for the body, release on exit (including exceptions)."""
+    _acquire(script, wait_seconds, sleep, clock, log)
     try:
         yield
     finally:

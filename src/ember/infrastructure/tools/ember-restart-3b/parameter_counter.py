@@ -1593,6 +1593,9 @@ def _counter_for(digest):
         # keep their one entry point. Process env is never toggled.
         reopen = getattr(module, '_cia_parent_snapshot_reopened', None) or module._cia_parent_snapshot
         module._cia_parent_snapshot = _cia_operation_snapshot(reopen, digest)
+        # A parent accepted by content address (see _cia_attest_chain) has no tensor digests to compare, so the
+        # historic derive is routed through the attested boundary check; every other parent keeps the verbatim derive.
+        module._cia_derive_first_lineage = _cia_attesting_derive(module._cia_derive_first_lineage)
         _COUNTERS[digest] = module
     return _COUNTERS[digest]
 
@@ -1605,26 +1608,53 @@ _CIA_OPERATION = contextvars.ContextVar('cia_validation_operation', default=None
 _SELF_SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
+ATTEST_MIN_DEPTH = 2                      # lead ruling 82046: depth 0 (the parent being extended) and depth 1 stay byte-verified
+ATTEST_CUSTODY_ENV = 'EMBER_CIA_ANCESTOR_CUSTODY_DIR'
+CUSTODY_SCHEMA = 'ember-ancestor-custody-v1'
+
+
 class _CiaValidationOperation:
-    def __init__(self):
+    def __init__(self, custody_dir=None, attest_closed_roots=False):
         self.snapshots = {}
         self.validated = set()
-        self.visits = {'snapshot_calls': 0, 'snapshot_reopened': 0, 'validated_calls': 0, 'validated_full': 0}
+        self.visits = {'snapshot_calls': 0, 'snapshot_reopened': 0, 'validated_calls': 0, 'validated_full': 0,
+                       'attested_nodes': 0}
+        # Archived-ancestor attestation is OFF unless a custody directory is named (argument or env, read once here).
+        self.custody_dir = custody_dir
+        self.attest_closed_roots = attest_closed_roots   # tests only: attest a root even though its bytes are held
+        self.min_depth = ATTEST_MIN_DEPTH
+        self.depths = {}                                  # canonical root -> depth below the first parent resolved here
+        self.attested = {}                                # depth -> manifest sha256 accepted by content address
 
 
 @contextmanager
-def cia_validation_operation():
-    """Open one validation context, or join the enclosing one (a nested entry never widens the scope)."""
+def cia_validation_operation(custody_dir=None, _attest_closed_roots=False):
+    """Open one validation context, or join the enclosing one (a nested entry never widens the scope).
+
+    custody_dir (or the EMBER_CIA_ANCESTOR_CUSTODY_DIR environment variable, read here once) turns on archived-ancestor
+    attestation for this operation only: an ancestor at depth >= ATTEST_MIN_DEPTH whose bytes are not held locally is
+    accepted by content address (_cia_attest_chain) instead of a byte walk. Absent, nothing changes."""
     outer = _CIA_OPERATION.get()
     if outer is not None:
         yield outer
         return
-    operation = _CiaValidationOperation()
+    if custody_dir is None:
+        custody_dir = os.environ.get(ATTEST_CUSTODY_ENV) or None
+    operation = _CiaValidationOperation(custody_dir, _attest_closed_roots)
     token = _CIA_OPERATION.set(operation)
     try:
         yield operation
     finally:
         _CIA_OPERATION.reset(token)
+
+
+def cia_attestation_disclosure(operation=None):
+    """The disclosure line every receipt that used the attestation clause carries; None when nothing was attested."""
+    operation = operation if operation is not None else _CIA_OPERATION.get()
+    if operation is None or not operation.attested:
+        return None
+    return {'ancestors_attested_by_custody': sorted(operation.attested), 'bytes_reverified': False,
+            'attested_manifest_sha256': {str(depth): operation.attested[depth] for depth in sorted(operation.attested)}}
 
 
 def _cia_operation_snapshot(reopen, source_sha256):
@@ -1634,6 +1664,13 @@ def _cia_operation_snapshot(reopen, source_sha256):
     it (role: snapshot). Only a digest-bound call is cached; a value is stored only after the reopen succeeded."""
     def snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
         operation = _CIA_OPERATION.get()
+        if operation is None and expected_digest is not None and os.environ.get(ATTEST_CUSTODY_ENV):
+            # A bare admission (the fresh-session head load, the hour's child receipt) outside any publication operation:
+            # with a custody directory named in the environment it is its own operation, so it takes the same attested
+            # path as the publication. Without the variable nothing changes.
+            with cia_validation_operation():
+                return snapshot(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
+                                expected_digest=expected_digest)
         if operation is not None: operation.visits['snapshot_calls'] += 1
         if operation is None or expected_digest is None:
             if operation is not None: operation.visits['snapshot_reopened'] += 1
@@ -1643,8 +1680,14 @@ def _cia_operation_snapshot(reopen, source_sha256):
         if key in operation.snapshots:
             return copy.deepcopy(operation.snapshots[key])
         operation.visits['snapshot_reopened'] += 1
-        value = reopen(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
-                       expected_digest=expected_digest)
+        value = None
+        if operation.custody_dir:
+            # Archived-ancestor attestation (opt-in per operation): only for an ancestor at depth >= min_depth whose
+            # bytes are not held and which has a custody record. Anything else takes the unchanged byte path.
+            value = _cia_attested_snapshot(operation, parent_checkpoint, max_restore_payload_bytes, expected_digest)
+        if value is None:
+            value = reopen(parent_checkpoint, max_restore_payload_bytes=max_restore_payload_bytes,
+                           expected_digest=expected_digest)
         operation.snapshots[key] = copy.deepcopy(value)
         return value
     return snapshot
@@ -1696,10 +1739,319 @@ def _cia_parent_snapshot_reopened(parent_checkpoint, *, max_restore_payload_byte
 _cia_parent_snapshot = _cia_operation_snapshot(_cia_parent_snapshot_reopened, _SELF_SOURCE_SHA256)
 
 
-def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None):
+# ---- Archived-ancestor attestation (lead ruling 82046 (c), as its own 02B change) --------------------------------------
+# Why: a child's reopen re-reads its WHOLE parent chain; 33 pre-Nov ancestors of the H39 child lost their per-generation
+# optimizer-state.pt and one object locally, and the restore runs at ~1.4 MB/s. For an ancestor at depth >= ATTEST_MIN_DEPTH
+# (depth 0 = the parent being extended, depth 1 = its parent; both stay byte-verified) whose bytes are not held, content
+# address replaces the byte walk:
+#   1. the manifest's sha256 equals the digest its (byte-verified or attested) child's lineage names;
+#   2. a custody record (HF server listing, recorded outside every checkpoint root) holds, for EVERY manifest-declared file,
+#      a server LFS sha256 + size equal to what the manifest declares (non-LFS small files: the local bytes and git blob id);
+#   3. the ancestor's persisted receipt is held, its sha256 equals the child's parent_counter_receipt_sha256, it names this
+#      manifest, and the counter that wrote it is one this tree keeps (_counter_for);
+#   4. the same chain is walked to the zero-step root, each link by the same rules, identity fields and cursors consistent.
+# The boundary derive then checks only what a content address can prove (see _cia_attested_first_lineage); the per-tensor
+# comparison against the attested parent is NOT re-derived. Every use is disclosed (cia_attestation_disclosure) with
+# bytes_reverified: false, and the full byte walk on the same chain after the restore completes is the real check.
+
+class _AttestedParentFacts(dict):
+    """Parent facts of a node accepted by content address. Deliberately empty: it carries no tensor or optimizer digests,
+    so any derive that is not the attested boundary check fails closed on the first lookup."""
+
+
+def _cia_manifest_declared(root, manifest):
+    """relpath -> (bytes, sha256) for every file the exact object closure names. Reads the held manifest-adjacent expert
+    index (small) and verifies it against the manifest record; returns None when the index is not held."""
+    index = manifest['expert_index']
+    index_file = Path(root) / index['path']
+    if not index_file.is_file(): return None
+    with index_file.open('rb') as handle: index_raw = handle.read(65537)
+    if len(index_raw) > 65536 or len(index_raw) != index['bytes'] or hashlib.sha256(index_raw).hexdigest() != index['sha256']:
+        raise ValueError('CIA counter expert index digest mismatch')
+    records = json.loads(index_raw)['experts']
+    declared = {index['path']: (index['bytes'], index['sha256']),
+                'optimizer-state.pt': (manifest['optimizer']['bytes'], manifest['optimizer']['sha256']),
+                'replay-state.pt': (manifest['replay']['bytes'], manifest['replay']['sha256']),
+                'objects/%s.pt' % manifest['core']['sha256']: (manifest['core']['bytes'], manifest['core']['sha256'])}
+    for record in records: declared['objects/%s.pt' % record['sha256']] = (record['bytes'], record['sha256'])
+    return declared
+
+
+def _cia_root_missing(root, manifest):
+    """Declared closure files this root does not hold (the expert index absent counts as everything absent)."""
+    declared = _cia_manifest_declared(root, manifest)
+    if declared is None: return {manifest['expert_index']['path']}
+    return {relative for relative in declared if not (Path(root) / relative).is_file()}
+
+
+def _cia_register_depths(operation, root):
+    """Number the chain below the first parent this operation resolves: depth 0 = that parent. Read-only, tolerant."""
+    depth, seen, node = 0, set(), Path(root)
+    while node is not None and str(node) not in seen:
+        seen.add(str(node))
+        operation.depths.setdefault(str(node), depth)
+        try:
+            with (node / 'checkpoint-manifest.json').open('rb') as handle: lineage = json.loads(handle.read(1048577)).get('lineage')
+        except (OSError, ValueError):
+            break
+        parent = lineage.get('parent_checkpoint') if isinstance(lineage, dict) else None
+        node = Path(parent) if parent else None
+        depth += 1
+
+
+def _cia_attested_snapshot(operation, parent_checkpoint, max_restore_payload_bytes, expected_digest):
+    """(parent, _AttestedParentFacts) for an ancestor eligible for attestation, else None (the byte path then runs)."""
+    try:
+        root = Path(parent_checkpoint)
+        if not root.is_absolute() or root.resolve(strict=True) != root: return None
+        with (root / 'checkpoint-manifest.json').open('rb') as handle: manifest = json.loads(handle.read(1048577))
+        if str(root) not in operation.depths: _cia_register_depths(operation, root)
+        if operation.depths.get(str(root), 0) < operation.min_depth: return None
+        if not operation.attest_closed_roots and not _cia_root_missing(root, manifest): return None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None          # unreadable or malformed here: the byte path reports it with its own refusal
+    if not (Path(operation.custody_dir) / ('%s.json' % expected_digest)).is_file(): return None
+    return _cia_attest_chain(operation, root, operation.depths[str(root)], expected_digest, max_restore_payload_bytes)
+
+
+def _cia_contract_validators():
+    source_root = Path(__file__).resolve().parents[4]
+    if str(source_root) not in sys.path: sys.path.insert(0, str(source_root))
+    from ember.model.ember_v0_contract import validate_cia_architecture
+    return validate_cia_architecture
+
+
+_ATTEST_IDENTITY = ('architecture_config', 'model_config_sha256', 'contract_sha256', 'launch_seed', 'optimizer_identity',
+                    'placement', 'expert_genesis_sha256')
+_ATTEST_MANIFEST_FIELDS = {'schema_version', 'architecture_revision', 'architecture_config', 'architecture', 'launch_seed',
+    'rng_state_sha256', 'data_cursor', 'model_config_sha256', 'contract_sha256', 'expert_genesis_sha256',
+    'expert_parameter_sha256', 'active_expert_ids', 'core', 'expert_index', 'optimizer', 'replay', 'optimizer_identity',
+    'placement', 'max_restore_payload_bytes', 'genesis_provenance', 'qualification'}
+
+
+def _git_blob_sha1(data):
+    return hashlib.sha1(b'blob %d\0' % len(data) + data).hexdigest()
+
+
+def _cia_verify_custody(root, sha, manifest, manifest_raw, custody_dir):
+    """Every manifest-declared file has a server record equal to the manifest's own declaration."""
+    path = Path(custody_dir) / ('%s.json' % sha)
+    if not path.is_file(): raise ValueError('CIA attested ancestor has no custody record')
+    with path.open('rb') as handle: raw = handle.read(4194305)
+    if len(raw) > 4194304: raise ValueError('CIA custody record exceeds its byte bound')
+    record = json.loads(raw)
+    if (type(record) is not dict or record.get('schema_version') != CUSTODY_SCHEMA or record.get('manifest_sha256') != sha
+            or type(record.get('files')) is not dict):
+        raise ValueError('CIA custody record schema or manifest binding mismatch')
+    declared = _cia_manifest_declared(root, manifest)
+    if declared is None: raise ValueError('CIA attested ancestor expert index is not held')
+    declared['checkpoint-manifest.json'] = (len(manifest_raw), sha)
+    files = record['files']
+    if set(files) != set(declared): raise ValueError('CIA custody record file set differs from the manifest closure')
+    for relative, (nbytes, digest) in declared.items():
+        entry = files[relative]
+        if type(entry) is not dict or entry.get('server_bytes') != nbytes:
+            raise ValueError('CIA custody server size differs from the manifest declaration')
+        lfs = entry.get('server_lfs_sha256')
+        if lfs is not None:
+            if lfs != digest: raise ValueError('CIA custody server LFS sha256 differs from the manifest declaration')
+            continue
+        # A small non-LFS file: the held bytes must be the declared bytes and equal the server's git blob id.
+        local = manifest_raw if relative == 'checkpoint-manifest.json' else (Path(root) / relative).read_bytes()
+        if len(local) != nbytes or hashlib.sha256(local).hexdigest() != digest or _git_blob_sha1(local) != entry.get('server_blob_id'):
+            raise ValueError('CIA custody server blob differs from the held manifest-declared bytes')
+
+
+def _cia_attest_chain(operation, root, depth, expected_digest, max_restore_payload_bytes):
+    """Accept root and every ancestor below it by content address (see the section comment). Raises on any mismatch;
+    a refusal here never falls back to the byte path."""
+    validate_cia_architecture = _cia_contract_validators()
+    first, node, expected, link, seen = None, Path(root), expected_digest, None, set()
+    depth_first, attested_here = depth, {}
+    while True:
+        if str(node) in seen: raise ValueError('CIA attested ancestor chain loops')
+        seen.add(str(node))
+        if not node.is_absolute() or node.resolve(strict=True) != node:
+            raise ValueError('CIA attested ancestor requires its canonical absolute path')
+        with _cia_counter_path(node, 'checkpoint-manifest.json').open('rb') as handle: raw = handle.read(1048577)
+        if len(raw) > 1048576: raise ValueError('CIA attested ancestor manifest exceeds its byte bound')
+        sha = hashlib.sha256(raw).hexdigest()
+        if sha != expected: raise ValueError('CIA attested ancestor manifest digest differs from its bound identity')
+        manifest = json.loads(raw)
+        descendant = 'lineage' in manifest
+        if (type(manifest) is not dict or set(manifest) != _ATTEST_MANIFEST_FIELDS | ({'lineage'} if descendant else set())
+                or manifest['schema_version'] != 'ember-cia-checkpoint-v1' or manifest['architecture_revision'] != 'CIA3-R1-N61'):
+            raise ValueError('CIA attested ancestor manifest schema mismatch')
+        validate_cia_architecture(manifest['architecture_config'])
+        if manifest['qualification'] != {'clean_genesis': False, 'trained': False, 'served': False}:
+            raise ValueError('CIA attested ancestor bytes cannot grant model qualification')
+        if manifest['genesis_provenance'] not in (
+                [{'kind': 'VERIFIED_ZERO_STEP_PARENT', 'independently_qualified': False},
+                 {'kind': 'VERIFIED_DESCENDANT_PARENT', 'independently_qualified': False}] if descendant
+                else [{'kind': 'ZERO_STEP_OBJECT_BINDING', 'independently_qualified': False}]):
+            raise ValueError('CIA attested ancestor requires unqualified object provenance')
+        cursor = manifest['data_cursor']
+        if type(cursor.get('global_step')) is not int or type(cursor.get('tokens_seen')) is not int or cursor['global_step'] < 0 or cursor['tokens_seen'] < 0:
+            raise ValueError('CIA attested ancestor cursor counters must be nonnegative integers')
+        if not descendant and (cursor['global_step'] != 0 or cursor['tokens_seen'] != 0):
+            raise ValueError('CIA attested ancestor root must be a zero-step genesis')
+        cap = manifest['max_restore_payload_bytes']
+        if type(cap) is not int or cap < 1 or type(max_restore_payload_bytes) is not int or cap > max_restore_payload_bytes:
+            raise ValueError('CIA attested ancestor exceeds the explicit caller restore byte bound')
+        if link is not None:                                   # consistency with the child that named this node
+            for name in _ATTEST_IDENTITY:
+                if link['manifest'].get(name) != manifest.get(name): raise ValueError('CIA attested ancestor ' + name + ' differs from its child')
+            if not (link['manifest']['data_cursor']['global_step'] > cursor['global_step']
+                    and link['manifest']['data_cursor']['tokens_seen'] >= cursor['tokens_seen']):
+                raise ValueError('CIA attested ancestor cursor does not precede its child')
+        _cia_verify_custody(node, sha, manifest, raw, operation.custody_dir)
+        persisted_path = _cia_counter_path(node, 'parameter-counter-receipt.json')
+        if not persisted_path.is_file(): raise ValueError('CIA attested ancestor requires its admitted counter receipt')
+        with persisted_path.open('rb') as handle: persisted_raw = handle.read(1048577)
+        if len(persisted_raw) > 1048576: raise ValueError('CIA attested ancestor counter receipt exceeds its byte bound')
+        persisted = validate_realization_receipt(json.loads(persisted_raw))
+        persisted_sha = hashlib.sha256(persisted_raw).hexdigest()
+        if link is not None and persisted_sha != link['manifest']['lineage'].get('parent_counter_receipt_sha256'):
+            raise ValueError('CIA attested ancestor counter receipt digest differs from its child lineage')
+        counts = ('allocated_parameters', 'unique_parameters', 'trainable_parameters', 'served_parameters',
+                  'active_parameters', 'episode_trainable_parameters')
+        if (persisted['subject_checkpoint_sha256'] != sha or persisted['model_config_sha256'] != manifest['model_config_sha256']
+                or persisted['expert_parameter_sha256'] != manifest['expert_parameter_sha256']
+                or persisted['expert_genesis_sha256'] != manifest['expert_genesis_sha256']
+                or persisted['active_expert_ids'] != manifest['active_expert_ids']
+                or {name: persisted[name] for name in counts} != manifest['architecture']):
+            raise ValueError('CIA attested ancestor counter receipt differs from its manifest')
+        _counter_for(persisted['counter_sha256'])              # a counter this tree does not keep refuses here
+        operation.attested[depth] = attested_here[depth] = sha
+        operation.depths.setdefault(str(node), depth)
+        operation.visits['attested_nodes'] += 1
+        if first is None:
+            first = (dict(manifest, checkpoint_manifest_sha256=sha, _parent_counter_receipt_sha256=persisted_sha, _attested_by_custody=True),
+                     _AttestedParentFacts())
+        if not descendant: break
+        lineage = manifest['lineage']
+        if type(lineage) is not dict or type(lineage.get('parent_checkpoint')) is not str or not lineage['parent_checkpoint']:
+            raise ValueError('CIA attested ancestor lineage schema mismatch')
+        link = {'manifest': manifest}
+        node, expected, depth = Path(lineage['parent_checkpoint']), lineage.get('parent_manifest_sha256'), depth + 1
+    _cia_record_attestation_use(operation, root, depth_first, attested_here)
+    return first
+
+
+def _cia_record_attestation_use(operation, root, depth_first, attested_here):
+    """Append-only use receipt beside the custody records: every use of the clause is disclosed with the line
+    ancestors_attested_by_custody / bytes_reverified:false (the closed hour-result schema is left unchanged)."""
+    import datetime
+    row = {'ts_utc': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'pid': os.getpid(),
+           'counter_source_sha256': _SELF_SOURCE_SHA256, 'first_attested_root': str(root),
+           'ancestors_attested_by_custody': sorted(attested_here), 'bytes_reverified': False,
+           'attested_manifest_sha256': {str(d): attested_here[d] for d in sorted(attested_here)}, 'first_attested_depth': depth_first}
+    with (Path(operation.custody_dir) / 'attestation-uses.jsonl').open('a', encoding='utf-8', newline='\n') as handle:
+        handle.write(json.dumps(row, sort_keys=True) + '\n')
+
+
+_LINEAGE_FIELDS = {'schema_version', 'parent_checkpoint', 'parent_manifest_sha256', 'parent_counter_receipt_sha256', 'step_delta',
+                   'token_delta', 'updated_parameters', 'updated_parameter_elements', 'changed_parameters', 'changed_parameter_elements'}
+
+
+def _cia_attested_first_lineage(parent_root, parent, parent_facts, child, child_facts):
+    """The boundary derive for a parent accepted by content address. It returns the child's RECORDED lineage after checking
+    everything a content address and the child's own bytes can prove: the parent identity and receipt digests the lineage
+    names, the identity fields, the cursor arithmetic, and the recorded update support against the child's own optimizer
+    clocks and parameter inventory. It does NOT compare tensors or optimizer moments with the parent (the parent's bytes are
+    not held): that comparison is what the later full byte walk re-derives."""
+    lineage = child.get('lineage')
+    if type(lineage) is not dict: raise ValueError('CIA descendant lineage schema mismatch')
+    sparse = lineage.get('schema_version') == 'ember-cia-first-descendant-v2'
+    if set(lineage) != _LINEAGE_FIELDS | ({'owner_update_counts'} if sparse else set()) or lineage['schema_version'] not in (
+            'ember-cia-first-descendant-v1', 'ember-cia-first-descendant-v2'):
+        raise ValueError('CIA attested lineage schema mismatch')
+    if (lineage['parent_checkpoint'] != str(parent_root) or lineage['parent_manifest_sha256'] != parent.get('checkpoint_manifest_sha256')
+            or lineage['parent_counter_receipt_sha256'] != parent.get('_parent_counter_receipt_sha256')):
+        raise ValueError('CIA attested lineage differs from the attested parent identity')
+    for name in _ATTEST_IDENTITY:
+        if child.get(name) != parent.get(name): raise ValueError('CIA parent and child ' + name + ' differ')
+    old, new = parent['data_cursor'], child['data_cursor']
+    step_delta, token_delta = new['global_step'] - old['global_step'], new['tokens_seen'] - old['tokens_seen']
+    if step_delta <= 0 or token_delta < 0 or lineage['step_delta'] != step_delta or lineage['token_delta'] != token_delta:
+        raise ValueError('CIA attested lineage cursor arithmetic differs from the manifests')
+    updated, changed = lineage['updated_parameters'], lineage['changed_parameters']
+    inventory = set(child_facts['parameters'])
+    if (type(updated) is not list or type(changed) is not list or not updated or not changed or len(set(updated)) != len(updated)
+            or not set(changed) <= set(updated) or not set(updated) <= inventory):
+        raise ValueError('CIA attested lineage update support differs from the child parameter inventory')
+    counts = lineage.get('owner_update_counts')
+    if sparse:
+        if (type(counts) is not dict or set(counts) != set(updated)
+                or any(type(v) is not int or not 0 < v <= step_delta for v in counts.values())):
+            raise ValueError('CIA attested lineage per-owner update counts are malformed')
+    for name in updated:
+        if not child['placement'][name]['requires_grad']: raise ValueError('CIA frozen parameter has optimizer update support')
+        count = counts[name] if sparse else step_delta
+        if child_facts['optimizer'].get(name, {}).get('step', 0) < count:
+            raise ValueError('CIA attested lineage owner clock exceeds the child optimizer clock')
+    if (lineage['updated_parameter_elements'] != sum(child_facts['elements'][name] for name in updated)
+            or lineage['changed_parameter_elements'] != sum(child_facts['elements'][name] for name in changed)):
+        raise ValueError('CIA attested lineage element counts differ from the child inventory')
+    return dict(lineage)
+
+
+def _cia_attesting_derive(original):
+    """Route a counter module's derive through the attested boundary only for an attested parent."""
+    def derive(parent_root, parent, parent_facts, child, child_facts, **kwargs):
+        if isinstance(parent_facts, _AttestedParentFacts):
+            return _cia_attested_first_lineage(parent_root, parent, parent_facts, child, child_facts)
+        return original(parent_root, parent, parent_facts, child, child_facts, **kwargs)
+    return derive
+
+
+def _cia_identity_without_lr(value):
+    if isinstance(value, dict):
+        return {k: _cia_identity_without_lr(v) for k, v in value.items() if k != 'lr'}
+    if isinstance(value, list):
+        return [_cia_identity_without_lr(v) for v in value]
+    return value
+
+
+def _cia_identity_lrs(value, found=None):
+    found = set() if found is None else found
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k == 'lr': found.add(v)
+            else: _cia_identity_lrs(v, found)
+    elif isinstance(value, list):
+        for v in value: _cia_identity_lrs(v, found)
+    return found
+
+
+def _cia_lr_transition(parent, child, declaration):
+    """#2119: an optimizer identity may differ from the parent's only in lr, and only under an hour declaration whose
+    declared_lr is the child's single lr. Returns the lineage record, or None when the identities are equal."""
+    before, after = parent.get('optimizer_identity'), child.get('optimizer_identity')
+    if after == before:
+        return None
+    if declaration is None or _cia_identity_without_lr(after) != _cia_identity_without_lr(before):
+        raise ValueError('CIA parent and child optimizer_identity differ')
+    if type(declaration) is not dict or set(declaration) != {'declared_lr','source'} or declaration['source'] != 'hour.declared_lr':
+        raise ValueError('CIA lr declaration schema mismatch')
+    parent_lrs, child_lrs = _cia_identity_lrs(before), _cia_identity_lrs(after)
+    if len(parent_lrs) != 1 or len(child_lrs) != 1 or child_lrs != {declaration['declared_lr']}:
+        raise ValueError('CIA declared lr is not the child optimizer lr')
+    return dict(parent_lr=next(iter(parent_lrs)), child_lr=next(iter(child_lrs)),
+                declared_lr=declaration['declared_lr'], source=declaration['source'])
+
+
+def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts, *, owner_update_counts=None,
+                              lr_declaration=None):
     """Derive one mechanical transition from reopened parent state and child bytes."""
-    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','optimizer_identity','placement'):
+    if isinstance(parent_facts, _AttestedParentFacts):
+        return _cia_attested_first_lineage(parent_root, parent, parent_facts, child, child_facts)
+    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','placement'):
         if child.get(name) != parent.get(name): raise ValueError('CIA parent and child '+name+' differ')
+    if lr_declaration is None:
+        recorded = child.get('lineage', {}).get('lr_declaration')
+        lr_declaration = None if recorded is None else {k: recorded.get(k) for k in ('declared_lr','source')}
+    lr_record = _cia_lr_transition(parent, child, lr_declaration)
     old, new = parent['data_cursor'], child['data_cursor']
     if any(type(cursor.get(name)) is not int or cursor[name] < 0
            for cursor in (old,new) for name in ('global_step','tokens_seen')):
@@ -1742,6 +2094,7 @@ def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_fa
                 or recorded_counts != owner_update_counts):
             raise ValueError('recorded per-owner update counts differ from reopened optimizer clocks')
     return {**({'owner_update_counts': owner_update_counts} if sparse else {}),
+        **({'lr_declaration': lr_record} if lr_record is not None else {}),
         'schema_version':'ember-cia-first-descendant-v2' if sparse else 'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
         'parent_manifest_sha256':parent['checkpoint_manifest_sha256'],
         'parent_counter_receipt_sha256':parent['_parent_counter_receipt_sha256'],

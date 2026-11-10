@@ -1,0 +1,15 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "receipts/fp33-e1-open-base-inventory-20260612T033709Z.json",
+  "artifact_sha256": "01cc1d7bd5671078928678f32064611ffa875defb9739c6e47072ef4cdd2d54f",
+  "ticket": "posix-path-policy",
+  "ts": "2026-11-04T13:36:36Z",
+  "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
+  "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
+  "reason": "historical receipt re-minted only to remove a POSIX home path: the one scan_roots key is replaced by the redactor's own rewrite (local:hub); every other byte is unchanged (a full redactor write would collapse its duplicate <local-path> keys). Reviewed ruling by an AI agent acting for the owner, 2026-11-04. manifests/ember-01-identity/consumer-census-v1.json is an environmental-discovery snapshot and still records the pre-redaction sha256 e9d1169cff61ab5506c5cf2298e4ec80b4c9e328a8c48cf13bf0d467adcd020b; it is not checked against the live tree, so it is left as the historical record."
+}

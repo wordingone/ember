@@ -74,7 +74,7 @@ function makeDeps(
       return '---\ntitle: Remote Skill\n---\n# Remote Content\nHello from remote.';
     },
     getRemoteCatalog: () => null,
-    getLocalSkillsDir: () => '/home/user/.ember/skills',
+    getLocalSkillsDir: () => '/fixture/home/user/.ember/skills',
     applyModelOverride: (_model: string) => {},
     applyEffortOverride: (_effort: string) => {},
     applyToolModifier: (_tools?: string[], _disallowedTools?: string[]) => {},
@@ -356,7 +356,7 @@ describe('Skill — remote canonical skills', () => {
     const catalog = [{ slug: 'dir-skill', contentUrl: 'https://example.com/dir.md' }];
     const deps = makeDeps([], { denyRules: [], allowRules: [] }, {
       getRemoteCatalog: () => catalog,
-      getLocalSkillsDir: () => '/home/user/.ember/skills',
+      getLocalSkillsDir: () => '/fixture/home/user/.ember/skills',
       async fetchRemoteSkill(_url: string): Promise<string> {
         return 'Skills dir: ${EMBER_SKILL_DIR}/templates';
       },
@@ -369,7 +369,7 @@ describe('Skill — remote canonical skills', () => {
       undefined,
     );
     const data = result.data as { content: string };
-    expect(data.content).toContain('/home/user/.ember/skills');
+    expect(data.content).toContain('/fixture/home/user/.ember/skills');
     expect(data.content).not.toContain('${EMBER_SKILL_DIR}');
   });
 });

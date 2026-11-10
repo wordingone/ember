@@ -68,9 +68,9 @@ when their interaction hypothesis is still open.
 
 Any new neural experiment must pass the authority conservation verifier and
 contain at least 3,000,000,000 parameters with native text, image, audio,
-reasoning, and structured tool use. Borrowed weights, outputs, teachers,
+reasoning, and structured tool use. Undeclared borrowed weights, outputs, teachers,
 judges, filters, ranks, curricula, stopping decisions, or hidden model
-cognition cannot enter the target lineage. Rows based on those signals remain
+cognition cannot enter the target lineage; declared uses follow GOAL §6. Rows based on those signals remain
 historical or frozen-reference evidence only.
 
 The registry may hold published ideas and transparent deterministic methods,

@@ -167,10 +167,10 @@ describe('insights command', () => {
 
   it('Phase 5: uses renderHtmlReport when wired', async () => {
     wireInsightsDeps({
-      renderHtmlReport: async (_report) => '/tmp/insights-report.html',
+      renderHtmlReport: async (_report) => '/fixture/tmp/insights-report.html',
     });
     const result = await insightsCommand.execute('', CTX);
     const msg = (result as { message?: string }).message ?? '';
-    expect(msg).toContain('/tmp/insights-report.html');
+    expect(msg).toContain('/fixture/tmp/insights-report.html');
   });
 });

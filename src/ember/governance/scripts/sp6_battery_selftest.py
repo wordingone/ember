@@ -41,7 +41,7 @@ FAMILY_SOURCE = {
     "file-hygiene": "file_watch",
 }
 TS_RE = re.compile(r"^20260622T\d{6}Z$")
-MACHINE_PATH_RE = re.compile(r"[A-Za-z]:[\\/]|/mnt/|/home/|/Users/")
+MACHINE_PATH_RE = re.compile(r"[A-Za-z]:[\\/]|/mnt/|/(?:home|Users)/")
 
 VERB_ENUM = {
     "reply", "ack-begin", "challenge", "no-action", "clarify",

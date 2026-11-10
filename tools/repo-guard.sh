@@ -166,7 +166,15 @@ fi
 # this check). Windows+Temp is scoped to require the Temp segment specifically
 # so a universal, non-identifying path like C:\Windows\System32\cmd.exe never
 # false-positives here.
-PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)'
+# POSIX roots (ruling by an AI agent acting for the owner, 2026-11-04): a user's home directory (under
+# "home" or macOS "Users", plus root's home), a CI runner's workspace (under
+# the runner user's home) and the temporary roots ("tmp", "var/tmp",
+# "var/folders", "private/tmp|var") are local-path leaks too, because Linux
+# runners write receipts with them. The leading class keeps relative,
+# home-relative (tilde), URL and drive-letter paths out (a drive path such as
+# C:/tmp stays judged by the narrower Windows rules above). Mirrors _POSIX_LOCAL_PATH in
+# src/ember/governance/scripts/redact_local_paths.py.
+PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\]+[Tt][Ee][Mm][Pp])|(/mnt/[a-z]/)|((^|[^A-Za-z0-9_.~:/\\-])/((home|Users)/[^/[:space:]]+|(root|tmp|var/tmp|var/folders|private/tmp|private/var)/))'
 # Files that intentionally embed a leaked-path-shaped literal as adversarial
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
@@ -200,6 +208,17 @@ PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
   ':(exclude)receipts/ember-02-launch-authority/certificate.json'
   ':(exclude)receipts/ember-02-launch-authority/run-spec.json'
+  # Class 4 (2026-11-04, POSIX local-path policy): files whose POSIX-root
+  # match is not a host path, each enumerated by exact file with a
+  # docs/domains/governance/authority/REDACTIONS.md row. Reviewed ruling by an
+  # AI agent acting for the owner. Like every entry here, the exclusion covers
+  # the whole paths check for that file; the names checks still cover it.
+  ':(exclude)receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json'
+  ':(exclude)docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl'
+  ':(exclude)baseline/fragments/inventory-v0.md'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli/src/build-tools/lifecycle-smoke.test.ts'
+  ':(exclude)src/ember/governance/scripts/fp17_mixweights.py'
+  ':(exclude)src/ember/infrastructure/tools/ember-restart-3b/python_environment.py'
 )
 PATHPAT_SELF_EXCLUDE_ARGS=()
 if surface_bytes_match 'tools/repo-guard.sh'; then

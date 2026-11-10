@@ -3251,6 +3251,7 @@ def write_checkpoint_artifacts(
     specialist_lineage: Mapping[str, Any] | None = None,
     cia_parent_checkpoint: Path | None = None,
     cia_owner_update_counts: Mapping[str, int] | None = None,
+    cia_lr_declaration: Mapping[str, Any] | None = None,
     max_serialized_bytes: int | None = None,
     max_transient_scratch_bytes: int | None = None,
     host_commit_reserve_bytes: int | None = None,
@@ -3265,8 +3266,9 @@ def write_checkpoint_artifacts(
             contract_sha256=contract_sha256,expert_genesis_sha256=expert_genesis_sha256,
             max_serialized_bytes=max_serialized_bytes,max_transient_scratch_bytes=max_transient_scratch_bytes,
             host_commit_reserve_bytes=host_commit_reserve_bytes,pre_publish_verifier=pre_publish_verifier,
-            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts)
-    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None:
+            cia_parent_checkpoint=cia_parent_checkpoint, cia_owner_update_counts=cia_owner_update_counts,
+            cia_lr_declaration=cia_lr_declaration)
+    if cia_parent_checkpoint is not None or cia_owner_update_counts is not None or cia_lr_declaration is not None:
         raise ValueError('CIA parent checkpoint cannot supply v2 lineage')
     return _write_checkpoint_artifacts_impl(
         model,
@@ -4540,6 +4542,10 @@ def _cia_validate_parent_once(root, receipt):
     if operation is None:
         return _cia_validated_checkpoint(root, receipt)
     operation.visits['validated_calls'] += 1
+    if receipt.get('_attested_by_custody') is True and receipt.get('checkpoint_manifest_sha256') in operation.attested.values():
+        # Accepted by content address inside THIS operation (parameter_counter._cia_attest_chain): its bytes are not held,
+        # so there is nothing to walk; the use is disclosed through cia_attestation_disclosure.
+        return None
     key = ('parent-validation', str(root),
            hashlib.sha256(json.dumps(receipt, sort_keys=True, default=str).encode()).hexdigest())
     if key in operation.validated:
@@ -4721,7 +4727,7 @@ def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_res
 def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_state, data_cursor,
         model_config_sha256, contract_sha256, expert_genesis_sha256, max_serialized_bytes,
         max_transient_scratch_bytes, pre_publish_verifier, host_commit_reserve_bytes=None,
-        cia_parent_checkpoint=None, cia_owner_update_counts=None):
+        cia_parent_checkpoint=None, cia_owner_update_counts=None, cia_lr_declaration=None):
     """Complete CIA publication through the existing quarantine admission authority.
 
     Caller owns exclusion from updates throughout capture. Native optimizer
@@ -4807,7 +4813,8 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
         if descendant:
             facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
-                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts)
+                parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts,
+                lr_declaration=None if cia_lr_declaration is None else dict(cia_lr_declaration))
         if (_cia_parameter_snapshot_identity(_cia_quiescent_parameters(model)) != before or cia_optimizer_identity(model,optimizer) != identity
                 or _cia_live_optimizer_state_identity(optimizer) != live_optimizer):
             raise ValueError('CIA model or optimizer identity changed during checkpoint capture')
@@ -4861,3 +4868,96 @@ def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_trans
     torch.set_rng_state(replay['rng_state']['cpu'])
     if cuda_rng.numel(): torch.cuda.set_rng_state(cuda_rng,device=device)
     return {'data_cursor':dict(replay['data_cursor'])}
+
+
+_CIA_MODEL_ONLY_MANIFEST_FIELDS = {'schema_version', 'architecture_revision', 'architecture_config', 'architecture',
+    'launch_seed', 'rng_state_sha256', 'data_cursor', 'model_config_sha256', 'contract_sha256',
+    'expert_genesis_sha256', 'expert_parameter_sha256', 'active_expert_ids', 'core', 'expert_index',
+    'optimizer', 'replay', 'optimizer_identity', 'placement', 'max_restore_payload_bytes', 'genesis_provenance', 'qualification'}
+
+
+def load_cia_checkpoint_model_only(root, *, expected_manifest_sha256=None, max_model_bytes=None):
+    """Read the model tensors of ONE complete CIA generation for inference; returns (tensors, receipt).
+
+    A named sibling of _load_cia_checkpoint_artifacts, not a mode of it (lead ruling 82032 E3): one generation, no
+    lineage walk, no optimizer, no replay state, no model mutation. It verifies what it reads: the manifest digest and
+    closed schema, the architecture, the expert index digest and byte arithmetic, every object's size and sha256 (inside
+    the object readers), the tensor names against the manifest placement and the tensor element count against the
+    manifest parameter counts. It does NOT verify the parent chain, the optimizer payload, the replay state or the
+    lineage block, and the receipt says so: parent_walk_skipped true, optimizer_loaded false, lineage_verified false.
+    """
+    import time
+    from ember.model.ember_v0_contract import validate_cia_architecture, cia_architecture_sha256
+    started = time.monotonic()
+    root = Path(root)
+    manifest_path = root / 'checkpoint-manifest.json'
+    if _path_has_link(manifest_path, root):
+        raise ValueError('CIA manifest is a symlink or reparse point')
+    with manifest_path.open('rb') as handle:
+        raw = handle.read(1048577)
+    if len(raw) > 1048576: raise ValueError('CIA checkpoint manifest exceeds its byte bound')
+    digest = hashlib.sha256(raw).hexdigest()
+    if expected_manifest_sha256 is not None and digest != _sha256_value(expected_manifest_sha256, name='CIA model-only manifest pin'):
+        raise ValueError('CIA model-only manifest digest differs from the caller pin')
+    manifest = json.loads(raw)
+    descendant = type(manifest) is dict and 'lineage' in manifest
+    if (type(manifest) is not dict or set(manifest) != _CIA_MODEL_ONLY_MANIFEST_FIELDS | ({'lineage'} if descendant else set())
+            or manifest['schema_version'] != _CIA_CHECKPOINT_SCHEMA):
+        raise ValueError('CIA checkpoint manifest schema mismatch')
+    if manifest['architecture_revision'] != 'CIA3-R1-N61':
+        raise ValueError('CIA checkpoint architecture revision mismatch')
+    config = manifest['architecture_config']
+    validate_cia_architecture(config)
+    cia_architecture_sha256(config)
+    if max_model_bytes is not None and (type(max_model_bytes) is not int or max_model_bytes < 1):
+        raise ValueError('CIA model-only byte bound must be a positive integer')
+    index = manifest['expert_index']
+    if type(index) is not dict or set(index) != {'path', 'sha256', 'bytes', 'expert_object_bytes'}:
+        raise ValueError('CIA checkpoint expert index record schema mismatch')
+    if index['path'] != 'expert-index-' + _sha256_value(index['sha256'], name='CIA index digest') + '.json':
+        raise ValueError('CIA checkpoint expert index path mismatch')
+    index_path = root / index['path']
+    if _path_has_link(index_path, root):
+        raise ValueError('CIA checkpoint index is a symlink or reparse point')
+    with index_path.open('rb') as handle:
+        index_raw = handle.read(65537)
+    if len(index_raw) > 65536 or len(index_raw) != index['bytes'] or hashlib.sha256(index_raw).hexdigest() != index['sha256']:
+        raise ValueError('CIA checkpoint expert index digest mismatch')
+    objects = json.loads(index_raw).get('experts', [])
+    if len(objects) != 25:
+        raise ValueError('CIA checkpoint requires all 25 expert objects')
+    if sum(record['bytes'] for record in objects) != index['expert_object_bytes']:
+        raise ValueError('CIA checkpoint expert byte arithmetic mismatch')
+    if manifest['expert_parameter_sha256'] != {str(i): record['sha256'] for i, record in enumerate(objects)}:
+        raise ValueError('CIA checkpoint expert object identities differ from manifest')
+    core = manifest['core']
+    if type(core) is not dict or type(core.get('bytes')) is not int or core['bytes'] < 1:
+        raise ValueError('CIA checkpoint component byte bound mismatch')
+    model_bytes = core['bytes'] + index['expert_object_bytes']
+    if max_model_bytes is not None and model_bytes > max_model_bytes:
+        raise ValueError('CIA model-only payload exceeds the caller byte bound')
+    tensors = dict(read_cia_core_object(root, record=core, architecture_config=config))
+
+    def load_expert(expert_id):
+        return read_cia_expert_object(index_path, expected_index_sha256=index['sha256'], expert_id=expert_id)
+    objects_read = 1  # the core object, read and verified above
+    for expert in _cia_ordered_parallel(load_expert, range(25)):
+        overlap = set(expert) & set(tensors)
+        if overlap: raise ValueError('CIA model-only tensor name defined twice')
+        tensors.update(expert)
+        objects_read += 1
+        del expert
+    placement = manifest['placement']
+    if type(placement) is not dict or set(placement) != set(tensors):
+        raise ValueError('CIA checkpoint placement inventory mismatch')
+    total = sum(value.numel() for value in tensors.values())
+    if manifest['architecture'].get('allocated_parameters') != total:
+        raise ValueError('CIA checkpoint measured inventory differs from manifest')
+    cursor = manifest['data_cursor']
+    receipt = {'schema_version': 'ember-cia-model-only-load-v1', 'checkpoint_manifest_sha256': digest,
+               'global_step': cursor.get('global_step'), 'tokens_seen': cursor.get('tokens_seen'),
+               'descendant': descendant, 'parent_walk_skipped': True, 'optimizer_loaded': False, 'replay_loaded': False,
+               'lineage_verified': False, 'objects_verified': objects_read, 'model_object_bytes': model_bytes,
+               'tensor_count': len(tensors), 'parameter_count': total,
+               'elapsed_seconds': round(time.monotonic() - started, 3)}
+    return tensors, receipt

@@ -153,8 +153,8 @@ describe("resolveVerifyWorktreeRoot -- #1317 future verifier checkout placement"
   });
 
   it("retains the portable home-root convention where a B: volume does not exist", () => {
-    expect(resolveVerifyWorktreeRoot({}, "linux", "/home/ember")).toBe(
-      "/home/ember/ember-verify-worktrees",
+    expect(resolveVerifyWorktreeRoot({}, "linux", "/fixture/home/ember")).toBe(
+      "/fixture/home/ember/ember-verify-worktrees",
     );
   });
 });

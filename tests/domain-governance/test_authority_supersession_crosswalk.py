@@ -36,7 +36,7 @@ def canonical_sha256(payload: dict) -> str:
 
 
 def write_authority(root: Path) -> tuple[str, str]:
-    matrix = root / "docs" / "authority" / "ember-authority-matrix.md"
+    matrix = root / "docs" / "domains" / "governance" / "authority" / "ember-authority-matrix.md"
     matrix.parent.mkdir(parents=True, exist_ok=True)
     matrix.write_text(
         "| discrepancy | disposition | enforced by | evidence/open question |\n"

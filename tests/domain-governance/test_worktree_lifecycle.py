@@ -1933,9 +1933,18 @@ def test_renew_respects_the_repository_lock(tmp_path: Path) -> None:
 
     lock = state_path(repo).with_name("ember-worktree-lifecycle.lock")
     with module.RepositoryLock(lock):
-        result = lifecycle(repo, "renew", "--path", str(managed), "--days", "7", check=False)
+        # A short bounded wait (the default is 120 s): contention still refuses, fail-closed,
+        # after printing ONE waiting line that names this process as the recorded holder.
+        result = lifecycle_with_env(
+            repo,
+            "renew", "--path", str(managed), "--days", "7",
+            env={"EMBER_LIFECYCLE_LOCK_WAIT_SECONDS": "1", "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS": "0.2"},
+            check=False,
+        )
     assert result.returncode == 2
     assert "LIFECYCLE_LOCKED" in result.stderr
+    assert result.stderr.count("waiting for lifecycle lock held by") == 1
+    assert f"held by pid={os.getpid()} acquired=" in result.stderr
     assert read_state(repo)["managed"][path_key_of(managed)]["expires"] == "2099-01-01"
 
 
@@ -2300,3 +2309,100 @@ def test_create_refuses_when_origin_cannot_be_fetched(tmp_path: Path) -> None:
     # Fail CLOSED: refusing after creating the directory would leave an unregistered
     # worktree behind, which is the UNMANAGED_WORKTREE condition that blocks every seat.
     assert not destination.exists()
+
+
+# ---------------------------------------------------------------------------
+# live pins: a worktree a derived script or cockpit launcher names is not retired
+# ---------------------------------------------------------------------------
+
+
+def register_pin_dir(repo: Path, pin_dir: Path) -> None:
+    common = state_path(repo).parent
+    (common / "worktree-pin-dirs").write_text(f"# test pin dirs\n{pin_dir}\n", encoding="utf-8")
+
+
+def write_pin(pin_dir: Path, name: str, tree: Path) -> Path:
+    pin_dir.mkdir(exist_ok=True)
+    pin = pin_dir / f"{name}.treepin.json"
+    pin.write_text(json.dumps({"path": str(tree), "head": "0" * 40, "purpose": name}), encoding="utf-8")
+    return pin
+
+
+def test_retire_refuses_a_worktree_named_by_a_live_pin_and_changes_nothing(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    tree = _managed(repo, tmp_path, "pinned-tree")
+    pin_dir = tmp_path / "pins"
+    register_pin_dir(repo, pin_dir)
+    pin = write_pin(pin_dir, "hour-tree", tree)
+    before = state_path(repo).read_bytes()
+
+    result = lifecycle(repo, "retire", "--path", str(tree), check=False)
+
+    assert result.returncode == 2
+    assert "PINNED_WORKTREE" in result.stderr and str(pin) in result.stderr
+    assert tree.is_dir()
+    assert state_path(repo).read_bytes() == before
+    # --force-owner narrows the DIRTY refusal only; it is no way around a pin.
+    forced = lifecycle(repo, "retire", "--path", str(tree), "--force-owner", "founder-one", check=False)
+    assert forced.returncode == 2 and "PINNED_WORKTREE" in forced.stderr
+    assert tree.is_dir()
+
+
+def test_retire_proceeds_once_the_pin_is_released(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    tree = _managed(repo, tmp_path, "released-tree")
+    pin_dir = tmp_path / "pins"
+    register_pin_dir(repo, pin_dir)
+    pin = write_pin(pin_dir, "hour-tree", tree)
+    released = pin_dir / "released"
+    released.mkdir()
+    pin.replace(released / pin.name)
+
+    payload = json.loads(lifecycle(repo, "retire", "--path", str(tree)).stdout)
+
+    assert payload["status"] == "RETIRED"
+    assert not tree.exists()
+
+
+def test_a_pin_on_one_worktree_does_not_block_another_and_plain_json_is_not_a_pin(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    pinned = _managed(repo, tmp_path, "keep-tree")
+    other = _managed(repo, tmp_path, "other-tree")
+    pin_dir = tmp_path / "pins"
+    register_pin_dir(repo, pin_dir)
+    write_pin(pin_dir, "hour-tree", pinned)
+    (pin_dir / "notes.json").write_text("not a pin, not even json", encoding="utf-8")
+
+    payload = json.loads(lifecycle(repo, "retire", "--path", str(other)).stdout)
+
+    assert payload["status"] == "RETIRED"
+    assert pinned.is_dir()
+
+
+def test_an_unreadable_pin_refuses_every_retire_rather_than_being_skipped(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    tree = _managed(repo, tmp_path, "any-tree")
+    pin_dir = tmp_path / "pins"
+    register_pin_dir(repo, pin_dir)
+    pin_dir.mkdir()
+    (pin_dir / "broken.treepin.json").write_text("{not json", encoding="utf-8")
+
+    result = lifecycle(repo, "retire", "--path", str(tree), check=False)
+
+    assert result.returncode == 2 and "PIN_UNREADABLE" in result.stderr
+    assert tree.is_dir()
+
+
+def test_retire_without_any_pin_dirs_file_is_unchanged(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    tree = _managed(repo, tmp_path, "unpinned-tree")
+    assert not (state_path(repo).parent / "worktree-pin-dirs").exists()
+
+    payload = json.loads(lifecycle(repo, "retire", "--path", str(tree)).stdout)
+
+    assert payload["status"] == "RETIRED"

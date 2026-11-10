@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 # #1945 mixture amendment A1 section 9 (frozen before any A1 result): 16,384 optimizer updates per arm, the warm update
@@ -185,8 +186,11 @@ def validate_checkpoint_probe(runner, identity):
     disk = bound_json(runner, root/'disk.json', reference['disk_sha256'])
     terminal = bound_json(runner, root/'worker-terminal.json', reference['worker_terminal_sha256'])
     prior = prediction['identity']
-    if (prior.get('hour') != dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
-                                 minimum_measured_steps=2)
+    expected_hour = dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
+                         minimum_measured_steps=2)
+    if 'declared_lr' in selection:  # a declared-lr hour consumes only a probe that declared the same lr (#2119)
+        expected_hour['declared_lr'] = selection['declared_lr']
+    if (prior.get('hour') != expected_hour or prior.get('optimizer') != identity.get('optimizer')
             or result.get('hour') != prior['hour'] or result.get('measured_updates') != 2
             or result.get('applied_positions') != 3*4096 or result.get('restored_state_matches') is not True
             or terminal.get('status') != 'completed' or terminal.get('applied_positions') != 3*4096
@@ -411,6 +415,130 @@ def require_remaining_hour_capacity(measured_updates, maximum):
         raise ValueError('declared measured hour capacity exhausted before completion')
 
 
+DECODE_PREFETCH_CLAUSE = 'decode-prefetch-actually-hit'
+DECODE_PREFETCH_ASSERTED_ROWS = 64   # measured rows the assertion inspects before the hour counts; counted-only after
+# First update a two-ahead prefetch can have decoded, an UPPER bound: update 2 is staged inside update 1 before any
+# prefetch targets it (update 1 prefetches update 3); update 1 is covered by the record step's one-ahead prefetch, and a
+# one-ahead-only hour has no structural miss at all (the Sept 24 genesis control reads 1,200 of 1,200 hits).
+DECODE_PREFETCH_FIRST_INDEX = 3
+DECODE_PREFETCH_HIT = 'decoded-in-previous-step-wall'
+DECODE_PREFETCH_MISS = 'decoded-in-this-step'
+
+
+class DecodePrefetchWitness:
+    """The consumer's own assertion for EMBER_DECODE_TWO_AHEAD=1: acceptance of the flag is not execution of the prefetch.
+
+    H34 (#1945) ran a whole hour with the flag accepted and every one of its 68,269 rows reading image_patches_source
+    'decoded-in-this-step', and nothing refused, because the flag was recorded and the outcome field was never read.
+    This reads it, off the row exactly as written. Inside the first DECODE_PREFETCH_ASSERTED_ROWS measured rows a row
+    with index >= DECODE_PREFETCH_FIRST_INDEX whose patches decoded in-step REFUSES the hour before it counts; the
+    raise reaches the worker's terminal record (status failed) carrying DECODE_PREFETCH_CLAUSE. After those rows the
+    field is only counted and reported through receipt(), never a mid-hour kill. A measured row without the field
+    (text-only pack) is the residual, counted beside the buckets and never assigned."""
+    def __init__(self, *, two_ahead):
+        self.two_ahead = bool(two_ahead)
+        self.counts = {}
+        self.residual = 0
+        self.rows_asserted = 0
+        self.measured_rows = 0
+        # Execution beside the request: rows that staged the next update, and rows whose staging started the two-ahead
+        # decode (the step's two_ahead_prefetched, read back off its staging object, never off the environment).
+        self.staged_next_rows = 0
+        self.two_ahead_prefetched_rows = 0
+
+    def observe(self, row, measured_ordinal):
+        """row: one complete step row as written; measured_ordinal: its 1-based position among measured rows."""
+        if row.get('phase') != 'measured':
+            return
+        self.measured_rows += 1
+        if row.get('staged_next_step') is True:
+            self.staged_next_rows += 1
+        if row.get('two_ahead_prefetched') is True:
+            self.two_ahead_prefetched_rows += 1
+        source = row.get('image_patches_source')
+        if source is None:
+            self.residual += 1
+            return
+        self.counts[source] = self.counts.get(source, 0) + 1
+        if (self.two_ahead and measured_ordinal <= DECODE_PREFETCH_ASSERTED_ROWS
+                and row.get('index', 0) >= DECODE_PREFETCH_FIRST_INDEX):
+            self.rows_asserted += 1
+            if source == DECODE_PREFETCH_MISS:
+                raise ValueError(DECODE_PREFETCH_CLAUSE + ': EMBER_DECODE_TWO_AHEAD=1 requested the two-ahead image '
+                                 'decode and measured row %d (update index %d) decoded its image patches in-step; the '
+                                 'prefetch did not hit, so the hour refuses before it counts'
+                                 % (measured_ordinal, row.get('index', 0)))
+
+    def two_ahead_executed(self):
+        """Every measured row that staged the next update also started the two-ahead decode, and at least one did.
+        False on the eager arm, on EMBER_STAGE_NEXT_STEP unset, and on a one-ahead hour: the request standing alone."""
+        return self.two_ahead_prefetched_rows > 0 and self.two_ahead_prefetched_rows == self.staged_next_rows
+
+    def receipt(self):
+        return dict(clause=DECODE_PREFETCH_CLAUSE, two_ahead_requested=self.two_ahead,
+                    two_ahead_executed=self.two_ahead_executed(),
+                    staged_next_rows=self.staged_next_rows, two_ahead_prefetched_rows=self.two_ahead_prefetched_rows,
+                    asserted_rows=DECODE_PREFETCH_ASSERTED_ROWS, first_asserted_index=DECODE_PREFETCH_FIRST_INDEX,
+                    rows_asserted=self.rows_asserted, measured_rows=self.measured_rows,
+                    image_patches_source_counts=dict(sorted(self.counts.items())),
+                    residual_rows_without_field=self.residual,
+                    claim='image_patches_source counted off the written measured rows; two_ahead_executed read off '
+                          'the two_ahead_prefetched field the step wrote from its staging object, beside the request; '
+                          'a refusal is recorded in the worker terminal under the clause above, never here')
+
+
+def file_decode_prefetch_refusal(runner, custody, witness):
+    """Write the refusal's sidecar. A failure HERE is named on stderr (the parent files it as custody/stderr.log) and
+    never propagates: the caller's bare `raise` re-raises the clause-bearing refusal, which outranks its evidence."""
+    try:
+        runner._write_new(custody / 'decode-prefetch.json', dict(witness.receipt(), refused=True))
+    except Exception as error:   # evidence-only sidecar: FileExistsError, OSError, anything; the clause propagates
+        print('DECODE_PREFETCH_SIDECAR_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+
+
+def start_contention_sampler(device):
+    """(A) co-tenant attribution (lead ruling 81915): sample what else uses the card and the CPU once a second so every
+    measured update can be tagged. Evidence only: returns None when disabled (EMBER_CONTENTION_SAMPLER=0) or when it
+    cannot start, and never changes a row, a pin or the hour's outcome. Started after the capture so no CUDA query can
+    land inside graph capture."""
+    if os.environ.get('EMBER_CONTENTION_SAMPLER', '1') == '0':
+        return None
+    try:
+        import torch
+        import cia_contention
+        read = cia_contention.default_reader(
+            mem_info=lambda: torch.cuda.mem_get_info(device),
+            own_reserved=lambda: torch.cuda.memory_reserved(device),
+            own_cpu_percent=cia_contention.ProcessCpu().percent)
+        sampler = cia_contention.ContentionSampler(read, clock=time.perf_counter)
+        sampler.start()
+        return sampler, read
+    except Exception as error:   # evidence-only: anything here is named on stderr and the hour carries on
+        print('CONTENTION_SAMPLER_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+        return None
+
+
+def file_contention_attribution(runner, custody, started, rows):
+    """Stop the sampler and write custody/contention-attribution.json: raw positions/s beside the uncontended rate and
+    the contended fraction. A failure here is named on stderr and never propagates (see file_decode_prefetch_refusal)."""
+    if started is None:
+        return
+    sampler, read = started
+    try:
+        sampler.stop()
+        import cia_contention
+        receipt = cia_contention.attribution_receipt(rows, sampler_errors=sampler.errors)
+        receipt.update(schema='ember-contention-attribution-v1', sample_seconds=cia_contention.SAMPLE_SECONDS,
+            foreign_gpu_bytes_threshold=cia_contention.FOREIGN_GPU_BYTES,
+            foreign_cpu_percent_threshold=cia_contention.FOREIGN_CPU_PERCENT,
+            overhead_calibration='running_minimum_outside_this_allocator', overhead_bytes_final=read.overhead_bytes(),
+            claim='Attribution only: contended means another process was seen using the card or the CPU during the '
+                  'update; it changes no throughput claim, row or pin')
+        runner._write_new(custody / 'contention-attribution.json', receipt)
+    except Exception as error:   # evidence-only sidecar
+        print('CONTENTION_ATTRIBUTION_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+
+
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
@@ -453,7 +581,11 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             contract_sha256=identity['source_sha256']['src/ember/model/ember_v0_contract.py'],
             expert_genesis_sha256={}, max_serialized_bytes=cap, max_transient_scratch_bytes=cap,
             host_commit_reserve_bytes=16 * runner.GIB, pre_publish_verifier=verifier,
-            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None)
+            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None,
+            cia_lr_declaration=lr_declaration if parent else None)
+    hour = identity.get('hour') or {}
+    lr_declaration = (dict(declared_lr=hour['declared_lr'], source='hour.declared_lr')
+                      if parent_declares_lr(hour, identity) else None)
     return publish, owner_update_counts
 
 
@@ -800,6 +932,46 @@ def validate_continuation(runner, identity):
     return dict(root=root, hour=hour, reference=reference, hour_binding=hour_binding, pack=pack, child=child)
 
 
+def parent_declares_lr(hour, identity):
+    """A declared lr reaches the lineage only when it is the lr the optimizer identity actually carries."""
+    return 'declared_lr' in hour and hour['declared_lr'] == identity.get('optimizer', {}).get('lr')
+
+
+def parent_learning_rate(parent):
+    """The single lr every group of the parent checkpoint's optimizer identity carries."""
+    groups = (parent.get('optimizer_identity') or {}).get('param_groups')
+    lrs = {group['hyperparameters']['lr'] for group in groups} if isinstance(groups, list) and groups else set()
+    if len(lrs) != 1:
+        raise ValueError('parent optimizer identity does not carry one learning rate')
+    return next(iter(lrs))
+
+
+def restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner, load):
+    """Restore a chained parent, then apply a declared lr (#2119).
+
+    The parent is loaded at its own lr, so every restore identity check compares like with like and the moment
+    tensors load untouched. Only a governed declaration (hour.declared_lr equal to the identity's optimizer lr) may
+    change the lr after the restore; an undeclared difference refuses before anything is mutated."""
+    parent_lr = parent_learning_rate(parent)
+    target = definition['lr']
+    if parent_lr == target:
+        return load()
+    if hour.get('declared_lr') != target:
+        raise ValueError(f'chained hour lr {target} differs from parent lr {parent_lr} without a declared_lr')
+    # the CIA identity binds both the defaults and every group, so both are set for the restore and both move after
+    optimizer.defaults['lr'] = parent_lr
+    for group in optimizer.param_groups:
+        group['lr'] = parent_lr
+    restored = load()
+    optimizer.defaults['lr'] = target
+    for group in optimizer.param_groups:
+        group['lr'] = target
+    runner._write_new(custody / 'lr-override.json', dict(parent_lr=parent_lr, declared_lr=target,
+        applied_after_restore=True, groups=len(optimizer.param_groups),
+        claim='The parent restored at its own lr; the declared lr applies to every update of this hour.'))
+    return restored
+
+
 def run_continuation(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
     """A new native worker restores the hour checkpoint and independently executes its next update."""
     import torch
@@ -989,8 +1161,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         parent = artifacts.published_checkpoint_receipt(parent_root)
         if parent['checkpoint_manifest_sha256'] != chain['manifest_sha256']:
             raise ValueError('chained hour parent manifest differs from its bound digest')
-        restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
-            max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
+        restored = restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner,
+            lambda: artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
+                max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB))
         cursor = parent['data_cursor']
         if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
@@ -1004,6 +1177,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     measured, positions, total_steps = 0, 0, 0
     started = None
     step_rates = []
+    contention, contention_rows = None, []
     gc_identity = dict(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'])
     with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
             (custody / 'gc-events.jsonl').open('xb') as gc_rows:
@@ -1012,6 +1186,10 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         # anyway; a pack drawn early and not trained on is pushed back after the loop (continuation reservation).
         stage_next = capture is not None and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1'
         upcoming = None
+        # The GLOBAL image-text position this hour's packs are filled from (HourPacks.image_start; the look-ahead
+        # forwards it). The step keys every image prefetch at it, so a chained hour's prefetch matches its own packs.
+        image_start = prepared['packs'].image_start
+        decode_witness = DecodePrefetchWitness(two_ahead=os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1')
         while True:
             call_started = time.perf_counter()
             if stage_next and total_steps >= 1 and measured + 1 < identity['geometry']['measured_steps']:
@@ -1022,7 +1200,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 next_pack=upcoming, prelaunch_next=(
                     upcoming is not None and os.environ.get('EMBER_PRELAUNCH_FORWARD') == '1' and not probe
                     and not learning and started is not None and not hour_complete(
-                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)))
+                        measured_updates=measured + 1, elapsed_seconds=time.perf_counter() - started + 1.0)),
+                image_start=image_start)
             call_finished = time.perf_counter()
             row.update(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'],
                 input_sha256=prepared['binding']['input_sha256'], cursor_before=pack['cursor_before'],
@@ -1039,6 +1218,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                                                          call_finished=call_finished)) + b'\n')
             gc_rows.flush()
             applied(row['applied_positions'])
+            # The two-ahead decode's own assertion, read off the row as written (the physical update above is already
+            # applied and recorded). A refusal here precedes every count below; the sidecar keeps the tally it had.
+            try:
+                decode_witness.observe(row, measured + 1)
+            except ValueError:
+                file_decode_prefetch_refusal(runner, custody, decode_witness)
+                raise   # the original refusal, clause intact; the sidecar's own failure never replaces it
             if started is not None and not gc.isenabled() and total_steps % 64 == 63:
                 runner.bounded_collect(total_steps)
             if os.environ.get('EMBER_LEAK_PROBE') and total_steps % 1024 == 1023:
@@ -1072,9 +1258,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     gc.disable()  # bounded below: runner.bounded_collect every 64 steps
                 energy.begin()
                 started = time.perf_counter()
+                contention = start_contention_sampler(device)
             else:
                 measured += 1
                 step_rates.append(row['positions_per_second'])
+                if contention is not None:
+                    contention_rows.append(dict(update=total_steps, positions_per_second=row['positions_per_second'],
+                        contention=contention[0].classify(call_started, call_finished)))
                 elapsed = time.perf_counter() - started
                 if learning and total_steps in LEARNING_SNAPSHOTS:
                     # Training wall excludes snapshot writing; the snapshot reads parameters after the step completes.
@@ -1099,6 +1289,9 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             pack, upcoming = (upcoming, None) if upcoming is not None else (prepared['packs'].next_pack(), None)
         rows.flush()
         os.fsync(rows.fileno())
+        # image_patches_source counted over every measured row (the assertion above covered only the first 64).
+        runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=False))
+        file_contention_attribution(runner, custody, contention, contention_rows)
         gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)

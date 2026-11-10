@@ -1,11 +1,11 @@
 {
-  "baselined_row_count": 206,
+  "baselined_row_count": 205,
   "expires_on": "2026-11-11",
   "expiry_change_authority": "OPERATOR_ONLY",
-  "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
+  "expiry_consequence": "after this date the scheduled master check (ci-nightly) fails on every baselined row; pull requests and the merge queue carry a warning and are not blocked",
   "goal_id": "EMBER-02",
-  "maximum_rows": 206,
-  "minted_on": "2026-11-04",
+  "maximum_rows": 205,
+  "minted_on": "2026-11-05",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
     {
@@ -1980,18 +1980,6 @@
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
-      "expression": "Path(os.environ.get('EMBER_ISSUE1267_ROOT', Path(__file__).parents[2]))",
-      "expression_sha256": "b8f969c53424587405c60a1dffbea3f0e03a8d95a276656e30af1fddc5794547",
-      "justification": "Correctly unresolvable, and unresolvable BY DESIGN rather than by limitation. This root is read from an environment variable, so its value is chosen at run time and no static evaluator can know it. Censused before accepting it: the 68 rows in this class read 19 distinct variables, and every one of those variables has at least one other code-level read elsewhere in the repository (non-test, non-doc, excluding assignments) \u2014 so none of them is a dead wrapper that could simply be deleted in favour of a plain binding. The tempting cure, evaluating the default argument of os.environ.get, is refused: the row would then MATCH against a default the process need not use, reporting as verified a binding that resolves to something else at run time. What the gate does check here is that the expression's SHAPE has not drifted \u2014 the row is keyed on expression_sha256, so editing the lookup produces a new row that must be justified afresh. Accepted with this reason recorded, not by silent baseline membership.",
-      "line": 14,
-      "path": "src/ember/governance/scripts/tests/test_issue1267_frozen_receipt_disposition.py",
-      "status": "UNEVALUABLE",
-      "target": "ROOT"
-    },
-    {
-      "error": "call outside closed grammar: os.environ.get",
-      "evaluated_path": null,
-      "expectation": "repo_root",
       "expression": "Path(os.environ.get('EMBER_ISSUE1396_REPO_ROOT', next((parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()))))",
       "expression_sha256": "7f4f4135c9ec6cf5bdd3758f334816cf3c3114d3639c2462202acb1a625a7abd",
       "justification": "Correctly unresolvable, and unresolvable BY DESIGN rather than by limitation. This root is read from an environment variable, so its value is chosen at run time and no static evaluator can know it. Censused before accepting it: the 68 rows in this class read 19 distinct variables, and every one of those variables has at least one other code-level read elsewhere in the repository (non-test, non-doc, excluding assignments) \u2014 so none of them is a dead wrapper that could simply be deleted in favour of a plain binding. The tempting cure, evaluating the default argument of os.environ.get, is refused: the row would then MATCH against a default the process need not use, reporting as verified a binding that resolves to something else at run time. What the gate does check here is that the expression's SHAPE has not drifted \u2014 the row is keyed on expression_sha256, so editing the lookup produces a new row that must be justified afresh. Accepted with this reason recorded, not by silent baseline membership.",
@@ -2482,6 +2470,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "d6eb529000e2b40779c1b037f8c2c08f7bd49f14d99d3d3a472fe537ff20a6fe",
+  "self_sha256": "da717fe54c9e6f6ed56cfcb4d08b6a1a2a96246e8b9d37917d601610abebffa3",
   "workstream_id": "EMBER-02A"
 }

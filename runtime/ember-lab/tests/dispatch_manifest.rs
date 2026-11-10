@@ -1993,7 +1993,12 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
     let root = sandbox("resource-guard-frozen");
     let db = root.join("ember-lab.sqlite3");
     let manifest = write_manifest(&root, "dispatch-resource-guard-frozen", 10_000);
-    let daemon = Daemon::open(&db).unwrap();
+    // Hand-writes the monitor-owned foreign-pressure row between the two sticky
+    // refusals, so the monitor must not be running (monitor_owned_rows_guard).
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(host_capacity(16 * GIB)))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     Connection::open(&db)
         .unwrap()
         .execute(
@@ -2080,7 +2085,17 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
 fn evidenced_resource_guard_rearm_consumes_the_exact_freeze_after_a_healthy_window() {
     let root = sandbox("resource-guard-evidenced-rearm");
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(host_capacity(16 * GIB))).unwrap();
+    // This test authors a synthetic resource-guard timeline (freeze at 10s,
+    // healthy rows to 72s, re-arm at 73s). The monitor-starting constructor
+    // appends a real now_ms() HEALTHY row every 2s; once one lands, it is the
+    // newest healthy row and the re-arm refuses as "stale or future" (Windows
+    // CI run 41995641002, attempt 1). The no-monitor seam removes the writer;
+    // real_epoch_monitor_observation_refuses_a_synthetic_rearm_timeline keeps
+    // the refusal itself covered.
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(host_capacity(16 * GIB)))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     let freeze_at_ms = 10_000i64;
     let freeze = json!({
         "schema_version": "ember-lab-resource-guard-observation-v1",

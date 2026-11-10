@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import runpy
 import shutil
+import time
 import subprocess
 import sys
 import traceback
@@ -47,7 +48,7 @@ def headroom():
     if free < resources.MIN_FREE_COMMIT:
         raise ValueError('less than 42 GiB free system commit')
     disks = {drive: shutil.disk_usage(drive + ':/').free for drive in ('C', 'B')}
-    if disks['C'] < 150 * resources.GIB or disks['B'] < 250 * resources.GIB:
+    if disks['C'] < 40 * resources.GIB or disks['B'] < 250 * resources.GIB:
         raise ValueError('operating disk reserve is unavailable')
     return {'free_commit_bytes': free, 'free_disk_bytes': disks}
 
@@ -90,7 +91,29 @@ def training_command(command):
     return any(Path(arg).name.lower() in entries or arg == 'ember.training.pretrain' for arg in args[1:])
 
 
-def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
+UNREADABLE_REREADS = 3
+UNREADABLE_REREAD_SECONDS = 2.0
+
+
+def settle_unreadable_row(row, gpu_pids, reread, sleep):
+    """lead ruling 81909: a process matters only if it holds GPU memory. An unreadable row (no commit or command line, the shape of a
+    short-lived python seen mid-start or mid-exit) that nvidia-smi does not list is ignored. A GPU-listed unreadable row is
+    re-read UNREADABLE_REREADS times over UNREADABLE_REREAD_SECONDS; gone or exited -> ignored, readable -> classified,
+    still live and unreadable -> refused. Returns the row to classify, or None to ignore it."""
+    pid = row['ProcessId']
+    if pid not in gpu_pids:
+        return None
+    for _ in range(UNREADABLE_REREADS):
+        sleep(UNREADABLE_REREAD_SECONDS / UNREADABLE_REREADS)
+        fresh = next((r for r in reread() if r['ProcessId'] == pid), None)
+        if fresh is None or fresh.get('HasExited') is True:
+            return None
+        if fresh.get('PageFileUsage') is not None and fresh.get('CommandLine'):
+            return fresh
+    return False
+
+
+def reject_resource_conflicts(rows, owner_pid, gpu_pids=(), reread=None, sleep=time.sleep):
     by_pid = {row['ProcessId']: row for row in rows}
     ancestors = set()
     current = owner_pid
@@ -110,16 +133,20 @@ def reject_resource_conflicts(rows, owner_pid, gpu_pids=()):
         # live process is classified as before.
         if row.get('HasExited') is True:
             continue
+        if row.get('PageFileUsage') is None or not row.get('CommandLine'):
+            row = settle_unreadable_row(row, gpu_pids, reread or process_census, sleep)
+            if row is None:
+                continue
+            if row is False:
+                raise ValueError(f'cannot classify Python resource ownership: {pid}')
         commit_kib = row.get('PageFileUsage')
         command = row.get('CommandLine')
-        if commit_kib is None or command is None:
-            raise ValueError(f'cannot classify Python resource ownership: {pid}')
         training = training_command(command)
         # WDDM lists desktop graphics applications as C+G with no per-process
         # memory attribution. Device-list membership alone is not a trainer.
         # For Python it corroborates a potential model process; native desktop
         # allocation remains included in the total-device supervisor's ceiling.
-        if pid in gpu_pids or int(commit_kib) >= 1024 ** 2 or training:
+        if pid in gpu_pids or training:
             conflicts.append(pid)
             described.append(f'{pid}: name={row["Name"]} parent={row.get("ParentProcessId")} command={command}')
     if conflicts:

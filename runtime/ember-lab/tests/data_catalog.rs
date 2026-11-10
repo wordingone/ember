@@ -5,7 +5,7 @@
 use ember_lab::{
     rollback_empty_admission_events_migration, rollback_empty_artifact_custody_migration,
     rollback_empty_data_catalog_migration, rollback_empty_foreign_process_pressure_migration,
-    Daemon, EmberLabError,
+    Daemon, EmberLabError, HostCommitCapacity,
 };
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -21,6 +21,35 @@ fn temp_root(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("ember-lab-{name}-{unique}"));
     fs::create_dir_all(&root).unwrap();
     root
+}
+
+/// Opens the daemon without the Windows resource-guard monitor. The rollback
+/// tests reset monitor-owned rows (foreign-pressure observations and state) by
+/// hand, and a monitor tick still in flight when the daemon drops (Drop signals
+/// the thread but does not join it) can append a real census row after that
+/// reset. See tests/monitor_owned_rows_guard.rs.
+fn open_without_monitor(db: &Path) -> Daemon {
+    Daemon::open_with_resource_guard_seed_without_monitor(db, Ok(seeded_host_capacity())).unwrap()
+}
+
+fn seeded_host_capacity() -> HostCommitCapacity {
+    HostCommitCapacity {
+        basis: "maximum_configured_capacity".to_string(),
+        sampled_at_ms: 10_000,
+        snapshot_sha256: "e".repeat(64),
+        physical_ram_bytes: 64 * 1024 * 1024 * 1024,
+        physical_available_bytes: 32 * 1024 * 1024 * 1024,
+        pagefile_maximum_bytes: 32 * 1024 * 1024 * 1024,
+        pagefile_configuration_source:
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+                .to_string(),
+        pagefile_configuration_sha256: "a".repeat(64),
+        commit_total_bytes: 80 * 1024 * 1024 * 1024,
+        current_commit_limit_bytes: 80 * 1024 * 1024 * 1024,
+        current_commit_remaining_bytes: 32 * 1024 * 1024 * 1024,
+        maximum_commit_capacity_bytes: 96 * 1024 * 1024 * 1024,
+        available_maximum_commit_bytes: 32 * 1024 * 1024 * 1024,
+    }
 }
 
 #[test]
@@ -1062,7 +1091,7 @@ fn failed_catalog_migration_rolls_back_all_schema_changes() {
 fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     let root = temp_root("catalog-explicit-rollback");
     let empty_db = root.join("empty.sqlite3");
-    drop(Daemon::open(&empty_db).unwrap());
+    drop(open_without_monitor(&empty_db));
     // Reset only the live pressure observation to the exact migration seed so this fixture
     // represents a schema-7 database before its first census.
     let conn = rusqlite::Connection::open(&empty_db).unwrap();
@@ -1098,10 +1127,10 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
         .unwrap();
     assert_eq!(catalog_tables, 0);
     drop(conn);
-    drop(Daemon::open(&empty_db).unwrap());
+    drop(open_without_monitor(&empty_db));
 
     let populated_db = root.join("populated.sqlite3");
-    let populated = Daemon::open(&populated_db).unwrap();
+    let populated = open_without_monitor(&populated_db);
     populated
         .import_data_catalog_manifest(&minimal_manifest_bytes())
         .unwrap();
@@ -1124,7 +1153,7 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     rollback_empty_artifact_custody_migration(&populated_db).unwrap();
     let error = rollback_empty_data_catalog_migration(&populated_db).unwrap_err();
     assert!(matches!(error, EmberLabError::InvalidDataCatalog { .. }));
-    let reopened = Daemon::open(&populated_db).unwrap();
+    let reopened = open_without_monitor(&populated_db);
     assert_eq!(reopened.export_data_catalog_manifest().unwrap(), before);
 
     drop(reopened);
@@ -1190,7 +1219,7 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     let root = temp_root("foreign-pressure-rollback-refusals");
 
     let wrong_version = root.join("wrong-version.sqlite3");
-    drop(Daemon::open(&wrong_version).unwrap());
+    drop(open_without_monitor(&wrong_version));
     reset_to_empty_pressure_seed(&wrong_version);
     rusqlite::Connection::open(&wrong_version)
         .unwrap()
@@ -1203,7 +1232,7 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     assert!(format!("{error:?}").contains("requires database schema version 7"));
 
     let mismatch = root.join("mismatch.sqlite3");
-    drop(Daemon::open(&mismatch).unwrap());
+    drop(open_without_monitor(&mismatch));
     reset_to_empty_pressure_seed(&mismatch);
     rollback_empty_admission_events_migration(&mismatch).unwrap();
     rusqlite::Connection::open(&mismatch)
@@ -1230,7 +1259,7 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     );
 
     let history = root.join("history.sqlite3");
-    drop(Daemon::open(&history).unwrap());
+    drop(open_without_monitor(&history));
     reset_to_empty_pressure_seed(&history);
     rollback_empty_admission_events_migration(&history).unwrap();
     let conn = rusqlite::Connection::open(&history).unwrap();

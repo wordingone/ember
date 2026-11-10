@@ -15,7 +15,7 @@ import {
 } from "./slash-dispatch.ts";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
 
-const CTX: CommandContext = { sessionId: "s1", mode: "default", cwd: "/tmp/x" };
+const CTX: CommandContext = { sessionId: "s1", mode: "default", cwd: "/fixture/tmp/x" };
 
 function cmd(over: Partial<RegistryCommand> & { name: string }): RegistryCommand {
   return {

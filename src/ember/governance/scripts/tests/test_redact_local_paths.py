@@ -85,6 +85,20 @@ def test_exact_drive_path_with_spaces_is_one_external_path(tmp_path: Path) -> No
     assert normalized["path"] == "local:nested receipt.json"
 
 
+def test_exact_posix_home_path_with_spaces_is_one_external_path(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    # A whole-string value is one path even when a segment holds a space,
+    # as for drive paths above. Built at runtime so this source stays clean
+    # under repo-guard's PATHPAT.
+    value = "/" + "home/the maintainer/.cache/huggingface/hub"
+
+    normalized, count = redact_local_paths.normalize_json_paths({"path": value}, repo)
+
+    assert count == 1
+    assert normalized["path"] == "local:hub"
+
+
 def test_existing_redaction_note_is_refused_instead_of_overwritten(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

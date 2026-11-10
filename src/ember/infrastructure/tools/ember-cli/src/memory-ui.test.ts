@@ -16,14 +16,14 @@ import {
 import type { MemoryFile } from "./memory-ui.ts";
 
 // ---------------------------------------------------------------------------
-// AC1: path at /home/user/.ember/memory.md — ~/  is shorter than ./
+// AC1: path at /fixture/home/user/.ember/memory.md — ~/  is shorter than ./
 // ---------------------------------------------------------------------------
 
 describe("AC1 — tilde path chosen when shorter", () => {
   test("AC1: ~/path is chosen over ./path when tilde representation is shorter", () => {
-    const homeDir = "/home/user";
+    const homeDir = "/fixture/home/user";
     const cwd     = "/deeply/nested/project/subdir"; // ./path would be very long
-    const file    = "/home/user/.ember/memory.md";
+    const file    = "/fixture/home/user/.ember/memory.md";
     const result = getRelativeMemoryPath(file, homeDir, cwd);
     expect(result).toBe("~/.ember/memory.md");
   });
@@ -35,9 +35,9 @@ describe("AC1 — tilde path chosen when shorter", () => {
 
 describe("AC2 — dotslash path chosen when shorter", () => {
   test("AC2: ./path is chosen when it is shorter than ~/path", () => {
-    const homeDir = "/home/user"; // file is deep in home → long tilde path
-    const cwd     = "/home/user/project";
-    const file    = "/home/user/project/.ember/memory.md";
+    const homeDir = "/fixture/home/user"; // file is deep in home → long tilde path
+    const cwd     = "/fixture/home/user/project";
+    const file    = "/fixture/home/user/project/.ember/memory.md";
     const result  = getRelativeMemoryPath(file, homeDir, cwd);
     // tilde: ~/./../project/.ember/memory.md → "~/project/.ember/memory.md"
     // dot:   "./.ember/memory.md"
@@ -51,12 +51,12 @@ describe("AC2 — dotslash path chosen when shorter", () => {
 
 describe("AC3 — folder quick-link detection", () => {
   test("AC3: isFolderQuickLink returns true for __open_folder__ prefix", () => {
-    const item = `${FOLDER_QUICK_LINK_PREFIX}/home/user/.ember/memory`;
+    const item = `${FOLDER_QUICK_LINK_PREFIX}/fixture/home/user/.ember/memory`;
     expect(isFolderQuickLink(item)).toBe(true);
   });
 
   test("AC3: isFolderQuickLink returns false for regular file path", () => {
-    expect(isFolderQuickLink("/home/user/.ember/memory.md")).toBe(false);
+    expect(isFolderQuickLink("/fixture/home/user/.ember/memory.md")).toBe(false);
   });
 
   test("AC3: folderQuickLinkPath extracts the directory path", () => {
@@ -111,7 +111,7 @@ describe("AC6 — MemoryUpdateNotification text format", () => {
 describe("AC7 — memory files grouped by scope", () => {
   test("AC7: groupMemoryFilesByScope separates user from project files", () => {
     const files: MemoryFile[] = [
-      { path: "/home/user/.ember/EMBER.md", scope: "user" },
+      { path: "/fixture/home/user/.ember/EMBER.md", scope: "user" },
       { path: "/proj/.ember/EMBER.md",      scope: "project" },
       { path: "/proj/.ember/agent.md",        scope: "agent" },
     ];
@@ -147,7 +147,7 @@ describe("module structure", () => {
   });
 
   test("getRelativeMemoryPath returns absolute path when file is not under home or cwd", () => {
-    const result = getRelativeMemoryPath("/some/other/path.md", "/home/user", "/project");
+    const result = getRelativeMemoryPath("/some/other/path.md", "/fixture/home/user", "/project");
     expect(result).toBe("/some/other/path.md");
   });
 });

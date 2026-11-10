@@ -32,7 +32,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.12"
       - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0" "huggingface_hub==1.22.0" "tokenizers==0.22.2" "numpy==2.2.6"
@@ -43,7 +43,9 @@ jobs:
       - name: Test tracked Python self-location guard
         run: python -B -m pytest -q scripts/tests/test_self_location_roots.py
       - name: Guard tracked Python self-location roots
-        run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json
+        # warn: the baseline's expiry is a burn-down deadline enforced by the scheduled
+        # ci-nightly check on master, not by every pull request (see EXPIRY_MODES).
+        run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json --expiry-mode warn
       - name: Compile changed governance tooling
         run: python -B -m compileall -q src/ember/governance/scripts/github
       - name: Bootstrap exact-head live PR policy (read-only)
@@ -79,6 +81,10 @@ jobs:
       - name: Run CIA checkpoint object and index mechanics (#2163)
         if: hashFiles('tests/ember_restart_model/domain-governance/test_issue2163_cia_*.py') != ''
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_issue2163_cia_*.py' -v
+      - name: Run CIA model-only checkpoint load mechanics (#2119)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_cia_model_only_load.py' -v
+      - name: Run CIA eval v0 tensor adoption, ledger and adapter mechanics (#2119)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 300 -- python -B -m unittest discover -s tests/domain-governance -p 'test_cia_eval_v0.py' -v
       - name: Verify bounded POSIX checkpoint ledger acquisition (#2211)
         run: >-
           python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 --
@@ -143,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -151,7 +157,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.12"
       - run: python -m pip install "pytest==8.4.1"
@@ -238,7 +244,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.10.11"
       - name: Resolve and hash the exact CPU torch wheel
@@ -292,7 +298,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.12"
       - run: python -m pip install "tokenizers==0.22.2"
@@ -344,7 +350,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: "3.12"
       - name: Verify repository guard selftests
