@@ -60,3 +60,14 @@ def status_line(name, state, detail):
     if state == "clean": return "%s: TruffleHog scan clean (%s)" % (name, detail)
     if state == "refused": return "%s: TRUFFLEHOG REFUSED push (%s); nothing uploaded" % (name, detail)
     return "%s: TruffleHog scan state UNKNOWN (%s); a scan will be started" % (name, detail)
+
+def push_decision(state, was_pass):
+    """Upload-tick gate (lead 82933). -> 'push' | 'wait' | 'skip' | 'escalate'.
+    push      scan clean for the current file set.
+    wait      a scan is running (transient; neither a push nor a blocked tick).
+    skip      REFUSED or NOT RUN (unknown): no push attempt, no cap check, no mail, no blocked count; the trainable listing owns these packs.
+    escalate  REFUSED but this queue item was PASS earlier (a clean verdict was recorded for it): a real regression, reported as a blocked tick."""
+    if state == "clean": return "push"
+    if state == "running": return "wait"
+    if state == "refused": return "escalate" if was_pass else "skip"
+    return "skip"

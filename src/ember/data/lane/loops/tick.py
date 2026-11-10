@@ -388,7 +388,7 @@ def upload():
     if _ref: bad_ref = "; ".join(i["name"] for i in _ref)
     todo = [i for i in items if not i.get("verified")]
     if not todo: done("idle", "no batch pending: nothing newly C1/C2-PASSed (standing rule: private uploads auto-start on rules + training C1/C2 PASS)")
-    acts = []; bad = []
+    acts = []; bad = []; skipped = []
     try: from huggingface_hub import HfApi
     except Exception as e: done("blocked", "huggingface_hub import failed")
     api = HfApi()
@@ -410,20 +410,19 @@ def upload():
         shabad = [x for x in shabad if not x.endswith("source-manifest.jsonl")] if it.get("manifest_reemit_ok") else shabad   # lead 81232: manifest re-emits with unchanged docs-index/ledger shas may replace the HF copy by hand; tick never overwrites
         if shabad: bad.append(f"{it['name']}: {len(shabad)} file(s) differ from the HF copy (never overwritten without lead approval): {shabad[:2]}")
         elif miss:
+            sys.path.insert(0, ROOT + "/scripts"); import th_pack_scan      # operator / lead 81934: TruffleHog pre-upload gate on EVERY repo, fail-closed; push only on a clean scan of the CURRENT file set
+            import pack_scan_status as _pss      # lead 82613 item 3: one function names the scan state; 'unknown' is never printed as 'running'
+            _st, _sd = _pss.pack_scan_status(it["name"], it["local"], ROOT + "/logs/th-scan", th_pack_scan.signature, scan_pids)
+            _act = _pss.push_decision(_st, bool(it.get("scan_pass")))
+            # lead 82933 class fix: the decision comes BEFORE the cap check and the push. REFUSED / NOT RUN packs are skipped (no push attempt, no cap check, no mail, no blocked tick); only a pack that was PASS and is now REFUSED escalates.
+            if _st == "unknown" and "lookup failed" not in _sd and spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"): acts.append(f"{it['name']}: TruffleHog pre-upload scan started")
+            if _act == "skip": skipped.append(_pss.status_line(it["name"], _st, _sd)); continue
+            if _act == "wait": skipped.append(_pss.status_line(it["name"], _st, _sd)); continue
+            if _act == "escalate": bad.append(_pss.status_line(it["name"], _st, _sd) + " (was PASS earlier: ESCALATE)"); continue
+            it["scan_pass"] = time.strftime("%Y-%m-%dT%H:%M:%S")      # a clean verdict for the current file set was seen for this item
             mb = sum(os.path.getsize(f) for f in loc if (it["path"].rstrip("/") + "/" + os.path.relpath(f, it["local"]).replace(chr(92), "/")) in miss)
             sys.path.insert(0, ROOT + "/scripts"); import hf_cap
             if it["repo"].endswith("-private") and not hf_cap.check(mb, f"pack push {it['name']}", f"{len(miss)} files"): bad.append(f"{it['name']}: PRIVATE CAP HOLD (push {mb/1e9:.1f} GB not started; lead mailed)"); continue   # lead 81851 hard guard
-            sys.path.insert(0, ROOT + "/scripts"); import th_pack_scan      # operator / lead 81934: TruffleHog pre-upload gate on EVERY repo, fail-closed; push only on a clean scan of the CURRENT file set
-            ts_p = ROOT + f"/logs/th-scan/{it['name']}.json"; ts_r = None
-            try: ts_r = json.load(open(ts_p)) if os.path.exists(ts_p) else None
-            except Exception: ts_r = None
-            import pack_scan_status as _pss      # lead 82613 item 3: one function names the scan state; 'unknown' is never printed as 'running'
-            _st, _sd = _pss.pack_scan_status(it["name"], it["local"], ROOT + "/logs/th-scan", th_pack_scan.signature, scan_pids)
-            if _st == "unknown":
-                if "lookup failed" not in _sd and spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"): acts.append(f"{it['name']}: TruffleHog pre-upload scan started")
-                bad.append(_pss.status_line(it["name"], _st, _sd)); continue
-            if _st == "running": bad.append(_pss.status_line(it["name"], _st, _sd)); continue
-            if _st == "refused": bad.append(_pss.status_line(it["name"], _st, _sd)); continue
             if not it.get("started") or it.get("restarts", 0) < 5:   # class fix: a pack push that died/was stopped (wedged socket restart) is relaunched; hf upload is resumable and never overwrites; capped at 5 relaunches
                 if it.get("started"): it["restarts"] = it.get("restarts", 0) + 1
                 if spawn(f"hf upload {it['repo']} {it['local']} {it['path']} --repo-type dataset", ROOT + f"/logs/hf-upload-{it['name']}.log"): it["started"] = True; acts.append(f"{it['name']}: upload {'re' if it.get('restarts') else ''}started ({len(miss)} missing)")
@@ -437,8 +436,9 @@ def upload():
                     import mb_send; mb_send.send(SEAT_LEAD, f"SET UPLOADED + DROPPED: {it['name']} ({_r['dropped_bytes']/2**30:.2f} GiB freed)", _m + ("; kept: " + "; ".join(f"{os.path.basename(p)} ({w})" for p, w in _r['kept'][:5]) if _r["kept"] else ""))
                 except Exception as e: bad.append(f"{it['name']}: verified but drop failed {type(e).__name__} {str(e)[:120]}")
     json.dump(items, open(ap, "w"), indent=1)
-    if bad and not acts: done("blocked", "; ".join(bad))
-    done("worked", "; ".join(acts + bad))
+    _sk = (" | skipped by scan state (no push attempted, no mail): " + "; ".join(skipped)) if skipped else ""
+    if bad and not acts: done("blocked", "; ".join(bad) + _sk)
+    done("worked" if (acts or bad) else "idle", ("; ".join(acts + bad) or "nothing to push") + _sk)
 
 def census():
     tot = dict(text_content_tokens=0, datasets=[]);
