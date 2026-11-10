@@ -7,7 +7,7 @@ Two named paths, never mixed:
   remove_verified(path, repo, hf_path, ...)   the file has a SERVER copy. In this call, in this order: path contained in an allowed root (no link/junction on the way), regular file with
                                               st_nlink == 1, the server entry READ BACK NOW (no cache) with size AND an LFS sha256 (a missing entry, a missing LFS sha or an unreadable server keeps the file;
                                               there is no size-only fallback), the local sha256 recomputed NOW and the file unchanged while it was hashed, then the receipt row written + fsynced, then
-                                              (size, mtime_ns, inode) compared once more against the first stat, then the remove.
+                                              (size, mtime_ns, inode, nlink) compared once more against the first stat, then the remove.
   remove_dup(path, other, ...)                the file has a LOCAL duplicate outside the delete set: both sha256 recomputed now, same size, other is a different file, receipt first, the same final stat compare.
   remove_ruled(row, ...) / ruled_manifest()   NO copy exists (regenerable or derived data deleted under a lead ruling). NOT a verification: nothing is compared to any copy. It rests on (1) a ruling id that is a mail id ('lead 82451'),
                                               (2) a PIN: the plan sha256 (plan_sha: sorted path|size|mtime_ns|inode of the files found) that the lead saw in the dry run and ruled on, handed back as --manifest-sha256; a plan that differs
@@ -125,10 +125,10 @@ def _remove_checked(path, st0, remove, receipt, kind):
     """The last step of every path: compare the file with the first stat once more (the receipt fsync sits between the hash and here), then remove (#2459 F3)."""
     if not _same(path, st0):
         try:
-            _receipt(receipt, dict(ts=now(), kind=kind + "-aborted", path=path.replace("\\", "/"), why="file changed after verification (size/mtime_ns/inode) before the remove; kept"))
+            _receipt(receipt, dict(ts=now(), kind=kind + "-aborted", path=path.replace("\\", "/"), why="file changed after verification (size/mtime_ns/inode/nlink) before the remove; kept"))
         except Exception:
             pass
-        return _refuse("file changed after verification (size/mtime_ns/inode), kept", st0.st_size)
+        return _refuse("file changed after verification (size/mtime_ns/inode/nlink), kept", st0.st_size)
     return _do_remove(path, st0.st_size, remove)
 
 
