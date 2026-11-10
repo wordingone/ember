@@ -20,7 +20,7 @@ KEEP_MARKERS = ("cia-hour-a1-five-attn-stage-d4-20261107T073017Z/measurement-60b
                 "cia-hour-a1-five-attn-stage-d4-20261109T100107Z/",                                                    # H45 child
                 # lead 82363: the H41 child cb516ed9 and the H44 child e73486d2 score better on the true held-out than the selected head; whole hour + probe dirs (trained-child objects, optimizer-state.pt, replay-state.pt)
                 "cia-hour-a1-five-attn-stage-d4-20261107T165532Z/", "cia-probe-a1-five-attn-stage-d4-20261107T165532Z/",
-                "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/", "cia-probe-a1-five-attn-stage-d4-20261109T072659Z/")
+                "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/")      # 82451: the 072659Z PROBE (partial remnant) left the keep set; the H44 hour dir stays
 
 
 class EvictRefused(RuntimeError):
