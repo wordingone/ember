@@ -13,7 +13,9 @@ Deletes go through verified_remove.py (#2454), two named paths, and the status j
   branch (c) (probe children, no copy anywhere, reproducible): needs --ruling ID (a mail id) AND --expect-dirs FILE.json (the ruled dir list is the pin; --apply refuses without it); the manifest (path, size, sha256, mtime_ns, inode, ruling) for ALL files is fsynced before the first remove and each remove re-checks
     that the file is still the one in the manifest. This path is "ruled, no copy" and is never labelled verified.
 Receipts: logs/manifests-20261108/ckpt-lineage-delete-receipts.jsonl. Every path must be inside its child dir with no link or junction on the way.
-Usage: python ckpt_lineage_delete.py [--apply] [--only-probes] [--expect-dirs FILE.json] [--ruling ID] [--keep NAME ...]   (--only-probes: branch (c), the guarded terminal probes, only; --expect-dirs: refuse, exit 4, unless the selected child dirs equal that list; --ruling: required by --apply when any no-copy child is selected, else exit 5; put --expect-dirs/--ruling BEFORE --keep; lead rulings 82451/82461)"""
+  File-level plan (#2459 round 2): the dry run prints PLAN-SHA256, the sha256 of the sorted lines path|bytes|sha256 of EVERY selected no-copy file, and lists the rows in logs/manifests-20261108/ckpt-lineage-delete-plan-<sha12>.jsonl; --apply requires --plan-sha256 with that value and refuses (exit 4, nothing hashed further, no manifest row, nothing removed)
+    when the files found now are another set, naming a file added to a ruled dir after the dry run. Nothing is removed that was not listed. An inode with several names inside the set is removed name by name with a per-inode nlink countdown (nlink, then nlink-1, ...); a name added meanwhile still refuses.
+Usage: python ckpt_lineage_delete.py [--apply] [--only-probes] [--expect-dirs FILE.json] [--ruling ID] [--plan-sha256 SHA] [--keep NAME ...]   (--only-probes: branch (c), the guarded terminal probes, only; --expect-dirs: refuse, exit 4, unless the selected child dirs equal that list; --ruling: required by --apply when any no-copy child is selected, else exit 5; --plan-sha256: required with it, exit 5 without, exit 4 on another file set; put --expect-dirs/--ruling/--plan-sha256 BEFORE --keep; lead rulings 82451/82461)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import HF_RAW_REPO, LANE_ROOT
@@ -29,6 +31,7 @@ READER = None          # tests inject a fake server reader; production asks the 
 apply_ = "--apply" in sys.argv; keep = set(sys.argv[sys.argv.index("--keep") + 1:]) if "--keep" in sys.argv else set()
 EXPECT = sys.argv[sys.argv.index("--expect-dirs") + 1] if "--expect-dirs" in sys.argv else None      # json list of the child dirs the lead ruled on (82461); put it BEFORE --keep
 RULING = sys.argv[sys.argv.index("--ruling") + 1] if "--ruling" in sys.argv else None      # required for the no-copy branch (c); put it BEFORE --keep
+PLAN_SHA = sys.argv[sys.argv.index("--plan-sha256") + 1] if "--plan-sha256" in sys.argv else None     # round 2 F-C: file-level pin of the no-copy path; put it BEFORE --keep
 ONLY_PROBES = "--only-probes" in sys.argv       # lead ruling 82451: branch (c) only; the upload branches (a)/(b) select nothing (put this flag BEFORE --keep)
 KEEP_ALWAYS = {"H38", "H39"}
 _hc = {}
@@ -106,12 +109,32 @@ def main():
     uniq = sum(v[0]["size"] for v in names_per_ino.values())
     print(f"children selected {len(sel)} | files to delete {len(rows)} | unique inodes {len(names_per_ino)} | REAL freed {uniq/2**30:.1f} GiB | kept: shared-with-outside {keep_shared} names ({keep_shared_b/2**30:.1f} GiB logical), small {keep_small}")
     nocopy = sorted({r["child"] for r in rows if not r["hf_ref"]})
+    plan = None                                        # round 2 F-C: the no-copy path is pinned at FILE level: sha256 over the sorted lines path|bytes|sha256 of every selected no-copy file
+    nc_rows = [r for r in rows if not r["hf_ref"]]
+    if nc_rows:
+        for r in nc_rows: r["sha256"] = sha256(r["path"])
+        plan_lines = sorted("%s|%d|%s" % (r["path"].replace(chr(92), "/"), r["size"], r["sha256"]) for r in nc_rows)
+        plan = hashlib.sha256("\n".join(plan_lines).encode("utf-8")).hexdigest()
+        plan_file = os.path.dirname(MAN) + "/ckpt-lineage-delete-plan-" + plan[:12] + ".jsonl"
+        if not os.path.exists(plan_file):
+            with open(plan_file, "w", encoding="utf-8") as pf:
+                pf.write("".join(json.dumps(dict(path=r["path"].replace(chr(92), "/"), bytes=r["size"], sha256=r["sha256"])) + chr(10) for r in sorted(nc_rows, key=lambda x: x["path"]))); pf.flush(); os.fsync(pf.fileno())
+        print(f"PLAN-SHA256 {plan} over {len(nc_rows)} no-copy files ({sum(r['size'] for r in nc_rows)/2**30:.2f} GiB); the lead rules on this value; rows listed in {plan_file}")
     if not apply_:
-        print("DRY RUN (use --apply)" + (f" | {len(nocopy)} no-copy children need --ruling ID" if nocopy and not RULING else "")); return
+        print("DRY RUN (use --apply)" + (f" | {len(nocopy)} no-copy children need --ruling ID, --expect-dirs and --plan-sha256" if nocopy and not RULING else "")); return
     if nocopy and not VR.ruling_ok(RULING):
         print("REFUSED: children with no server copy (branch c) need --ruling ID, a mail id such as 'lead 82451'", nocopy[:5]); sys.exit(5)
     if nocopy and not EXPECT:
         print("REFUSED: children with no server copy (branch c) need --expect-dirs FILE.json (the ruled dir list is the pin of the no-copy path; NO_PIN)", nocopy[:5]); sys.exit(5)
+    if nocopy and not PLAN_SHA:
+        print("REFUSED: children with no server copy (branch c) need --plan-sha256 (the file-level plan the dry run printed; NO_FILE_PIN)", nocopy[:5]); sys.exit(5)
+    if plan and PLAN_SHA.strip().lower() != plan:       # a file added to (or changed in) a ruled dir after the dry run: nothing is hashed further, no manifest row, no remove
+        pf0 = os.path.dirname(MAN) + "/ckpt-lineage-delete-plan-" + PLAN_SHA.strip().lower()[:12] + ".jsonl"; extra = missing = changed = []
+        if os.path.exists(pf0):
+            old_rows = {x["path"]: x for x in (json.loads(l) for l in open(pf0, encoding="utf-8") if l.strip())}; now_rows = {r["path"].replace(chr(92), "/"): r for r in nc_rows}
+            extra = sorted(set(now_rows) - set(old_rows)); missing = sorted(set(old_rows) - set(now_rows)); changed = sorted(p for p in set(now_rows) & set(old_rows) if (now_rows[p]["size"], now_rows[p]["sha256"]) != (old_rows[p]["bytes"], old_rows[p]["sha256"]))
+        print(f"REFUSED: the no-copy file set found now (plan {plan[:16]}) is not the ruled plan ({PLAN_SHA[:16]}); not in the plan: {extra[:5]}; missing: {missing[:3]}; changed: {changed[:3]}; nothing removed"); sys.exit(4)
+    for r in nc_rows: r["pinned_by"] = (r["pinned_by"] or "") + " ; plan sha256 " + plan      # the manifest and receipt rows carry both pins
     reader = READER or VR.hub_reader()
     child_dir = {r["name"]: r["dir"] for r in sel}
     for r in rows:
@@ -121,13 +144,15 @@ def main():
         mf.write("".join(json.dumps(r) + chr(10) for r in rows)); mf.flush(); os.fsync(mf.fileno())
     b0 = shutil.disk_usage("B:/").free
     failed, kept, n_ok = [], [], 0
+    nl_left = {}                                       # round 2 F-A: per-inode countdown. Every name of an inode is in the set (inset[ino] == nlink), so the k-th name removed must see nlink - (names of that inode already removed)
     for r in rows:
         roots = [child_dir[r["child"]]]
+        req = nl_left.setdefault(r["ino"], r["nlink"])      # planned nlink minus the names already removed; a name added after the plan still refuses (#2459 F5)
         if r["hf_ref"]:
-            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=r["nlink"], extra=dict(child=r["child"], via=r["verified_via"]))   # nlink as planned: a name added after the plan refuses (#2459 F5)
+            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=req, extra=dict(child=r["child"], via=r["verified_via"]))
         else:
-            res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=r["nlink"])
-        if res["ok"]: n_ok += 1
+            res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=req)
+        if res["ok"]: n_ok += 1; nl_left[r["ino"]] = req - 1
         elif res["why"].startswith("remove failed: PermissionError"): failed.append(r["path"])          # file held open by another process: left in place, retried on the next run
         else: kept.append((r["path"], res["why"]))
     if failed:

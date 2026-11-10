@@ -113,12 +113,12 @@ def _hash_stable(path, st0):
 
 
 def _same(path, st0):
-    """True when the file now has the (size, mtime_ns, inode) it had at the first stat. Any error is False."""
+    """True when the file now has the (size, mtime_ns, inode, nlink) it had at the first stat. Any error is False. A name hard-linked after the first stat changes nlink and keeps the file (#2459 round 2, F-A)."""
     try:
         st = os.lstat(path)
     except Exception:
         return False
-    return (st.st_size, st.st_mtime_ns, st.st_ino) == (st0.st_size, st0.st_mtime_ns, st0.st_ino)
+    return (st.st_size, st.st_mtime_ns, st.st_ino, st.st_nlink) == (st0.st_size, st0.st_mtime_ns, st0.st_ino, st0.st_nlink)
 
 
 def _remove_checked(path, st0, remove, receipt, kind):

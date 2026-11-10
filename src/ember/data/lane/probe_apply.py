@@ -2,11 +2,11 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """One-run, ruled application of the terminal-probe payload reclaim, generic form of probe_apply_82461.py (lead rulings 82461 / 82478).
-Usage: python scripts/probe_apply.py --ruling 82478 --manifest <probe_manifest json> --only O-probe-... [--only ...] [--keep NAME ...] [--protect GLOB ...]
+Usage: python scripts/probe_apply.py --ruling 82478 --manifest <probe_manifest json> --plan-sha256 <the PLAN-SHA256 the lead ruled on> --only O-probe-... [--only ...] [--keep NAME ...] [--protect GLOB ...]
 Steps (the ruling, in order):
  1. rename loops/CKPT-DELETE-FREEZE.flag -> CKPT-DELETE-FREEZE.flag.lifted-by-lead-<ruling>
  2. ckpt_lineage_delete.py --only-probes --expect-dirs <the ruled dirs> --ruling <ruling> [--keep ...] as a DRY RUN; refuse (restore the flag, exit 5) unless it selects exactly the ruled children and their dirs equal the manifest rows
- 3. the same with --apply (the script writes each manifest row, sha256 + path, before the remove)
+ 3. the same with --apply and --plan-sha256 (the file-level plan the dry run printed must equal the ruled value, else exit 4: a file added to a ruled dir after the ruling is never removed; the script writes each manifest row, sha256 + path, before the remove)
  4. restore the flag name in a finally block, whatever happened
  5. read back: flag present, the ruled payloads gone, the --protect globs unchanged (file count, bytes, newest mtime), B: free
 Each ruled manifest row must be clause A or B with its terminal receipt file present on disk (clause A) before the flag is touched. Nothing else is touched.
@@ -19,6 +19,7 @@ import os, sys, json, re, time, glob, shutil, subprocess, argparse
 ap = argparse.ArgumentParser()
 ap.add_argument("--ruling", required=True)
 ap.add_argument("--manifest", required=True)
+ap.add_argument("--plan-sha256", required=True, help="file-level plan sha256 the lead ruled on (printed as PLAN-SHA256 by the dry run); the apply refuses any other file set")
 ap.add_argument("--only", action="append", required=True, help="manifest row name (O-probe-...) the ruling covers; repeatable")
 ap.add_argument("--keep", action="append", default=[], help="enumerated child name to leave out of the selection (passed to --keep, last)")
 ap.add_argument("--protect", action="append", default=[], help="glob of dirs that must be byte-for-byte unchanged")
@@ -99,19 +100,21 @@ try:
     os.rename(FLAG, LIFTED)
     log("1 freeze flag renamed to %s" % os.path.basename(LIFTED))
     extra = (["--keep"] + A.keep) if A.keep else []
-    base = ["--only-probes", "--expect-dirs", EXPECT, "--ruling", A.ruling]
+    base = ["--only-probes", "--expect-dirs", EXPECT, "--ruling", A.ruling]      # the dry run prints PLAN-SHA256 for the selected no-copy files
     rc, out = run(base + extra, DS + "/logs/probe-apply-%s.dry.out" % A.ruling, 3600)
     sel = sorted(l.split(" ", 2)[2].strip() for l in out.splitlines() if l.startswith("SELECTED "))
+    mp = re.search(r"^PLAN-SHA256 ([0-9a-f]{64}) ", out, re.M); plan_now = mp.group(1) if mp else None
+    res["plan_sha256_ruled"] = A.plan_sha256.strip().lower(); res["plan_sha256_dry_run"] = plan_now
     m = re.search(r"children selected (\d+) \| files to delete (\d+) \| unique inodes (\d+) \| REAL freed ([0-9.]+) GiB", out)
     res["dry"] = dict(rc=rc, selected=len(sel), summary=m.group(0) if m else None, dry_run_line="DRY RUN" in out)
-    ok = rc == 0 and "DRY RUN" in out and m and int(m.group(1)) == len(want) and sel == want and int(m.group(2)) == want_files
+    ok = rc == 0 and "DRY RUN" in out and m and int(m.group(1)) == len(want) and sel == want and int(m.group(2)) == want_files and plan_now == A.plan_sha256.strip().lower()
     if not ok:
-        log("2 DRY RUN REFUSED: rc=%s selected=%d summary=%s equal_to_manifest=%s" % (rc, len(sel), m.group(0) if m else None, sel == want))
+        log("2 DRY RUN REFUSED: rc=%s selected=%d summary=%s equal_to_manifest=%s plan_equal_to_ruled=%s" % (rc, len(sel), m.group(0) if m else None, sel == want, plan_now == A.plan_sha256.strip().lower()))
         rc_final = 5
     else:
         log("2 dry run ok: " + m.group(0))
         t0 = time.time()
-        rc, out = run(["--only-probes", "--apply", "--expect-dirs", EXPECT, "--ruling", A.ruling] + extra, DS + "/logs/probe-apply-%s.apply.out" % A.ruling, 4 * 3600)
+        rc, out = run(["--only-probes", "--apply", "--expect-dirs", EXPECT, "--ruling", A.ruling, "--plan-sha256", A.plan_sha256] + extra, DS + "/logs/probe-apply-%s.apply.out" % A.ruling, 4 * 3600)
         tail = [l for l in out.splitlines() if l.startswith("deleted ") or l.startswith("could not remove") or l.startswith("REFUSED")]
         res["apply"] = dict(rc=rc, secs=round(time.time() - t0), tail=tail)
         log("3 apply rc=%s secs=%d %s" % (rc, time.time() - t0, tail))
