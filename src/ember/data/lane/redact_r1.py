@@ -16,6 +16,7 @@ REPO = ("wordingone/" + HF_TRAIN_REPO); from lane_config import LANE_ROOT as ROO
 AUDIT = ROOT + ("/audit/secret-audit-" + HF_TRAIN_REPO + ".jsonl"); MAN = OUTD + "/MANIFEST.jsonl"
 api = HfApi(); tok = get_token()
 def log(*a): print(time.strftime("%H:%M:%S"), *a, flush=True)
+def _glog(m): print(m, file=sys.stderr, flush=True)      # write_gate wait lines go to stderr, never stdout
 rows = {}
 for l in open(AUDIT, encoding="utf-8"):
     r = json.loads(l)
@@ -30,6 +31,9 @@ for p in todo:
     info = api.get_paths_info(REPO, [p], repo_type="dataset", expand=True)[0]; oid = info.lfs.sha256; size = info.size
     name = os.path.basename(p); loc = f"{OUTD}/{name}"; newname = name.replace(".jsonl.zst", "-r1.jsonl.zst"); newloc = f"{OUTD}/{newname}"; newp = p.rsplit("/", 1)[0] + "/" + newname
     have = os.path.getsize(loc) if os.path.exists(loc) else 0
+    import reserve_plan
+    if not reserve_plan.write_gate("redact_r1.py object", max(size - have, 0) + size + (64 << 20), log=_glog):      # lead 82324 / lead 82669: download + the redacted copy, per object
+        sys.exit(f"write_gate refused: B: below the reserve floor for the whole gate cap: redact_r1.py not downloading {name}")
     while have < size:
         try:
             with requests.get(f"https://huggingface.co/datasets/{REPO}/resolve/main/{p}", stream=True, timeout=(30, 90), headers={"Range": f"bytes={have}-", "Authorization": "Bearer " + tok, "User-Agent": "ember-redact/1.0"}) as r:
@@ -43,10 +47,18 @@ for p in todo:
         for c in iter(lambda: f.read(8 << 20), b""): h.update(c)
     if h.hexdigest() != oid: raise RuntimeError(f"{name} SHA MISMATCH vs HF oid; nothing written")
     counts = {}; ndocs = 0; nred = 0
+    # the redacted copy comes minutes after the download gate: re-gate before it and every 512 MiB written (the other lanes may have used the space meanwhile)
+    GATE_STEP = 512 << 20; next_gate = GATE_STEP
+    if not reserve_plan.write_gate("redact_r1.py redacted copy", size + (64 << 20), log=_glog):
+        sys.exit(f"write_gate refused: B: below the reserve floor for the whole gate cap: redact_r1.py not writing the redacted copy of {name}")
     with open(loc, "rb") as fi, open(newloc, "wb") as fo:
         rd = io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(fi), encoding="utf-8")
         w = zstandard.ZstdCompressor(level=6).stream_writer(fo)
         for line in rd:
+            if fo.tell() >= next_gate:
+                if not reserve_plan.write_gate("redact_r1.py redacted copy", max(size - fo.tell(), 0) + (64 << 20), log=_glog):
+                    sys.exit(f"write_gate refused: B: below the reserve floor for the whole gate cap: redact_r1.py stopped mid-copy of {name} (partial {newname} stays local, never uploaded)")
+                next_gate = fo.tell() + GATE_STEP
             d = json.loads(line); ndocs += 1
             c = {}; t = secret_scan.redact(d["text"], c)
             if c:
