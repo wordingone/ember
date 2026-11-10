@@ -43,6 +43,11 @@ export interface HourStarted {
    */
   receiptComplete: boolean;
   receiptError?: string;
+  /**
+   * Set when the lab's start returned an error AFTER the child was running (lead review 82583 S1). The hour is live and the lab kept
+   * its `hour-chain` lease: do not retry; `jobId`/`pid` are the handle and this text says what failed.
+   */
+  startTailError?: string;
 }
 
 export interface HourRefused {
@@ -126,6 +131,7 @@ export async function startHour(options: StartHourOptions): Promise<StartHourRes
     cwd: typeof cwd === "string" ? cwd : null,
     receiptComplete: result["receipt_complete"] !== false,
     ...(typeof result["receipt_error"] === "string" ? { receiptError: result["receipt_error"] } : {}),
+    ...(typeof result["start_tail_error"] === "string" ? { startTailError: result["start_tail_error"] } : {}),
   };
 }
 

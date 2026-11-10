@@ -107,6 +107,30 @@ describe("startHour", () => {
     expect(result.receiptError).toContain("disk full");
   });
 
+  winTest("a running hour whose start tail failed is a SUCCESS carrying startTailError (the lab kept the lease)", async () => {
+    const daemon = fakeDaemon(() => ({
+      result: {
+        job_id: "hour-aaaaaaaaaaaa-bbbbbbbb",
+        pid: 4321,
+        script: "B:/s/h49_dispatch_v2.sh",
+        sha256: SHA,
+        log: "B:/l/hour.log",
+        receipt_path: "B:/l/hour.log.lab-start.json",
+        bash: "C:/Program Files/Git/bin/bash.exe",
+        cwd: null,
+        receipt_complete: true,
+        start_tail_error: "hour_start_tail: hour hour-aaaaaaaaaaaa-bbbbbbbb is RUNNING (pid 4321) and keeps its lease; start_job returned an error after the child was resumed: Poisoned",
+      },
+    }));
+    const result = await startHour({ pipeName: daemon.pipe, script: "B:/s/h49_dispatch_v2.sh", sha256: SHA, log: "B:/l/hour.log", env: {} });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pid).toBe(4321);
+    expect(result.receiptComplete).toBe(true);
+    expect(result.startTailError).toContain("keeps its lease");
+    expect(result.receiptError).toBeUndefined();
+  });
+
   winTest("returns a contract refusal as a value with its own code and rc, never a throw", async () => {
     const daemon = fakeDaemon(() => ({
       error: { code: -32001, message: "hour_refused", data: { refusal_code: "hour_sha_mismatch", rc: 24, detail: "sha differs" } },

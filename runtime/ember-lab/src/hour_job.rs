@@ -169,6 +169,11 @@ pub struct HourStarted {
     pub receipt_complete: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_error: Option<String>,
+    /// Set when `start_job` returned an error AFTER the child was resumed and `running` was committed (lead review 82583 S1). The hour
+    /// is live and its `hour-chain` lease is KEPT; this text names the job id, pid and the error. Never a refusal: a refusal would
+    /// free the lease and let a second hour start next to a live one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_tail_error: Option<String>,
 }
 
 fn default_receipt_complete() -> bool {
@@ -184,13 +189,18 @@ impl HourStarted {
             (None, false) => " receipt_incomplete=unknown".to_string(),
             (None, true) => String::new(),
         };
+        let tail = match &self.start_tail_error {
+            Some(error) => format!(" start_tail_error={}", error.replace(['\r', '\n'], " ")),
+            None => String::new(),
+        };
         format!(
-            "START_HOUR_OK pid={} job_id={} log={} receipt={}{}",
+            "START_HOUR_OK pid={} job_id={} log={} receipt={}{}{}",
             self.pid,
             self.job_id,
             self.log.display(),
             self.receipt_path.display(),
-            incomplete
+            incomplete,
+            tail
         )
     }
 }
@@ -544,10 +554,16 @@ fn complete_receipt(
     complete: &Value,
     job_id: &str,
     pid: u32,
+    inject_failure: bool,
 ) -> Option<String> {
     serde_json::to_string_pretty(complete)
         .map_err(|error| error.to_string())
-        .and_then(|text| fs::write(receipt_path, text).map_err(|error| error.to_string()))
+        .and_then(|text| {
+            if inject_failure {
+                return Err("injected receipt write failure".to_string());
+            }
+            fs::write(receipt_path, text).map_err(|error| error.to_string())
+        })
         .err()
         .map(|error| {
             format!(
@@ -687,30 +703,51 @@ impl Daemon {
             cwd: checked.cwd.clone(),
         });
         spec.env = checked.env.clone();
-        let handle = match self.start_job(spec) {
-            Ok(handle) => handle,
+        let mut start_tail_error = None;
+        let pid = match self.start_job(spec) {
+            Ok(handle) => handle.pid,
             Err(refusal @ EmberLabError::HourRefused { .. }) => {
                 release(self);
                 return Err(refusal);
             }
-            Err(error) => {
-                release(self);
-                return Err(refuse("hour_spawn_failed", format!("{error:?}")));
-            }
+            Err(error) => match self.running_pid(&job_id) {
+                // The error came after the child was resumed and `running` was committed: the hour is LIVE. Freeing the lease here
+                // would let a second hour start on the card beside it, so the lease stays and the start is reported as success.
+                Some(pid) => {
+                    start_tail_error = Some(format!(
+                        "hour_start_tail: hour {job_id} is RUNNING (pid {pid}) and keeps its lease; start_job returned an error after the child was resumed: {error:?}"
+                    ));
+                    pid
+                }
+                None => {
+                    release(self);
+                    return Err(refuse("hour_spawn_failed", format!("{error:?}")));
+                }
+            },
         };
         let mut complete = base;
         complete["phase"] = json!("started");
-        complete["pid"] = json!(handle.pid);
+        complete["pid"] = json!(pid);
         complete["started_at_ms"] = json!(now_ms());
+        if let Some(text) = &start_tail_error {
+            complete["start_tail_error"] = json!(text);
+        }
         // The child is running. A failure to complete the receipt must NOT turn into a refusal (the caller would retry, or lose the
         // handle): report success carrying job_id/pid and the receipt state, and leave the `intent` receipt on disk.
-        let receipt_error = complete_receipt(&receipt_path, &complete, &job_id, handle.pid);
+        let receipt_error = complete_receipt(
+            &receipt_path,
+            &complete,
+            &job_id,
+            pid,
+            self.take_receipt_write_fault(),
+        );
         Ok(HourStarted {
             receipt_complete: receipt_error.is_none(),
             receipt_error,
+            start_tail_error,
             kind: checked.kind.as_str().to_string(),
             job_id,
-            pid: handle.pid,
+            pid,
             script: checked.script,
             sha256: checked.sha256,
             log: checked.log,
@@ -901,12 +938,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ember-lab-receipt-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let good = dir.join("good.lab-start.json");
-        assert!(complete_receipt(&good, &json!({"phase": "started"}), "hour-x", 7).is_none());
+        assert!(
+            complete_receipt(&good, &json!({"phase": "started"}), "hour-x", 7, false).is_none()
+        );
         assert!(fs::read_to_string(&good).unwrap().contains("started"));
         // A directory in place of the receipt file makes the write fail on every platform.
         let bad = dir.join("bad.lab-start.json");
         fs::create_dir_all(&bad).unwrap();
-        let error = complete_receipt(&bad, &json!({"phase": "started"}), "hour-x", 7).unwrap();
+        let error =
+            complete_receipt(&bad, &json!({"phase": "started"}), "hour-x", 7, false).unwrap();
         assert!(error.starts_with("hour_receipt_write:"), "{error}");
         assert!(
             error.contains("hour-x") && error.contains("pid 7") && error.contains("RUNNING"),
@@ -930,6 +970,7 @@ mod tests {
             cwd: None,
             receipt_complete: true,
             receipt_error: None,
+            start_tail_error: None,
         };
         let complete = started.line();
         assert!(
@@ -949,11 +990,22 @@ mod tests {
             "{incomplete}"
         );
         assert!(!incomplete.contains('\n'));
+        started.receipt_complete = true;
+        started.receipt_error = None;
+        started.start_tail_error = Some("hour_start_tail: RUNNING\nkeeps its lease".into());
+        let tail = started.line();
+        assert!(
+            tail.ends_with("start_tail_error=hour_start_tail: RUNNING keeps its lease"),
+            "{tail}"
+        );
+        assert!(!tail.contains('\n'));
         // A result from an older daemon without the new fields reads as complete.
         let old: HourStarted = serde_json::from_value(json!({
             "job_id": "j", "pid": 1, "script": "s", "sha256": "x", "log": "l", "receipt_path": "r", "bash": "b", "cwd": null,
         }))
         .unwrap();
-        assert!(old.receipt_complete && old.receipt_error.is_none());
+        assert!(
+            old.receipt_complete && old.receipt_error.is_none() && old.start_tail_error.is_none()
+        );
     }
 }

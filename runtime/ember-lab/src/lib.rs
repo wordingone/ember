@@ -15,7 +15,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::RwLock;
 use std::sync::{Arc, Condvar, Mutex, Weak};
@@ -2299,6 +2299,11 @@ pub struct Daemon {
     monitor_ownership: Arc<RwLock<bool>>,
     #[cfg(all(windows, debug_assertions))]
     resource_guard_monitor_started_for_test: bool,
+    /// Armed only by `arm_start_tail_fault`: the next `start_job` fails right after its child was resumed and `running` was committed
+    /// (the window the hour class must survive without freeing a live hour's lease).
+    start_tail_fault: AtomicBool,
+    /// Armed only by `arm_receipt_write_fault`: the next `phase: started` receipt write of an hour fails (a running hour, a failed write).
+    receipt_write_fault: AtomicBool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3205,6 +3210,8 @@ impl Daemon {
             monitor_ownership: Arc::new(RwLock::new(true)),
             #[cfg(all(windows, debug_assertions))]
             resource_guard_monitor_started_for_test: false,
+            start_tail_fault: AtomicBool::new(false),
+            receipt_write_fault: AtomicBool::new(false),
         };
         #[cfg(all(windows, debug_assertions))]
         let mut daemon = daemon;
@@ -6120,12 +6127,41 @@ impl Daemon {
             let _ = self.mark_failed(&spec.job_id, failure_kind);
             return Err(error);
         }
+        if self.start_tail_fault.swap(false, Ordering::SeqCst) {
+            return Err(EmberLabError::Poisoned);
+        }
         let lease_epoch = self.job_process_row(&spec.job_id)?.lease_epoch;
         #[cfg(windows)]
         self.retain_and_monitor(&spec.job_id, lease_epoch, spawned.into_live())?;
         #[cfg(not(windows))]
         spawned.detach_reaper(Arc::downgrade(&self.db), spec.job_id.clone(), lease_epoch);
         Ok(JobHandle { pid })
+    }
+
+    /// In-process seam for tests (not reachable over the pipe): the next `start_job` returns an error AFTER the child was resumed and
+    /// `running` + `job_started` were committed, as a failure of its tail (`job_process_row`, `retain_and_monitor`) would.
+    #[doc(hidden)]
+    pub fn arm_start_tail_fault(&self) {
+        self.start_tail_fault.store(true, Ordering::SeqCst);
+    }
+
+    /// In-process seam for tests: the next completing (`phase: started`) hour receipt write fails, as a full disk or a locked file would.
+    #[doc(hidden)]
+    pub fn arm_receipt_write_fault(&self) {
+        self.receipt_write_fault.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn take_receipt_write_fault(&self) -> bool {
+        self.receipt_write_fault.swap(false, Ordering::SeqCst)
+    }
+
+    /// The pid of `job_id` when its row says `running`, else `None`. A start that returned an error while this answers `Some` has a
+    /// live child: its lease must be kept and the start reported as success with the error attached, never as a refusal.
+    pub fn running_pid(&self, job_id: &str) -> Option<u32> {
+        match self.job_state(job_id) {
+            Ok(Some(JobState::Running)) => self.job_process_row(job_id).ok().map(|row| row.pid),
+            _ => None,
+        }
     }
 
     pub fn job_state(&self, job_id: &str) -> Result<Option<JobState>> {

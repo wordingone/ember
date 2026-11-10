@@ -38,6 +38,10 @@ id from an identical concurrent start (same script, sha and log), refuses with `
 no lease. If the child is already running but the `started`-phase receipt cannot be completed, the start still SUCCEEDS: the
 result carries `job_id`, `pid`, `receipt_complete: false` and `receipt_error`, `START_HOUR_OK` ends with
 `receipt_incomplete=<error>`, and the `intent` receipt stays on disk; the caller must not retry, because the hour is running.
+Likewise, if the lab's own start returns an error AFTER the child was resumed and its row says `running`, the start still
+SUCCEEDS and the lease is KEPT: the result carries `start_tail_error` (job id, pid and the error), `START_HOUR_OK` ends with
+`start_tail_error=<error>`, and the `started` receipt records it. An error while the row is not `running` still frees the lease and
+answers `hour_spawn_failed`. Freeing the lease of a live hour would let a second hour start on the card beside it.
 
 Job kinds. The request carries `kind`, `hour` (the default, everything above) or
 `learn` (a LEARN job, issue #2453). Kind `learn` takes a script named

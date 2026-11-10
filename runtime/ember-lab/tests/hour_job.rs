@@ -709,3 +709,125 @@ fn a_surviving_descendant_is_not_killed_when_the_hour_main_process_exits() {
         "the descendant was killed when the main process exited"
     );
 }
+
+/// Lead review 82583 S1 (the live-hour defect). `start_job` can return an error AFTER its child was resumed and `running` was
+/// committed (its tail: `job_process_row`, `retain_and_monitor`). Before: `start_hour` freed the lease and answered `hour_spawn_failed`
+/// for a LIVE hour, so a second hour could start on the card. Now the lease stays and the start is a success carrying the error.
+#[test]
+fn a_start_tail_error_after_the_child_runs_keeps_the_lease_and_reports_success() {
+    let fx = fixture("tail");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+    daemon.arm_start_tail_fault();
+    let started = daemon
+        .start_hour(request(&fx, "tail.log", &[]))
+        .expect("a running hour is never reported as a refusal");
+    let tail = started
+        .start_tail_error
+        .clone()
+        .expect("the injected tail error is reported");
+    assert!(
+        tail.starts_with("hour_start_tail:")
+            && tail.contains("RUNNING")
+            && tail.contains(&started.job_id)
+            && tail.contains(&format!("pid {}", started.pid)),
+        "{tail}"
+    );
+    assert!(started.receipt_complete && started.receipt_error.is_none());
+    assert!(
+        started
+            .line()
+            .contains(" start_tail_error=hour_start_tail:"),
+        "{}",
+        started.line()
+    );
+    let receipt: Value =
+        serde_json::from_str(&fs::read_to_string(&started.receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["phase"], "started");
+    assert!(receipt["start_tail_error"]
+        .as_str()
+        .unwrap()
+        .contains("keeps its lease"));
+    // The row says running and the lease is still this hour's.
+    assert_eq!(
+        daemon.job_state(&started.job_id).unwrap(),
+        Some(JobState::Running)
+    );
+    assert_eq!(
+        daemon.lease_owner("hour-chain").unwrap().as_deref(),
+        Some(started.job_id.as_str())
+    );
+    // So a second hour is refused exactly as if nothing had failed, and creates nothing.
+    let (code, rc) = refusal(daemon.start_hour(request(&fx, "second.log", &[])));
+    assert_eq!((code.as_str(), rc), ("hour_lease_conflict", 32));
+    assert!(!fx.dir.join("second.log").exists());
+    fs::write(&fx.stop, b"stop").unwrap();
+    let _ = daemon.stop_job(&started.job_id);
+    kill_pid(started.pid);
+}
+
+/// Lead review 82583 check 4: the `receipt_complete=false` path executed THROUGH `start_hour`, not only the line formatter. The
+/// completing receipt write is made to fail (the seam stands in for a full disk or a locked file: the real window between the intent
+/// receipt and the completing write is about 14 ms, too short for a test to race a real fault into), while the hour is already running.
+#[test]
+fn an_incomplete_start_receipt_is_a_running_hour_success_through_start_hour() {
+    let fx = fixture("receipt");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+    daemon.arm_receipt_write_fault();
+    let req = request(&fx, "receipt.log", &[]);
+    let receipt_path = PathBuf::from(format!("{}.lab-start.json", req.log.display()));
+    let started = daemon
+        .start_hour(req)
+        .expect("a running hour is never reported as a refusal");
+    assert!(!started.receipt_complete);
+    let error = started.receipt_error.clone().expect("the receipt error");
+    assert!(
+        error.starts_with("hour_receipt_write:")
+            && error.contains("RUNNING")
+            && error.contains(&started.job_id)
+            && error.contains(&format!("pid {}", started.pid)),
+        "{error}"
+    );
+    assert!(started.start_tail_error.is_none());
+    assert!(
+        started
+            .line()
+            .contains(" receipt_incomplete=hour_receipt_write:"),
+        "{}",
+        started.line()
+    );
+    assert_eq!(
+        daemon.job_state(&started.job_id).unwrap(),
+        Some(JobState::Running)
+    );
+    assert_eq!(
+        daemon.lease_owner("hour-chain").unwrap().as_deref(),
+        Some(started.job_id.as_str())
+    );
+    // The intent receipt stays on disk, and says it is only the intent.
+    let on_disk: Value = serde_json::from_str(&fs::read_to_string(&receipt_path).unwrap()).unwrap();
+    assert_eq!(on_disk["phase"], "intent");
+    // The fault was one-shot: nothing else is left armed for the next hour.
+    daemon.stop_job(&started.job_id).unwrap();
+}
+
+/// Lead review 82583 check 4: the START-time `hour_log_unwritable` (code 26), executed through `start_hour`. The log's directory
+/// exists and its name does not, so every check passes; the create-new itself fails on the invalid file name, after the lease was
+/// taken. The refusal must free the lease and create nothing, so a good start follows at once.
+#[test]
+fn a_log_that_cannot_be_created_at_start_is_refused_unwritable_and_frees_the_lease() {
+    let fx = fixture("logname");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+    let bad = request(&fx, "bad?name.log", &[]);
+    assert!(!bad.log.exists());
+    let (code, rc) = refusal(daemon.start_hour(bad));
+    assert_eq!((code.as_str(), rc), ("hour_log_unwritable", 26));
+    assert_eq!(daemon.lease_owner("hour-chain").unwrap(), None);
+    let leftovers: Vec<_> = fs::read_dir(&fx.dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("bad"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+    let good = daemon.start_hour(request(&fx, "good.log", &[])).unwrap();
+    daemon.stop_job(&good.job_id).unwrap();
+}
