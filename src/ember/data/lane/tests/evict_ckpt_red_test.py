@@ -19,13 +19,13 @@ check("RED H45 child object refused", E.refuse_reason(R + "cia-hour-a1-five-attn
 check("RED manifest / receipt (not objects/*.pt) refused", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-9/trained-child/checkpoint-manifest.json"))
 check("RED H44 child (e73486d2) object refused (lead 82363)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-99364f2a0e624c98981335f3ef65bbc0/trained-child/objects/ab.pt"))
 check("RED H41 child (cb516ed9) object refused (lead 82363)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261107T165532Z/measurement-8fe5f0ef58e34d68831174450d3f50d7/trained-child/objects/ab.pt"))
-check("RED H44 / H41 probe dirs are KEEP (optimizer-state, replay-state)", E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261109T072659Z/m/trained-child/optimizer-state.pt") and E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261107T165532Z/m/trained-child/replay-state.pt"))
+check("RED H41 probe dir is KEEP (replay-state); 82451: the 072659Z probe remnant is no longer KEEP, the H44 hour dir still is", E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261107T165532Z/m/trained-child/replay-state.pt") and not E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261109T072659Z/m/trained-child/optimizer-state.pt") and E.kept(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/m/trained-child/optimizer-state.pt"))
 check("RED kept() covers a bare directory path (no trailing slash)", E.kept(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-99364f2a0e624c98981335f3ef65bbc0/trained-child"))
 check("GREEN H43 child (0622d4c4) object is not a KEEP node", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261108T064216Z/measurement-4cd3cb481d2a4ae883d12c032418598c/trained-child/objects/ab.pt") is None and not E.kept(R + "cia-hour-a1-five-attn-stage-d4-20261108T064216Z/measurement-4cd3cb481d2a4ae883d12c032418598c/trained-child"))
 _S = (LANE_ROOT + "/scripts/")
 for _f in ("evict_ckpt_list.py", "reserve_manifest.py", "reserve_evict.py", "ckpt_backup.py", "ckpt_lineage_delete.py"):
     _t = open(_S + _f, encoding="utf-8").read()
-    check("every checkpoint-deleting script consults the KEEP set: " + _f, "KEEP_MARKERS" in _t or ".kept(" in _t or '"evict_ckpt_list").kept(' in _t)
+    check("every checkpoint-deleting script consults the KEEP set: " + _f, "KEEP_MARKERS" in _t or ".kept(" in _t or '"evict_ckpt_list").kept(' in _t or "protected_set" in _t)      # issue 2450: the declared set (loops/protected-set.json) via protected_set.py
 T = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch"))
 try:
     open(T + "/l.tsv", "w").write("0\t5\tB:/x/trained-child/objects/ab.pt\n")

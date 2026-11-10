@@ -15,13 +15,21 @@ import os, sys, json, time, hashlib, threading
 pass
 import evict_ckpt_list as E
 RC = (LANE_ROOT + "/logs/reserve-evict-receipts.jsonl"); BASE = (M_ROOT + "/ember-live-receipts/")
-KEEP = tuple(E.KEEP_MARKERS) + ("cia-hour-a1-five-attn-stage-d4-20261109T233136Z/", "cia-probe-a1-five-attn-stage-d4-20261109T233136Z/",      # lead 82318 keep-list (H49 hour+probe); the H47 hour/probe 172522Z left the keep set (H47 scored, H48 forked from H46; training 82321)
-        "cia-hour-a1-five-attn-stage-d4-20261109T193128Z/measurement-9457a769f1b543c0949d4296d850d2b6/", "cia-hour-a1-five-attn-stage-d4-20261109T142405Z/", "selected-continuation-head.json", "catalog-train-cache")
+import protected_set as PS
+KEEP = PS.reserve_markers()      # issue 2450: the declared protected set (loops/protected-set.json: shared markers + reserve_markers); refuse_reason re-reads it per file
+RESERVE_FILE = os.environ.get("RESERVE_FILE", (LANE_ROOT + "/loops/reserve.json"))
 class Refused(RuntimeError): pass
+def reserve_decl(path=None):
+    """The reserve declaration this run serves (loops/reserve.json), with its sha256, for the run receipt (issue 2450)."""
+    p = path or RESERVE_FILE
+    try:
+        raw = open(p, "rb").read(); return dict(file=p, sha256=hashlib.sha256(raw).hexdigest(), declaration=json.loads(raw.decode("utf-8")))
+    except Exception as e:
+        return dict(file=p, missing=True, error=type(e).__name__)
 def refuse_reason(path):
     p = path.replace("\\", "/")
     if not p.startswith(BASE): return ("outside " + M_ROOT + "/ember-live-receipts")
-    if any(k in p for k in KEEP): return "under a KEEP path"
+    if any(k in p for k in PS.reserve_markers()): return "under a KEEP path"      # fail closed: ProtectedSetError propagates and nothing is removed
     if not p.endswith(".pt"): return "not a .pt file"
     return None
 def sha_of(p):
@@ -42,7 +50,7 @@ def main():
     man = a[1]; rows = load(man, a[a.index("--manifest-sha256") + 1]); ack = a[a.index("--ack") + 1]; dry = "--dry" in a
     nw = int(a[a.index("--workers") + 1]) if "--workers" in a else 4
     api = HfApi(); lock = threading.Lock(); st = dict(n=0, phys=0, skipped=[]); os.makedirs(os.path.dirname(RC), exist_ok=True)
-    import shutil; free0 = shutil.disk_usage("B:/").free
+    import shutil; free0 = shutil.disk_usage("B:/").free; st["series"] = []; PSD = PS.load(); rdecl = reserve_decl()      # PS.load raises = fail closed before any I/O
     hidx = {}
     for e in api.list_repo_tree(("wordingone/" + HF_RAW_REPO), path_in_repo="checkpoints", recursive=True, expand=True, repo_type="dataset"):
         if e.__class__.__name__ == "RepoFile" and e.lfs: hidx.setdefault(e.lfs["sha256"] if isinstance(e.lfs, dict) else e.lfs.sha256, e.size)
@@ -68,12 +76,16 @@ def main():
             return
         with lock:
             open(RC, "a", encoding="utf-8").write(json.dumps(dict(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), path=p, size=stt.st_size, sha256=s, hf=r["hf"], physical_bytes_freed=stt.st_size,
-                verified="local sha256 recomputed == manifest == server LFS sha256, size equal, server re-read just before delete", manifest=man, ack=f"lead mail {ack}")) + "\n")
+                verified="local sha256 recomputed == manifest == server LFS sha256, size equal, server re-read just before delete", manifest=man, ack=f"lead mail {ack}", protected_set_sha256=PSD["sha256"])) + "\n")
         os.remove(p)
-        with lock: st["n"] += 1; st["phys"] += stt.st_size
+        with lock: st["n"] += 1; st["phys"] += stt.st_size; st["series"].append(dict(path=p, bytes=stt.st_size, free_after_bytes=shutil.disk_usage("B:/").free))      # measured after EACH eviction (other writers included)
     with ThreadPoolExecutor(nw) as ex: list(ex.map(one, rows))
     d = shutil.disk_usage("B:/").free - free0
     print(("DRY " if dry else "") + f"removed {st['n']} of {len(rows)}; PHYSICAL by receipts {st['phys']/2**30:.2f} GiB; MEASURED B: free change {d/2**30:+.2f} GiB (other writers included); skipped {len(st['skipped'])}; B free {shutil.disk_usage('B:/').free/2**30:.1f} GiB", flush=True)
     for p, w in st["skipped"][:50]: print("SKIP", w, p, flush=True)
+    if not dry:   # ONE run receipt: the reserve declaration served, the protected set used, free space before / after each eviction / at the end (issue 2450)
+        open(RC, "a", encoding="utf-8").write(json.dumps(dict(kind="run", ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), manifest=man, ack=f"lead mail {ack}", reserve_declaration=rdecl,
+            protected_set=dict(path=PSD["path"], sha256=PSD["sha256"], declared_by=PSD["declared_by"], declared_at=PSD["declared_at"]), removed=st["n"], skipped=len(st["skipped"]),
+            physical_bytes_by_receipts=st["phys"], free_before_bytes=free0, free_after_bytes=shutil.disk_usage("B:/").free, measured_delta_bytes=d, free_after_each=st["series"])) + "\n")
     json.dump(dict(skipped=st["skipped"], removed=st["n"], physical=st["phys"], dry=dry), open((LANE_ROOT + "/logs/reserve-evict.summary.json"), "w"), indent=1)
 if __name__ == "__main__": main()
