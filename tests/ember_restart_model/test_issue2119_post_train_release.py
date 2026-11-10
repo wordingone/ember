@@ -14,8 +14,10 @@ counter is a new source file; its previous source is kept in counter-history). C
 import ast
 import gc
 import hashlib
+import importlib.util
 import inspect
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -170,6 +172,63 @@ class ReleaseIsHarmless(Fixture):
         with patch.object(artifacts, 'load_checkpoint_artifacts', return_value={'data_cursor': {'different': True}}):
             with self.assertRaisesRegex(ValueError, 'checkpoint restore cursor differs'):
                 cia_hour.verify_checkpoint_restore(runner, self.model, self.optimizer, self.parameters, identity, self.custody, self.child)
+
+
+class HistoryCounterDifferential(Fixture):
+    """A kept counter with the streaming reader bound onto it (`_counter_for`) derives the same facts, writes the same receipt bytes and
+    refuses a tampered byte the same way as that counter's verbatim whole-file reading: its source bytes are untouched and only the IO
+    mechanism differs. Both arms run on one real child written by the real writer."""
+    HISTORY = Path(counter.__file__).parent / 'counter-history'
+    PREVIOUS = 'b8704a16d577a9ce90edbbb2835ff85e04fcec62c95d45085ab4c396d895f1ba'
+
+    def verbatim(self, digest):
+        path = self.HISTORY / ('parameter_counter-%s.py' % digest)
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest, 'a kept counter is verbatim')
+        spec = importlib.util.spec_from_file_location('verbatim_counter_%s' % digest[:16], path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def outcome(self, module, root):
+        try:
+            result = module.execute_counter(model_config=self.config_path, checkpoint_manifest=Path(root) / 'checkpoint-manifest.json',
+                                            active_expert='all')
+        except Exception as error:
+            return ('refused', type(error).__name__, str(error))
+        return ('ok', json.dumps(result).encode())
+
+    def digests(self):
+        found = sorted(p.name[len('parameter_counter-'):-len('.py')] for p in self.HISTORY.glob('parameter_counter-*.py'))
+        self.assertGreaterEqual(len(found), 5)
+        return found
+
+    def test_facts_and_receipt_bytes_are_equal_and_the_history_source_is_untouched(self):
+        self.build()
+        outcomes = {}
+        for digest in self.digests():
+            with self.subTest(counter=digest[:8]):
+                before = hashlib.sha256((self.HISTORY / ('parameter_counter-%s.py' % digest)).read_bytes()).hexdigest()
+                whole, streaming = self.outcome(self.verbatim(digest), self.root), self.outcome(counter._counter_for(digest), self.root)
+                self.assertEqual(whole, streaming)
+                outcomes[digest] = whole[0] if whole[0] == 'ok' else 'refused: %s' % whole[2][:70]
+                self.assertEqual(hashlib.sha256((self.HISTORY / ('parameter_counter-%s.py' % digest)).read_bytes()).hexdigest(), before)
+        self.assertEqual(outcomes[self.PREVIOUS], 'ok', 'the counter that wrote the H50 child must measure the fixture child')
+        print('HISTORY_DIFFERENTIAL', {digest[:8]: kind for digest, kind in sorted(outcomes.items())})
+        self.assertEqual({d for d, kind in outcomes.items() if kind == 'ok'}, {self.PREVIOUS})
+
+    def test_a_tampered_byte_is_refused_the_same_way(self):
+        self.build()
+        for name in ('optimizer-state.pt', next(self.root.joinpath('objects').glob('*.pt')).relative_to(self.root).as_posix()):
+            copy = Path(self.temp.name) / ('tamper-' + hashlib.sha256(name.encode()).hexdigest()[:8])
+            shutil.copytree(self.root, copy)
+            data = bytearray((copy / name).read_bytes())
+            data[len(data) // 2] ^= 1
+            (copy / name).write_bytes(bytes(data))
+            for digest in self.digests():
+                with self.subTest(counter=digest[:8], tampered=name):
+                    whole, streaming = self.outcome(self.verbatim(digest), copy), self.outcome(counter._counter_for(digest), copy)
+                    self.assertEqual(whole[0], 'refused')
+                    self.assertEqual(whole, streaming)
 
 
 class ReleaseBehaviour(unittest.TestCase):

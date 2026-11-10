@@ -11,6 +11,7 @@ run_hour, run_verify_tail and run_continuation mark it and what they write, the 
 The real-kernel half (a named job, a committed ballast, the old counter under the hour's resident set) is
 test_issue2119_post_train_memory_job.py, Windows only."""
 import ast
+import hashlib
 import inspect
 import sys
 import unittest
@@ -59,6 +60,20 @@ class Ledger(unittest.TestCase):
         self.assertEqual(fields['job_memory_phase_private_bytes']['before_verify'], 26 * GIB)
         self.assertEqual(fields['predicted_peak_job_memory_bytes'], 35 * GIB)
         self.assertIs(fields['peak_within_predicted'], False)     # 37 used against 35 declared: stated, never hidden
+
+    def test_the_result_names_the_counter_io_mechanism_and_the_history_it_was_bound_onto(self):
+        import parameter_counter as counter
+        ledger = cia_hour.JobMemoryLedger(FakeRunner([(34 * GIB, 30 * GIB)]), {'run_id': 'r'})
+        ledger.mark('verified')
+        kept = '7d46fc9db80c30427ade481cda5feefa473869a0bfbe12c5aa068a7426176e47'
+        counter._counter_for(kept)
+        report = ledger.fields(self.PREDICTION)['counter_io']
+        self.assertEqual(report['counter_io_mechanism'], 'streaming')
+        self.assertEqual(report['counter_sha256'], hashlib.sha256(Path(counter.__file__).read_bytes()).hexdigest())
+        self.assertIn(kept, report['history_bound_sha256'])
+        self.assertEqual(report['history_bound_sha256'], sorted(report['history_bound_sha256']))
+        module = counter._counter_for(kept)
+        self.assertEqual((module.COUNTER_IO_MECHANISM, module.COUNTER_IO_BOUND_ONTO), ('streaming', kept))
 
     def test_a_peak_within_the_declaration_says_so(self):
         ledger = cia_hour.JobMemoryLedger(FakeRunner([(34 * GIB, 30 * GIB)]), {'run_id': 'r'})

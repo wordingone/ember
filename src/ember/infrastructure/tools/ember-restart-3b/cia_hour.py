@@ -625,7 +625,14 @@ class JobMemoryLedger:
                     peak_headroom_bytes=self.host_memory_bytes - peak,
                     job_memory_phase_peaks_bytes=dict(self.phases), job_memory_phase_private_bytes=dict(self.private),
                     predicted_peak_job_memory_bytes=prediction['predicted_peak_job_memory_bytes'],
-                    peak_within_predicted=peak <= prediction['predicted_peak_job_memory_bytes'])
+                    peak_within_predicted=peak <= prediction['predicted_peak_job_memory_bytes'],
+                    counter_io=counter_io_report())
+
+
+def counter_io_report():
+    """`counter_io_mechanism: streaming`, this counter's digest, and the digests of the kept counters it was bound onto in this process."""
+    import parameter_counter as counter
+    return counter.counter_io_report()
 
 
 def hold_resident_set(resources, declared_bytes, private_bytes):

@@ -1911,8 +1911,19 @@ def _counter_for(digest):
         module._cia_counter_component = _historic_component(module)
         for helper in ('_cia_f32_facts_from_raw', '_cia_f32_rne_bf16'):
             if hasattr(module, helper): setattr(module, helper, globals()[helper])
+        # Visible, not hidden: the module's source bytes are untouched (they are what the receipts name); what is bound is recorded
+        # on it and reported by counter_io_report(), which the hour result carries.
+        module.COUNTER_IO_MECHANISM = 'streaming'
+        module.COUNTER_IO_BOUND_ONTO = digest
         _COUNTERS[digest] = module
     return _COUNTERS[digest]
+
+
+def counter_io_report():
+    """How this process read components, for the hour result: this counter reads them by the chunk-verified streaming reader, and every
+    kept (historic) counter loaded through _counter_for in this process has that same reader bound onto it, named here by its source digest.
+    The receipt is never told: it must stay bit-identical to what the whole-file counter wrote (the differential red compares bytes)."""
+    return dict(counter_io_mechanism='streaming', counter_sha256=_SELF_SOURCE_SHA256, history_bound_sha256=sorted(_COUNTERS))
 
 
 import contextvars
