@@ -7,6 +7,7 @@ import gc
 import sys
 import types
 import unittest
+import warnings
 import copy
 
 import torch
@@ -15,7 +16,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'))
 sys.path.insert(0, str(ROOT / 'src'))
 import cia_fp32_master as M  # noqa: E402
-from ember.model.ember_v0_residency import ExpertCache  # noqa: E402
+with warnings.catch_warnings():
+    # see test_issue2119_fp32_master_state.py: the wiring gate accepts no warning, and the model stack warns once at first import
+    warnings.filterwarnings('ignore', message='`torch.jit.script_method` is deprecated', category=DeprecationWarning)
+    from ember.model.ember_v0_residency import ExpertCache  # noqa: E402
 
 ZERO = torch.zeros(())
 
