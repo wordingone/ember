@@ -623,7 +623,7 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # Reopen full model and native moments, including inactive owners, through
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
-    facts = artifacts._cia_lineage_facts(inventory, native['state'], native['master_weights'])
+    facts = artifacts._cia_lineage_facts(inventory, native['state'], native.get('master_weights'))
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
 
@@ -775,7 +775,7 @@ def continuation_state(runner, model, optimizer, cursor, device):
         torch.cuda.synchronize(device)
     native = artifacts.capture_cia_placed_optimizer_state(
         model, optimizer, max_state_bytes=checkpoint_cap(runner, optimizer))
-    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'], native['master_weights'])
+    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'], native.get('master_weights'))
     del native
     states = {'cpu': torch.get_rng_state(),
               'cuda': torch.cuda.get_rng_state(device) if device.type == 'cuda'
