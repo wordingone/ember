@@ -8,6 +8,7 @@
 Per child: manifest rows FIRST (path, size, sha256, nlink, HF path; fsync), then os.remove, only for files >= 1 MiB whose EVERY hard-link name is inside the delete set
 (count of that inode inside the set == st_nlink) so no name outside the set (catalog-train-cache, kept children) is ever touched and the freed space is real. Small files (manifest, expert index,
 receipts) stay local. Dry run by default: --apply to delete.
+The manifest lists the PLAN (every row, kept files included, with the protected set read at planning). logs/manifests-20261108/ckpt-lineage-delete-decisions.jsonl says what was DONE: one row per file, written and fsynced before the os.remove (decision remove) or when the file is kept (decision kept + marker), each with the protected set re-read right before that file (#2450).
 Usage: python ckpt_lineage_delete.py [--apply] [--keep NAME ...]"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
@@ -84,21 +85,27 @@ def main():
         print("DRY RUN (use --apply)"); return
     for r in rows: r["sha256"] = sha256(r["path"])
     ps0 = _PS.load()                                   # #2450: the set the manifest rows were written under (each remove below re-reads it)
-    for r in rows: r["protected_set_sha256"] = ps0["sha256"]; r["protected_set_path"] = ps0["path"]
+    for r in rows: r["protected_set_sha256_at_plan"] = ps0["sha256"]; r["protected_set_path_at_plan"] = ps0["path"]      # the PLAN was written under this set; each decision row below records the set re-read for that file
     with open(MAN, "a") as mf:
         mf.write("".join(json.dumps(r) + "\n" for r in rows)); mf.flush(); os.fsync(mf.fileno())
+    DEC = os.path.dirname(MAN) + "/ckpt-lineage-delete-decisions.jsonl"      # one row per file and decision, written + fsynced BEFORE the os.remove: removed / kept (with the marker) / outcome, each with the protected set read right before that file
+    def _dec(r, cur, decision, **kw):
+        with open(DEC, "a") as df:
+            df.write(json.dumps(dict(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), decision=decision, path=r["path"], size=r["size"], sha256=r["sha256"], protected_set_sha256=cur["sha256"], protected_set_path=cur["path"], planned_under_sha256=ps0["sha256"], **kw)) + "\n"); df.flush(); os.fsync(df.fileno())
     b0 = shutil.disk_usage("B:/").free
     failed = []; kept = []
     for r in rows:
-        _k = _E.kept(r["path"], _PS.load()["markers"])   # #2450: re-read right before this remove (selection and hashing ran minutes ago): a marker declared since keeps the file
-        if _k: kept.append((r["path"], _k)); continue
+        cur = _PS.load()                                 # #2450: re-read right before this remove (selection and hashing ran minutes ago): a marker declared since keeps the file
+        _k = _E.kept(r["path"], cur["markers"])
+        if _k: kept.append((r["path"], _k)); _dec(r, cur, "kept", marker=_k); continue
+        _dec(r, cur, "remove")                           # receipt row first; the manifest above lists the PLAN (kept files included), this file says what was done
         try: os.remove(r["path"])
-        except FileNotFoundError: pass
-        except PermissionError as e: failed.append(r["path"])          # file held open by another process: left in place, retried on the next run
+        except FileNotFoundError: _dec(r, cur, "already-gone")
+        except PermissionError as e: failed.append(r["path"]); _dec(r, cur, "remove-failed-in-use")          # file held open by another process: left in place, retried on the next run
     if failed:
         json.dump(failed, open(os.path.dirname(MAN) + "/ckpt-lineage-delete-failed.json", "w"), indent=1); print("could not remove (in use):", len(failed), failed[:3])
     if kept: print(f"KEPT {len(kept)} files under a KEEP node (re-declared during the run), not deleted:", kept[:3])
-    print(f"deleted {len(rows) - len(kept) - len(failed)} names; B free {b0/2**30:.1f} -> {shutil.disk_usage('B:/').free/2**30:.1f} GiB; manifest {MAN}")
+    print(f"deleted {len(rows) - len(kept) - len(failed)} names; B free {b0/2**30:.1f} -> {shutil.disk_usage('B:/').free/2**30:.1f} GiB; manifest {MAN}; decisions {DEC}")
 
 
 if __name__ == "__main__":

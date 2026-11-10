@@ -33,9 +33,12 @@ check("RED selected head json refused", R.refuse_reason(L + "selected-continuati
 check("GREEN old ancestor object allowed", R.refuse_reason(L + "cia-hour-a1-five-attn-stage-d4-20260927T080708Z/measurement-d6/trained-child/objects/a.pt") is None)
 
 T = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch")).replace("\\", "/")
-real_remove = os.remove; calls = []
+real_remove = os.remove; calls = []; before_remove = []
 def spy(p, *a, **k):
-    calls.append(str(p).replace("\\", "/")); return real_remove(p, *a, **k)
+    q = str(p).replace("\\", "/"); calls.append(q)
+    try: seen = any(json.loads(l).get("path", "").replace("\\", "/") == q for l in open(R.RC, encoding="utf-8") if l.strip())      # EXECUTED receipt-before-remove: is this path's receipt row on disk at the moment os.remove is called?
+    except Exception: seen = False
+    before_remove.append((q, seen)); return real_remove(p, *a, **k)
 def write_doc(path, doc):
     json.dump(doc, open(path, "w", encoding="utf-8"))
 BASE_DOC = {"declared_by": "red test", "declared_at": "2099-01-01T00:00:00Z", "markers": [{"marker": "cia-hour-keep-aa/"}], "reserve_markers": [{"marker": "cia-probe-keep-bb/"}]}
@@ -147,7 +150,7 @@ def sandbox(name, nfiles=2, doc=None, reserve=True, dry=False, workers=1):
     return S, files, pd
 def run():
     """-> (exception or None, number of os.remove calls, receipt rows, summary dict or None)"""
-    del calls[:]; os.remove = spy; prev = sys.modules.get("huggingface_hub"); sys.modules["huggingface_hub"] = fake; exc = None
+    del calls[:]; del before_remove[:]; os.remove = spy; prev = sys.modules.get("huggingface_hub"); sys.modules["huggingface_hub"] = fake; exc = None
     try: R.main()
     except BaseException as e: exc = e
     finally:
@@ -191,6 +194,7 @@ if kinds == ["run-start", "file", "file", "run-end"]:
     check("run-end row: removed 2, physical bytes == the file rows, free space after each eviction, error None", re_["removed"] == 2 and re_["skipped"] == 0 and re_["physical_bytes_by_receipts"] == f1["size"] + f2["size"]
           and len(re_["free_after_each"]) == 2 and re_["error"] is None and re_["free_after_bytes"] > 0)
     check("timestamps are in order: run-start <= file rows <= run-end", rs["ts"] <= f1["ts"] <= f2["ts"] <= re_["ts"])
+check("RED receipt-before-remove, executed: at each os.remove the receipt row for that very path was already in the file (2 of 2)", len(before_remove) == 2 and all(flag for _, flag in before_remove))
 check("summary file is written next to the receipt, not in the live tree", summ and summ["removed"] == 2 and os.path.exists(os.path.join(S, "reserve-evict.summary.json")))
 
 # 5d. a worker raising mid-run still leaves the run-start row and a run-end row with the error and the files removed so far
