@@ -874,7 +874,7 @@ def streamed_sources(identity):
 
 TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
 CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'cia_fp32_master.py', 'cia_fp32_evidence.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
     ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_contention.py'))
@@ -1169,6 +1169,9 @@ def resource_limits(identity):
     return limits
 
 
+HOUR_KINDS = ('LOCATE', 'MOVE', 'BASELINE', 'LEARN')
+
+
 def hour_mode(identity):
     if 'hour' not in identity:
         if 'continuation' in identity:
@@ -1202,6 +1205,23 @@ def hour_mode(identity):
             raise ValueError(f'hour declared_lr is governed-hour-v1/checkpoint-probe-v1 only, a finite float in '
                              f'[{DECLARED_LR_MIN}, {DECLARED_LR_MAX}]')
         fixed = fixed | {'declared_lr'}
+    if isinstance(value, dict) and 'hour_kind' in value:
+        # What the hour is FOR (#2119 locked goal, lead rulings 82495 and 82520): LOCATE a skill in Qwen, MOVE it into Ember,
+        # BASELINE a reference, or LEARN (the lead's learn job class). Declared, validated here and carried in the hour (so in every row and the hour result); it never changes the run.
+        if value.get('schema') != 'governed-hour-v1' or value['hour_kind'] not in HOUR_KINDS:
+            raise ValueError(f'hour hour_kind is governed-hour-v1 only, one of {HOUR_KINDS}')
+        fixed = fixed | {'hour_kind'}
+    if isinstance(value, dict) and 'precision_fix' in value:
+        # fp32 master weights and moments (#2119, lead ruling 82420/82435): the declared treatment of a paired comparison hour. The
+        # optimizer identity stays equal to the parent's; the treatment is the schema-v3 optimizer state plus this declaration.
+        if value.get('schema') not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['precision_fix'] != 'fp32_master_v1':
+            raise ValueError("hour precision_fix is governed-hour-v1/checkpoint-probe-v1 only, and only 'fp32_master_v1'")
+        # Only the treatment arm builds the fused optimizer the masters wrap, and only the two capture modes train a bounded resident
+        # set; control or the legacy paged branch would otherwise pass identity validation and fail after the model is materialised.
+        if value.get('arm') != 'treatment' or execution_mode(identity) is None:
+            raise ValueError("hour precision_fix requires arm 'treatment' and a resident capture execution_mode "
+                             f"{EXECUTION_MODES}")
+        fixed = fixed | {'precision_fix'}
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != fixed
             or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
@@ -1720,7 +1740,9 @@ def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
     Per tensor this is the same kernel with the same arguments optimizer.step() launches; the partition changes only
     which tensors share a launch. Returns (keys, skip): the gated expert owners and their device found_inf values."""
     import torch
+    import cia_fp32_master
     from torch.optim.adam import adam
+    master_treatment = cia_fp32_master.enabled(optimizer)
     cache = getattr(optimizer, '_ember_gate_cache', None)
     if cache is None:
         owner_of = {id(parameter): key for key, parameters in expert_owners.items() for parameter in parameters}
@@ -1751,6 +1773,9 @@ def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
         for group, split in members:
             beta1, beta2 = group['betas']
             for key, parameters in split.items():
+                if master_treatment:
+                    cia_fp32_master.step(optimizer, group, parameters, (dense if key is None else skip[position[key]]))
+                    continue
                 sub = dict(group)
                 sub['params'] = parameters
                 params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
@@ -1843,9 +1868,15 @@ class SegmentOptimizer:
         split = {}
         for p in params:
             split.setdefault((self.group_index[id(p)], self.owner_of.get(id(p))), []).append(p)
+        import cia_fp32_master
+        master_treatment = cia_fp32_master.enabled(self.optimizer)
         with torch.cuda.stream(self.side), torch.no_grad():
             for (gi, key), members in split.items():
                 group = self.optimizer.param_groups[gi]
+                if master_treatment:
+                    cia_fp32_master.step(self.optimizer, group, members,
+                                         (armed['dense'] if key is None else armed['skip'][self.position[key]]))
+                    continue
                 beta1, beta2 = group['betas']
                 sub = dict(group)
                 sub['params'] = members
@@ -1955,6 +1986,16 @@ def capture_prerequisites(identity):
     return experts
 
 
+def apply_precision_fix(optimizer, identity):
+    """The declared fp32 master treatment (hour.precision_fix, #2119): switch the freshly built optimizer to fp32 masters and
+    moments before any state exists or any checkpoint restores into it. Identity validation is hour_mode's; this only reads."""
+    hour = identity.get('hour')
+    if isinstance(hour, dict) and hour.get('precision_fix') == 'fp32_master_v1':
+        import cia_fp32_master
+        cia_fp32_master.enable(optimizer)
+    return optimizer
+
+
 def prepare_model(model, identity, first_lengths, device, *, mode, optimizer_factory):
     """Activation order per execution mode; returns (inventory, optimizer).
 
@@ -1967,14 +2008,14 @@ def prepare_model(model, identity, first_lengths, device, *, mode, optimizer_fac
         experts = capture_prerequisites(identity)
         model.apply_update_support(support['locus'], experts=experts)
         inventory = model.parameter_inventory()
-        optimizer = optimizer_factory(inventory)
+        optimizer = apply_precision_fix(optimizer_factory(inventory), identity)
         model.activate_cuda(device, resident_capacity=4, resident_experts=experts, optimizer=optimizer)
         model._cuda_execution.bind_geometry(tuple(first_lengths))
         return inventory, optimizer
     model.activate_cuda(device)
     inventory = model.parameter_inventory()
     model.apply_update_support(support['locus'], experts=tuple(support['experts']))
-    return inventory, optimizer_factory(inventory)
+    return inventory, apply_precision_fix(optimizer_factory(inventory), identity)
 
 
 def routing_buffers(lengths, device):
@@ -2200,6 +2241,17 @@ def _cce_executed_fields(executed):
         raise ValueError('weighted document loss did not report its execution')
     values = [executed_values(item) for item in executed]
     return {key: sum(item[key] for item in values) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
+
+
+def ungated_optimizer_step(optimizer):
+    """The non-deferred optimizer step: the fp32 master path when the declared treatment is on, otherwise the native step.
+    Parameters without a gradient are left alone on the master path (the native step skips them the same way)."""
+    import cia_fp32_master
+    if cia_fp32_master.enabled(optimizer):
+        for group in optimizer.param_groups:
+            cia_fp32_master.step(optimizer, group, [p for p in group['params'] if p.grad is not None], None)
+    else:
+        optimizer.step()
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
@@ -2472,7 +2524,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
         refused_host.copy_(refused, non_blocking=True)
     else:
-        optimizer.step()
+        ungated_optimizer_step(optimizer)
     if events is not None:
         events[-1].record()
     if stage_next and staged_early is None:
