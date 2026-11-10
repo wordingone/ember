@@ -229,8 +229,11 @@ def common_dir(repo: Path) -> Path:
 
 LOCK_WAIT_ENV = "EMBER_LIFECYCLE_LOCK_WAIT_SECONDS"
 LOCK_BACKOFF_ENV = "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS"
+LOCK_NOTIFY_ENV = "EMBER_LIFECYCLE_LOCK_NOTIFY_SECONDS"
 DEFAULT_LOCK_WAIT_SECONDS = 120.0
 DEFAULT_LOCK_BACKOFF_SECONDS = 2.0
+DEFAULT_LOCK_NOTIFY_SECONDS = 30.0
+HOLDERS_SUFFIX = ".holders"
 
 
 def _lock_setting(explicit: float | None, env_name: str, default: float) -> float:
@@ -258,22 +261,119 @@ def _lock_setting(explicit: float | None, env_name: str, default: float) -> floa
     return value
 
 
+def _process_alive(pid: int) -> bool:
+    """Best-effort liveness of a recorded holder pid.
+
+    Advisory only: it keeps a waiting lane from naming a process that has exited, and a
+    reused pid reads as alive. The lock itself is the OS's, never this answer.
+    """
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED: it exists, it is not ours
+        try:
+            code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _windows_byte_lock(fd: int, *, exclusive: bool, unlock: bool = False) -> bool:
+    """LockFileEx / UnlockFileEx on byte 0. False only for contention (ERROR_LOCK_VIOLATION).
+
+    msvcrt.locking has no shared mode, so a reader takes a real shared byte-range lock
+    here. It conflicts with the exclusive lock msvcrt.locking(LK_NBLCK) takes on the same
+    byte, which is what keeps a pre-change copy of this tool (exclusive for everything)
+    mutually exclusive with a reader.
+    """
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class Overlapped(ctypes.Structure):
+        _fields_ = [
+            ("Internal", ctypes.c_void_p),
+            ("InternalHigh", ctypes.c_void_p),
+            ("Offset", wintypes.DWORD),
+            ("OffsetHigh", wintypes.DWORD),
+            ("hEvent", wintypes.HANDLE),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LockFileEx.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        ctypes.POINTER(Overlapped),
+    ]
+    kernel32.LockFileEx.restype = wintypes.BOOL
+    kernel32.UnlockFileEx.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(Overlapped),
+    ]
+    kernel32.UnlockFileEx.restype = wintypes.BOOL
+    handle = wintypes.HANDLE(msvcrt.get_osfhandle(fd))
+    overlapped = Overlapped()
+    if unlock:
+        ok = kernel32.UnlockFileEx(handle, 0, 1, 0, ctypes.byref(overlapped))
+    else:
+        flags = 0x1 | (0x2 if exclusive else 0)  # FAIL_IMMEDIATELY | EXCLUSIVE_LOCK
+        ok = kernel32.LockFileEx(handle, flags, 0, 1, 0, ctypes.byref(overlapped))
+    if ok:
+        return True
+    error = ctypes.get_last_error()
+    if error in (33, 32, 997):  # ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION, ERROR_IO_PENDING
+        return False
+    raise ctypes.WinError(error)
+
+
 class RepositoryLock(AbstractContextManager["RepositoryLock"]):
-    """Repo-wide exclusive lock on byte 0 of the lifecycle lock file, with a bounded wait.
+    """Repo-wide lock on byte 0 of the lifecycle lock file, exclusive or shared, with a bounded wait.
 
-    Every seat's create/retire/renew/audit -- and therefore every pre-commit and pre-push
-    hook -- takes this one lock, so with several seats a fail-fast acquire made pushes
-    collide about hourly (four LIFECYCLE_LOCKED refusals on 2026-11-05 alone). Contention
-    now waits up to ``wait_seconds`` (default 120, env EMBER_LIFECYCLE_LOCK_WAIT_SECONDS),
-    polling every ``backoff_seconds`` (default 2, env EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS).
-    Still fail-closed: when the wait expires it raises LIFECYCLE_LOCKED, naming the
-    recorded holder, and the caller never runs unlocked.
+    Issue #2457: the pre-commit and pre-push hooks run ``audit --strict --quiet`` and the
+    audit only READS the registry and ``git worktree list``, yet it took the one exclusive
+    lock for its whole run, so every commit in every worktree queued behind the slowest
+    audit (a 207-file commit held it 9 minutes; another seat retried 12 times). Now:
 
-    File layout: byte 0 is the lock byte (``b"0"``, unchanged, so a pre-change copy of
-    this tool on another seat still locks the same region). After acquiring, the holder
-    writes a newline plus one JSON object ``{"acquired": ISO, "pid": N}`` from byte 1 on,
-    and truncates it away before releasing. Waiters read only from byte 1: on Windows the
-    held byte 0 is a mandatory lock and reading it from another handle fails.
+    - ``shared=True`` (a read-only audit): any number of shared holders at once; a writer
+      waits for all of them and they wait for a writer, so an audit still never sees a
+      create or retire half done (git and the registry briefly disagree in between).
+    - ``shared=False`` (create, retire, renew, reconcile, install, audit --ratchet): the
+      exclusive lock, exactly as before.
+
+    Every seat's hooks used to fail fast, then wait up to ``wait_seconds`` (default 120, env
+    EMBER_LIFECYCLE_LOCK_WAIT_SECONDS), polling every ``backoff_seconds`` (default 2, env
+    EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS). Still fail-closed: when the wait expires it
+    raises LIFECYCLE_LOCKED naming every recorded holder, and the caller never runs
+    unlocked. While it waits it prints who holds the lock (pid, since when, command line)
+    first at once, then every ``notify_seconds`` (default 30, env
+    EMBER_LIFECYCLE_LOCK_NOTIFY_SECONDS; 0 prints only the first line), so a waiting lane is
+    distinguishable from a dead one.
+
+    File layout: byte 0 is the lock byte (``b"0"``, unchanged, so a pre-change copy of this
+    tool on another seat still locks the same region). After acquiring, an EXCLUSIVE holder
+    writes a newline plus one JSON object ``{"acquired": ISO, "argv": text, "pid": N}`` from
+    byte 1 on, and truncates it away before releasing; a pre-change reader ignores ``argv``.
+    Waiters read only from byte 1: on Windows the held byte 0 is a mandatory lock and reading
+    it from another handle fails. SHARED holders cannot share that one record, so each writes
+    ``<lock>.holders/<pid>-<ns>.json`` and removes it on release; a sidecar whose pid is gone
+    (a killed audit) is swept the next time anyone lists the holders.
     """
 
     def __init__(
@@ -282,15 +382,22 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
         *,
         wait_seconds: float | None = None,
         backoff_seconds: float | None = None,
+        notify_seconds: float | None = None,
         notify: Any = None,
+        shared: bool = False,
     ):
         self.path = path
+        self.shared = shared
         self.wait_seconds = _lock_setting(wait_seconds, LOCK_WAIT_ENV, DEFAULT_LOCK_WAIT_SECONDS)
         self.backoff_seconds = _lock_setting(
             backoff_seconds, LOCK_BACKOFF_ENV, DEFAULT_LOCK_BACKOFF_SECONDS
         )
+        self.notify_seconds = _lock_setting(
+            notify_seconds, LOCK_NOTIFY_ENV, DEFAULT_LOCK_NOTIFY_SECONDS
+        )
         self.notify = notify if notify is not None else self._stderr_line
         self.handle: Any = None
+        self._sidecar: Path | None = None
 
     @staticmethod
     def _stderr_line(line: str) -> None:
@@ -317,13 +424,16 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
         self.handle.seek(0)
         try:
             if os.name == "nt":
+                if self.shared:
+                    return _windows_byte_lock(self.handle.fileno(), exclusive=False)
                 import msvcrt
 
                 msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
 
-                fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                mode = fcntl.LOCK_SH if self.shared else fcntl.LOCK_EX
+                fcntl.flock(self.handle.fileno(), mode | fcntl.LOCK_NB)
         except OSError as exc:
             # Same discipline as loop_graph/_atomic.py::ExclusiveLock: only "held by
             # someone else" is retryable; a bad fd or disk error is a real fault.
@@ -332,39 +442,109 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
             raise
         return True
 
-    def holder(self) -> str:
-        """The recorded holder as ``pid=N acquired=ISO``, or ``unknown``.
+    def _holders_dir(self) -> Path:
+        return self.path.with_name(self.path.name + HOLDERS_SUFFIX)
 
-        ``unknown`` covers a holder running a pre-change copy of this tool (bare ``b"0"``
-        file) and the instant between another holder's acquire and its record write.
-        """
+    def holders(self) -> list[dict[str, Any]]:
+        """Every recorded, still-running holder: the exclusive record and the shared sidecars."""
+        found: list[dict[str, Any]] = []
         try:
             with self.path.open("rb") as reader:
                 reader.seek(1)
                 raw = reader.read(4096)
             record = json.loads(raw.decode("utf-8").strip())
-            return f"pid={int(record['pid'])} acquired={record['acquired']}"
+            pid = int(record["pid"])
+            if _process_alive(pid):
+                found.append(
+                    {
+                        "pid": pid,
+                        "acquired": str(record["acquired"]),
+                        "argv": str(record.get("argv", "")),
+                        "mode": "exclusive",
+                    }
+                )
         except (OSError, ValueError, KeyError, TypeError):
-            return "unknown"
+            pass
+        directory = self._holders_dir()
+        try:
+            names = sorted(os.listdir(directory))
+        except OSError:
+            names = []
+        for name in names:
+            sidecar = directory / name
+            try:
+                record = json.loads(sidecar.read_text(encoding="utf-8"))
+                pid = int(record["pid"])
+                entry = {
+                    "pid": pid,
+                    "acquired": str(record["acquired"]),
+                    "argv": str(record.get("argv", "")),
+                    "mode": "shared",
+                }
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            if not _process_alive(pid):
+                try:
+                    sidecar.unlink()
+                except OSError:
+                    pass
+                continue
+            found.append(entry)
+        return found
 
-    def _write_holder(self) -> None:
-        record = {
+    def holder(self) -> str:
+        """The recorded holders as ``pid=N acquired=ISO [shared] [cmd=...]``, or ``unknown``.
+
+        ``unknown`` covers a holder running a pre-change copy of this tool (bare ``b"0"``
+        file), a holder that has exited, and the instant between another holder's acquire
+        and its record write.
+        """
+        found = self.holders()
+        if not found:
+            return "unknown"
+        parts = []
+        for entry in found:
+            text = f"pid={entry['pid']} acquired={entry['acquired']}"
+            if entry["mode"] == "shared":
+                text += " shared"
+            if entry["argv"]:
+                text += f" cmd={entry['argv']}"
+            parts.append(text)
+        return "; ".join(parts)
+
+    @staticmethod
+    def _record() -> dict[str, Any]:
+        return {
             "acquired": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "argv": " ".join(sys.argv)[:300],
             "pid": os.getpid(),
         }
+
+    def _write_holder(self) -> None:
         self.handle.seek(1)
         self.handle.truncate()
-        self.handle.write(b"\n" + json.dumps(record, sort_keys=True).encode("utf-8") + b"\n")
+        self.handle.write(b"\n" + json.dumps(self._record(), sort_keys=True).encode("utf-8") + b"\n")
         self.handle.flush()
+
+    def _write_sidecar(self) -> None:
+        import time
+
+        directory = self._holders_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        sidecar = directory / f"{os.getpid()}-{time.time_ns()}.json"
+        sidecar.write_text(json.dumps(self._record(), sort_keys=True) + "\n", encoding="utf-8")
+        self._sidecar = sidecar
 
     def __enter__(self) -> "RepositoryLock":
         import time
 
         self.handle = self._open()
         try:
-            deadline = time.monotonic() + self.wait_seconds
+            started = time.monotonic()
+            deadline = started + self.wait_seconds
             if not self._try_lock():
                 self.notify(f"waiting for lifecycle lock held by {self.holder()}")
+                next_notice = started + self.notify_seconds
                 while True:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
@@ -376,6 +556,13 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
                     time.sleep(min(self.backoff_seconds, remaining))
                     if self._try_lock():
                         break
+                    now = time.monotonic()
+                    if self.notify_seconds > 0 and now >= next_notice:
+                        self.notify(
+                            f"still waiting for lifecycle lock after {now - started:.0f}s, "
+                            f"held by {self.holder()}"
+                        )
+                        next_notice = now + self.notify_seconds
         except LifecycleError:
             self.handle.close()
             self.handle = None
@@ -385,7 +572,10 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
             self.handle = None
             raise LifecycleError("LIFECYCLE_LOCKED", f"{self.path}: {exc}") from exc
         try:
-            self._write_holder()
+            if self.shared:
+                self._write_sidecar()
+            else:
+                self._write_holder()
         except OSError:
             # The record is advisory; the lock itself is held, which is what matters.
             pass
@@ -394,17 +584,28 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         if self.handle is None:
             return
-        try:
-            self.handle.seek(1)
-            self.handle.truncate()
-            self.handle.flush()
-        except OSError:
-            pass
+        if self.shared:
+            if self._sidecar is not None:
+                try:
+                    self._sidecar.unlink()
+                except OSError:
+                    pass
+                self._sidecar = None
+        else:
+            try:
+                self.handle.seek(1)
+                self.handle.truncate()
+                self.handle.flush()
+            except OSError:
+                pass
         self.handle.seek(0)
         if os.name == "nt":
-            import msvcrt
+            if self.shared:
+                _windows_byte_lock(self.handle.fileno(), exclusive=False, unlock=True)
+            else:
+                import msvcrt
 
-            msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
+                msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
         else:
             import fcntl
 
@@ -1724,6 +1925,15 @@ def build_parser() -> argparse.ArgumentParser:
             f"(default: ${LOCK_BACKOFF_ENV}, else {DEFAULT_LOCK_BACKOFF_SECONDS:g})"
         ),
     )
+    parser.add_argument(
+        "--lock-notify-seconds",
+        type=float,
+        default=None,
+        help=(
+            "while waiting, print who holds the lifecycle lock this often "
+            f"(default: ${LOCK_NOTIFY_ENV}, else {DEFAULT_LOCK_NOTIFY_SECONDS:g}; 0 prints once)"
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     install_parser = subparsers.add_parser("install")
@@ -1863,16 +2073,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo = Path(canonical_path(args.repo))
         common = common_dir(repo)
         state_file = common / STATE_NAME
+        # Issue #2457: a read-only audit (no --ratchet, registry already present) takes the
+        # SHARED lock, so concurrent pre-commit/pre-push hooks no longer queue behind each
+        # other's audit; every verb that writes the registry or git state keeps the
+        # exclusive lock, and a writer still waits for every audit to finish.
+        shared = args.command == "audit" and not args.ratchet and load_state(state_file) is not None
         with RepositoryLock(
             common / LOCK_NAME,
             wait_seconds=args.lock_wait_seconds,
             backoff_seconds=args.lock_backoff_seconds,
+            notify_seconds=args.lock_notify_seconds,
+            shared=shared,
         ):
             if args.command == "install":
                 payload = install(repo, state_file, args.target)
                 emit(payload, False)
             elif args.command == "audit":
-                state = load_or_initialize(repo, state_file)
+                if shared:
+                    state = load_state(state_file)
+                    if state is None:
+                        raise LifecycleError(
+                            "MALFORMED_STATE",
+                            "the registry disappeared while the audit held the shared lock; rerun",
+                        )
+                else:
+                    state = load_or_initialize(repo, state_file)
                 if args.strict:
                     # The inventory runs FIRST and in full. audit_state raises on its first
                     # violation, and on MISSING_MANAGED_WORKTREE in particular, either of

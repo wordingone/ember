@@ -2406,3 +2406,131 @@ def test_retire_without_any_pin_dirs_file_is_unchanged(tmp_path: Path) -> None:
     payload = json.loads(lifecycle(repo, "retire", "--path", str(tree)).stdout)
 
     assert payload["status"] == "RETIRED"
+
+
+# ---- Issue #2457: the read-only audit takes a shared lock; only writers take the exclusive one ----------------------------
+
+LOCK_WAIT = "EMBER_LIFECYCLE_LOCK_WAIT_SECONDS"
+LOCK_BACKOFF = "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS"
+
+
+def lock_file(repo: Path) -> Path:
+    return state_path(repo).with_name("ember-worktree-lifecycle.lock")
+
+
+def installed_repo(tmp_path: Path) -> Path:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    return repo
+
+
+def test_an_audit_finishes_while_another_audit_holds_the_lock(tmp_path: Path) -> None:
+    """The issue's red: two commits in two worktrees, neither waits for the other's audit.
+
+    The first audit is modelled by a shared holder that stays inside its lock for the whole
+    second run. Before the change the second audit was refused LIFECYCLE_LOCKED after its wait.
+    """
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    with module.RepositoryLock(lock_file(repo), shared=True):
+        result = lifecycle_with_env(
+            repo, "audit", "--strict", "--quiet", env={LOCK_WAIT: "1", LOCK_BACKOFF: "0.1"}, check=False
+        )
+    assert result.returncode == 0, result.stderr
+    assert "waiting for lifecycle lock" not in result.stderr
+
+
+def test_two_real_audits_overlap_without_waiting(tmp_path: Path) -> None:
+    """Two audit processes started together both finish with no waiting line on stderr."""
+    repo = installed_repo(tmp_path)
+    env = {**os.environ, LOCK_WAIT: "1", LOCK_BACKOFF: "0.1"}
+    command = [sys.executable, str(SCRIPT), "--repo", str(repo), "audit", "--strict", "--quiet"]
+    processes = [
+        subprocess.Popen(command, cwd=repo, env=env, text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for _ in range(2)
+    ]
+    results = [process.communicate(timeout=120) + (process.returncode,) for process in processes]
+    for _stdout, stderr, code in results:
+        assert code == 0, stderr
+        assert "waiting for lifecycle lock" not in stderr
+
+
+def test_writers_stay_exclusive_against_a_shared_holder(tmp_path: Path) -> None:
+    """create, renew, install, reconcile and audit --ratchet still need the lock to themselves."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    managed = _managed(repo, tmp_path, "writer")
+    env = {LOCK_WAIT: "0.5", LOCK_BACKOFF: "0.1"}
+    with module.RepositoryLock(lock_file(repo), shared=True):
+        for argv in (
+            ("renew", "--path", str(managed), "--days", "7"),
+            ("audit", "--ratchet", "--quiet"),
+        ):
+            result = lifecycle_with_env(repo, *argv, env=env, check=False)
+            assert result.returncode == 2, (argv, result.stderr)
+            assert "LIFECYCLE_LOCKED" in result.stderr
+            assert f"pid={os.getpid()}" in result.stderr and "shared" in result.stderr
+
+
+def test_a_writer_blocks_a_reader_and_readers_share_with_each_other(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    with module.RepositoryLock(lock):
+        reader = module.RepositoryLock(lock, shared=True, wait_seconds=0.3, backoff_seconds=0.1, notify=lambda line: None)
+        try:
+            reader.__enter__()
+        except module.LifecycleError as exc:
+            assert exc.code == "LIFECYCLE_LOCKED"
+            assert f"pid={os.getpid()}" in str(exc)
+        else:  # pragma: no cover - the failure being tested
+            raise AssertionError("a shared lock was granted while an exclusive holder was inside")
+    with module.RepositoryLock(lock, shared=True, wait_seconds=0):
+        with module.RepositoryLock(lock, shared=True, wait_seconds=0):
+            pass
+    # Both readers left: the writer gets the lock at once, and no sidecar is left behind.
+    with module.RepositoryLock(lock, wait_seconds=0):
+        pass
+    holders = lock.with_name(lock.name + ".holders")
+    assert not holders.exists() or list(holders.iterdir()) == []
+
+
+def test_a_waiting_lane_names_the_holder_every_interval(tmp_path: Path) -> None:
+    """A waiting hook prints who holds the lock (pid, since when, command line) first at once, then each interval."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    lines: list[str] = []
+    with module.RepositoryLock(lock):
+        waiter = module.RepositoryLock(
+            lock, wait_seconds=1.0, backoff_seconds=0.1, notify_seconds=0.25, notify=lines.append
+        )
+        try:
+            waiter.__enter__()
+        except module.LifecycleError as exc:
+            assert exc.code == "LIFECYCLE_LOCKED"
+        else:  # pragma: no cover
+            raise AssertionError("the exclusive lock was granted twice")
+    assert len(lines) >= 3, lines
+    assert lines[0].startswith("waiting for lifecycle lock held by ")
+    assert all(line.startswith("still waiting for lifecycle lock") for line in lines[1:])
+    for line in lines:
+        assert f"pid={os.getpid()} acquired=" in line
+        assert "cmd=" in line
+
+
+def test_a_holder_that_exited_is_not_named_and_its_sidecar_is_swept(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    finished = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True, check=True)
+    dead_pid = int(finished.stdout.strip())
+    holders = lock.with_name(lock.name + ".holders")
+    holders.mkdir(parents=True, exist_ok=True)
+    sidecar = holders / f"{dead_pid}-1.json"
+    sidecar.write_text(json.dumps({"acquired": "2026-01-01T00:00:00+00:00", "argv": "audit", "pid": dead_pid}), encoding="utf-8")
+    assert module.RepositoryLock(lock).holder() == "unknown"
+    assert not sidecar.exists()
+    with module.RepositoryLock(lock, shared=True):
+        live = module.RepositoryLock(lock).holder()
+    assert f"pid={os.getpid()}" in live and "shared" in live
