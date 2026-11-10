@@ -2986,6 +2986,12 @@ fn start_hour_cli(
     cwd: Option<PathBuf>,
     bash: Option<PathBuf>,
 ) -> i32 {
+    if !pipe.starts_with(r"\\.\pipe\ember-lab-") || pipe.len() > 240 {
+        println!(
+            "START_HOUR_FAILED stage=pipe_name detail=--pipe must be \\\\.\\pipe\\ember-lab-<name> (at most 240 characters); received {pipe:?}"
+        );
+        return 2;
+    }
     let here = std::env::current_dir().unwrap_or_default();
     let absolute = |path: &Path| {
         if path.is_absolute() {
@@ -3791,6 +3797,29 @@ mod tests {
             "EMBER_LAB_MINIMAL_SLICE_HOLD_MS exceeds 60000"
         );
     }
+    #[test]
+    fn start_hour_cli_refuses_a_malformed_pipe_name_before_any_connect() {
+        let sha = "0".repeat(64);
+        // A non-raw string in a caller collapses `\\.\pipe` to one leading backslash; the CLI must name the cause, not os error 3.
+        for bad in [
+            "\\.\\pipe\\ember-lab-studio",
+            r"\\.\pipe\other-studio",
+            "ember-lab-studio",
+            "",
+        ] {
+            assert_eq!(
+                start_hour_cli(bad, Path::new("x.sh"), &sha, Path::new("x.log"), None, None),
+                2,
+                "pipe {bad:?} must be refused with rc 2"
+            );
+        }
+        let long = format!(r"\\.\pipe\ember-lab-{}", "a".repeat(240));
+        assert_eq!(
+            start_hour_cli(&long, Path::new("x.sh"), &sha, Path::new("x.log"), None, None),
+            2
+        );
+    }
+
     use ember_lab::storage_retention::{CensusDeclaration, CustodyClass};
     use ember_lab::{JobSpec, ReceiptArtifact};
     use std::fs;
