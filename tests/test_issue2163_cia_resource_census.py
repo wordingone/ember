@@ -24,18 +24,21 @@ class ResourceCensus(unittest.TestCase):
         launch.reject_resource_conflicts(self.rows, 2, {2})
 
     def test_large_commit_or_training_entry_or_gpu_context_refuses(self):
-        for commit, command, gpu in ((1024**2, 'python.exe unknown.py', set()),
-                                     (2048, 'python.exe train.py', set()),
+        self.add(1024**2, 'python.exe unknown.py')
+        launch.reject_resource_conflicts(self.rows, 2, set())  # lead ruling 81914: own commit alone is presence, not harm
+        for commit, command, gpu in ((2048, 'python.exe train.py', set()),
                                      (2048, 'python.exe unknown.py', {3})):
             with self.subTest(commit=commit, command=command, gpu=gpu):
                 self.setUp(); self.add(commit, command)
                 with self.assertRaisesRegex(ValueError, 'resource-consuming'):
                     launch.reject_resource_conflicts(self.rows, 2, gpu)
 
-    def test_missing_classification_refuses(self):
+    def test_missing_classification_refuses_only_when_gpu_listed_and_persistent(self):
+        # lead ruling 81909: an unreadable row that nvidia-smi does not list is ignored; a GPU-listed one that stays unreadable refuses.
         self.add(None)
+        launch.reject_resource_conflicts(self.rows, 2, set(), reread=lambda: self.rows, sleep=lambda s: None)
         with self.assertRaisesRegex(ValueError, 'cannot classify'):
-            launch.reject_resource_conflicts(self.rows, 2)
+            launch.reject_resource_conflicts(self.rows, 2, {3}, reread=lambda: self.rows, sleep=lambda s: None)
 
     def add_with_state(self, exited, commit=15 * 1024 ** 2, command='python.exe serve_owned_cia_batch.py', pid=3):
         self.rows.append({'ProcessId': pid, 'ParentProcessId': 0, 'Name': 'python.exe', 'PageFileUsage': commit,
@@ -50,8 +53,9 @@ class ResourceCensus(unittest.TestCase):
         for exited in (False, None):
             with self.subTest(exited=exited):
                 self.setUp(); self.add_with_state(exited)
+                launch.reject_resource_conflicts(self.rows, 2, set())
                 with self.assertRaisesRegex(ValueError, 'resource-consuming'):
-                    launch.reject_resource_conflicts(self.rows, 2, set())
+                    launch.reject_resource_conflicts(self.rows, 2, {3})
 
     def test_exited_object_that_nvidia_smi_still_lists_is_not_a_tenant(self):
         # Lead ruling 68756 (b): nvidia-smi still lists 69952 although the process exited; WDDM keeps a context on the dead object.

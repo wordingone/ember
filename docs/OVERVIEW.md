@@ -13,12 +13,14 @@ the owner has not yet reviewed it.
 
 ## What Ember is
 
-Ember is an attempt to build an AI model from scratch on one home computer with one consumer graphics
+Ember is an attempt to build its own AI model on one home computer with one consumer graphics
 card, and to run it locally (the research journal's gate table names a single RTX 4090, and the
 roadmap's last milestone refers to a 24 GiB GPU:
 [journal](domains/lab/research/journal.md.txt),
-[roadmap table](domains/governance/roadmap/README.md#milestones)). "From scratch" means no borrowed
-model weights, no teacher model and no judge model: every weight is to be learned here
+[roadmap table](domains/governance/roadmap/README.md#milestones)). The model-free baseline hours are "from scratch": no borrowed
+model weights, every weight learned here. Declared, licence-recorded external models may
+assist training since 2026-11-07 (GOAL §6); their products are recorded as model-assisted, never as
+undeclared provenance (docs/authority/INVARIANT-v2.md), and every hour before the first declared model resource is model-free
 ([project front door](../README.md)). The work is organised as twelve milestones, from "the project
 has one consistent definition" to "another person can independently own and continue the whole
 system" ([public roadmap](domains/governance/roadmap/README.md)).

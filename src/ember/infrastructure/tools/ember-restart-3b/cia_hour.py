@@ -186,8 +186,13 @@ def validate_checkpoint_probe(runner, identity):
     disk = bound_json(runner, root/'disk.json', reference['disk_sha256'])
     terminal = bound_json(runner, root/'worker-terminal.json', reference['worker_terminal_sha256'])
     prior = prediction['identity']
-    if (prior.get('hour') != dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
-                                 minimum_measured_steps=2)
+    expected_hour = dict(schema='checkpoint-probe-v1', arm=selection['arm'], minimum_wall_seconds=0,
+                         minimum_measured_steps=2)
+    if 'declared_lr' in selection:  # a declared-lr hour consumes only a probe that declared the same lr (#2119)
+        expected_hour['declared_lr'] = selection['declared_lr']
+    if 'precision_fix' in selection:  # an fp32-master hour consumes only a probe that ran the same treatment (#2119)
+        expected_hour['precision_fix'] = selection['precision_fix']
+    if (prior.get('hour') != expected_hour or prior.get('optimizer') != identity.get('optimizer')
             or result.get('hour') != prior['hour'] or result.get('measured_updates') != 2
             or result.get('applied_positions') != 3*4096 or result.get('restored_state_matches') is not True
             or terminal.get('status') != 'completed' or terminal.get('applied_positions') != 3*4096
@@ -493,13 +498,63 @@ def file_decode_prefetch_refusal(runner, custody, witness):
         print('DECODE_PREFETCH_SIDECAR_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
+def start_contention_sampler(device):
+    """(A) co-tenant attribution (lead ruling 81915): sample what else uses the card and the CPU once a second so every
+    measured update can be tagged. Evidence only: returns None when disabled (EMBER_CONTENTION_SAMPLER=0) or when it
+    cannot start, and never changes a row, a pin or the hour's outcome. Started after the capture so no CUDA query can
+    land inside graph capture."""
+    if os.environ.get('EMBER_CONTENTION_SAMPLER', '1') == '0':
+        return None
+    try:
+        import torch
+        import cia_contention
+        read = cia_contention.default_reader(
+            mem_info=lambda: torch.cuda.mem_get_info(device),
+            own_reserved=lambda: torch.cuda.memory_reserved(device),
+            own_cpu_percent=cia_contention.ProcessCpu().percent)
+        sampler = cia_contention.ContentionSampler(read, clock=time.perf_counter)
+        sampler.start()
+        return sampler, read
+    except Exception as error:   # evidence-only: anything here is named on stderr and the hour carries on
+        print('CONTENTION_SAMPLER_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+        return None
+
+
+def file_contention_attribution(runner, custody, started, rows):
+    """Stop the sampler and write custody/contention-attribution.json: raw positions/s beside the uncontended rate and
+    the contended fraction. A failure here is named on stderr and never propagates (see file_decode_prefetch_refusal)."""
+    if started is None:
+        return
+    sampler, read = started
+    try:
+        sampler.stop()
+        import cia_contention
+        receipt = cia_contention.attribution_receipt(rows, sampler_errors=sampler.errors)
+        receipt.update(schema='ember-contention-attribution-v1', sample_seconds=cia_contention.SAMPLE_SECONDS,
+            foreign_gpu_bytes_threshold=cia_contention.FOREIGN_GPU_BYTES,
+            foreign_cpu_percent_threshold=cia_contention.FOREIGN_CPU_PERCENT,
+            overhead_calibration='running_minimum_outside_this_allocator', overhead_bytes_final=read.overhead_bytes(),
+            claim='Attribution only: contended means another process was seen using the card or the CPU during the '
+                  'update; it changes no throughput claim, row or pin')
+        runner._write_new(custody / 'contention-attribution.json', receipt)
+    except Exception as error:   # evidence-only sidecar
+        print('CONTENTION_ATTRIBUTION_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
+
+
+def checkpoint_cap(runner, optimizer):
+    """Serialize and restore byte cap: 10 GiB for the native bf16 state, 16 GiB when the optimizer carries the fp32 master
+    treatment (fp32 moments plus masters, about 5.7 GB more than bf16 moments; lead ruling 82435)."""
+    import cia_fp32_master
+    return (16 if cia_fp32_master.enabled(optimizer) else 10) * runner.GIB
+
+
 def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding, custody, device):
     import torch
     import checkpoint_artifacts as artifacts
     helper = Path.home() / '.codex/headless-python.ps1'
     if runner.file_sha256(helper) != binding['launch']['helpers'][str(helper.resolve())]:
         raise ValueError('checkpoint counter launcher differs from dispatch')
-    cap = 10 * runner.GIB
+    cap = checkpoint_cap(runner, optimizer)
     def verifier(candidate, receipt):
         runner.tail_stamp(custody, 'quarantine')
         command = ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper), '--', '-I',
@@ -517,6 +572,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     owner_update_counts = {}
     def publish(name, *, steps, tokens, cursor, parent=None):
         torch.cuda.synchronize(device)
+        import cia_fp32_master
         optimizer.zero_grad(set_to_none=True)
         # A gated fused step runs _init_group on every parameter carrying a gradient, then found_inf skips it and
         # rolls its clock back to 0: state that no update ever applied (step 0, zero moments). Adam initialises
@@ -527,6 +583,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
                           and all(not torch.is_tensor(v) or v.dim() == 0 or not bool(v.any())
                                   for k, v in s.items() if k != 'step')]:
             del optimizer.state[parameter]
+            cia_fp32_master.masters(optimizer).pop(parameter, None)
         return artifacts.write_checkpoint_artifacts(model, optimizer, custody / name,
             launch_seed=identity['seed'], rng_state={'cpu': torch.get_rng_state(), 'cuda': torch.cuda.get_rng_state(device)},
             data_cursor=dict(shard=str(cursor['shard_index']), record_index=cursor['token_offset'],
@@ -535,14 +592,18 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             contract_sha256=identity['source_sha256']['src/ember/model/ember_v0_contract.py'],
             expert_genesis_sha256={}, max_serialized_bytes=cap, max_transient_scratch_bytes=cap,
             host_commit_reserve_bytes=16 * runner.GIB, pre_publish_verifier=verifier,
-            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None)
+            cia_parent_checkpoint=parent, cia_owner_update_counts=dict(owner_update_counts) if parent else None,
+            cia_lr_declaration=lr_declaration if parent else None)
+    hour = identity.get('hour') or {}
+    lr_declaration = (dict(declared_lr=hour['declared_lr'], source='hour.declared_lr')
+                      if parent_declares_lr(hour, identity) else None)
     return publish, owner_update_counts
 
 
 def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
-    cap = 10 * runner.GIB
+    cap = checkpoint_cap(runner, optimizer)
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
         model_config_sha256=identity['config_sha256'], _facts=expected)
@@ -562,7 +623,7 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # Reopen full model and native moments, including inactive owners, through
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
-    facts = artifacts._cia_lineage_facts(inventory, native['state'])
+    facts = artifacts._cia_lineage_facts(inventory, native['state'], native.get('master_weights'))
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
 
@@ -713,8 +774,8 @@ def continuation_state(runner, model, optimizer, cursor, device):
     if device.type == 'cuda':
         torch.cuda.synchronize(device)
     native = artifacts.capture_cia_placed_optimizer_state(
-        model, optimizer, max_state_bytes=10 * runner.GIB)
-    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'])
+        model, optimizer, max_state_bytes=checkpoint_cap(runner, optimizer))
+    facts = artifacts._cia_lineage_facts(model.parameter_inventory(), native['state'], native.get('master_weights'))
     del native
     states = {'cpu': torch.get_rng_state(),
               'cuda': torch.cuda.get_rng_state(device) if device.type == 'cuda'
@@ -880,6 +941,46 @@ def validate_continuation(runner, identity):
         if regenerated[key] != pack[key]:
             raise ValueError('continuation pack differs from the admitted stream: ' + key)
     return dict(root=root, hour=hour, reference=reference, hour_binding=hour_binding, pack=pack, child=child)
+
+
+def parent_declares_lr(hour, identity):
+    """A declared lr reaches the lineage only when it is the lr the optimizer identity actually carries."""
+    return 'declared_lr' in hour and hour['declared_lr'] == identity.get('optimizer', {}).get('lr')
+
+
+def parent_learning_rate(parent):
+    """The single lr every group of the parent checkpoint's optimizer identity carries."""
+    groups = (parent.get('optimizer_identity') or {}).get('param_groups')
+    lrs = {group['hyperparameters']['lr'] for group in groups} if isinstance(groups, list) and groups else set()
+    if len(lrs) != 1:
+        raise ValueError('parent optimizer identity does not carry one learning rate')
+    return next(iter(lrs))
+
+
+def restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner, load):
+    """Restore a chained parent, then apply a declared lr (#2119).
+
+    The parent is loaded at its own lr, so every restore identity check compares like with like and the moment
+    tensors load untouched. Only a governed declaration (hour.declared_lr equal to the identity's optimizer lr) may
+    change the lr after the restore; an undeclared difference refuses before anything is mutated."""
+    parent_lr = parent_learning_rate(parent)
+    target = definition['lr']
+    if parent_lr == target:
+        return load()
+    if hour.get('declared_lr') != target:
+        raise ValueError(f'chained hour lr {target} differs from parent lr {parent_lr} without a declared_lr')
+    # the CIA identity binds both the defaults and every group, so both are set for the restore and both move after
+    optimizer.defaults['lr'] = parent_lr
+    for group in optimizer.param_groups:
+        group['lr'] = parent_lr
+    restored = load()
+    optimizer.defaults['lr'] = target
+    for group in optimizer.param_groups:
+        group['lr'] = target
+    runner._write_new(custody / 'lr-override.json', dict(parent_lr=parent_lr, declared_lr=target,
+        applied_after_restore=True, groups=len(optimizer.param_groups),
+        claim='The parent restored at its own lr; the declared lr applies to every update of this hour.'))
+    return restored
 
 
 def run_continuation(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
@@ -1071,14 +1172,24 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         parent = artifacts.published_checkpoint_receipt(parent_root)
         if parent['checkpoint_manifest_sha256'] != chain['manifest_sha256']:
             raise ValueError('chained hour parent manifest differs from its bound digest')
-        restored = artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
-            max_transient_scratch_bytes=10 * runner.GIB, host_commit_reserve_bytes=16 * runner.GIB)
+        restored = restore_at_parent_lr(optimizer, parent, definition, hour, custody, runner,
+            lambda: artifacts.load_checkpoint_artifacts(model, optimizer, parent_root, parent,
+                max_transient_scratch_bytes=checkpoint_cap(runner, optimizer), host_commit_reserve_bytes=16 * runner.GIB))
         cursor = parent['data_cursor']
         if restored['data_cursor'] != cursor or identity['data']['cursor'] != dict(
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
     check_image_start(prepared['binding'], base_steps)
+    # Declared fp32 master hour (#2119, lead rulings 82495 / 82501): the hour must PROVE the path ran and show the effective step size.
+    # The first row is read here, after the parent restored and before any update; the result is refused at its end without the block.
+    fp32_declared = hour.get('precision_fix') == 'fp32_master_v1'
+    fp32_evidence = None
+    if fp32_declared:
+        import cia_fp32_evidence
+        untrained = {id(p) for p in getattr(optimizer, '_ember_template_untrained', ())}
+        fp32_evidence = cia_fp32_evidence.Evidence(optimizer, inventory, track=lambda name, p: p.requires_grad and id(p) not in untrained)
+        fp32_evidence.observe(0)
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
@@ -1086,6 +1197,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     measured, positions, total_steps = 0, 0, 0
     started = None
     step_rates = []
+    contention, contention_rows = None, []
     gc_identity = dict(run_id=identity['run_id'], prediction_sha256=binding['launch']['prediction_sha256'])
     with runner.GcPauseMeter().bind(**gc_identity) as gc_meter, (custody / 'rows.jsonl').open('xb') as rows, \
             (custody / 'gc-events.jsonl').open('xb') as gc_rows:
@@ -1139,6 +1251,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 _leak_probe(custody, total_steps)
             total_steps += 1
             positions += row['applied_positions']
+            if fp32_evidence is not None and fp32_evidence.due(total_steps, probe=probe):
+                fp32_evidence.observe(total_steps)   # reads device-side optimizer state only; its wall is reported in the block
             # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
             # found_inf, so its clock does not advance; the row names those owners, and they are not counted.
             skipped = {(int(layer), expert) for layer, experts in (row.get('unrouted_expert_grads_released') or {}).items()
@@ -1166,9 +1280,13 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                     gc.disable()  # bounded below: runner.bounded_collect every 64 steps
                 energy.begin()
                 started = time.perf_counter()
+                contention = start_contention_sampler(device)
             else:
                 measured += 1
                 step_rates.append(row['positions_per_second'])
+                if contention is not None:
+                    contention_rows.append(dict(update=total_steps, positions_per_second=row['positions_per_second'],
+                        contention=contention[0].classify(call_started, call_finished)))
                 elapsed = time.perf_counter() - started
                 if learning and total_steps in LEARNING_SNAPSHOTS:
                     # Training wall excludes snapshot writing; the snapshot reads parameters after the step completes.
@@ -1195,6 +1313,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         os.fsync(rows.fileno())
         # image_patches_source counted over every measured row (the assertion above covered only the first 64).
         runner._write_new(custody / 'decode-prefetch.json', dict(decode_witness.receipt(), refused=False))
+        file_contention_attribution(runner, custody, contention, contention_rows)
         gc.enable()  # the bound above covers the timed loop only; publication and continuation run collected
         if upcoming is not None:
             prepared['packs'] = _HourPushback(prepared['packs'], upcoming)
@@ -1234,6 +1353,12 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
     energy_binding = energy.end()
+    # The fp32 master receipt block is read from the hour's TERMINAL optimizer state, before the continuation's extra update moves it,
+    # and an hour that declared the treatment is refused here without a complete block (lead ruling 82501: required, not optional).
+    fp32_block = None
+    if fp32_declared:
+        fp32_block = cia_fp32_evidence.require(fp32_evidence.finish(
+            total_steps, child_optimizer_state_path=custody / 'trained-child' / 'optimizer-state.pt'), declared=True, probe=probe)
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
     continuation = None if probe or learning else publish_continuation_reference(
@@ -1259,6 +1384,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         prediction_sha256=binding['launch']['prediction_sha256'],
         energy=energy_binding,
         continuation=continuation,
+        **({'fp32_master': fp32_block} if fp32_declared else {}),
         production_mixture_validation=prepared['mixture_validation'],
         learning_snapshots=snapshots if learning else None,
         learning_snapshot_pause_seconds=paused if learning else None,

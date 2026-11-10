@@ -81,6 +81,10 @@ jobs:
       - name: Run CIA checkpoint object and index mechanics (#2163)
         if: hashFiles('tests/ember_restart_model/domain-governance/test_issue2163_cia_*.py') != ''
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_issue2163_cia_*.py' -v
+      - name: Run CIA model-only checkpoint load mechanics (#2119)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_cia_model_only_load.py' -v
+      - name: Run CIA eval v0 tensor adoption, ledger and adapter mechanics (#2119)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 300 -- python -B -m unittest discover -s tests/domain-governance -p 'test_cia_eval_v0.py' -v
       - name: Verify bounded POSIX checkpoint ledger acquisition (#2211)
         run: >-
           python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 --
@@ -145,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -158,6 +162,29 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "pytest==8.4.1"
       - name: Prove controller-death cleanup on ${{ matrix.os }}
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q src/ember/governance/scripts/tests/test_owned_process.py
+  # One re-run of a job whose first attempt did not succeed, for the two jobs the hosted runners "abandoned" mid-job with no test failing
+  # (owned-process-posix on macos-15 in #2443/#2445/#2446, production-rung-replay in #2446): a hand re-run was needed each time. A real failure
+  # fails the retry too, so the aggregate stays red; a pass on the retry is flagged by a ::warning:: in the ci-pr verdict, never hidden.
+  owned-process-posix-retry:
+    needs: owned-process-posix
+    if: ${{ !cancelled() && needs.owned-process-posix.result != 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "pytest==8.4.1"
+      - name: Prove controller-death cleanup on ${{ matrix.os }} (retry)
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q src/ember/governance/scripts/tests/test_owned_process.py
   rust:
     runs-on: windows-latest
@@ -300,6 +327,22 @@ jobs:
       - run: python -m pip install "tokenizers==0.22.2"
       - name: Replay checked-in production rung from canonical owned sources
         run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/production_rung.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/production_rung.py" --repo-root .
+  production-rung-replay-retry:
+    needs: production-rung-replay
+    if: ${{ !cancelled() && needs.production-rung-replay.result != 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "tokenizers==0.22.2"
+      - name: Replay checked-in production rung from canonical owned sources (retry)
+        run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/production_rung.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/production_rung.py" --repo-root .
   cli:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -359,7 +402,7 @@ jobs:
         run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
-    needs: [python, owned-process-posix, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay]
+    needs: [python, owned-process-posix, owned-process-posix-retry, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay, production-rung-replay-retry]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -371,5 +414,18 @@ jobs:
           import json, os, sys
           results = {k: v["result"] for k, v in json.loads(os.environ["NEEDS_JSON"]).items()}
           print(json.dumps(results, sort_keys=True))
-          sys.exit(0 if all(v in {"success", "skipped"} for v in results.values()) else 1)
+          ok = {"success", "skipped"}
+          # A job with a "-retry" twin passes if its first attempt or its one retry succeeded (both skipped = legitimately skipped); a pass on the
+          # retry is flagged, never hidden. Every other job needs success or skipped.
+          failed = []
+          for name in sorted(n for n in results if n.endswith("-retry")):
+              base = name[: -len("-retry")]
+              first, retry = results.pop(base), results.pop(name)
+              if first == "success" or retry == "success" or (first == "skipped" and retry == "skipped"):
+                  if first != "success" and retry == "success":
+                      print("::warning::%s first attempt was %s; the retry passed (runner flake, not a test failure)" % (base, first))
+              else:
+                  failed.append(base)
+          failed += [k for k, v in results.items() if v not in ok]
+          sys.exit(1 if failed else 0)
           PY

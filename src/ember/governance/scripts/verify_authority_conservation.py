@@ -196,7 +196,17 @@ def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     )
 
 
-FORBIDDEN_MODEL_SIGNALS = [
+# Two policy eras. v1 (docs/authority/INVARIANT.md, bytes untouched forever): every learned external signal is
+# forbidden and borrowed models are frozen references only. v2 (docs/authority/INVARIANT-v2.md, public succession
+# docs/authority/SUCCESSION-2026-11-07.md): external models may train a lineage as a DECLARED resource and creation
+# follows the declared lineage (clauses 3 and 4). A GOAL policy is judged as v2 only when it pins invariant_v2_sha256
+# and that pin binds the v2 bytes and the succession record exists; otherwise it is judged as v1. A mixed shape
+# (v2 pin with v1 fields, or v2 fields without the pin) fails both ways. Borrowed weights (backbone, §4) and
+# undeclared (hidden) external cognition stay forbidden in both eras.
+INVARIANT_V2_REL = "docs/authority/INVARIANT-v2.md"
+INVARIANT_V2_SHA256 = "48b692eba6ebcc57b2170c035e40aed60efb3382178d11416711ce2785216b6a"
+SUCCESSION_REL = "docs/authority/SUCCESSION-2026-11-07.md"
+V1_FORBIDDEN_MODEL_SIGNALS = [
     "weights",
     "outputs",
     "teachers",
@@ -207,6 +217,63 @@ FORBIDDEN_MODEL_SIGNALS = [
     "stopping_decisions",
     "hidden_external_cognition",
 ]
+FORBIDDEN_MODEL_SIGNALS = [
+    "weights",
+    "hidden_external_cognition",
+]
+MODEL_ASSISTED_CONDITIONS = [
+    "licence_recorded",
+    "per_hour_declaration",
+    "boundary_recorded_at_first_declared_hour",
+    "frozen_declared_judges",
+    "contamination_scrub_on_teacher_data",
+]
+CREATION_RULE = "invariant_v2_clause_3_declared_lineage"
+MODEL_FREE_BASELINE = "every_hour_before_the_first_declared_model_resource"
+DECLARED_SIGNAL_ROLES = {"teacher", "data_generator", "judge", "filter", "ranker", "curriculum"}
+
+
+def declared_model_signal_errors(signals):
+    """Return the reasons a config's model_mediated_signals list is not a fully declared model-assisted input.
+
+    An empty list is model-free. Each entry must be an object naming the model, its version or sha, a role in
+    DECLARED_SIGNAL_ROLES, licence_recorded true and a share in (0, 1]. A bare string, a weights role, or any missing
+    field is an undeclared model-mediated signal and refuses (GOAL §6 condition 2)."""
+    if not isinstance(signals, list):
+        return ["model_mediated_signals must be a list"]
+    out = []
+    for i, entry in enumerate(signals):
+        if not isinstance(entry, dict):
+            out.append(f"entry {i} is not a declared object")
+            continue
+        if not str(entry.get("model", "")).strip() or not str(entry.get("version", "")).strip():
+            out.append(f"entry {i} lacks model or version")
+        if entry.get("role") not in DECLARED_SIGNAL_ROLES:
+            out.append(f"entry {i} role {entry.get('role')!r} is not a declared role")
+        if entry.get("licence_recorded") is not True:
+            out.append(f"entry {i} has no recorded licence")
+        share = entry.get("share")
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
+            out.append(f"entry {i} share is not in (0, 1]")
+    return out
+
+
+def declared_backbone_errors(declaration):
+    """Return the reasons a config's backbone_declaration is not a GOAL §6 declaration of a borrowed backbone or
+    initialization: an object naming the model and its version or sha, with licence_recorded true and
+    licence_permits_derivatives true. Copied code stays governed by its own licence, not by this declaration."""
+    if not isinstance(declaration, dict):
+        return ["backbone_declaration must be a declared object"]
+    out = []
+    if not str(declaration.get("model", "")).strip() or not str(declaration.get("version", "")).strip():
+        out.append("declaration lacks model or version")
+    if declaration.get("licence_recorded") is not True:
+        out.append("declaration has no recorded licence")
+    if declaration.get("licence_permits_derivatives") is not True:
+        out.append("declaration licence does not record that derivatives are permitted")
+    return out
+
+
 REASONING_AXES = [
     "multi_step",
     "compositional",
@@ -239,8 +306,8 @@ MUTATION_CLASSES = [
     "sub_3b_network",
     "missing_native_modality",
     "missing_native_reasoning",
-    "borrowed_backbone",
-    "model_mediated_signal",
+    "{BACKBONE_MUTATION}",
+    "{MODEL_SIGNAL_MUTATION}",
     "mechanism_erasure",
     "missing_totality_member",
     "ambiguous_identity",
@@ -496,6 +563,35 @@ def expect(
         errors.append(finding(leg, code, detail))
 
 
+def policy_era(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]] | None = None) -> int:
+    """1 for a v1-shaped GOAL policy (no invariant_v2_sha256), 2 for one that pins v2.
+
+    A v2 pin that does not bind docs/authority/INVARIANT-v2.md bytes, or with no succession record, is recorded as
+    policy.invariant_v2_unbound (when errors is given) and still judged as v2, so it fails closed."""
+    if not isinstance(policy, dict) or "invariant_v2_sha256" not in policy:
+        return 1
+    if errors is not None:
+        pin = str(policy.get("invariant_v2_sha256") or "").lower()
+        v2 = root / INVARIANT_V2_REL
+        got = hashlib.sha256(v2.read_bytes()).hexdigest() if v2.is_file() else None
+        expect(
+            errors,
+            1,
+            pin == INVARIANT_V2_SHA256 and got == INVARIANT_V2_SHA256 and (root / SUCCESSION_REL).is_file(),
+            "policy.invariant_v2_unbound",
+            f"invariant_v2_sha256 must bind {INVARIANT_V2_REL} ({INVARIANT_V2_SHA256}, got {got}) and {SUCCESSION_REL} must exist",
+        )
+    return 2
+
+
+def mutation_classes(era: int) -> list[str]:
+    names = {
+        "{MODEL_SIGNAL_MUTATION}": "model_mediated_signal" if era == 1 else "undeclared_model_mediated_signal",
+        "{BACKBONE_MUTATION}": "borrowed_backbone" if era == 1 else "undeclared_borrowed_backbone",
+    }
+    return [names.get(c, c) for c in MUTATION_CLASSES]
+
+
 def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]]) -> None:
     if policy is None:
         for leg in (1, 3, 4, 5, 7):
@@ -683,29 +779,63 @@ def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[st
         "policy.verified_expert_accretion",
         "Verified Expert Accretion must be the headline causal hypothesis",
     )
-    expect(
-        errors,
-        4,
-        architecture.get("published_family_backbone_allowed") is False,
-        "policy.published_backbone",
-        "published model families may not become Ember's backbone",
-    )
-
     lineage = policy.get("lineage") or {}
+    era = policy_era(root, policy, errors)
+    # Era 1 (H1-H43 model-free baseline): no published family may be the backbone. Era 2 (GOAL §4/§6, 2026-11-08):
+    # any backbone or initialization is allowed when declared under §6; check_configs checks each declaration.
     expect(
         errors,
         4,
-        lineage.get("borrowed_models_role") == "frozen_reference_only",
-        "policy.borrowed_role",
-        "borrowed models are frozen references only",
+        architecture.get("published_family_backbone_allowed") is (era != 1),
+        "policy.published_backbone",
+        "published_family_backbone_allowed must be false in era 1 and true (declared under GOAL §6) in era 2",
     )
-    expect(
-        errors,
-        4,
-        lineage.get("forbidden_model_mediated_signals") == FORBIDDEN_MODEL_SIGNALS,
-        "policy.model_mediated_signals",
-        "borrowed learned influence list drifted",
-    )
+    if era == 1:
+        expect(
+            errors,
+            4,
+            lineage.get("borrowed_models_role") == "frozen_reference_only",
+            "policy.borrowed_role",
+            "borrowed models are frozen references only",
+        )
+        expect(
+            errors,
+            4,
+            lineage.get("forbidden_model_mediated_signals") == V1_FORBIDDEN_MODEL_SIGNALS,
+            "policy.model_mediated_signals",
+            "borrowed learned influence list drifted",
+        )
+    else:
+        expect(
+            errors,
+            4,
+            lineage.get("borrowed_models_role") == "declared_training_resource",
+            "policy.borrowed_role",
+            "external models are declared training resources only (GOAL §6)",
+        )
+        expect(
+            errors,
+            4,
+            lineage.get("model_assisted_conditions") == MODEL_ASSISTED_CONDITIONS,
+            "policy.model_assisted_conditions",
+            "model-assisted conditions drifted (GOAL §6)",
+        )
+        expect(
+            errors,
+            4,
+            lineage.get("creation_rule") == CREATION_RULE
+            and lineage.get("creation_claims_state_model_assisted") is True
+            and lineage.get("model_free_baseline") == MODEL_FREE_BASELINE,
+            "policy.creation_boundary",
+            "creation follows the declared lineage and claims state model-assisted hours (INVARIANT-v2 clauses 3/4)",
+        )
+        expect(
+            errors,
+            4,
+            lineage.get("forbidden_model_mediated_signals") == FORBIDDEN_MODEL_SIGNALS,
+            "policy.model_mediated_signals",
+            "borrowed learned influence list drifted",
+        )
     expect(errors, 4, lineage.get("published_ideas_allowed") is True, "policy.published_ideas", "published ideas remain admissible research input")
     expect(errors, 4, lineage.get("transparent_deterministic_tools_allowed") is True, "policy.deterministic_tools", "transparent deterministic tools remain admissible")
 
@@ -739,7 +869,7 @@ def check_policy(root: Path, policy: dict[str, Any] | None, errors: list[dict[st
     expect(
         errors,
         5,
-        policy.get("mutation_controls_required") == MUTATION_CLASSES,
+        policy.get("mutation_controls_required") == mutation_classes(era),
         "policy.mutation_controls",
         "known drift-class mutation controls are incomplete",
     )
@@ -1597,6 +1727,8 @@ def parse_config_classifications(
 
 
 def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]], active_goal: str | None = None) -> None:
+    era = policy_era(root, policy)
+    signal_finding = "config.model_mediated_signal" if era == 1 else "config.undeclared_model_mediated_signal"
     config_roots = [root / "configs", root / "domains/model/configs"]
     if not any(config_root.is_dir() for config_root in config_roots):
         errors.append(finding(4, "configs.missing", "configs directory is absent"))
@@ -1725,7 +1857,7 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
             if authority.get("lineage_ingress") is not False:
                 errors.append(finding(4, "config.borrowed_lineage_ingress", rel))
             if authority.get("model_mediated_signals"):
-                errors.append(finding(4, "config.model_mediated_signal", rel))
+                errors.append(finding(4, signal_finding, rel))
             continue
         if artifact_class not in {"research_candidate", "model_milestone"}:
             errors.append(finding(4, "config.artifact_class_invalid", f"{rel}: {artifact_class}"))
@@ -1740,16 +1872,18 @@ def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[s
             errors.append(finding(4, "config.native_capabilities", rel))
         backbone = str(authority.get("published_family_backbone", "")).strip().lower()
         if backbone not in ("", "none"):
-            errors.append(finding(4, "config.borrowed_backbone", f"{rel}: {backbone}"))
+            if era == 1:
+                errors.append(finding(4, "config.borrowed_backbone", f"{rel}: {backbone}"))
+            else:
+                for why in declared_backbone_errors(authority.get("backbone_declaration")):
+                    errors.append(finding(4, "config.undeclared_borrowed_backbone", f"{rel}: {backbone}: {why}"))
         signals = authority.get("model_mediated_signals")
-        if not isinstance(signals, list) or signals:
-            errors.append(
-                finding(
-                    4,
-                    "config.model_mediated_signal",
-                    f"{rel}: model_mediated_signals must be an explicit empty list",
-                )
-            )
+        if era == 1:
+            if not isinstance(signals, list) or signals:
+                errors.append(finding(4, signal_finding, f"{rel}: model_mediated_signals must be an explicit empty list"))
+        else:
+            for why in declared_model_signal_errors(signals):
+                errors.append(finding(4, signal_finding, f"{rel}: {why}"))
     for rel in sorted(set(classifications) - seen_paths):
         errors.append(finding(4, "config.classification_target_missing", rel))
 

@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[5]
 ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py'
 CONFIG = 'configs/ember-cia-3b.json'
 DISK_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py'
+CONTENTION_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/cia_contention.py'
 GIB = 1024 ** 3
 POPULATION = 3_082_539_008
 CLAIM = 'governed execution evidence; model qualification requires its separate acceptance gates'
@@ -521,24 +522,68 @@ def windows_command_args(command):
         kernel.LocalFree(values)
 
 
-def resource_census():
+def resource_census(fence_holder=None):
+    """Refuse an unowned process that can harm the run. `fence_holder` is the pid of a live tenant of the GPU fence that the
+    caller is about to WAIT for (gpu_lock_guard.holder_pid()): that process and its descendants are exempt from this
+    pre-fence call only. The census inside the fence is made without it, so whatever still holds the card once the fence is ours
+    is judged as before."""
     result = run_readonly(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'], timeout=5)
     values = [value.strip() for value in result.stdout.splitlines() if value.strip()]
     if any(not value.isdecimal() for value in values):
         raise ValueError('GPU process identity is unreadable')
     gpu_pids = {int(value) for value in values}
     rows = process_census()
-    reject_unowned_model_processes(rows, gpu_pids, os.getpid())
+    reject_unowned_model_processes(rows, gpu_pids, os.getpid(), exempt_pids=fence_tenant_pids(rows, fence_holder))
     return rows
 
 
-def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
-    """Refuse a live, unowned Python process that holds model resources.
+def fence_tenant_pids(rows, holder):
+    """The fence holder and every descendant of it in the census rows (empty when there is no holder)."""
+    if holder is None:
+        return frozenset()
+    children = {}
+    for row in rows:
+        children.setdefault(row.get('ParentProcessId'), []).append(row['ProcessId'])
+    tenants, pending = set(), [holder]
+    while pending:
+        pid = pending.pop()
+        if pid not in tenants:
+            tenants.add(pid)
+            pending.extend(children.get(pid, ()))
+    return frozenset(tenants)
 
-    Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py requires both
-    copies to agree). An EXITED Python object kept alive by a stray handle runs nothing, so it is not a tenant even when
-    nvidia-smi still lists its pid; its commit charge stays in the commit gate and its device memory in the total-device sample.
-    An unknown state (HasExited None or absent) and a live process are classified as before.
+
+UNREADABLE_REREADS = 3
+UNREADABLE_REREAD_SECONDS = 2.0
+
+
+def settle_unreadable_row(row, gpu_pids, reread, sleep):
+    """Same rule as cia_conformance_launch.settle_unreadable_row (lead ruling 81909): a process matters only if it holds GPU memory.
+    An unreadable row (no commit or command line: a short-lived python seen mid-start or mid-exit) that nvidia-smi does not list is
+    ignored; a GPU-listed one is re-read UNREADABLE_REREADS times over UNREADABLE_REREAD_SECONDS and is ignored if it vanished or
+    exited, classified if it became readable, refused if it stayed live and unreadable. Returns the row to classify, None to
+    ignore it, or False to refuse."""
+    pid = row['ProcessId']
+    if pid not in gpu_pids:
+        return None
+    for _ in range(UNREADABLE_REREADS):
+        sleep(UNREADABLE_REREAD_SECONDS / UNREADABLE_REREADS)
+        fresh = next((r for r in reread() if r['ProcessId'] == pid), None)
+        if fresh is None or fresh.get('HasExited') is True:
+            return None
+        if fresh.get('PageFileUsage') is not None and fresh.get('CommandLine'):
+            return fresh
+    return False
+
+
+def reject_unowned_model_processes(rows, gpu_pids, owner_pid, exempt_pids=frozenset(), reread=None, sleep=time.sleep):
+    """Refuse a live, unowned Python process that can harm the run: one that holds GPU memory or runs a training entry.
+
+    Same predicate as cia_conformance_launch.reject_resource_conflicts (tests/test_issue2119_step_runner_census.py and
+    tests/ember_restart_model/test_issue2119_worker_census_harm_only.py require both copies to agree). An EXITED Python object kept
+    alive by a stray handle runs nothing, so it is not a tenant even when nvidia-smi still lists its pid; its commit charge stays
+    in the commit gate and its device memory in the total-device sample. A large commit alone is not a refusal (lead ruling 81914).
+    An unreadable row is settled by settle_unreadable_row. `exempt_pids` are fence tenants the caller is waiting for.
     """
     by_pid = {row['ProcessId']: row for row in rows}
     current, ancestors = owner_pid, set()
@@ -548,16 +593,20 @@ def reject_unowned_model_processes(rows, gpu_pids, owner_pid):
     training_entries = {'cia_step_runner.py', 'cia_conformance_launch.py', 'train.py', 'pretrain.py',
                         'certified_train_launch.py', 'timeshare_pretrain.py', 'train_multimodal_v0.py'}
     for row in rows:
-        if row['ProcessId'] in ancestors or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
+        pid = row['ProcessId']
+        if pid in ancestors or pid in exempt_pids or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
             continue
         if row.get('HasExited') is True:
             continue
         if row.get('PageFileUsage') is None or not row.get('CommandLine'):
-            raise ValueError('cannot classify model process resources')
+            row = settle_unreadable_row(row, gpu_pids, reread or process_census, sleep)
+            if row is None:
+                continue
+            if row is False:
+                raise ValueError(f'cannot classify model process resources: {pid}')
         argv = windows_command_args(row['CommandLine'])
-        if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
-                or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
-            raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]} '
+        if pid in gpu_pids or any(Path(arg).name.lower() in training_entries for arg in argv[1:]):
+            raise ValueError(f'unowned model resource process requires coordination: {pid} '
                              f'(name={row["Name"]} parent={row.get("ParentProcessId")} command={row["CommandLine"]})')
 
 
@@ -577,8 +626,33 @@ def headroom():
     disks = {drive: shutil.disk_usage(drive + ':/').free for drive in ('C', 'B')}
     if (free < LIMITS['min_free_commit_bytes'] or disks['C'] < LIMITS['min_c_free_bytes']
             or disks['B'] < LIMITS['min_b_free_bytes']):
-        raise ValueError('measurement operating reserve is unavailable')
+        # Waitable: another lane's transient commit or disk use clears on its own (lead ruling 81914). Still a ValueError.
+        raise load_contention_module().ReserveUnavailable('measurement operating reserve is unavailable')
     return {'free_commit_bytes': free, 'free_disk_bytes': disks}
+
+
+def load_contention_module():
+    """cia_contention by file path, registered once under its import name so cia_hour's plain import shares it."""
+    cached = sys.modules.get('cia_contention')
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location('cia_contention', ROOT / CONTENTION_ENTRY)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _reserve_log(event):
+    print(json.dumps(event, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def wait_headroom(**wait):
+    """headroom() that backs off (1, 2, 4, 8, 16, 30 s, last repeating, bounded at 30 min) while the reserve is short,
+    logging every wait, then refuses with the wait named. Any other failure propagates at once. ``wait`` overrides
+    wait_for_reserve's sleep/clock/schedule/max_wait (tests)."""
+    value, _ = load_contention_module().wait_for_reserve(headroom, **{'log': _reserve_log, **wait})
+    return value
 
 
 def daemon_identity():
@@ -706,7 +780,7 @@ atexit.register(_write_loss_widen_receipt)
 
 def training_head(identity):
     selected = identity.get('training_head', 'native')
-    if type(selected) is not str or selected not in ('native', 'cce-document-v1'):
+    if type(selected) is not str or selected not in ('native', 'cce-document-v1', 'cce-document-v2'):
         raise ValueError('training head is outside its fixed set')
     if selected != 'native' and execution_mode(identity) is None:
         raise ValueError('streamed training head requires explicit resident capture')
@@ -765,13 +839,23 @@ def capture_loss_kwargs(model, identity, lengths):
     import torch
     if training_head(identity) == 'native':
         return dict(loss_fn=_native_loss)
-    from ember.model.ember_v0_streamed_loss import document_streamed_loss
+    head = training_head(identity)
     os.environ['CCE_AUTOTUNE'] = '0'
     lengths = tuple(lengths)
-    def loss(hidden, targets, selections=None, denominator=None):
-        return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
-                                      sum(lengths) if denominator is None else denominator, selections=selections)
+    if head == 'cce-document-v2':
+        # One weighted CCE call per update; staged_inputs(fold=True) supplies (rows, weights, count) selections.
+        from ember.model.ember_v0_streamed_loss import weighted_document_streamed_loss
+        def loss(hidden, targets, selections=None, denominator=None):
+            return weighted_document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                                   sum(lengths) if denominator is None else denominator,
+                                                   selections=selections)
+    else:
+        from ember.model.ember_v0_streamed_loss import document_streamed_loss
+        def loss(hidden, targets, selections=None, denominator=None):
+            return document_streamed_loss(hidden, model._weight('embedding.weight'), targets, lengths,
+                                          sum(lengths) if denominator is None else denominator, selections=selections)
     loss.experiment_binding = experiment_fields(identity)
+    loss.training_head = head
     return dict(head_output='hidden', loss_fn=loss)
 
 
@@ -790,10 +874,10 @@ def streamed_sources(identity):
 
 TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
 CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'cia_fp32_master.py', 'cia_fp32_evidence.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour_energy.py', 'boundary_energy_collector.py'))
+    ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_contention.py'))
 # ruling 67346: the verify-only entry is pinned by a tail prediction alone; an ordinary hour prediction neither requires nor binds it.
 TAIL_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_verify_tail.py',)
 
@@ -905,6 +989,9 @@ def measurement_mode(identity):
     return True
 
 
+DECLARED_LR_MIN, DECLARED_LR_MAX = 1e-5, 1e-3
+
+
 def expected_optimizer(identity):
     """The one fixed optimizer definition an identity may carry. fused=True is a declared treatment: admitted for the
     trajectory Tfused arm, the hour treatment arm and the long-measurement fused arm, never by request alone."""
@@ -914,6 +1001,8 @@ def expected_optimizer(identity):
             or (hour_mode(identity) and identity['hour']['arm'] == 'treatment')
             or (measurement_mode(identity) and identity['measurement']['arm'] == 'fused')):
         expected['fused'] = True
+    if hour_mode(identity) and 'declared_lr' in identity['hour']:
+        expected['lr'] = identity['hour']['declared_lr']
     return expected
 
 
@@ -1080,6 +1169,9 @@ def resource_limits(identity):
     return limits
 
 
+HOUR_KINDS = ('LOCATE', 'MOVE', 'BASELINE', 'LEARN')
+
+
 def hour_mode(identity):
     if 'hour' not in identity:
         if 'continuation' in identity:
@@ -1104,6 +1196,32 @@ def hour_mode(identity):
         if value['layer_template'] != canonical:
             raise ValueError('hour layer_template must be written in canonical form')
         fixed = fixed | {'layer_template'}
+    if isinstance(value, dict) and 'declared_lr' in value:
+        # Declared learning rate (#2119 H43): a chained hour or probe may train at a declared lr that differs
+        # from the parent's; the parent is restored at its own lr and the declared one applies after it (cia_hour).
+        lr = value['declared_lr']
+        if (value.get('schema') not in ('governed-hour-v1', 'checkpoint-probe-v1') or type(lr) is not float
+                or not math.isfinite(lr) or not DECLARED_LR_MIN <= lr <= DECLARED_LR_MAX):
+            raise ValueError(f'hour declared_lr is governed-hour-v1/checkpoint-probe-v1 only, a finite float in '
+                             f'[{DECLARED_LR_MIN}, {DECLARED_LR_MAX}]')
+        fixed = fixed | {'declared_lr'}
+    if isinstance(value, dict) and 'hour_kind' in value:
+        # What the hour is FOR (#2119 locked goal, lead rulings 82495 and 82520): LOCATE a skill in Qwen, MOVE it into Ember,
+        # BASELINE a reference, or LEARN (the lead's learn job class). Declared, validated here and carried in the hour (so in every row and the hour result); it never changes the run.
+        if value.get('schema') != 'governed-hour-v1' or value['hour_kind'] not in HOUR_KINDS:
+            raise ValueError(f'hour hour_kind is governed-hour-v1 only, one of {HOUR_KINDS}')
+        fixed = fixed | {'hour_kind'}
+    if isinstance(value, dict) and 'precision_fix' in value:
+        # fp32 master weights and moments (#2119, lead ruling 82420/82435): the declared treatment of a paired comparison hour. The
+        # optimizer identity stays equal to the parent's; the treatment is the schema-v3 optimizer state plus this declaration.
+        if value.get('schema') not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['precision_fix'] != 'fp32_master_v1':
+            raise ValueError("hour precision_fix is governed-hour-v1/checkpoint-probe-v1 only, and only 'fp32_master_v1'")
+        # Only the treatment arm builds the fused optimizer the masters wrap, and only the two capture modes train a bounded resident
+        # set; control or the legacy paged branch would otherwise pass identity validation and fail after the model is materialised.
+        if value.get('arm') != 'treatment' or execution_mode(identity) is None:
+            raise ValueError("hour precision_fix requires arm 'treatment' and a resident capture execution_mode "
+                             f"{EXECUTION_MODES}")
+        fixed = fixed | {'precision_fix'}
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != fixed
             or value['schema'] not in ('governed-hour-v1', 'checkpoint-probe-v1', 'learning-comparison-v1')
@@ -1622,7 +1740,9 @@ def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
     Per tensor this is the same kernel with the same arguments optimizer.step() launches; the partition changes only
     which tensors share a launch. Returns (keys, skip): the gated expert owners and their device found_inf values."""
     import torch
+    import cia_fp32_master
     from torch.optim.adam import adam
+    master_treatment = cia_fp32_master.enabled(optimizer)
     cache = getattr(optimizer, '_ember_gate_cache', None)
     if cache is None:
         owner_of = {id(parameter): key for key, parameters in expert_owners.items() for parameter in parameters}
@@ -1653,6 +1773,9 @@ def gated_optimizer_step(optimizer, expert_owners, buffers, refused):
         for group, split in members:
             beta1, beta2 = group['betas']
             for key, parameters in split.items():
+                if master_treatment:
+                    cia_fp32_master.step(optimizer, group, parameters, (dense if key is None else skip[position[key]]))
+                    continue
                 sub = dict(group)
                 sub['params'] = parameters
                 params, grads, exp_avgs, exp_avg_sqs, max_exp_avg_sqs, steps = [], [], [], [], [], []
@@ -1745,9 +1868,15 @@ class SegmentOptimizer:
         split = {}
         for p in params:
             split.setdefault((self.group_index[id(p)], self.owner_of.get(id(p))), []).append(p)
+        import cia_fp32_master
+        master_treatment = cia_fp32_master.enabled(self.optimizer)
         with torch.cuda.stream(self.side), torch.no_grad():
             for (gi, key), members in split.items():
                 group = self.optimizer.param_groups[gi]
+                if master_treatment:
+                    cia_fp32_master.step(self.optimizer, group, members,
+                                         (armed['dense'] if key is None else armed['skip'][self.position[key]]))
+                    continue
                 beta1, beta2 = group['betas']
                 sub = dict(group)
                 sub['params'] = members
@@ -1802,14 +1931,14 @@ def prefetch_position(pack, image_start, ahead):
     return image_start + pack.get('index', 0) + ahead
 
 
-def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0):
+def _stage_next_early(next_pack, device, image_text, pack, two_ahead, image_start=0, fold=False):
     """Update index+1's pinned inputs and image patches (non-blocking copies on the current stream).
 
     Returns (inputs, (rows, patches), patches_source, two_ahead_position). The last is the GLOBAL image-text position
     whose decode this call started two updates ahead, or None when it started none (no image text, or two-ahead not in
     effect on this call). The step reads it back as the two-ahead decode's EXECUTION; the EMBER_DECODE_TWO_AHEAD
     request is not consulted for it."""
-    staged = (staged_inputs(next_pack, device),
+    staged = (staged_inputs(next_pack, device, fold=fold),
               load_image_text_module().load_patches(next_pack, device, pinned=True)
               if next_pack.get('images') else (None, None),
               load_image_text_module().LAST_SOURCE if next_pack.get('images') else None)
@@ -1857,6 +1986,16 @@ def capture_prerequisites(identity):
     return experts
 
 
+def apply_precision_fix(optimizer, identity):
+    """The declared fp32 master treatment (hour.precision_fix, #2119): switch the freshly built optimizer to fp32 masters and
+    moments before any state exists or any checkpoint restores into it. Identity validation is hour_mode's; this only reads."""
+    hour = identity.get('hour')
+    if isinstance(hour, dict) and hour.get('precision_fix') == 'fp32_master_v1':
+        import cia_fp32_master
+        cia_fp32_master.enable(optimizer)
+    return optimizer
+
+
 def prepare_model(model, identity, first_lengths, device, *, mode, optimizer_factory):
     """Activation order per execution mode; returns (inventory, optimizer).
 
@@ -1869,14 +2008,14 @@ def prepare_model(model, identity, first_lengths, device, *, mode, optimizer_fac
         experts = capture_prerequisites(identity)
         model.apply_update_support(support['locus'], experts=experts)
         inventory = model.parameter_inventory()
-        optimizer = optimizer_factory(inventory)
+        optimizer = apply_precision_fix(optimizer_factory(inventory), identity)
         model.activate_cuda(device, resident_capacity=4, resident_experts=experts, optimizer=optimizer)
         model._cuda_execution.bind_geometry(tuple(first_lengths))
         return inventory, optimizer
     model.activate_cuda(device)
     inventory = model.parameter_inventory()
     model.apply_update_support(support['locus'], experts=tuple(support['experts']))
-    return inventory, optimizer_factory(inventory)
+    return inventory, apply_precision_fix(optimizer_factory(inventory), identity)
 
 
 def routing_buffers(lengths, device):
@@ -1951,8 +2090,21 @@ def _weighted_rows(rows, answer_rows, weight):
     return list(rows) + [row for row in inside for _ in range(weight - 1)]
 
 
-def loss_selection(micro, device):
-    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections."""
+def _folded_rows(rows, answer_rows, weight):
+    """The fold of _weighted_rows (cce-document-v2): rows unchanged (each once) and one integer weight per row,
+    1 + (weight - 1) x (times the row is named in answer_rows) -- so sum(weights) == len(_weighted_rows(...))."""
+    named = {}
+    if weight > 1:
+        for row in answer_rows:
+            named[row] = named.get(row, 0) + 1
+    return list(rows), [1 + (weight - 1) * named.get(row, 0) for row in rows]
+
+
+def loss_selection(micro, device, *, fold=False):
+    """None when every target is loss-bearing (text-only: the prior function); else per-document row selections.
+
+    fold=False (cce-document-v1): (rows with answer repeats, count). fold=True (cce-document-v2): (unique rows,
+    FP32 weights, weight total). The denominator is the same number either way."""
     import torch
     targets = micro['target_ids']
     if IGNORE_TARGET not in targets:
@@ -1963,6 +2115,14 @@ def loss_selection(micro, device):
         rows = [row for row in range(lo, hi) if targets[row] != IGNORE_TARGET]
         if not rows:
             raise ValueError('a document carries no loss-bearing target')
+        if fold:
+            rows, weights = _folded_rows(rows, micro.get('answer_rows', ()), answer_weight())
+            count += sum(weights)
+            selections.append(None if rows == list(range(lo, hi)) and all(w == 1 for w in weights) else
+                              (torch.tensor(rows, dtype=torch.long).to(device, non_blocking=True),
+                               torch.tensor(weights, dtype=torch.float32).to(device, non_blocking=True),
+                               sum(weights)))
+            continue
         rows = _weighted_rows(rows, micro.get('answer_rows', ()), answer_weight())
         count += len(rows)
         selections.append(None if len(rows) == hi - lo and rows == list(range(lo, hi)) else
@@ -1970,12 +2130,14 @@ def loss_selection(micro, device):
     return {'selections': tuple(selections), 'denominator': count}
 
 
-def staged_inputs(micro, device):
-    """tokens, targets, positions and loss_selection(micro, device), through ONE pinned host array and ONE copy.
+def staged_inputs(micro, device, *, fold=False):
+    """tokens, targets, positions and loss_selection(micro, device, fold=fold), through ONE pinned host array and
+    ONE copy.
 
     Same values and dtypes as the three torch.tensor(list, device=...) calls plus loss_selection: the selection rows
     are the indices whose target is not IGNORE_TARGET within each document, in order, and a fully loss-bearing
-    document keeps None exactly as loss_selection does."""
+    document keeps None exactly as loss_selection does. With fold=True (cce-document-v2) the integer row weights
+    ride in the same pinned array after every selection's rows and are cast to FP32 once on the device."""
     import numpy
     import torch
     targets_host = numpy.asarray(micro['target_ids'], dtype=numpy.int64)
@@ -1988,25 +2150,52 @@ def staged_inputs(micro, device):
     spans, weight, answers = None, answer_weight(), micro.get('answer_rows', ())
     if (targets_host == IGNORE_TARGET).any():
         starts = list(micro['document_starts']) + [n]
-        spans, offset = [], end
+        spans, offset, weight_parts = [], end, []
         for lo, hi in zip(starts, starts[1:]):
             rows = lo + numpy.flatnonzero(targets_host[lo:hi] != IGNORE_TARGET)
             if rows.shape[0] == 0:
                 raise ValueError('a document carries no loss-bearing target')
+            if fold:
+                weights = numpy.asarray(_folded_rows(rows.tolist(), answers, weight)[1], dtype=numpy.int64)
+                if rows.shape[0] == hi - lo and bool((weights == 1).all()):
+                    spans.append(None)
+                else:
+                    spans.append((offset, rows.shape[0], int(weights.sum())))
+                    parts.append(rows.astype(numpy.int64))
+                    weight_parts.append(weights)
+                    offset += rows.shape[0]
+                continue
             if weight > 1 and answers:
                 rows = numpy.asarray(_weighted_rows(rows.tolist(), answers, weight), dtype=numpy.int64)
-            if rows.shape[0] == hi - lo:
+            # loss_selection's whole-document predicate, verbatim: the document's own rows in order with no
+            # answer repeat. A count match alone (k + (weight - 1) * a == hi - lo) is not whole (#2410).
+            if rows.shape[0] == hi - lo and numpy.array_equal(rows, numpy.arange(lo, hi)):
                 spans.append(None)
             else:
                 spans.append((offset, rows.shape[0]))
                 parts.append(rows.astype(numpy.int64))
                 offset += rows.shape[0]
+        weights_at = offset
+        parts.extend(weight_parts)
     host = torch.from_numpy(numpy.concatenate(parts))
     if device.type == 'cuda':
         host = host.pin_memory()
     staged = host.to(device, non_blocking=True)
     selection = None
-    if spans is not None:
+    if spans is not None and fold:
+        weights_device = staged[weights_at:].to(torch.float32)  # every selection's weights, one cast
+        entries, cursor = [], 0
+        for span in spans:
+            if span is None:
+                entries.append(None)
+                continue
+            at, count, total = span
+            entries.append((staged[at:at + count], weights_device[cursor:cursor + count], total))
+            cursor += count
+        selection = {'selections': tuple(entries),
+                     'denominator': sum(span[2] for span in spans if span is not None) +
+                                    sum(hi - lo for (lo, hi), s in zip(zip(starts, starts[1:]), spans) if s is None)}
+    elif spans is not None:
         selection = {'selections': tuple(None if span is None else (staged[span[0]:span[0] + span[1]], span[1])
                                          for span in spans),
                      'denominator': sum(length for *_, length in (s for s in spans if s is not None)) +
@@ -2026,6 +2215,43 @@ def exposure_fields(pack, wall):
             'positions_per_second': loss_bearing / wall, 'decoder_positions_per_second': len(targets) / wall,
             'images_per_second': len(images) / wall,
             'rate_basis': 'loss-bearing-decoder-targets'}
+
+
+def _row_training_head(capture):
+    """The row's declared head: native unless the capture streams hidden; then the selected loss's own head name
+    (a loss callback without one is the original cce-document-v1 callback)."""
+    if capture is None or getattr(capture, '_cia_head_output', 'logits') != 'hidden':
+        return 'native'
+    return getattr(getattr(capture, 'loss_fn', None), 'training_head', 'cce-document-v1')
+
+
+def _require_cce_receipt(loss):
+    """cce-document-v2, first line: right after the loss returns and BEFORE its backward, the loss must carry
+    its own executed receipt, so an update whose loss did not report its execution is never applied."""
+    from ember.model.ember_v0_streamed_loss import require_executed
+    require_executed(getattr(loss, 'cce_executed', None))
+
+
+def _cce_executed_fields(executed):
+    """cce-document-v2 executed receipt for one update, second line: summed over its micro-steps from the
+    receipts the loss attached to its own outputs, read after the update synchronized (the weight total is the
+    device-reduced sum of the weights the operator received). A missing receipt refuses the row."""
+    from ember.model.ember_v0_streamed_loss import executed_values
+    if not executed:
+        raise ValueError('weighted document loss did not report its execution')
+    values = [executed_values(item) for item in executed]
+    return {key: sum(item[key] for item in values) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
+
+
+def ungated_optimizer_step(optimizer):
+    """The non-deferred optimizer step: the fp32 master path when the declared treatment is on, otherwise the native step.
+    Parameters without a gradient are left alone on the master path (the native step skips them the same way)."""
+    import cia_fp32_master
+    if cia_fp32_master.enabled(optimizer):
+        for group in optimizer.param_groups:
+            cia_fp32_master.step(optimizer, group, [p for p in group['params'] if p.grad is not None], None)
+    else:
+        optimizer.step()
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
@@ -2127,6 +2353,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     stage_next = (next_pack is not None and not record and capture is not None and resident and depth == 1
                   and os.environ.get('EMBER_STAGE_NEXT_STEP') == '1' and len(micro_packs(next_pack)) == 1)
     staged_early = None
+    head = _row_training_head(capture)
+    fold = head == 'cce-document-v2'  # unique rows + per-row weights; the loss reports its own execution
+    executed = []
     two_ahead_position = None   # set from the staging this call produces; the row reads it back
 
     def _prepare(micro, staged_ahead):
@@ -2136,7 +2365,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                                                                     staged_ahead['patches'])
             patches_source = staged_ahead['patches_source']
         else:
-            tokens, targets, positions, selection = staged_inputs(micro, device)
+            tokens, targets, positions, selection = staged_inputs(micro, device, fold=fold)
             image_rows, image_patches = (load_image_text_module().load_patches(micro, device)
                                          if micro.get('images') else (None, None))
             patches_source = load_image_text_module().LAST_SOURCE if micro.get('images') else None
@@ -2205,6 +2434,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             with recording:
                 logits, routes, loss, micro_started, micro_forwarded = (
                     pre['launched'] if pre is not None else _launch(prep, micro_index, events))
+                if fold:
+                    _require_cce_receipt(loss)  # refused before backward: the update is never applied
                 if segment_optimizer is not None:
                     # The verdict and the unrouted gate are final once the forward is enqueued, so each segment's
                     # owners are stepped (gated) on the side stream as the backward finishes that segment.
@@ -2223,10 +2454,11 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                     # ran on an idle device. Pure host-to-device work, ordered before optimizer.step.
                     if not stage_after_optimizer:
                         staged_early = _stage_next_early(next_pack, device, image_text, pack, two_ahead,
-                                                         image_start=image_start)
+                                                         image_start=image_start, fold=fold)
             forward_seconds += micro_forwarded - micro_started
             backward_seconds += micro_backwarded - micro_forwarded
             losses.append(loss.detach())
+            executed.append(getattr(loss, 'cce_executed', None))
             deferred_buffers = None
             if buffers is not None:
                 if micro_index == len(micros) - 1 and not verify_routes:
@@ -2292,13 +2524,13 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
         refused_host.copy_(refused, non_blocking=True)
     else:
-        optimizer.step()
+        ungated_optimizer_step(optimizer)
     if events is not None:
         events[-1].record()
     if stage_next and staged_early is None:
         # EMBER_STAGE_AFTER_OPTIMIZER: staged behind this update's optimizer, ahead of the prelaunched forward.
         staged_early = _stage_next_early(next_pack, device, image_text, pack,
-                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1', image_start=image_start)
+                                         os.environ.get('EMBER_DECODE_TWO_AHEAD') == '1', image_start=image_start, fold=fold)
     if os.environ.get('EMBER_STAGE_OWNER_IDENTITY') == '1':
         stage = getattr(model._cuda_execution, 'stage_next_identity', None)
         if stage is not None:
@@ -2385,7 +2617,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     if route_snapshot is not None:
         route_snapshot.update(buffers=buffers, snapshot=snapshot)
     return {'index': pack.get('index', 0), 'phase': pack['phase'], 'batch_documents': batch_documents,
-            'training_head': ('cce-document-v1' if capture is not None and getattr(capture, '_cia_head_output', 'logits') == 'hidden' else 'native'),
+            'training_head': head,
+            **(_cce_executed_fields(executed) if fold else {}),
             **experiment,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
             **exposure_fields(pack, wall),
@@ -2632,7 +2865,7 @@ def verify_worker(binding, binding_path):
         raise ValueError(error)
     if os.environ.get('EMBER_GATE_AUTHORIZED') != '1':
         raise ValueError('explicit live gate condition missing')
-    headroom()
+    wait_headroom()
     resource_census()
     resources.sample_device(launch['gpu_uuid'], total_gpu_bytes=LIMITS['total_gpu_bytes'])
 
@@ -2959,6 +3192,16 @@ def launch_succeeded(result, supervisor_failure, custody):
     return isinstance(terminal, dict) and terminal.get('status') == 'completed'
 
 
+def record_fence_wait(custody, guard, holder_at_preflight):
+    """Queueing behind another fence tenant is a covariate of the hour (lead ruling 82032 E1): custody/gpu-fence-wait.json carries the
+    wait (seconds, attempts, holders seen) next to the hour's other receipts. A failed write is named on stderr and never fails the launch."""
+    try:
+        _write_new(custody / 'gpu-fence-wait.json', {'schema': 'ember-gpu-fence-wait-v1', 'wait': guard.last_wait(),
+                                                     'holder_at_preflight': holder_at_preflight, 'claim': CLAIM})
+    except Exception as error:  # noqa: BLE001 - evidence only
+        print(f'GPU_FENCE_WAIT_RECORD_DEGRADED {type(error).__name__}: {error}', file=sys.stderr, flush=True)
+
+
 def launch(args, dispatch):
     from ember.governance.scripts import cia_conformance_resources as resources, gpu_lock_guard
     from ember.governance.scripts.owned_process import OwnedProcessRunner
@@ -2981,8 +3224,9 @@ def launch(args, dispatch):
     tail_stamp(custody, 'segment_launch')  # typed wall start of the governed segment (#2119 accounting)
     helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
     hidden = args.hidden_helper.resolve(strict=True)
-    preflight = headroom()
-    census = resource_census()
+    preflight = wait_headroom()
+    fence_holder = gpu_lock_guard.holder_pid()  # a live fence tenant (eval, scorer) that the acquire below waits for; not a conflict
+    census = resource_census(fence_holder=fence_holder)
     _, prepared = prepare_execution(prediction)
     identity = prediction['identity']
     child_env = None
@@ -3010,7 +3254,8 @@ def launch(args, dispatch):
     gpu_uuid = prediction['identity']['gpu_uuid']
     # #1945: this one-shot preflight call had zero tolerance for a slow/failing nvidia-smi.
     # sample_device_at_launch() retries only here; the watcher's own tolerance is unchanged.
-    resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
+    if fence_holder is None:  # with a tenant on the fence the card is judged inside the fence, once it is ours
+        resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
     with (custody / 'prediction.json').open('xb') as stream:
         stream.write(prediction_bytes)
     _write_new(custody / 'preflight.json', {'headroom': preflight, 'processes': census,
@@ -3039,8 +3284,10 @@ def launch(args, dispatch):
     dispatch_started = time.time()
     try:
         with gpu_lock_guard.acquire(script=ENTRY):
-            headroom()
+            record_fence_wait(custody, gpu_lock_guard, fence_holder)
+            wait_headroom()
             resource_census()
+            resources.sample_device_at_launch(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
             result = OwnedProcessRunner(windows_job_factory=factory).run(command,
                 timeout_s=resource_limits(prediction['identity'])['wall_seconds'], cwd=ROOT, env=child_env)
     except BaseException as error:
