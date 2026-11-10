@@ -122,7 +122,8 @@ def scan(pack_dir, ledger_path=None, shards_dir=None, run_min=RUN_MIN, max_perio
                 raw.append((sha, int(sp["token_start"]) + s - plen, int(sp["token_start"]) + e - plen, k, s_name, s_off, name, e_rel))
             rel += ln
         last = spans[-1]
-        carry = (last["sha256"], int(last["token_end"]), np.array(arr[max(0, n - tail_len):n]), name, n)
+        take = min(tail_len, n, int(last["token_end"]) - int(last["token_start"]))        # the carry is the LAST SPAN's own tokens only: a short last span must not drag the previous object's tokens into the next shard's window (review r2, #2465)
+        carry = (last["sha256"], int(last["token_end"]), np.array(arr[n - take:n]), name, n)
         del arr
     if missing and not allow_missing:
         errors.append("missing shards (cannot claim clean): %s" % ", ".join(missing[:10]) + (" ... +%d" % (len(missing) - 10) if len(missing) > 10 else ""))

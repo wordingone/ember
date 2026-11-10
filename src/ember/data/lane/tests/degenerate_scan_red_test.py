@@ -98,6 +98,18 @@ d = build("h-straddle", [("n1", text(8000)), ("bad", cyc([23, 186], 6000)), ("n2
 r, named, lines = run(d)
 chk("(h) object straddling a shard boundary is REFUSED once, spanning both shards", r.returncode == 1 and named == [sha("bad")] and ".." in lines[0] and "v1-00001" in lines[0])
 
+# (l) review r2 of #2465: a short last span must not carry the previous object's tokens. Shard 0 = [text 20000][A = 4,062 period-2 tokens, below RUN_MIN][B first 50 text tokens]; shard 1 = [B, 20,000 more text].
+# Everything is clean: exit 0, nothing named (the old carry took the last 4,112 tokens, which were A's, and refused B with a negative offset).
+d = build("l-shortspan", [("pre", text(20_000)), ("A", cyc([23, 186], 4062)), ("B", text(20_050))], 24_112)
+r, named, lines = run(d)
+chk("(l) clean object after a short last span is NOT refused (exit 0, nothing named)", r.returncode == 0 and named == [])
+# (m) mirror: B itself is degenerate across the boundary with a short head (50 tokens in shard 0, 5,000 in shard 1): B is named, offsets never negative, source range inside B.
+d = build("m-shorthead", [("pre", text(20_000)), ("B", cyc([23, 186], 5050)), ("post", text(15_000))], 20_050)
+r, named, lines = run(d)
+chk("(m) degenerate B with a short head across a boundary is named (exit 1)", r.returncode == 1 and named == [sha("B")])
+offs = field(lines[0], "offsets") if lines else "x"
+chk("(m) offsets non-negative and the record spans shard 0 -> shard 1", lines and "-" not in offs.replace("v1-", "") and "v1-00000" in lines[0] and "v1-00001" in lines[0])
+
 # (i) real layout: 4,194,304-token shard, ids 23/186 alternating, shard offsets 932,601..2,077,324 (1,144,723 tokens), source coordinates far from shard-relative ones
 d = build("i-real", [("pre", text(932_601)), ("real", cyc([23, 186], 1_144_723)), ("post", text(4_194_304 - 2_077_324))], 4_194_304, src_base=777_000_000)
 r, named, lines = run(d)
