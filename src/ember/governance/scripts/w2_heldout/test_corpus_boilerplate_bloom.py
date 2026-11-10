@@ -21,7 +21,7 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_ROOT = os.path.dirname(HERE)
-REPO_ROOT = os.path.dirname(SCRIPTS_ROOT)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_ROOT))))  # <root>/src/ember/governance/scripts -> <root>
 sys.path.insert(0, SCRIPTS_ROOT)
 
 from w2_heldout.corpus_boilerplate_bloom import (

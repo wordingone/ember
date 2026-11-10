@@ -50,7 +50,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))  # repository root
 LEGACY_SCRIPTS = os.path.join(ROOT, "scripts")
 sys.path.insert(0, LEGACY_SCRIPTS)
-EMBER_ROOT = os.path.normpath(os.path.join(ROOT, "..", "ember"))  # read-only fallback tree
+# No sibling fallback tree: every input this checker reads is tracked in this repository.
 
 sys.path.insert(0, HERE)
 
@@ -67,21 +67,18 @@ def _read(path):
 
 
 def _resolve(rel_path, inputs, allow_ember_fallback=True):
-    """Resolve rel_path against this worktree first, then EMBER_ROOT (if
-    allowed). Records the source tree in `inputs`. Raises ParseError if
-    absent from every permitted location."""
+    """Resolve rel_path against this repository. Records the source tree in
+    `inputs`. Raises ParseError if absent.
+
+    A read-only fallback to a sibling directory named `ember` (ROOT/../ember)
+    was removed: it only equalled this repository when the checkout itself was
+    named `ember`, so the self-location gate's verdict on it depended on the
+    checkout's directory name, and every input it served is tracked here.
+    `allow_ember_fallback` is kept for caller compatibility and has no effect."""
     worktree_path = os.path.join(ROOT, rel_path)
     if os.path.isfile(worktree_path):
         inputs[rel_path] = "goalforge"
         return worktree_path
-    if allow_ember_fallback:
-        ember_path = os.path.join(EMBER_ROOT, rel_path)
-        if os.path.isfile(ember_path):
-            inputs[rel_path] = "ember"
-            return ember_path
-        raise ParseError(
-            f"{rel_path}: absent from both the goalforge worktree and <reference-tree> (read-only fallback)"
-        )
     raise ParseError(f"{rel_path}: absent from the goalforge worktree (no fallback permitted)")
 
 
