@@ -117,7 +117,9 @@ def main():
         for l in open(OUT, encoding="utf-8"):
             kept += 1; toks += json.loads(l)["tokens"]
     st["resumed_tried"] = len(seen)
-    import reserve_plan; assert reserve_plan.write_gate("gh_assemble.py out", (64 << 20) + TARGET * (256 << 10)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324 / lead 82669: ~<=256 KiB per chain (diff capped at 200 KB)
+    import reserve_plan
+    if not reserve_plan.write_gate("gh_assemble.py out", (64 << 20) + TARGET * (256 << 10), log=lambda m: print(m, file=sys.stderr, flush=True)):      # lead 82324 / lead 82669: ~<=256 KiB per chain (diff capped at 200 KB); wait lines to stderr
+        sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: gh_assemble.py not writing")
     with open(OUT, "a", encoding="utf-8") as fo, open(done_p, "a") as ft:
         for c in cands:
             if kept >= TARGET: break

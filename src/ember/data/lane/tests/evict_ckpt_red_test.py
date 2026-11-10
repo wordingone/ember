@@ -13,19 +13,48 @@ def check(l, c):
     global ok
     ok &= bool(c); print("PASS" if c else "FAIL", l)
 R = (M_ROOT + "/ember-live-receipts/")
-check("RED depth-1 (d4a908e3) object refused", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261107T073017Z/measurement-60bd6b8de01742389ea577ca2ccdbd0a/trained-child/objects/ab.pt"))
-check("RED depth-2 (8ed2307c) object refused", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261106T065417Z/measurement-0dd76650ae8b43a8be5ce845f72eeb49/trained-child/objects/ab.pt"))
-check("RED H45 child object refused", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261109T100107Z/measurement-x/trained-child/objects/ab.pt"))
-check("RED manifest / receipt (not objects/*.pt) refused", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-9/trained-child/checkpoint-manifest.json"))
-check("RED H44 child (e73486d2) object refused (lead 82363)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-99364f2a0e624c98981335f3ef65bbc0/trained-child/objects/ab.pt"))
-check("RED H41 child (cb516ed9) object refused (lead 82363)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261107T165532Z/measurement-8fe5f0ef58e34d68831174450d3f50d7/trained-child/objects/ab.pt"))
-check("RED H44 / H41 probe dirs are KEEP (optimizer-state, replay-state)", E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261109T072659Z/m/trained-child/optimizer-state.pt") and E.kept(R + "cia-probe-a1-five-attn-stage-d4-20261107T165532Z/m/trained-child/replay-state.pt"))
-check("RED kept() covers a bare directory path (no trailing slash)", E.kept(R + "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/measurement-99364f2a0e624c98981335f3ef65bbc0/trained-child"))
-check("GREEN H43 child (0622d4c4) object is not a KEEP node", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20261108T064216Z/measurement-4cd3cb481d2a4ae883d12c032418598c/trained-child/objects/ab.pt") is None and not E.kept(R + "cia-hour-a1-five-attn-stage-d4-20261108T064216Z/measurement-4cd3cb481d2a4ae883d12c032418598c/trained-child"))
+import protected_set as PS
+D = PS.load()      # the hour paths below come FROM loops/protected-set.json: a re-declaration can never leave this test pinned to old hours (issue 2450)
+def under(marker, tail="/m/trained-child/objects/ab.pt"):
+    return R + marker.rstrip("/") + tail if marker.endswith("/") else R + marker
+check("declared shared set is non-empty (%d markers)" % len(D["markers"]), len(D["markers"]) > 0)
+for _m in D["markers"]:
+    check("RED shared marker object refused: " + _m[-48:], E.refuse_reason(under(_m)) and E.kept(under(_m)) == _m)
+    check("RED shared marker: optimizer / replay state under it is KEEP: " + _m[-48:], E.kept(under(_m, "/m/trained-child/optimizer-state.pt")) == _m and E.kept(under(_m, "/m/trained-child/replay-state.pt")) == _m)
+    check("RED kept() covers a bare directory path under the marker (no trailing slash): " + _m[-48:], E.kept(under(_m, "/measurement-x/trained-child")) == _m)
+_m0 = D["markers"][0]
+check("RED manifest / receipt (not objects/*.pt) under a marker refused", E.refuse_reason(under(_m0, "/measurement-9/trained-child/checkpoint-manifest.json")))
+check("GREEN a hour dir that is not declared is not a KEEP node (an old ancestor)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20260927T080708Z/measurement-d6/trained-child/objects/ab.pt") is None and not E.kept(R + "cia-hour-a1-five-attn-stage-d4-20260927T080708Z/measurement-d6/trained-child"))
+check("GREEN an undeclared marker-lookalike (same hour name, one character off) is not a KEEP node", not E.kept(under(_m0.rstrip("/") + "0/")))
 _S = (LANE_ROOT + "/scripts/")
 for _f in ("evict_ckpt_list.py", "reserve_manifest.py", "reserve_evict.py", "ckpt_backup.py", "ckpt_lineage_delete.py"):
     _t = open(_S + _f, encoding="utf-8").read()
-    check("every checkpoint-deleting script consults the KEEP set: " + _f, "KEEP_MARKERS" in _t or ".kept(" in _t or '"evict_ckpt_list").kept(' in _t)
+    check("every checkpoint-deleting script consults the KEEP set: " + _f, "KEEP_MARKERS" in _t or ".kept(" in _t or '"evict_ckpt_list").kept(' in _t or "_keep(" in _t)      # the declared set (loops/protected-set.json) via evict_ckpt_list.kept()/KEEP_MARKERS; the behaviour is executed in reserve_evict_red_test.py and below
+T0 = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch")).replace("\\", "/")
+try:
+    import json as _j, subprocess
+    open(T0 + "/bad.json", "w").write(_j.dumps({"markers": [{"marker": "B:/"}], "reserve_markers": []}))
+    _p = PS.PATH
+    try:
+        PS.PATH = T0 + "/bad.json"
+        try: E.kept(R + "cia-hour-x/m/trained-child/objects/ab.pt"); _a = False
+        except PS.ProtectedSetError: _a = True
+        try: E.refuse_reason(R + "cia-hour-x/m/trained-child/objects/ab.pt"); _b = False
+        except PS.ProtectedSetError: _b = True
+    finally:
+        PS.PATH = _p
+    check("RED E.kept() and E.refuse_reason() fail closed (ProtectedSetError) on a too-broad declaration", _a and _b)
+    open(T0 + "/imp.py", "w").write(("import sys; sys.path.insert(0, '" + LANE_ROOT + "/scripts')\nimport protected_set as P; P.PATH = sys.argv[1]\ntry:\n    import evict_ckpt_list\n    print('IMPORTED')\nexcept P.ProtectedSetError:\n    print('FAILCLOSED')\n"))
+    check("RED importing evict_ckpt_list on a bad declaration fails closed (subprocess)", "FAILCLOSED" in subprocess.run([sys.executable, T0 + "/imp.py", T0 + "/bad.json"], capture_output=True, text=True).stdout)
+    open(T0 + "/ok.json", "w").write(_j.dumps({"markers": [{"marker": "cia-hour-only-here/"}], "reserve_markers": []}))
+    try:
+        PS.PATH = T0 + "/ok.json"
+        _in = E.kept(R + "cia-hour-only-here/m/trained-child/objects/ab.pt"); _out = E.kept(under(D["markers"][0]))
+    finally:
+        PS.PATH = _p
+    check("RED kept() re-reads the declaration on every call: a marker declared now protects, a marker removed no longer does", _in == "cia-hour-only-here/" and _out is None)
+finally:
+    shutil.rmtree(T0, ignore_errors=True)
 T = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch"))
 try:
     open(T + "/l.tsv", "w").write("0\t5\tB:/x/trained-child/objects/ab.pt\n")

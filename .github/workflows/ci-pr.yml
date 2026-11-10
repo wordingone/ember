@@ -48,6 +48,9 @@ jobs:
         run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json --expiry-mode warn
       - name: Compile changed governance tooling
         run: python -B -m compileall -q src/ember/governance/scripts/github
+      - name: Lint lane write gates and execute the gated writers against a stub gate (#2449)
+        # AST lint (every bulk writer is behind an enforced reserve_plan.write_gate or listed in TINY_OK / GATE_DEBT) plus executed refusal cases; needs no lane environment.
+        run: python -B src/ember/data/lane/tests/write_gate_lint_red_test.py
       - name: Bootstrap exact-head live PR policy (read-only)
         if: github.event_name == 'pull_request'
         env:

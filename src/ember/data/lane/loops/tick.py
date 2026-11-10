@@ -27,6 +27,16 @@ BASH = "C:/Program Files/Git/bin/bash.exe"   # NOT plain "bash" (resolves to WSL
 DETACH = 0x00000008 | 0x00000200 | 0x08000000   # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
 STATE = L + "/state.json"
 st = json.load(open(STATE)) if os.path.exists(STATE) else {}
+# Drift gate (#2454, lead 82490) - FIRST, before the scratch sweep or any work: the lane runs only code that is byte-identical to the reviewed tree copy (or drift acknowledged with a ruling, see lane_drift.py).
+# Fail closed: if the check cannot run, the tick refuses. A refused tick records a blocked row (3 in a row print ESCALATE) and starts nothing - it does not go through done(), which would start lane jobs.
+DRIFT_NOTE = ""
+try:
+    sys.path.insert(0, ROOT + "/scripts"); import lane_drift; _dok, DRIFT_NOTE = lane_drift.gate(LOOP)
+except BaseException as _e: _dok, DRIFT_NOTE = False, f"drift gate error {type(_e).__name__}: {str(_e)[:160]}"
+if not _dok:
+    _bl = st.get(LOOP, {}).get("blocked", 0) + 1; st[LOOP] = {"blocked": _bl, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}; json.dump(st, open(STATE, "w"))
+    with open(L + "/receipts.jsonl", "a", encoding="utf-8") as _f: _f.write(json.dumps(dict(ts=time.strftime("%Y-%m-%dT%H:%M:%S%z"), loop=LOOP, status="blocked", note="DRIFT-REFUSED " + DRIFT_NOTE)) + chr(10))
+    print(f"[{LOOP}] blocked: DRIFT-REFUSED {DRIFT_NOTE}" + (" ESCALATE (blocked 3 ticks)" if _bl >= 3 else "")); sys.exit(0)
 try:      # lead 82361: a killed writer's owner-stamped scratch is swept every tick (receipt row first; unstamped dirs are never touched)
     sys.path.insert(0, ROOT + "/scripts"); import scratch_dir; scratch_dir.sweep()
 except Exception as _e: print(f"[{LOOP}] scratch sweep failed: {_e}")
@@ -200,11 +210,16 @@ def backlog_state(start_missing=True):
     return live, pend, started, held
 
 def done(status, note):
+    if DRIFT_NOTE: note += ' | ' + DRIFT_NOTE      # an acknowledged drift is always visible in the receipt
     try:
         try:
             sys.path.insert(0, ROOT + '/scripts'); import stall_alarm; _sa = stall_alarm.run()   # lead 81807: no-progress alarm; mails lead itself
             if not _sa.startswith('ok'): note += ' | ' + _sa
         except Exception as _e: note += f' | stall_alarm error {type(_e).__name__}'
+        try:   # lead 82534: a gate edit must list the long-lived drivers that still run the old code (restart each at a step boundary)
+            import stale_drivers; _sd = stale_drivers.line(show=3)
+            if not _sd.startswith('stale_drivers 0'): note += ' | ' + _sd
+        except Exception as _e: note += f' | stale_drivers error {type(_e).__name__}'
         live, pend, started, held = backlog_state(start_missing=(LOOP in ("fetch", "prep", "upload")))
         tail = f" | live: {', '.join(live) or 'none'}; backlog {len(pend)}" + (f"; held by budget: {', '.join(held)}" if held else "") + f"; B free {B_free():.1f} GiB, A free {A_free():.1f} GiB"
         if started: note += "; started " + ", ".join(started)

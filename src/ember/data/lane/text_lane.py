@@ -144,6 +144,8 @@ SPEC = {
 }[LANE]
 
 def run(cmd, log):
+    if not B.reserve_plan.write_gate(f"text_lane {LANE} start {os.path.basename(cmd[1]) if len(cmd) > 1 else cmd}", 1 << 30, B.log):   # lead 82509: new pack/dedup/scrub STARTS wait at the floor (in-flight steps finish)
+        raise RuntimeError("write_gate refused: B: below the reserve floor for the whole gate cap: not starting the step")
     B.reserve_plan.harm_wait(f"text_lane {LANE} {os.path.basename(cmd[1]) if len(cmd) > 1 else cmd}", B.log)   # lead 82070: harm-only (link priority / disk floor)
     with open(log, "w") as lf: r = subprocess.run(cmd, stdout=lf, stderr=subprocess.STDOUT, env=ENV)
     if r.returncode: raise RuntimeError(f"{cmd[1]} failed rc={r.returncode}; see {log}")

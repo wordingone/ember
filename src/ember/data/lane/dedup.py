@@ -21,17 +21,23 @@ def sig(text):
     for k in range(NP):
         s[k] = (h * A[k] + Bc[k]).min()
     return s
+def _glog(m): print(m, file=sys.stderr, flush=True)      # wait lines go to stderr: stdout carries only the JSON stats line
 def main():
     t0 = time.time(); st = dict(docs_in=0, exact_dup=0, near_dup=0, kept=0, tok_removed=0, tok_out=0)
     seen_sha = set(); buckets = [dict() for _ in range(B)]; sigs = []
     cctx = zstandard.ZstdCompressor(level=6)
     src_bytes = os.path.getsize(SRC); GATE_STEP = 512 << 20; next_gate = GATE_STEP
-    import reserve_plan; assert reserve_plan.write_gate("dedup.py out", src_bytes + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324 / lead 82669: every lane write path waits on the floor (the output is at most the source size)
-    with open(SRC, "rb") as f, open(OUT, "wb") as fo, cctx.stream_writer(fo) as w:
+    import reserve_plan
+    if not reserve_plan.write_gate("dedup.py out", src_bytes + (64 << 20), log=_glog):      # lead 82324 / lead 82669: every lane write path waits on the floor (the output is at most the source size)
+        sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: dedup.py not writing")
+    # write to .part and rename on success: a refusal mid-stream never leaves a valid-looking partial at the final path
+    with open(SRC, "rb") as f, open(OUT + ".part", "wb") as fo, cctx.stream_writer(fo) as w:
         for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
             d = json.loads(line); st["docs_in"] += 1
             if fo.tell() >= next_gate:      # long stream: re-gate every 512 MiB written, for what is still to come
-                assert reserve_plan.write_gate("dedup.py out", max(src_bytes - fo.tell(), 0) + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"; next_gate = fo.tell() + GATE_STEP
+                if not reserve_plan.write_gate("dedup.py out", max(src_bytes - fo.tell(), 0) + (64 << 20), log=_glog):
+                    sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: dedup.py stopped mid-stream (only OUT.part exists)")
+                next_gate = fo.tell() + GATE_STEP
             sh = hashlib.sha256(WS.sub(" ", d["text"]).strip().encode()).digest()
             tk = d.get("tokens", 0)
             if sh in seen_sha: st["exact_dup"] += 1; st["tok_removed"] += tk; continue
@@ -51,5 +57,6 @@ def main():
             if dup: st["near_dup"] += 1; st["tok_removed"] += tk; continue
             st["kept"] += 1; st["tok_out"] += tk
             w.write((json.dumps(d, ensure_ascii=False) + "\n").encode())
+    os.replace(OUT + ".part", OUT)
     st["secs"] = round(time.time() - t0); print(json.dumps(st))
 main()
