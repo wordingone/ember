@@ -874,7 +874,7 @@ def streamed_sources(identity):
 
 TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
 CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'cia_fp32_master.py'))
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'cia_fp32_master.py', 'cia_fp32_evidence.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
     ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_contention.py'))
@@ -1169,6 +1169,9 @@ def resource_limits(identity):
     return limits
 
 
+HOUR_KINDS = ('LOCATE', 'MOVE', 'BASELINE', 'LEARN')
+
+
 def hour_mode(identity):
     if 'hour' not in identity:
         if 'continuation' in identity:
@@ -1202,6 +1205,12 @@ def hour_mode(identity):
             raise ValueError(f'hour declared_lr is governed-hour-v1/checkpoint-probe-v1 only, a finite float in '
                              f'[{DECLARED_LR_MIN}, {DECLARED_LR_MAX}]')
         fixed = fixed | {'declared_lr'}
+    if isinstance(value, dict) and 'hour_kind' in value:
+        # What the hour is FOR (#2119 locked goal, lead rulings 82495 and 82520): LOCATE a skill in Qwen, MOVE it into Ember,
+        # BASELINE a reference, or LEARN (the lead's learn job class). Declared, validated here and carried in the hour (so in every row and the hour result); it never changes the run.
+        if value.get('schema') != 'governed-hour-v1' or value['hour_kind'] not in HOUR_KINDS:
+            raise ValueError(f'hour hour_kind is governed-hour-v1 only, one of {HOUR_KINDS}')
+        fixed = fixed | {'hour_kind'}
     if isinstance(value, dict) and 'precision_fix' in value:
         # fp32 master weights and moments (#2119, lead ruling 82420/82435): the declared treatment of a paired comparison hour. The
         # optimizer identity stays equal to the parent's; the treatment is the schema-v3 optimizer state plus this declaration.
@@ -2234,6 +2243,17 @@ def _cce_executed_fields(executed):
     return {key: sum(item[key] for item in values) for key in ('cce_calls', 'cce_rows', 'cce_weight_total')}
 
 
+def ungated_optimizer_step(optimizer):
+    """The non-deferred optimizer step: the fp32 master path when the declared treatment is on, otherwise the native step.
+    Parameters without a gradient are left alone on the master path (the native step skips them the same way)."""
+    import cia_fp32_master
+    if cia_fp32_master.enabled(optimizer):
+        for group in optimizer.param_groups:
+            cia_fp32_master.step(optimizer, group, [p for p in group['params'] if p.grad is not None], None)
+    else:
+        optimizer.step()
+
+
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
                  capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None,
                  experiment_binding=None, image_text=None, next_pack=None,
@@ -2504,12 +2524,7 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
         refused_host = torch.empty((), dtype=torch.bool, pin_memory=True)
         refused_host.copy_(refused, non_blocking=True)
     else:
-        import cia_fp32_master
-        if cia_fp32_master.enabled(optimizer):
-            for group in optimizer.param_groups:
-                cia_fp32_master.step(optimizer, group, [p for p in group['params'] if p.grad is not None], None)
-        else:
-            optimizer.step()
+        ungated_optimizer_step(optimizer)
     if events is not None:
         events[-1].record()
     if stage_next and staged_early is None:

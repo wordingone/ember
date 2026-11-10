@@ -1181,6 +1181,15 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
     check_image_start(prepared['binding'], base_steps)
+    # Declared fp32 master hour (#2119, lead rulings 82495 / 82501): the hour must PROVE the path ran and show the effective step size.
+    # The first row is read here, after the parent restored and before any update; the result is refused at its end without the block.
+    fp32_declared = hour.get('precision_fix') == 'fp32_master_v1'
+    fp32_evidence = None
+    if fp32_declared:
+        import cia_fp32_evidence
+        untrained = {id(p) for p in getattr(optimizer, '_ember_template_untrained', ())}
+        fp32_evidence = cia_fp32_evidence.Evidence(optimizer, inventory, track=lambda name, p: p.requires_grad and id(p) not in untrained)
+        fp32_evidence.observe(0)
     runner._write_new(custody / 'checkpoint-parent.json', dict(
         manifest_sha256=parent['checkpoint_manifest_sha256'], published=True))
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
@@ -1242,6 +1251,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 _leak_probe(custody, total_steps)
             total_steps += 1
             positions += row['applied_positions']
+            if fp32_evidence is not None and fp32_evidence.due(total_steps, probe=probe):
+                fp32_evidence.observe(total_steps)   # reads device-side optimizer state only; its wall is reported in the block
             # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
             # found_inf, so its clock does not advance; the row names those owners, and they are not counted.
             skipped = {(int(layer), expert) for layer, experts in (row.get('unrouted_expert_grads_released') or {}).items()
@@ -1342,6 +1353,12 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
     energy_binding = energy.end()
+    # The fp32 master receipt block is read from the hour's TERMINAL optimizer state, before the continuation's extra update moves it,
+    # and an hour that declared the treatment is refused here without a complete block (lead ruling 82501: required, not optional).
+    fp32_block = None
+    if fp32_declared:
+        fp32_block = cia_fp32_evidence.require(fp32_evidence.finish(
+            total_steps, child_optimizer_state_path=custody / 'trained-child' / 'optimizer-state.pt'), declared=True, probe=probe)
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
     continuation = None if probe or learning else publish_continuation_reference(
@@ -1367,6 +1384,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         prediction_sha256=binding['launch']['prediction_sha256'],
         energy=energy_binding,
         continuation=continuation,
+        **({'fp32_master': fp32_block} if fp32_declared else {}),
         production_mixture_validation=prepared['mixture_validation'],
         learning_snapshots=snapshots if learning else None,
         learning_snapshot_pause_seconds=paused if learning else None,
