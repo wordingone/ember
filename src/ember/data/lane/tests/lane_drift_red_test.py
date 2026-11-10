@@ -23,7 +23,7 @@ def check(label, cond, detail=""):
 
 SCR = (LANE_ROOT + "/scratch"); os.makedirs(SCR, exist_ok=True)
 T = tempfile.mkdtemp(dir=SCR, prefix="drift-test-").replace("\\", "/")
-D.ROOT = T; D.L = T + "/loops"; D.CACHE = D.L + "/drift-cache.json"; D.ACK = D.L + "/drift-ack.json"; os.makedirs(D.L)
+D.LANE_BASE = T; D.L = T + "/loops"; D.CACHE = D.L + "/drift-cache.json"; D.ACK = D.L + "/drift-ack.json"; os.makedirs(D.L)
 SRC = T + "/src"; REPO = T + "/repo"; SUB = D.cfg()["tree"]["sub"]; TREE = REPO + "/" + SUB
 ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull)
 
@@ -190,7 +190,7 @@ os.remove(D.ACK); wr(SRC + "/a.py", "print('a')\n")
 
 # ---- the real exporter on a tiny source: deterministic, README LF, exclude honoured
 import importlib; importlib.reload(D)
-D.ROOT = T; D.L = T + "/loops"
+D.LANE_BASE = T; D.L = T + "/loops"
 tiny = T + "/tiny"; wr(tiny + "/x.py", '"""doc"""\nimport os\nprint(os.getcwd())\n'); wr(tiny + "/lane-README.md", "# r\r\nz\r\n"); wr(tiny + "/caselaw_lane_handoff.py", "print('excluded')\n")
 try:
     D.export_to(T + "/e1", tiny); D.export_to(T + "/e2", tiny); o1, o2 = D.dir_oids(T + "/e1"), D.dir_oids(T + "/e2")

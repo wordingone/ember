@@ -29,7 +29,7 @@ import re
 import time
 
 RECEIPTS = (M_ROOT + "/ember-live-receipts")
-IN_ROOT = (M_ROOT + "/avir/" + SEAT_LEAD + "/state/issue1945-receipts")
+IN_RECEIPTS = (M_ROOT + "/avir/" + SEAT_LEAD + "/state/issue1945-receipts")
 WINDOW_MARKER = (M_ROOT + "/avir/" + SEAT_LEAD + "/state/gpu-window-open")
 MIN_ORPHAN_IDLE_S = 2 * 3600
 BIG = 1 << 20
@@ -55,7 +55,7 @@ def _read(p):
         return ""
 
 
-def consumers(mid, receipts=RECEIPTS, in_root=IN_ROOT):
+def consumers(mid, receipts=RECEIPTS, in_root=IN_RECEIPTS):
     """Hours that name this probe measurement: [(kind, dir, terminal_receipt or None)]. kind 'hour' = a cia-hour-* prediction.json, 'ref' = a
     checkpoint-probe-reference.json (a dispatch that has the probe but may not have prepared its hour yet; a REUSE_PROBE_IN retry reads one)."""
     out = []
@@ -98,7 +98,7 @@ def _linked_outside(child):
     return [v[2] for v in names.values() if v[0] != v[1]]
 
 
-def probe_eligibility(path, kept=None, receipts=RECEIPTS, in_root=IN_ROOT, window=WINDOW_MARKER, now=None):
+def probe_eligibility(path, kept=None, receipts=RECEIPTS, in_root=IN_RECEIPTS, window=WINDOW_MARKER, now=None):
     now = time.time() if now is None else now
     probe, mid = locate(path)
     res = dict(ok=False, clause=None, reason=None, probe=probe, consumers=[], terminal_receipt=None)

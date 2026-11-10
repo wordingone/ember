@@ -12,7 +12,7 @@ names the exact exported blob ids it covers and expires. When drift is found the
 Red: python scripts/tests/lane_drift_red_test.py"""
 import os, sys, json, time, hashlib, subprocess
 SCRIPTS = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
-ROOT = os.path.dirname(SCRIPTS); L = ROOT + "/loops"
+LANE_BASE = os.path.dirname(SCRIPTS); L = LANE_BASE + "/loops"
 CFG = SCRIPTS + "/lane-export.json"; CACHE = L + "/drift-cache.json"; ACK = L + "/drift-ack.json"
 FETCH_EVERY_S = 1800; ACK_TTL_H = 48
 EXPORTABLE = (".py", ".sh", ".ps1")
