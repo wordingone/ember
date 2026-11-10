@@ -18,7 +18,7 @@ pass
 from th_pack_scan import signature
 
 PACKED = os.environ.get("TL_PACKED", (LANE_ROOT + "/packed"))
-SCAN_DIR = os.environ.get("TL_SCAN_DIR", (LANE_ROOT + "/logs/th-scan"))
+SCAN_ROWS = os.environ.get("TL_SCAN_DIR", (LANE_ROOT + "/logs/th-scan"))
 OUT = os.environ.get("TL_OUT", (LANE_ROOT + "/loops/trainable-listing.json"))
 
 
@@ -36,7 +36,7 @@ def local_complete(pack_dir):
 def scan_state(pack_dir, name):
     """-> (state, detail). Fail-closed: anything unreadable is NOT RUN. A row binds either to the complete LOCAL pack (signature equal now) or, for a pack whose local shards are gone,
     to its Hub copy (scan-hub-binding.json: Hub listing signature == the clean row's signature). A scan of an incomplete local stub never counts."""
-    f = os.path.join(SCAN_DIR, "train-%s.json" % name)
+    f = os.path.join(SCAN_ROWS, "train-%s.json" % name)
     if not os.path.isfile(f): return "NOT RUN", "no scan row"
     try: row = json.load(open(f))
     except Exception as e: return "NOT RUN", "unreadable scan row: %s" % str(e)[:80]
