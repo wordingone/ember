@@ -1,7 +1,7 @@
 {
   "schema": "ember-issue2119-wiring-manifest-v1",
   "note": "The issue 2119 head-wiring test files and the exact count they collect. Both CI workflows (ci-pr and issue2119-wiring-tests) read this file, so a test and its count change in one reviewed EMBER-02B edit.",
-  "expected_tests": 246,
+  "expected_tests": 272,
   "new_files": [
     "tests/ember_restart_model/test_issue2119_post_hour_promotion_gate.py",
     "tests/ember_restart_model/test_issue2119_fresh_session_head_load.py",
@@ -12,7 +12,10 @@
     "tests/ember_restart_model/test_issue2119_fp32_master_keying.py",
     "tests/ember_restart_model/test_issue2119_fp32_master_numerics.py",
     "tests/ember_restart_model/test_issue2119_fp32_master_runner.py",
-    "tests/ember_restart_model/test_issue2119_fp32_master_state.py"
+    "tests/ember_restart_model/test_issue2119_fp32_master_state.py",
+    "tests/ember_restart_model/test_issue2119_fp32_master_evidence.py",
+    "tests/ember_restart_model/test_issue2119_fp32_master_callsites.py",
+    "tests/ember_restart_model/test_issue2119_fp32_master_roundtrip.py"
   ],
   "page_files": [
     "tests/ember_restart_model/test_issue2119_continuity_page.py",
