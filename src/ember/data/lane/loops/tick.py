@@ -68,15 +68,21 @@ def cmdlines():
         _cmd = [x for x in out.splitlines() if x.strip()]
     return _cmd
 def alive(pat): return sum(1 for c in cmdlines() if pat in c and "tick.py" not in c)
-def scan_pids(name):
-    """PIDs of live `th_pack_scan.py <name> ` processes (pack_scan_status, lead 82613 item 3). Raises on a failed lookup: the caller reads that as unknown, never as running."""
+def scan_listing():
+    """One process listing -> [(pid, cmdline)]. Raises when the listing fails, is empty or parses to nothing: a lookup that saw no process at all (a live host always has some) is a failed lookup,
+    never 'no scan running' (lead 82933 / PR 2467 review D3). The upload tick builds it ONCE per tick and every pack reads it."""
     out = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     if out.returncode != 0: raise RuntimeError("process lookup rc=%d" % out.returncode)
-    pids = []
+    rows = []
     for ln in out.stdout.splitlines():
-        pid, _, c = ln.partition("	")
-        if ("th_pack_scan.py " + name + " ") in c and "tick.py" not in c and pid.strip().isdigit(): pids.append(int(pid))
-    return pids
+        pid, _, c = ln.partition("\t")
+        if pid.strip().isdigit(): rows.append((int(pid), c))
+    if not rows: raise RuntimeError("process listing empty or unparsable")
+    return rows
+def scan_pids(name, rows=None):
+    """PIDs of live `th_pack_scan.py <name> ` processes (pack_scan_status, lead 82613 item 3). `rows` is the tick's shared listing (scan_listing()); without it one listing is made. Raises on a failed lookup: the caller reads that as unknown, never as running."""
+    if rows is None: rows = scan_listing()
+    return [pid for pid, c in rows if ("th_pack_scan.py " + name + " ") in c and "tick.py" not in c]
 # ---- CPU cap (lead 81497, operator): the lane may use at most LANE_CORES logical cores in total; BelowNormal priority; no new job while total CPU > CPU_MAX %. ----
 LANE_CORES = 8; CPU_MAX = 85
 BELOW_NORMAL = 0x00004000
@@ -389,6 +395,13 @@ def upload():
     todo = [i for i in items if not i.get("verified")]
     if not todo: done("idle", "no batch pending: nothing newly C1/C2-PASSed (standing rule: private uploads auto-start on rules + training C1/C2 PASS)")
     acts = []; bad = []; skipped = []
+    _lst = {}      # PR 2467 review note 8: ONE process listing per tick (built on first use, result or failure cached), not one per pack
+    def _pids(n):
+        if "v" not in _lst:
+            try: _lst["v"] = ("ok", scan_listing())
+            except Exception as _e: _lst["v"] = ("err", _e)
+        if _lst["v"][0] == "err": raise _lst["v"][1]
+        return scan_pids(n, _lst["v"][1])
     try: from huggingface_hub import HfApi
     except Exception as e: done("blocked", "huggingface_hub import failed")
     api = HfApi()
@@ -410,15 +423,32 @@ def upload():
         shabad = [x for x in shabad if not x.endswith("source-manifest.jsonl")] if it.get("manifest_reemit_ok") else shabad   # lead 81232: manifest re-emits with unchanged docs-index/ledger shas may replace the HF copy by hand; tick never overwrites
         if shabad: bad.append(f"{it['name']}: {len(shabad)} file(s) differ from the HF copy (never overwritten without lead approval): {shabad[:2]}")
         elif miss:
-            sys.path.insert(0, ROOT + "/scripts"); import th_pack_scan      # operator / lead 81934: TruffleHog pre-upload gate on EVERY repo, fail-closed; push only on a clean scan of the CURRENT file set
+            sys.path.insert(0, ROOT + "/scripts"); import th_pack_scan      # operator / lead 81934: TruffleHog pre-upload gate on EVERY repo, fail-closed; push only on a clean scan of the CURRENT file set (path + byte size signature, not content)
             import pack_scan_status as _pss      # lead 82613 item 3: one function names the scan state; 'unknown' is never printed as 'running'
-            _st, _sd = _pss.pack_scan_status(it["name"], it["local"], ROOT + "/logs/th-scan", th_pack_scan.signature, scan_pids)
-            _act = _pss.push_decision(_st, bool(it.get("scan_pass")))
-            # lead 82933 class fix: the decision comes BEFORE the cap check and the push. REFUSED / NOT RUN packs are skipped (no push attempt, no cap check, no mail, no blocked tick); only a pack that was PASS and is now REFUSED escalates.
-            if _st == "unknown" and "lookup failed" not in _sd and spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"): acts.append(f"{it['name']}: TruffleHog pre-upload scan started")
-            if _act == "skip": skipped.append(_pss.status_line(it["name"], _st, _sd)); continue
-            if _act == "wait": skipped.append(_pss.status_line(it["name"], _st, _sd)); continue
-            if _act == "escalate": bad.append(_pss.status_line(it["name"], _st, _sd) + " (was PASS earlier: ESCALATE)"); continue
+            _st, _sd = _pss.pack_scan_status(it["name"], it["local"], ROOT + "/logs/th-scan", th_pack_scan.signature, _pids)
+            _tries = int(it.get("scan_tries", 0) or 0)
+            _dec = _pss.push_decision(_st, bool(it.get("scan_pass") or it.get("started")), _tries, _pss.LOOKUP_FAILED in _sd)      # was-PASS = scan_pass OR started (items pushed before scan_pass existed carry only `started`)
+            # lead 82933 class fix: the decision comes BEFORE the cap check and the push, and ANYTHING other than "push" never pushes (PR 2467 review note 1).
+            if _dec != "push":
+                if _st in ("clean", "refused_hits"): it.pop("scan_tries", None); it.pop("scan_escalated", None)      # a definitive verdict resets the bounded-retry state
+                if _dec == "rescan":
+                    try: _alive = _pids(it["name"])      # alive-guard: never spawn while a scan of this pack runs; a failed lookup spawns nothing
+                    except Exception: _alive = None
+                    if _alive is None or _alive: skipped.append(_pss.status_line(it["name"], "unknown", _pss.LOOKUP_FAILED if _alive is None else "scan process alive"))
+                    elif spawn(f"python scripts/th_pack_scan.py {it['name']} {it['local']}", ROOT + f"/logs/th-scan-{it['name']}.log"):
+                        it["scan_tries"] = _tries + 1; acts.append(f"{it['name']}: TruffleHog pre-upload scan started (try {it['scan_tries']}/{_pss.MAX_SCAN_TRIES}; state {_st})")
+                    else: skipped.append(_pss.status_line(it["name"], _st, _sd) + " (scan start deferred)")
+                elif _dec == "escalate":
+                    bad.append(_pss.status_line(it["name"], _st, _sd) + (" (was PASS earlier: ESCALATE)" if _st == "refused_hits" else " (%d scans started without a verdict: ESCALATE)" % _tries))
+                    if _st != "refused_hits" and not it.get("scan_escalated"):
+                        try:
+                            sys.path.insert(0, ROOT + "/scripts"); import mb_send
+                            mb_send.send(SEAT_LEAD, f"SCAN STUCK: {it['name']}", f"{it['name']}: {_st} after {_tries} TruffleHog scans started ({_sd}); nothing uploaded. Needs a look at logs/th-scan-{it['name']}.log.")
+                            it["scan_escalated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                        except Exception as _e: bad.append(f"{it['name']}: scan-stuck mail failed {type(_e).__name__}")
+                else: skipped.append(_pss.status_line(it["name"], _st, _sd))      # wait / skip
+                continue
+            it.pop("scan_tries", None); it.pop("scan_escalated", None)
             it["scan_pass"] = time.strftime("%Y-%m-%dT%H:%M:%S")      # a clean verdict for the current file set was seen for this item
             mb = sum(os.path.getsize(f) for f in loc if (it["path"].rstrip("/") + "/" + os.path.relpath(f, it["local"]).replace(chr(92), "/")) in miss)
             sys.path.insert(0, ROOT + "/scripts"); import hf_cap
