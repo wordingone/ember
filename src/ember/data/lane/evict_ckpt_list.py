@@ -15,12 +15,10 @@ from lane_config import HF_RAW_REPO, LANE_ROOT, M_ROOT, SEAT_TRAIN
 import os, sys, json, time, hashlib, threading
 LIST = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/evict-list-final-20261109.tsv"); LIST_SHA = "90a747e8e5e52950a9737699b561af6a81e46cd10e8bbc056a49071a73a666a4"
 WALK = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/h44-walk-20261109.json"); REPO = ("wordingone/" + HF_RAW_REPO); RC = (LANE_ROOT + "/logs/evict-ckpt-20261109.jsonl")
-KEEP_MARKERS = ("cia-hour-a1-five-attn-stage-d4-20261107T073017Z/measurement-60bd6b8de01742389ea577ca2ccdbd0a/",      # walk depth 1 = d4a908e3
-                "cia-hour-a1-five-attn-stage-d4-20261106T065417Z/measurement-0dd76650ae8b43a8be5ce845f72eeb49/",       # walk depth 2 = 8ed2307c
-                "cia-hour-a1-five-attn-stage-d4-20261109T100107Z/",                                                    # H45 child
-                # lead 82363: the H41 child cb516ed9 and the H44 child e73486d2 score better on the true held-out than the selected head; whole hour + probe dirs (trained-child objects, optimizer-state.pt, replay-state.pt)
-                "cia-hour-a1-five-attn-stage-d4-20261107T165532Z/", "cia-probe-a1-five-attn-stage-d4-20261107T165532Z/",
-                "cia-hour-a1-five-attn-stage-d4-20261109T072659Z/", "cia-probe-a1-five-attn-stage-d4-20261109T072659Z/")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import protected_set as _PS
+KEEP_MARKERS = _PS.markers()      # issue 2450: the keep-list is the declared protected set (loops/protected-set.json), not a literal here; unreadable/empty file raises ProtectedSetError = nothing is removed
+PROTECTED_SET_SHA256 = _PS.load()["sha256"]
 
 
 class EvictRefused(RuntimeError):
@@ -31,7 +29,7 @@ def kept(path):
     """The KEEP marker that covers `path` (a file or a directory), else None. Every checkpoint-deleting script (this one, reserve_evict, reserve_manifest, ckpt_backup, ckpt_lineage_delete) asks this one function (lead 82363)."""
     p = path.replace("\\", "/")
     p = p if p.endswith("/") else p + "/"
-    return next((k for k in KEEP_MARKERS if k in p), None)
+    return next((k for k in _PS.markers() if k in p), None)      # re-read on every call: a long-lived caller never keeps a stale (smaller) protected set
 
 
 def load_list(path=LIST, want_sha=LIST_SHA):
@@ -44,9 +42,10 @@ def load_list(path=LIST, want_sha=LIST_SHA):
     return rows
 
 
-def refuse_reason(path, keep=KEEP_MARKERS):
+def refuse_reason(path, keep=None):
     """Static guards, checked for every row before any I/O. Returns a reason string or None."""
     p = path.replace("\\", "/")
+    keep = _PS.markers() if keep is None else keep
     if any(k in p for k in keep): return "under a KEEP node (depth 1 / depth 2 / H45 child)"
     if not ("/trained-child/objects/" in p or "/zero-parent/objects/" in p) or not p.endswith(".pt"): return "not a trained-child / zero-parent objects/*.pt file"      # walk depth 36 is the chain's zero-parent root node (in training's list, 36 files)
     return None

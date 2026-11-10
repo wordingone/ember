@@ -205,6 +205,10 @@ def done(status, note):
             sys.path.insert(0, ROOT + '/scripts'); import stall_alarm; _sa = stall_alarm.run()   # lead 81807: no-progress alarm; mails lead itself
             if not _sa.startswith('ok'): note += ' | ' + _sa
         except Exception as _e: note += f' | stall_alarm error {type(_e).__name__}'
+        try:   # lead 82534: a gate edit must list the long-lived drivers that still run the old code (restart each at a step boundary)
+            import stale_drivers; _sd = stale_drivers.line(show=3)
+            if not _sd.startswith('stale_drivers 0'): note += ' | ' + _sd
+        except Exception as _e: note += f' | stale_drivers error {type(_e).__name__}'
         live, pend, started, held = backlog_state(start_missing=(LOOP in ("fetch", "prep", "upload")))
         tail = f" | live: {', '.join(live) or 'none'}; backlog {len(pend)}" + (f"; held by budget: {', '.join(held)}" if held else "") + f"; B free {B_free():.1f} GiB, A free {A_free():.1f} GiB"
         if started: note += "; started " + ", ".join(started)
