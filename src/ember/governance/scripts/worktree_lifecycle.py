@@ -234,13 +234,18 @@ DEFAULT_LOCK_WAIT_SECONDS = 120.0
 DEFAULT_LOCK_BACKOFF_SECONDS = 2.0
 DEFAULT_LOCK_NOTIFY_SECONDS = 30.0
 HOLDERS_SUFFIX = ".holders"
+STALE_SIDECAR_SECONDS = 300.0
 
 
-def _lock_setting(explicit: float | None, env_name: str, default: float) -> float:
+def _lock_setting(
+    explicit: float | None, env_name: str, default: float, *, lenient_env: bool = False
+) -> float:
     """Resolve one lock timing: explicit argument, then environment, then default.
 
     A malformed or negative value refuses rather than falling back to the default -- a
     typo in the environment must not silently turn a 5 s budget into 120 s or into 0.
+    ``lenient_env=True`` is for a pure display interval (the notice cadence): a bad
+    ENVIRONMENT value falls back to the default there; a bad explicit argument still refuses.
     """
     if explicit is not None:
         value = float(explicit)
@@ -253,8 +258,12 @@ def _lock_setting(explicit: float | None, env_name: str, default: float) -> floa
         try:
             value = float(raw)
         except ValueError as exc:
+            if lenient_env:
+                return default
             raise LifecycleError("LIFECYCLE_LOCK_CONFIG", f"{source}={raw!r} is not a number") from exc
     if value != value or value < 0 or value == float("inf"):
+        if lenient_env and source != "argument":
+            return default
         raise LifecycleError(
             "LIFECYCLE_LOCK_CONFIG", f"{source}={value!r} must be a finite non-negative number"
         )
@@ -267,7 +276,7 @@ def _process_alive(pid: int) -> bool:
     Advisory only: it keeps a waiting lane from naming a process that has exited, and a
     reused pid reads as alive. The lock itself is the OS's, never this answer.
     """
-    if pid <= 0:
+    if pid <= 0 or pid > 0xFFFFFFFF:  # no OS pid is outside 1..2**32-1
         return False
     if os.name == "nt":
         import ctypes
@@ -294,16 +303,20 @@ def _process_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    except OverflowError:
+        # A pid beyond the platform's range cannot be a live process; a waiter prints
+        # "unknown" for it instead of crashing on a garbled record.
+        return False
     return True
 
 
-def _windows_byte_lock(fd: int, *, exclusive: bool, unlock: bool = False) -> bool:
-    """LockFileEx / UnlockFileEx on byte 0. False only for contention (ERROR_LOCK_VIOLATION).
+def _windows_byte_lock(fd: int, *, unlock: bool = False) -> bool:
+    """Shared LockFileEx / UnlockFileEx on byte 0. False only for contention (ERROR_LOCK_VIOLATION).
 
     msvcrt.locking has no shared mode, so a reader takes a real shared byte-range lock
     here. It conflicts with the exclusive lock msvcrt.locking(LK_NBLCK) takes on the same
     byte, which is what keeps a pre-change copy of this tool (exclusive for everything)
-    mutually exclusive with a reader.
+    mutually exclusive with a reader. Writers never come through here.
     """
     import ctypes
     import msvcrt
@@ -333,7 +346,7 @@ def _windows_byte_lock(fd: int, *, exclusive: bool, unlock: bool = False) -> boo
     if unlock:
         ok = kernel32.UnlockFileEx(handle, 0, 1, 0, ctypes.byref(overlapped))
     else:
-        flags = 0x1 | (0x2 if exclusive else 0)  # FAIL_IMMEDIATELY | EXCLUSIVE_LOCK
+        flags = 0x1  # LOCKFILE_FAIL_IMMEDIATELY, shared (no LOCKFILE_EXCLUSIVE_LOCK)
         ok = kernel32.LockFileEx(handle, flags, 0, 1, 0, ctypes.byref(overlapped))
     if ok:
         return True
@@ -363,8 +376,9 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
     raises LIFECYCLE_LOCKED naming every recorded holder, and the caller never runs
     unlocked. While it waits it prints who holds the lock (pid, since when, command line)
     first at once, then every ``notify_seconds`` (default 30, env
-    EMBER_LIFECYCLE_LOCK_NOTIFY_SECONDS; 0 prints only the first line), so a waiting lane is
-    distinguishable from a dead one.
+    EMBER_LIFECYCLE_LOCK_NOTIFY_SECONDS; 0 prints only the first line; a malformed
+    environment value falls back to the default, it being only a display interval), so a
+    waiting lane is distinguishable from a dead one.
 
     File layout: byte 0 is the lock byte (``b"0"``, unchanged, so a pre-change copy of this
     tool on another seat still locks the same region). After acquiring, an EXCLUSIVE holder
@@ -372,8 +386,9 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
     byte 1 on, and truncates it away before releasing; a pre-change reader ignores ``argv``.
     Waiters read only from byte 1: on Windows the held byte 0 is a mandatory lock and reading
     it from another handle fails. SHARED holders cannot share that one record, so each writes
-    ``<lock>.holders/<pid>-<ns>.json`` and removes it on release; a sidecar whose pid is gone
-    (a killed audit) is swept the next time anyone lists the holders.
+    ``<lock>.holders/<pid>-<uuid4 hex>.json`` and removes it on release; a sidecar whose pid
+    is gone (a killed audit), or one that cannot be parsed and is older than
+    ``STALE_SIDECAR_SECONDS``, is swept the next time anyone lists the holders.
     """
 
     def __init__(
@@ -393,7 +408,7 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
             backoff_seconds, LOCK_BACKOFF_ENV, DEFAULT_LOCK_BACKOFF_SECONDS
         )
         self.notify_seconds = _lock_setting(
-            notify_seconds, LOCK_NOTIFY_ENV, DEFAULT_LOCK_NOTIFY_SECONDS
+            notify_seconds, LOCK_NOTIFY_ENV, DEFAULT_LOCK_NOTIFY_SECONDS, lenient_env=True
         )
         self.notify = notify if notify is not None else self._stderr_line
         self.handle: Any = None
@@ -425,7 +440,7 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
         try:
             if os.name == "nt":
                 if self.shared:
-                    return _windows_byte_lock(self.handle.fileno(), exclusive=False)
+                    return _windows_byte_lock(self.handle.fileno())
                 import msvcrt
 
                 msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
@@ -444,6 +459,17 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
 
     def _holders_dir(self) -> Path:
         return self.path.with_name(self.path.name + HOLDERS_SUFFIX)
+
+    @staticmethod
+    def _sweep_unparseable(sidecar: Path) -> None:
+        """Remove a sidecar nobody can read once it is old enough not to be a write in progress."""
+        import time
+
+        try:
+            if time.time() - sidecar.stat().st_mtime > STALE_SIDECAR_SECONDS:
+                sidecar.unlink()
+        except OSError:
+            pass
 
     def holders(self) -> list[dict[str, Any]]:
         """Every recorded, still-running holder: the exclusive record and the shared sidecars."""
@@ -482,6 +508,7 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
                     "mode": "shared",
                 }
             except (OSError, ValueError, KeyError, TypeError):
+                self._sweep_unparseable(sidecar)
                 continue
             if not _process_alive(pid):
                 try:
@@ -527,11 +554,12 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
         self.handle.flush()
 
     def _write_sidecar(self) -> None:
-        import time
+        import uuid
 
         directory = self._holders_dir()
         directory.mkdir(parents=True, exist_ok=True)
-        sidecar = directory / f"{os.getpid()}-{time.time_ns()}.json"
+        # uuid4, not a clock: two locks in one process must never share a name.
+        sidecar = directory / f"{os.getpid()}-{uuid.uuid4().hex}.json"
         sidecar.write_text(json.dumps(self._record(), sort_keys=True) + "\n", encoding="utf-8")
         self._sidecar = sidecar
 
@@ -601,7 +629,7 @@ class RepositoryLock(AbstractContextManager["RepositoryLock"]):
         self.handle.seek(0)
         if os.name == "nt":
             if self.shared:
-                _windows_byte_lock(self.handle.fileno(), exclusive=False, unlock=True)
+                _windows_byte_lock(self.handle.fileno(), unlock=True)
             else:
                 import msvcrt
 
@@ -2077,7 +2105,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # SHARED lock, so concurrent pre-commit/pre-push hooks no longer queue behind each
         # other's audit; every verb that writes the registry or git state keeps the
         # exclusive lock, and a writer still waits for every audit to finish.
-        shared = args.command == "audit" and not args.ratchet and load_state(state_file) is not None
+        # The mode probe is a stat, never a read: load_state() here would open the registry
+        # BEFORE the lock, and on Windows a writer's os.replace onto a file another process
+        # has open fails with PermissionError. The real read stays under the lock below, and
+        # the vanished-registry refusal there covers the gap between the stat and the lock.
+        shared = args.command == "audit" and not args.ratchet and state_file.exists()
         with RepositoryLock(
             common / LOCK_NAME,
             wait_seconds=args.lock_wait_seconds,
