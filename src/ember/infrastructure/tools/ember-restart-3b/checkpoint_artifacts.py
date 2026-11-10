@@ -4401,7 +4401,7 @@ def _cia_validate_master_weights(parameters, state, masters, *, max_state_bytes)
 
 def _cia_live_master_identity(optimizer):
     import cia_fp32_master
-    return tuple(sorted((key, _cia_tensor_identity(value)) for key, value in cia_fp32_master.masters(optimizer).items()))
+    return tuple(sorted((id(key), _cia_tensor_identity(value)) for key, value in cia_fp32_master.masters(optimizer).items()))
 
 
 def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
@@ -4431,8 +4431,8 @@ def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
         if cia_fp32_master.check_invariant(optimizer):
             raise ValueError('CIA fp32 master invariant broken: a working weight differs from bf16(master)')
         table = cia_fp32_master.masters(optimizer)
-        live = {names[id(parameter)]: table[id(parameter)] for group in optimizer.param_groups
-                for parameter in group['params'] if id(parameter) in table and optimizer.state.get(parameter)}
+        live = {names[id(parameter)]: table[parameter] for group in optimizer.param_groups
+                for parameter in group['params'] if parameter in table and optimizer.state.get(parameter)}
         for device in {value.device for value in live.values() if value.device.type != 'cpu'}:
             torch.cuda.synchronize(device)
         master_weights = {name: value.detach().to('cpu', copy=True) for name, value in live.items()}

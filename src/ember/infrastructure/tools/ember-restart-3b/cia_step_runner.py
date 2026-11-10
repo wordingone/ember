@@ -874,7 +874,7 @@ def streamed_sources(identity):
 
 TRAJECTORY_SOURCES = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',)
 CHECKPOINT_SOURCES = tuple('src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
-    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py'))
+    ('cia_hour.py', 'checkpoint_artifacts.py', 'parameter_counter.py', 'cia_fp32_master.py'))
 HOUR_SOURCES = ('src/ember/governance/scripts/catalog_train_stream.py',) + tuple(
     'src/ember/infrastructure/tools/ember-restart-3b/' + name for name in
     ('cia_hour_energy.py', 'boundary_energy_collector.py', 'cia_contention.py'))
@@ -1207,6 +1207,11 @@ def hour_mode(identity):
         # optimizer identity stays equal to the parent's; the treatment is the schema-v3 optimizer state plus this declaration.
         if value.get('schema') not in ('governed-hour-v1', 'checkpoint-probe-v1') or value['precision_fix'] != 'fp32_master_v1':
             raise ValueError("hour precision_fix is governed-hour-v1/checkpoint-probe-v1 only, and only 'fp32_master_v1'")
+        # Only the treatment arm builds the fused optimizer the masters wrap, and only the two capture modes train a bounded resident
+        # set; control or the legacy paged branch would otherwise pass identity validation and fail after the model is materialised.
+        if value.get('arm') != 'treatment' or execution_mode(identity) is None:
+            raise ValueError("hour precision_fix requires arm 'treatment' and a resident capture execution_mode "
+                             f"{EXECUTION_MODES}")
         fixed = fixed | {'precision_fix'}
     if ('trajectory' in identity or 'measurement' in identity or not isinstance(value, dict)
             or set(value) != fixed

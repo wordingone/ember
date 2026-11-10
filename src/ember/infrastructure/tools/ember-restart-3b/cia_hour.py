@@ -583,7 +583,7 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
                           and all(not torch.is_tensor(v) or v.dim() == 0 or not bool(v.any())
                                   for k, v in s.items() if k != 'step')]:
             del optimizer.state[parameter]
-            cia_fp32_master.masters(optimizer).pop(id(parameter), None)
+            cia_fp32_master.masters(optimizer).pop(parameter, None)
         return artifacts.write_checkpoint_artifacts(model, optimizer, custody / name,
             launch_seed=identity['seed'], rng_state={'cpu': torch.get_rng_state(), 'cuda': torch.cuda.get_rng_state(device)},
             data_cursor=dict(shard=str(cursor['shard_index']), record_index=cursor['token_offset'],

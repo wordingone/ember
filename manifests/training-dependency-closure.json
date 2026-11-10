@@ -41,6 +41,7 @@
     "src/ember/infrastructure/tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
     "src/ember/infrastructure/tools/ember-restart-3b/build_owned_vision_scenes.py",
     "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_scratch.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/cia_fp32_master.py",
     "src/ember/infrastructure/tools/ember-restart-3b/durable_io.py",
     "src/ember/infrastructure/tools/ember-restart-3b/host_setup_contract.py",
     "src/ember/infrastructure/tools/ember-restart-3b/input_identity.py",

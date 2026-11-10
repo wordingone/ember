@@ -62,8 +62,8 @@ class Fp32MasterNumerics(unittest.TestCase):
             ref.step()
             master_step(opt)
             self.assertEqual(M.check_invariant(opt), [])
-        self.assertTrue(torch.equal(M.masters(opt)[id(p)], ref_p.detach()))
-        self.assertTrue(torch.equal(M.masters(opt)[id(q)], ref_q.detach()))
+        self.assertTrue(torch.equal(M.masters(opt)[p], ref_p.detach()))
+        self.assertTrue(torch.equal(M.masters(opt)[q], ref_q.detach()))
         self.assertTrue(torch.equal(p.detach(), ref_p.detach().to(torch.bfloat16)))
         for x in (p, q):
             for key in ('step', 'exp_avg', 'exp_avg_sq'):
@@ -74,11 +74,11 @@ class Fp32MasterNumerics(unittest.TestCase):
         M.enable(opt)
         grads(p, q, 0)
         master_step(opt)
-        keep = [p.detach().clone(), M.masters(opt)[id(p)].clone(), opt.state[p]['exp_avg'].clone(),
+        keep = [p.detach().clone(), M.masters(opt)[p].clone(), opt.state[p]['exp_avg'].clone(),
                 opt.state[p]['exp_avg_sq'].clone(), opt.state[p]['step'].clone()]
         grads(p, q, 1)
         master_step(opt, torch.ones(()))
-        now = [p.detach(), M.masters(opt)[id(p)], opt.state[p]['exp_avg'], opt.state[p]['exp_avg_sq'], opt.state[p]['step']]
+        now = [p.detach(), M.masters(opt)[p], opt.state[p]['exp_avg'], opt.state[p]['exp_avg_sq'], opt.state[p]['step']]
         for a, b in zip(keep, now):
             self.assertTrue(torch.equal(a, b))
 
@@ -92,7 +92,7 @@ class Fp32MasterNumerics(unittest.TestCase):
         self.assertTrue(torch.equal(opt.state[p]['exp_avg'], before['exp_avg'].float()))
         self.assertTrue(torch.equal(opt.state[p]['exp_avg_sq'], before['exp_avg_sq'].float()))
         self.assertTrue(torch.equal(opt.state[p]['step'], before['step']))
-        self.assertTrue(torch.equal(M.masters(opt)[id(p)], p.detach().float()))
+        self.assertTrue(torch.equal(M.masters(opt)[p], p.detach().float()))
         self.assertEqual(M.check_invariant(opt), [])
 
     def test_unsupported_optimizers_refuse(self):

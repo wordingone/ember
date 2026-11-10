@@ -8,13 +8,18 @@ of the dense weights of the H48 child cannot move at all (state/fp32-master-2026
 keeps the weight and both moments in fp32, runs the SAME fused AdamW kernel over them, and writes the round-to-nearest bf16
 view back to the working parameter, so the bf16 weights the model computes with are always bf16(master).
 
-Layout: masters live in a side table on the optimizer (optimizer._ember_masters: id(parameter) -> fp32 tensor); the optimizer
-state keeps exactly the native fields {step, exp_avg, exp_avg_sq} (fp32 here), so every existing field-set check still holds.
+Layout: masters live in a side table on the optimizer (optimizer._ember_masters: Parameter -> fp32 tensor), keyed by the Parameter
+OBJECT through torch's identity-keyed weak dictionary, never by id(): a freed Parameter drops its master with it, so a later
+Parameter that happens to reuse the address can never inherit a stale master (lead review 82486 Q1). The optimizer state keeps
+exactly the native fields {step, exp_avg, exp_avg_sq} (fp32 here), so every existing field-set check still holds.
 Invariant I: for every parameter with a master, parameter == master.to(bfloat16) bit for bit, after every step and after restore.
+Expert paging copies a bank Parameter's data to a device buffer (`source.detach().to(device, copy=True)`, ember_v0_residency.py
+lease) and never creates or replaces the bank Parameter that the optimizer owns, so a page-out/page-in leaves the table alone.
 """
 from __future__ import annotations
 
 import torch
+from torch.utils.weak import WeakTensorKeyDictionary
 
 SCHEMA = 'fp32_master_v1'
 
@@ -22,7 +27,7 @@ SCHEMA = 'fp32_master_v1'
 def masters(optimizer):
     table = getattr(optimizer, '_ember_masters', None)
     if table is None:
-        table = optimizer._ember_masters = {}
+        table = optimizer._ember_masters = WeakTensorKeyDictionary()
     return table
 
 
@@ -60,8 +65,8 @@ def convert_loaded(optimizer):
                         state[key] = state[key].to(torch.float32)
                     elif state[key].dtype != torch.float32:
                         raise ValueError('fp32 master found a moment that is neither bf16 nor fp32')
-                if id(p) not in table:
-                    table[id(p)] = p.detach().to(torch.float32).clone()
+                if p not in table:
+                    table[p] = p.detach().to(torch.float32).clone()
 
 
 def install(optimizer, state_by_index, masters_by_index):
@@ -75,7 +80,7 @@ def install(optimizer, state_by_index, masters_by_index):
         if fields:
             optimizer.state[params[i]] = dict(fields)
     for i, tensor in masters_by_index.items():
-        table[id(params[i])] = tensor
+        table[params[i]] = tensor
 
 
 def _ensure(optimizer, p):
@@ -86,9 +91,9 @@ def _ensure(optimizer, p):
         state['exp_avg'] = torch.zeros_like(p, dtype=torch.float32, memory_format=torch.preserve_format)
         state['exp_avg_sq'] = torch.zeros_like(p, dtype=torch.float32, memory_format=torch.preserve_format)
     table = masters(optimizer)
-    if id(p) not in table:
-        table[id(p)] = p.detach().to(torch.float32).clone()
-    return state, table[id(p)]
+    if p not in table:
+        table[p] = p.detach().to(torch.float32).clone()
+    return state, table[p]
 
 
 def step(optimizer, group, params, found_inf):
@@ -125,7 +130,7 @@ def check_invariant(optimizer):
     table = masters(optimizer)
     for group in optimizer.param_groups:
         for p in group['params']:
-            master = table.get(id(p))
+            master = table.get(p)
             if master is not None and not torch.equal(p.detach(), master.to(torch.bfloat16)):
                 bad.append(id(p))
     return bad

@@ -188,7 +188,7 @@ class RoundTrip(unittest.TestCase):
             self.assertTrue(torch.equal(master.to(torch.bfloat16), params[name].detach()))
             self.assertEqual(payload['state'][name]['exp_avg'].dtype, torch.float32)
             self.assertEqual(payload['state'][name]['exp_avg_sq'].dtype, torch.float32)
-        self.assertNotEqual(payload['master_weights']['a'].data_ptr(), M.masters(optimizer)[id(params['a'])].data_ptr())
+        self.assertNotEqual(payload['master_weights']['a'].data_ptr(), M.masters(optimizer)[params['a']].data_ptr())
 
     def test_native_optimizer_still_captures_v2_with_no_master(self):
         params, model, optimizer = self.build(master=False)
@@ -213,12 +213,12 @@ class RoundTrip(unittest.TestCase):
             for key in ('step', 'exp_avg', 'exp_avg_sq'):
                 self.assertTrue(torch.equal(fresh.state[fresh_params[name]][key], optimizer.state[params[name]][key]), (name, key))
                 self.assertEqual(fresh.state[fresh_params[name]][key].dtype, torch.float32)
-            self.assertTrue(torch.equal(M.masters(fresh)[id(fresh_params[name])], M.masters(optimizer)[id(params[name])]))
+            self.assertTrue(torch.equal(M.masters(fresh)[fresh_params[name]], M.masters(optimizer)[params[name]]))
         self.step(params, optimizer, 3)
         self.step(fresh_params, fresh, 3)
         for name in ('a', 'b'):
             self.assertTrue(torch.equal(fresh_params[name].detach(), params[name].detach()))
-            self.assertTrue(torch.equal(M.masters(fresh)[id(fresh_params[name])], M.masters(optimizer)[id(params[name])]))
+            self.assertTrue(torch.equal(M.masters(fresh)[fresh_params[name]], M.masters(optimizer)[params[name]]))
 
     def test_torch_load_state_dict_would_narrow_the_moments(self):
         """The reason restore installs v3 state directly: torch casts a floating moment to the parameter dtype."""
@@ -252,7 +252,7 @@ class RoundTrip(unittest.TestCase):
             state = fresh.state[fresh_params[name]]
             self.assertEqual(state['exp_avg'].dtype, torch.float32)
             self.assertTrue(torch.equal(state['exp_avg'], optimizer.state[params[name]]['exp_avg'].float()))
-            self.assertTrue(torch.equal(M.masters(fresh)[id(fresh_params[name])], params[name].detach().float()))
+            self.assertTrue(torch.equal(M.masters(fresh)[fresh_params[name]], params[name].detach().float()))
 
     def test_corrupt_v3_payloads_are_refused(self):
         params, model, optimizer = self.trained()

@@ -29,7 +29,13 @@ import cia_fp32_master as M  # noqa: E402
 
 def hour(schema='governed-hour-v1', **extra):
     shape = {'governed-hour-v1': (3600, 1024), 'checkpoint-probe-v1': (0, 2), 'learning-comparison-v1': (0, 16383)}[schema]
-    return dict(schema=schema, arm='control', minimum_wall_seconds=shape[0], minimum_measured_steps=shape[1], **extra)
+    arm = extra.pop('arm', 'control')
+    return dict(schema=schema, arm=arm, minimum_wall_seconds=shape[0], minimum_measured_steps=shape[1], **extra)
+
+
+def treatment(schema='governed-hour-v1', mode='resident-segmented-capture', **extra):
+    """The one identity shape hour_mode admits for precision_fix: treatment arm in a resident capture mode."""
+    return dict(hour=hour(schema, arm='treatment', **extra), execution_mode=mode)
 
 
 def fused(params, lr=1e-4):
@@ -39,19 +45,28 @@ def fused(params, lr=1e-4):
 class Declaration(unittest.TestCase):
     def test_hour_mode_admits_the_fp32_master_declaration_and_the_optimizer_identity_stays_equal(self):
         for schema in ('governed-hour-v1', 'checkpoint-probe-v1'):
-            identity = dict(hour=hour(schema, precision_fix='fp32_master_v1'))
+            identity = treatment(schema, precision_fix='fp32_master_v1')
             self.assertTrue(runner.hour_mode(identity), schema)
-        both = dict(hour=hour(declared_lr=1e-4, precision_fix='fp32_master_v1'))
+        both = treatment(declared_lr=1e-4, precision_fix='fp32_master_v1')
         self.assertTrue(runner.hour_mode(both))
-        self.assertEqual(runner.expected_optimizer(dict(hour=hour(precision_fix='fp32_master_v1'))),
-                         runner.expected_optimizer(dict(hour=hour())))
+        self.assertTrue(runner.hour_mode(treatment(mode='resident-dynamic-capture', precision_fix='fp32_master_v1')))
+        self.assertEqual(runner.expected_optimizer(treatment(precision_fix='fp32_master_v1')),
+                         runner.expected_optimizer(treatment()))
+
+    def test_control_arm_and_a_missing_or_legacy_execution_mode_refuse_before_any_model_exists(self):
+        with self.assertRaises(ValueError):
+            runner.hour_mode(dict(hour=hour(precision_fix='fp32_master_v1'), execution_mode='resident-segmented-capture'))
+        with self.assertRaises(ValueError):
+            runner.hour_mode(dict(hour=hour(arm='treatment', precision_fix='fp32_master_v1')))
+        with self.assertRaises(ValueError):
+            runner.hour_mode(dict(hour=hour(arm='treatment', precision_fix='fp32_master_v1'), execution_mode='eager'))
 
     def test_other_values_and_schemas_refuse(self):
         for bad in ('fp32', '', None, True, 'fp32_master_v2'):
             with self.assertRaises(ValueError, msg=repr(bad)):
-                runner.hour_mode(dict(hour=hour(precision_fix=bad)))
+                runner.hour_mode(treatment(precision_fix=bad))
         with self.assertRaises(ValueError):
-            runner.hour_mode(dict(hour=hour('learning-comparison-v1', precision_fix='fp32_master_v1')))
+            runner.hour_mode(treatment('learning-comparison-v1', precision_fix='fp32_master_v1'))
 
 
 class Switch(unittest.TestCase):
@@ -95,12 +110,12 @@ class GatedStep(unittest.TestCase):
             self.assertEqual(keys, ((0, 3), (0, 5)))
             self.assertEqual(skip.tolist(), [0.0, 1.0])
         table = M.masters(optimizer)
-        self.assertTrue(torch.equal(table[id(dense)], reference[0].detach()))
-        self.assertTrue(torch.equal(table[id(hit)], reference[1].detach()))
+        self.assertTrue(torch.equal(table[dense], reference[0].detach()))
+        self.assertTrue(torch.equal(table[hit], reference[1].detach()))
         self.assertTrue(torch.equal(dense.detach(), reference[0].detach().to(torch.bfloat16)))
         self.assertTrue(torch.equal(hit.detach(), reference[1].detach().to(torch.bfloat16)))
         self.assertTrue(torch.equal(miss.detach(), start['miss']))
-        self.assertTrue(torch.equal(table[id(miss)], start['miss'].float()))
+        self.assertTrue(torch.equal(table[miss], start['miss'].float()))
         self.assertEqual(optimizer.state[miss]['step'].item(), 0)
         self.assertFalse(bool(optimizer.state[miss]['exp_avg'].any()) or bool(optimizer.state[miss]['exp_avg_sq'].any()))
         self.assertEqual(M.check_invariant(optimizer), [])
@@ -114,7 +129,7 @@ class GatedStep(unittest.TestCase):
         p.grad = (torch.randn(32, generator=g) * .1).to(torch.bfloat16)
         runner.gated_optimizer_step(optimizer, {}, buffers, torch.tensor(True))
         self.assertTrue(torch.equal(p.detach(), before))
-        self.assertTrue(torch.equal(M.masters(optimizer)[id(p)], before.float()))
+        self.assertTrue(torch.equal(M.masters(optimizer)[p], before.float()))
         self.assertEqual(optimizer.state[p]['step'].item(), 0)
 
 
