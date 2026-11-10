@@ -80,4 +80,18 @@ def main():
     print("DONE", a.repo, sha, "%.1fs" % rec["download_seconds"], "B free %.1f GiB" % free_gib(out)); return 0
 
 
-if __name__ == "__main__": sys.exit(main())
+def run():
+    """--hold-flag PATH: release the uploader hold (hold_flag.release) when the fetch returns, success or failure (lead 82475: the flag goes with the fetch's own completion, not by hand)."""
+    pre = argparse.ArgumentParser(add_help=False); pre.add_argument("--hold-flag"); ns, rest = pre.parse_known_args()
+    sys.argv = [sys.argv[0]] + rest
+    rc = 1
+    try:
+        rc = main()
+        return rc
+    finally:
+        if ns.hold_flag:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import hold_flag
+            print("hold flag:", hold_flag.release(ns.hold_flag, "fetch_open_model returned rc=%s" % rc), flush=True)
+
+
+if __name__ == "__main__": sys.exit(run())

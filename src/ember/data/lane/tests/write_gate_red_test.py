@@ -29,4 +29,5 @@ check("th_gate below the floor: ThError (fail-closed) and _expand never called (
 src = lambda n: open((LANE_ROOT + "/scripts/") + n, encoding="utf-8").read()
 s = src("pack.py"); check("pack.py: write_gate precedes the shard tmp write", 0 <= s.find("write_gate") < s.find('open(tmp, "wb")'))
 s = src("redact_pack_hits.py"); check("redact_pack_hits.py: write_gate precedes the redacted-copy write", 0 <= s.find("write_gate") < s.find('open(o, "wb")'))
+s = src("text_lane.py"); r = s[s.find("def run(cmd, log):"):s.find("def run(cmd, log):") + 700]; check("text_lane.py run(): write_gate (floor wait for new pack/dedup/scrub STARTS, lead 82509) precedes harm_wait and the subprocess", 0 <= r.find("write_gate") < r.find("harm_wait") < r.find("subprocess.run"))
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)

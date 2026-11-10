@@ -15,7 +15,7 @@ import os, sys, json, time, hashlib, threading
 pass
 import evict_ckpt_list as E
 RC = (LANE_ROOT + "/logs/reserve-evict-receipts.jsonl"); BASE = (M_ROOT + "/ember-live-receipts/")
-KEEP = tuple(E.KEEP_MARKERS) + ("cia-hour-a1-five-attn-stage-d4-20261109T233136Z/", "cia-probe-a1-five-attn-stage-d4-20261109T233136Z/",      # lead 82318 keep-list (H49 hour+probe); the H47 hour/probe 172522Z left the keep set (H47 scored, H48 forked from H46; training 82321)
+KEEP = tuple(E.KEEP_MARKERS) + ("cia-hour-a1-five-attn-stage-d4-20261110T034921Z/", "cia-probe-a1-five-attn-stage-d4-20261110T034921Z/",      # lead 82318 keep-list (H49 hour+probe); 82451: H49 is now the 034921Z pair (233136Z was try 1, hour refused); the H47 hour/probe 172522Z left the keep set (H47 scored, H48 forked from H46; training 82321)
         "cia-hour-a1-five-attn-stage-d4-20261109T193128Z/measurement-9457a769f1b543c0949d4296d850d2b6/", "cia-hour-a1-five-attn-stage-d4-20261109T142405Z/", "selected-continuation-head.json", "catalog-train-cache")
 class Refused(RuntimeError): pass
 def refuse_reason(path):
