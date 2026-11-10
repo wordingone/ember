@@ -21,6 +21,29 @@ def pushes():
         if c and "python" in c[0].lower() and ("upload_file" in j or "hf.exe" in j and " upload " in j): out.append(p)
     return out
 
+HELD_LOG = ROOT + "/logs/backlog-upload-worker.log"
+def held_state(log=None, now=None, max_age=600):
+    """Declared hold (lead 82475): the upload worker's NEWEST log line is 'HH:MM:SS push HELD: <flag>' and the log is fresh -> (flag, first HH:MM:SS of the unbroken run of that same hold line), else None.
+    A silent worker, a stale log or any other newest line is NOT a hold, so a real stall still alarms."""
+    log = log or os.environ.get("STALL_ALARM_WORKER_LOG", HELD_LOG); now = time.time() if now is None else now
+    try:
+        if now - os.path.getmtime(log) > max_age: return None
+        lines = [l.strip() for l in open(log, encoding="utf-8", errors="ignore").read().splitlines() if l.strip()]
+    except Exception: return None
+    m = re.match(r"(\d\d:\d\d:\d\d) push HELD: (\S+)", lines[-1]) if lines else None
+    if not m: return None
+    flag, since = m.group(2), m.group(1)
+    for l in reversed(lines[:-1]):
+        k = re.match(r"(\d\d:\d\d:\d\d) push HELD: (\S+)", l)
+        if not k or k.group(2) != flag: break
+        since = k.group(1)
+    return flag, since
+
+def decide(flat, thresh, since_alert, repeat, hold):
+    """'hold' (declared hold: mail nothing) | 'alarm' (flat >= thresh and not alerted within repeat) | 'wait'."""
+    if hold: return "hold"
+    return "alarm" if flat >= thresh and since_alert >= repeat else "wait"
+
 def heal(ps, prog_by_log, now):
     """Auto-heal (lead 81847): a pack push (hf upload) whose sockets sit in CLOSE_WAIT for >=120 s, or whose own progress (files + bytes in its log) is flat >=300 s, is restarted via kill_lane.ps1 (PID-verified, receipts);
     the tick relaunches it (resumable, never overwrites, capped at 5 relaunches). Uses state file alarm-heal.json."""
@@ -116,10 +139,13 @@ def _run_stall():
     active = qf > 0 or any("hf.exe" in " ".join(p.info["cmdline"] or []) for p in ps)
     s = json.load(open(STATE)) if os.path.exists(STATE) else {}
     now = time.time()
+    hold = held_state()
+    if hold and active:          # lead 82475: a declared hold (worker log 'push HELD: <flag>') is not a stall: mail nothing, restart the flat clock so a real stall after the hold lifts is still caught
+        s.update(prog=prog, since=now, alerted=0); json.dump(s, open(STATE, "w")); return f"held by {hold[0]} since {hold[1]} (declared hold, no alarm)"
     # a worker restart resets the push's read_bytes to 0, so progress may drop: treat any change as movement
     if s.get("prog") != prog or not active: s.update(prog=prog, since=now, alerted=0); json.dump(s, open(STATE, "w")); return ("HEAL: " + "; ".join(healed) if healed else "ok: " + ("idle" if not active else "moving"))
     flat = now - s.get("since", now)
-    if flat >= THRESH and now - s.get("alerted", 0) >= REPEAT:
+    if decide(flat, THRESH, now - s.get("alerted", 0), REPEAT, hold) == "alarm":
         last = ""
         try: last = [l for l in open(ROOT + "/logs/backlog-upload-worker.log", encoding="utf-8", errors="ignore") if " uploaded " in l][-1].strip()
         except Exception: pass
