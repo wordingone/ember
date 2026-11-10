@@ -4,7 +4,7 @@
 """Free space on B: (lead 81345). Verified-duplicate / verified-on-HF / regenerable-garbage deletes only. Receipt: audit/free-b-receipt-<ts>.json. python os.remove only."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT, M_ROOT
 import os, sys, json, hashlib, time, shutil
 BS = chr(92); R = dict(ts=time.strftime("%Y-%m-%dT%H:%M:%S"), deleted=[], skipped=[], free_before_gib=shutil.disk_usage("B:/").free / 2**30)
 def sha(p):
@@ -29,7 +29,7 @@ else: R["skipped"].append("shards-v0 not fully verified; untouched")
 # 2) upload/raw + upload/train: files verified on HF (LFS sha256 or size) -> delete verified local copies
 from huggingface_hub import HfApi
 api = HfApi()
-for sub, repo in (("raw", "wordingone/ember-raw-private"), ("train", "wordingone/ember-train-private")):
+for sub, repo in (("raw", ("wordingone/" + HF_RAW_REPO)), ("train", ("wordingone/" + HF_TRAIN_REPO))):
     root = (LANE_ROOT + "/upload/") + sub
     if not os.path.isdir(root): continue
     tree = {t.path: t for t in api.list_repo_tree(repo, repo_type="dataset", recursive=True) if hasattr(t, "size")}

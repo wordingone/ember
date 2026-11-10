@@ -7,7 +7,7 @@ local verify (manifest sha prefix == child id; objects/<sha>.pt name == sha256 o
 Usage: python scripts/ckpt_backup.py H38 H39 H43 SLEEP H40 H41 H42"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, SEAT_LEAD
+from lane_config import HF_RAW_REPO, LANE_ROOT, SEAT_LEAD
 import os, sys, json, hashlib, time, subprocess, shutil
 pass
 import psutil, hf_cap, mb_send
@@ -18,7 +18,7 @@ mb_send.send = lambda to, subj, body, *a, **k: (None if os.environ.get('CKPT_BAT
 from huggingface_hub import HfApi
 try: p = psutil.Process(); p.cpu_affinity(list(range(16, 24))); p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
 except Exception: pass
-REPO = os.environ.get("CKPT_REPO", "wordingone/ember-raw-private"); RT = os.environ.get("CKPT_REPO_TYPE", "dataset"); api = HfApi()   # the token is scoped to the 3 dataset repos (no repo.create): checkpoints go under ember-raw-private/checkpoints/ until a model repo can be created; LOG = "<lane-root>/logs/ckpt-backup.log"; MAN = "<lane-root>/logs/manifests-20261108/ckpt-delete-manifest.jsonl"
+REPO = os.environ.get("CKPT_REPO", ("wordingone/" + HF_RAW_REPO)); RT = os.environ.get("CKPT_REPO_TYPE", "dataset"); api = HfApi()   # the token is scoped to the 3 dataset repos (no repo.create): checkpoints go under <raw-repo>/checkpoints/ until a model repo can be created; LOG = "<lane-root>/logs/ckpt-backup.log"; MAN = "<lane-root>/logs/manifests-20261108/ckpt-delete-manifest.jsonl"
 def log(*a):
     s = time.strftime("%H:%M:%S ") + " ".join(map(str, a)); print(s, flush=True)
 def sha(path):

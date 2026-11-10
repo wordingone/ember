@@ -4,16 +4,16 @@
 """Remedy (lead 81687/81698): move public objects/ files that carry credential-shaped spans to PRIVATE, then delete them from public HEAD in ONE commit.
 Phase 1 (known hits from audit/secret-audit.jsonl): H-heldout-2, H-heldout-1, B-heldout-2, K-heldout-2, H-train-2 -> copy, verify, ONE delete commit.
 Phase 2: every other objects/ file is polled for its audit row; a hit -> same copy+verify -> a SECOND delete commit. Unread files are reported UNSCANNED, never clean.
-Per file: Range-resumable stream download, sha256 == public LFS oid, upload to wordingone/ember-raw-private <heldout|train>/<name>, remote LFS sha256 == oid.
+Per file: Range-resumable stream download, sha256 == public LFS oid, upload to wordingone/<raw-repo> <heldout|train>/<name>, remote LFS sha256 == oid.
 No history rewrite. Receipts: logs/remedy-move.json (phase 1), logs/remedy-move-2.json (phase 2). Names, sizes, oids, commit hash; no secret values."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, time, hashlib, requests, threading
 from concurrent.futures import ThreadPoolExecutor
 from huggingface_hub import HfApi, CommitOperationDelete
-PUB = "wordingone/ember-corpus"; PRIV = "wordingone/ember-raw-private"; from lane_config import LANE_ROOT as ROOT; TMPD = ROOT + "/remedy"; os.makedirs(TMPD, exist_ok=True)
+PUB = "wordingone/ember-corpus"; PRIV = ("wordingone/" + HF_RAW_REPO); from lane_config import LANE_ROOT as ROOT; TMPD = ROOT + "/remedy"; os.makedirs(TMPD, exist_ok=True)
 H = "objects/heldout/issue1719-"; T = "objects/train/issue1719-"
 PHASE1 = [H + "license-partitions-wave10-20260819T0215Z__H-heldout-2.tar.gz", H + "github-license-partitions-20260818T0550Z__H-heldout-1.tar.gz",
           H + "license-partitions-wave10-20260819T0215Z__B-heldout-2.tar.gz", H + "license-partitions-wave10-20260819T0215Z__K-heldout-2.tar.gz",
@@ -61,7 +61,7 @@ def audit_rows():
     return rows
 def commit(done, rcpt, n):
     ops = [CommitOperationDelete(path_in_repo=d["public_path"]) for d in done]
-    c = hf_push.create_commit(api, repo_id=PUB, repo_type="dataset", operations=ops, commit_message="Remove " + str(len(ops)) + " objects/ archive(s) from public HEAD: third-party credentials found by secret scan; moved to private (wordingone/ember-raw-private heldout/ and train/). History not rewritten.")
+    c = hf_push.create_commit(api, repo_id=PUB, repo_type="dataset", operations=ops, commit_message="Remove " + str(len(ops)) + (" objects/ archive(s) from public HEAD: third-party credentials found by secret scan; moved to private (wordingone/" + HF_RAW_REPO + " heldout/ and train/). History not rewritten."))
     json.dump(dict(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), files=done, private_repo=PRIV, public_delete_commit=str(c.commit_url), commit_oid=c.oid), open(rcpt, "w"), indent=1)
     for d in done:
         try: os.remove(f"{TMPD}/{os.path.basename(d['public_path'])}")

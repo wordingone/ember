@@ -7,7 +7,7 @@ Per file under <local>/shards and <local>/objects: st_nlink==1 (a hard-linked fi
 docs-index / ledger / receipt / intake / source-manifest / prov files are never touched. Python only."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, time, hashlib, shutil
 from lane_config import LANE_ROOT as ROOT; RC = ROOT + "/logs/drop-uploaded-receipts.jsonl"
 ACK = "lead 82379(4)/82381: drop each set once its private upload is server-verified; HF-only pool waiver as 82379(2)"
@@ -54,7 +54,7 @@ def drop_pack(local, repo, prefix, srv=None, go=True, receipt=RC, remove=os.remo
     return res
 
 
-def run(local, repo="wordingone/ember-train-private", prefix=None, go=True):
+def run(local, repo=("wordingone/" + HF_TRAIN_REPO), prefix=None, go=True):
     prefix = prefix or "text/" + os.path.basename(local.rstrip("/\\"))
     res = drop_pack(local, repo, prefix, go=go)
     free = shutil.disk_usage("B:/").free / 2**30

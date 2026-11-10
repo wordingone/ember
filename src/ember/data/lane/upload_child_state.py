@@ -6,13 +6,13 @@ Order: local sha256 recompute vs the manifest (optimizer + replay) -> hf_cap.che
 Usage: python upload_child_state.py <trained-child dir> <id8-name>          e.g. ... e73486d2-H44"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, sys, json, glob, time, hashlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hf_cap, hf_push
 from huggingface_hub import HfApi, CommitOperationAdd
 
-REPO = "wordingone/ember-raw-private"; RT = "dataset"; RC = (LANE_ROOT + "/logs/upload-child-state-receipts.jsonl")
+REPO = ("wordingone/" + HF_RAW_REPO); RT = "dataset"; RC = (LANE_ROOT + "/logs/upload-child-state-receipts.jsonl")
 
 
 def sha_of(p):

@@ -6,7 +6,7 @@ roll(files=[(local_path, path_in_repo)], repo) -> list of rows. Receipts: audit/
 CLI: raw_roll.py lv-catchup  -> roll every mp3 in lvpilot/pairs.jsonl still on disk (batches of 100)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, time, hashlib
 from huggingface_hub import HfApi, CommitOperationAdd
@@ -16,7 +16,7 @@ def sha256f(p):
     with open(p, "rb") as f:
         for b in iter(lambda: f.read(1 << 24), b""): h.update(b)
     return h.hexdigest()
-def roll(files, repo="wordingone/ember-raw-private", message="raw roll"):
+def roll(files, repo=("wordingone/" + HF_RAW_REPO), message="raw roll"):
     api = HfApi(); files = [(l, r) for l, r in files if os.path.exists(l)]
     if not files: return []
     sys.path.insert(0, ROOT + "/scripts"); import upload_refuse

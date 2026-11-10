@@ -8,7 +8,7 @@ duplicate (speaker_id, book_id, begin_time) dropped. PROVENANCE FLAG: MLS transc
 each row carries transcript_origin so the per-hour declaration can name it. Audio is human speech (LibriVox volunteers, public domain / CC-BY 4.0 MLS release). Selftest: mls_manifest.py selftest"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys, os, re, json, time, collections
 IDX = None
 def heldout_hit(t):
@@ -49,7 +49,7 @@ def main(files, out, spk_state=None, cap_s=None):
                     if heldout_hit(t): st["heldout_hit"] += 1; continue
                     a = r["audio"]; ext = os.path.splitext(a.get("path") or "")[1] or ".flac"; p = f"{out}/audio/{os.path.basename(f)[:-8]}-{n:07d}{ext}"; open(p, "wb").write(a["bytes"]); n += 1
                     mf.write(json.dumps(dict(path=p, transcript=t, transcript_origin="Multilingual LibriSpeech (Pratap et al. 2020), CC BY 4.0; transcripts produced by the MLS ASR+alignment pipeline (model-derived, declared)", speaker_id=r["speaker_id"], book_id=r["book_id"], seconds=r["audio_duration"],
-                        licence="CC-BY-4.0 (MLS) over LibriVox public-domain recordings", origin="huggingface.co/datasets/facebook/multilingual_librispeech (english) via ember-raw-private audio/mls-eng", fetch_date=today, content_date_max="2020-12-31", modality="audio-text"), ensure_ascii=False) + "\n"); st["kept"] += 1; st["seconds"] += int(r["audio_duration"]); spk[r["speaker_id"]] = spk.get(r["speaker_id"], 0) + r["audio_duration"]
+                        licence="CC-BY-4.0 (MLS) over LibriVox public-domain recordings", origin=("huggingface.co/datasets/facebook/multilingual_librispeech (english) via " + HF_RAW_REPO + " audio/mls-eng"), fetch_date=today, content_date_max="2020-12-31", modality="audio-text"), ensure_ascii=False) + "\n"); st["kept"] += 1; st["seconds"] += int(r["audio_duration"]); spk[r["speaker_id"]] = spk.get(r["speaker_id"], 0) + r["audio_duration"]
     if spk_state: json.dump(spk, open(spk_state, "w"))
     json.dump(dict(st), open(out + "/stats.json", "w")); print(dict(st))
 def selftest():

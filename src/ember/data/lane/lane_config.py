@@ -8,13 +8,16 @@
   EMBER_SEAT_LEAD   seat id of the coordinating role: mailbox recipient and state-directory name
   EMBER_SEAT_TRAIN  seat id of the training role
   EMBER_SEAT_DATA   seat id of the data role (this lane)
+  EMBER_HF_RAW_REPO    name of the lane's private raw-sources Hub dataset repo (the name is local configuration, never stored in the public tree)
+  EMBER_HF_TRAIN_REPO  name of the lane's private training-ready Hub dataset repo (same)
   EMBER_CENSUS_SKIP_PREFIXES  ';'-separated lower-case path prefixes the census skips (other seats' trees, caches)
 
 Reading a missing variable raises at first use, so a mis-deployed lane fails loudly instead of writing to a default location.
 """
 import os
 
-_ENV = {"LANE_ROOT": "EMBER_LANE_ROOT", "M_ROOT": "EMBER_M_ROOT", "SEAT_LEAD": "EMBER_SEAT_LEAD", "SEAT_TRAIN": "EMBER_SEAT_TRAIN", "SEAT_DATA": "EMBER_SEAT_DATA"}
+_ENV = {"LANE_ROOT": "EMBER_LANE_ROOT", "M_ROOT": "EMBER_M_ROOT", "SEAT_LEAD": "EMBER_SEAT_LEAD", "SEAT_TRAIN": "EMBER_SEAT_TRAIN", "SEAT_DATA": "EMBER_SEAT_DATA",
+        "HF_RAW_REPO": "EMBER_HF_RAW_REPO", "HF_TRAIN_REPO": "EMBER_HF_TRAIN_REPO"}
 
 
 def __getattr__(name):

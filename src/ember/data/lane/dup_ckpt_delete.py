@@ -1,17 +1,17 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Remove from the PUBLIC ember-corpus HEAD every path whose LFS sha256 also lives in PRIVATE ember-raw-private (lead 82187 approved; training 82190 go: HEAD only, no history rewrite / super-squash).
+"""Remove from the PUBLIC ember-corpus HEAD every path whose LFS sha256 also lives in PRIVATE <raw-repo> (lead 82187 approved; training 82190 go: HEAD only, no history rewrite / super-squash).
 Order inside: (a) re-read BOTH sides per file from the server now: corpus path must exist with lfs sha256+size == manifest; at least one raw-private path must exist with the same sha256+size; any mismatch aborts the whole run (nothing deleted);
 (c) receipt rows (logs/dup-ckpt-delete-receipts.jsonl) are written BEFORE the single delete commit; the commit is made through hf_push; afterwards re-list and prove zero shared shas remain and every raw-private copy is intact.
 Usage: python scripts/dup_ckpt_delete.py [--dry] [--wait-h46]   (without --wait-h46 a real run REFUSES while <m-root>/avir/<lead>/state/gpu-window-open exists)      Manifest: logs/dup-ckpt-20261109.json (written by dup_ckpt_report.py).  NEVER touches history."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT, SEAT_LEAD
+from lane_config import HF_RAW_REPO, LANE_ROOT, M_ROOT, SEAT_LEAD
 import os, sys, json, time
 pass; import hf_push
 from huggingface_hub import HfApi, CommitOperationDelete, CommitOperationAdd
-A = "wordingone/ember-corpus"; B = "wordingone/ember-raw-private"; MAN = (LANE_ROOT + "/logs/dup-ckpt-20261109.json"); RC = (LANE_ROOT + "/logs/dup-ckpt-delete-receipts.jsonl")
+A = "wordingone/ember-corpus"; B = ("wordingone/" + HF_RAW_REPO); MAN = (LANE_ROOT + "/logs/dup-ckpt-20261109.json"); RC = (LANE_ROOT + "/logs/dup-ckpt-delete-receipts.jsonl")
 MARKER = (M_ROOT + "/avir/" + SEAT_LEAD + "/state/gpu-window-open")      # present while a governed hour (H46) window is open; lead 82193: the delete must not run until it clears
 api = HfApi(); dry = "--dry" in sys.argv
 

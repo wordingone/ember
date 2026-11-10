@@ -1,19 +1,19 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Redaction pass (lead 81713): the ember-train-private objects with credential-shaped spans become NEW objects '<name>-r1.jsonl.zst' (secret_scan.redact, <REDACTED_CREDENTIAL>).
+"""Redaction pass (lead 81713): the <train-repo> objects with credential-shaped spans become NEW objects '<name>-r1.jsonl.zst' (secret_scan.redact, <REDACTED_CREDENTIAL>).
 Old objects are NEVER touched (H41 and other ledgers bind their hashes). Per file: stream from the private repo, sha256 == HF LFS oid, redact doc text, re-scan the new object (must be 0 hits),
 upload as a new file next to the old one (never overwrites), verify the remote LFS sha. Manifest: redact-r1/MANIFEST.jsonl (old sha -> new sha, span counts per pattern, docs touched; no values)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, io, json, time, hashlib, requests
 pass
 import secret_scan, zstandard
 from huggingface_hub import HfApi, get_token
-REPO = "wordingone/ember-train-private"; from lane_config import LANE_ROOT as ROOT; OUTD = ROOT + "/redact-r1"; os.makedirs(OUTD, exist_ok=True)
-AUDIT = ROOT + "/audit/secret-audit-ember-train-private.jsonl"; MAN = OUTD + "/MANIFEST.jsonl"
+REPO = ("wordingone/" + HF_TRAIN_REPO); from lane_config import LANE_ROOT as ROOT; OUTD = ROOT + "/redact-r1"; os.makedirs(OUTD, exist_ok=True)
+AUDIT = ROOT + ("/audit/secret-audit-" + HF_TRAIN_REPO + ".jsonl"); MAN = OUTD + "/MANIFEST.jsonl"
 api = HfApi(); tok = get_token()
 def log(*a): print(time.strftime("%H:%M:%S"), *a, flush=True)
 rows = {}

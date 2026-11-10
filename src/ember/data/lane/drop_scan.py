@@ -6,13 +6,13 @@ Writes logs/drop-scan-<ts>.jsonl (one row per file) and prints the per-directory
 Usage: python drop_scan.py <dir> [<dir> ...]"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, time, hashlib
 from concurrent.futures import ThreadPoolExecutor
 from huggingface_hub import HfApi
 
 SC = (LANE_ROOT + "/logs/sha-cache.json")
-REPOS = ("wordingone/ember-raw-private", "wordingone/ember-train-private", "wordingone/ember-corpus")
+REPOS = (("wordingone/" + HF_RAW_REPO), ("wordingone/" + HF_TRAIN_REPO), "wordingone/ember-corpus")
 
 
 def sha_of(p):

@@ -1,14 +1,14 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""lead 82182 (3): find objects present in BOTH wordingone/ember-corpus (public) and wordingone/ember-raw-private by LFS sha256 (server-side, read only). Writes logs/dup-ckpt-20261109.json.
+"""lead 82182 (3): find objects present in BOTH wordingone/ember-corpus (public) and wordingone/<raw-repo> by LFS sha256 (server-side, read only). Writes logs/dup-ckpt-20261109.json.
 Zero overlap is operator's rule. This script NEVER deletes; the proposal needs lead's manifest approval first."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import json, sys, time
 from huggingface_hub import HfApi
-api = HfApi(); A = "wordingone/ember-corpus"; B = "wordingone/ember-raw-private"
+api = HfApi(); A = "wordingone/ember-corpus"; B = ("wordingone/" + HF_RAW_REPO)
 def idx(repo):
     out = {}
     for e in api.list_repo_tree(repo, recursive=True, expand=True, repo_type="dataset"):

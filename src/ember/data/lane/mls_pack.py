@@ -6,12 +6,12 @@ Per group: download -> mls_manifest (train-only, heldout, dedup) -> pack_media a
 Resumable via staging/mls-pack/state.json. Usage: python scripts/mls_pack.py [G=4]    NOTE spec v1 stores raw s16 16 kHz = 115.2 MB per hour: size the plan before running."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, sys, json, time, subprocess, shutil
 from huggingface_hub import HfApi
 import net_cap as _nc      # M-NET-2 (lead 82238): every lane download goes through the shared, cap-aware downloader (unthrottled while the cap is off)
 def hf_hub_download(repo, path, repo_type="dataset", revision=None, local_dir=".", **kw): return _nc.download(repo, path, rev=revision, local_dir=local_dir, repo_type=repo_type)
-from lane_config import LANE_ROOT as ROOT; W = ROOT + "/staging/mls-pack"; R = "wordingone/ember-raw-private"; G = int(sys.argv[1]) if len(sys.argv) > 1 else 4; TARGET_H = float(os.environ.get("MLS_HOURS", "500")); CAP_S = os.environ.get("MLS_SPK_CAP_S", "600")   # lead 81981: plan B = 500 h speaker-balanced subset
+from lane_config import LANE_ROOT as ROOT; W = ROOT + "/staging/mls-pack"; R = ("wordingone/" + HF_RAW_REPO); G = int(sys.argv[1]) if len(sys.argv) > 1 else 4; TARGET_H = float(os.environ.get("MLS_HOURS", "500")); CAP_S = os.environ.get("MLS_SPK_CAP_S", "600")   # lead 81981: plan B = 500 h speaker-balanced subset
 os.makedirs(W, exist_ok=True); ST = W + "/state.json"; state = json.load(open(ST)) if os.path.exists(ST) else {"done": {}}
 pass; import reserve_plan
 def log(*a): print(time.strftime("%H:%M:%S"), *a, flush=True)

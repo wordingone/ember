@@ -5,7 +5,7 @@
 Out: logs/heldout-custody-20261109.json + data/state/heldout-custody-20261109.md. Detects silent drift: rerun and diff against the committed sha."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT, SEAT_DATA
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT, M_ROOT, SEAT_DATA
 import os, sys, json, hashlib, time
 import numpy as np
 F = {"s4": (LANE_ROOT + "/heldout-index/heldout-sent-xxh64-s4.npy"), "full": (LANE_ROOT + "/heldout-index-full/heldout-sent-xxh64-full.npy"),
@@ -27,7 +27,7 @@ for k, p in F.items():
 try:
     from huggingface_hub import HfApi
     api = HfApi(); names = {os.path.basename(v["path"]): v for v in out.values() if not v.get("missing")}
-    for repo in ("wordingone/ember-raw-private", "wordingone/ember-train-private"):
+    for repo in (("wordingone/" + HF_RAW_REPO), ("wordingone/" + HF_TRAIN_REPO)):
         try:
             fs = {os.path.basename(x): x for x in api.list_repo_files(repo, repo_type="dataset")}
             for n, v in names.items():

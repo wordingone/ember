@@ -6,10 +6,10 @@ Per file: local sha256, HF LFS sha256 (repo@revision), receipt row written BEFOR
 Provenance files (catalog/expected/verify/log) and all derived intermediates are kept. No shell rm; os.remove on files under pg/ only."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, glob, json, hashlib, time, sys
 from huggingface_hub import HfApi
-REPO = "wordingone/ember-raw-private"; DEST = "text/pg-raw"; SRC = (LANE_ROOT + "/pg")
+REPO = ("wordingone/" + HF_RAW_REPO); DEST = "text/pg-raw"; SRC = (LANE_ROOT + "/pg")
 RECEIPT = (LANE_ROOT + "/logs/pg-delete-receipts.jsonl")
 api = HfApi()
 rev = api.dataset_info(REPO).sha

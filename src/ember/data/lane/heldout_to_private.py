@@ -12,11 +12,11 @@ Usage: python scripts/heldout_to_private.py plan     (read-only listing + sizes)
 Run copy/remove only after the H39 restore milestone (lead 82083)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, time
 from huggingface_hub import HfApi, CommitOperationDelete
-PUB = "wordingone/ember-corpus"; PRIV = "wordingone/ember-raw-private"; PREFIX = "acquisition/heldout"   # token is scoped to existing repos (no repo-create right, 403): custody copy lives in the existing PRIVATE raw repo
+PUB = "wordingone/ember-corpus"; PRIV = ("wordingone/" + HF_RAW_REPO); PREFIX = "acquisition/heldout"   # token is scoped to existing repos (no repo-create right, 403): custody copy lives in the existing PRIVATE raw repo
 REC = (LANE_ROOT + "/logs/heldout-private-receipt.json")
 api = HfApi()
 

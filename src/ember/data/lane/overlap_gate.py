@@ -4,7 +4,7 @@
 """Zero-overlap gate (lead 81645 item 2). Union index of what is on the three HF repos; refuses duplicates BEFORE upload and logs them.
 Keys: (1) file sha256 (LFS) -- byte-identical files; (2) doc id_key '<ns>:<id>' (pg:1, arxiv:0807.3315, wp:12) -- same document, different bytes;
 (3) normalized-text hash (NFKC, lowercase, alnum words joined by one space; sha256[:16]) -- same text, different formatting/ids.
-Index lives in <lane-root>/index/ (sqlite + sha list) and is mirrored to wordingone/ember-raw-private under index/ (HF is the authority copy).
+Index lives in <lane-root>/index/ (sqlite + sha list) and is mirrored to wordingone/<raw-repo> under index/ (HF is the authority copy).
 CLI:  python overlap_gate.py build-files | build-docs | check-pack <packed/NAME> | selftest
 Library: check_hashes([sha]) -> list of dups; check_docs([(id_key, text)]) -> list of dups; log_refusal(lane, path, key, dup)."""
 import os as _os, sys as _sys

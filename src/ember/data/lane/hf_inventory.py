@@ -8,11 +8,11 @@ Unique key = LFS sha256 of the file (byte-identical content across ALL repos). D
 Checkpoints, software bundles and run receipts are NOT data: counted separately under 'excluded'."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT
 import sys, os, json, time, collections, argparse
 from huggingface_hub import HfApi, hf_hub_download
 
-REPOS = {"public": "wordingone/ember-corpus", "raw": "wordingone/ember-raw-private", "train": "wordingone/ember-train-private"}
+REPOS = {"public": "wordingone/ember-corpus", "raw": ("wordingone/" + HF_RAW_REPO), "train": ("wordingone/" + HF_TRAIN_REPO)}
 IMG = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp")
 AUD = (".mp3", ".flac", ".wav", ".ogg", ".opus", ".m4a")
 VID = (".mp4", ".mkv", ".webm", ".avi", ".mov")

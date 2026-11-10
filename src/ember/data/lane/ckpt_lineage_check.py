@@ -4,7 +4,7 @@
 """lead 81925: which local ember children are already on HF inside ember-corpus checkpoints/lineage-2119 (and restart-3b-old)? READ-ONLY.
 Per child: hash the local manifest -> find the lineage step dir (INDEX.json manifest_sha256) -> every local file must exist there with equal size and
 server-side metadata equal to the LOCAL sha256 (LFS sha256 from list_repo_tree; non-LFS small files: git blob sha1 == blob_id). Writes logs/ckpt-lineage-check.json.
-Usage: python ckpt_lineage_check.py [names...]   (default: older + probes + H40-H43 + SLEEP; H38/H39 are in ember-raw-private already)"""
+Usage: python ckpt_lineage_check.py [names...]   (default: older + probes + H40-H43 + SLEEP; H38/H39 are in <raw-repo> already)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT

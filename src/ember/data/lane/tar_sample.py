@@ -4,10 +4,10 @@
 """Raw-backlog yield: sample issue1719 train tarballs by range-reading the first ~12 MB of each .tar.gz (no full download): member names/extensions, text-like share, chars per member, licence cues. Out logs/tar-sample-20261109.json"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import io, gzip, tarfile, zlib, json, requests, collections, re
 from huggingface_hub import hf_hub_url, get_token
-H = {"Authorization": "Bearer " + (get_token() or "")}; R = "wordingone/ember-raw-private"
+H = {"Authorization": "Bearer " + (get_token() or "")}; R = ("wordingone/" + HF_RAW_REPO)
 FILES = ["train/issue1719-github-license-partitions-20260818T0550Z__F-train-2.tar.gz", "train/issue1719-github-license-partitions-20260818T0550Z__H-train-2.tar.gz", "train/issue1719-license-partitions-wave10-20260819T0215Z__H-train-1.tar.gz", "train/issue1719-wide-wave-20260818T1436Z__K-train-2.tar.gz", "train/issue1719-wide-wave-20260818T1436Z__license-partitions.tar.gz"]
 out = {}
 for f in FILES:

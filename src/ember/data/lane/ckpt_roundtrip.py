@@ -3,13 +3,13 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT, M_ROOT
 import os, sys, hashlib, time, json
 T = (LANE_ROOT + "/tmp-roundtrip")
 os.environ["HF_XET_CACHE"] = T + "/xet"; os.environ["HF_HUB_CACHE"] = T + "/hub"   # token stays at the default HF_HOME; only caches move to B:
 from huggingface_hub import hf_hub_download, HfApi
 D = (M_ROOT + "/ember-live-receipts/cia-hour-a1-five-attn-stage-d4-20261107T073017Z/measurement-60bd6b8de01742389ea577ca2ccdbd0a/trained-child")
-REPO = "wordingone/ember-raw-private"; DEST = "checkpoints/d4a908e3-H39"
+REPO = ("wordingone/" + HF_RAW_REPO); DEST = "checkpoints/d4a908e3-H39"
 def sha(p):
     h = hashlib.sha256()
     with open(p, "rb") as f:

@@ -3,15 +3,15 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clear local packed token shards / objects that are already on the PRIVATE train repo and server-verified (lead 82094; verify-before-delete, data stays on HF).
 CLASS GUARD (lead 82108, after H45's builder died on an evicted NEW shard): a SHARD is evictable ONLY if (a) its name is in the ledger of an hour in the SELECTED head's ancestry (derived from selected-continuation-head.json; refuted H40-H44 children are NOT in it; fail CLOSED when the head/chain/ledger is unreadable) or (b) its pack is DROPPED from admission (an -r1/-r2 twin exists, or supersession-3/4 names it) so no hour will ever read it. Any shard of an admitted-but-not-yet-consumed intake is REFUSED. Objects (objects/*.zst) are not hour inputs and keep the old rule.
-For each candidate: HF path text/<pack>/(shards|objects)/<file> in wordingone/ember-train-private; deleted ONLY if the repo has that path, server size == local size and server LFS sha256 == the locally recomputed sha256. docs-index/ledger/intake/receipt/source-manifest/prov files are never touched.
+For each candidate: HF path text/<pack>/(shards|objects)/<file> in wordingone/<train-repo>; deleted ONLY if the repo has that path, server size == local size and server LFS sha256 == the locally recomputed sha256. docs-index/ledger/intake/receipt/source-manifest/prov files are never touched.
 Deletion is os.remove inside <lane-root>/packed only, receipt row appended to logs/clear-uploaded-20261109.jsonl BEFORE each remove.
 Usage: python scripts/clear_uploaded_shards.py [--dry] [--min-free-gib N] [--only PACK ...]
 Red: python scripts/tests/clear_shards_red_test.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT, M_ROOT
 import os, sys, json, time, hashlib, shutil, threading
-from lane_config import LANE_ROOT as ROOT; REPO = "wordingone/ember-train-private"; RC = ROOT + "/logs/clear-uploaded-20261109.jsonl"
+from lane_config import LANE_ROOT as ROOT; REPO = ("wordingone/" + HF_TRAIN_REPO); RC = ROOT + "/logs/clear-uploaded-20261109.jsonl"
 HEAD_FILE = os.environ.get("HEAD_FILE", (M_ROOT + "/ember-live-receipts/selected-continuation-head.json"))   # lead 82113: consumed = ancestry of the selected head, derived, not hand-seeded
 SUP = [ROOT + "/audit/supersession-3.jsonl", ROOT + "/audit/supersession-4.jsonl"]
 

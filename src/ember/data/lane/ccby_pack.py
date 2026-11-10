@@ -1,17 +1,17 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Image lane (queue item 7): stream-through pack of commoncatalog-cc-by from ember-raw-private image/commoncatalog-cc-by (our verified raw copy).
+"""Image lane (queue item 7): stream-through pack of commoncatalog-cc-by from <raw-repo> image/commoncatalog-cc-by (our verified raw copy).
 Per parquet: download -> ccby_manifest (licence/wall/human-text/heldout/dedup) -> delete parquet. Then pack_media image over the merged manifest -> packed to A:/ember-stage/media-packed (or B: media-packed) -> delete staged images.
 Resumable: staging/ccby-pack/state.json. Done marker: staging/ccby-pack/ALL.done. Usage: python scripts/ccby_pack.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, sys, json, time, subprocess, shutil
 from huggingface_hub import HfApi
 import net_cap as _nc      # M-NET-2 (lead 82238): every lane download goes through the shared, cap-aware downloader (unthrottled while the cap is off)
 def hf_hub_download(repo, path, repo_type="dataset", revision=None, local_dir=".", **kw): return _nc.download(repo, path, rev=revision, local_dir=local_dir, repo_type=repo_type)
-from lane_config import LANE_ROOT as ROOT; W = ROOT + "/staging/ccby-pack"; R = "wordingone/ember-raw-private"; NAME = "commoncatalog-cc-by-v1"
+from lane_config import LANE_ROOT as ROOT; W = ROOT + "/staging/ccby-pack"; R = ("wordingone/" + HF_RAW_REPO); NAME = "commoncatalog-cc-by-v1"
 os.makedirs(W + "/parts", exist_ok=True); ST = W + "/state.json"
 state = json.load(open(ST)) if os.path.exists(ST) else {"done": {}}
 def log(*a): print(time.strftime("%H:%M:%S"), *a, flush=True)

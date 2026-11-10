@@ -8,7 +8,7 @@ Directive words in the printed line for the cron prompt: NEW_PACKED <name> -> ma
 Rules this script enforces: CPU-only work, <=3 PG workers; lane total <=8 logical cores (LANE_WEIGHT table in spawn(), lead 81497), BelowNormal priority, OMP/MKL=1, no new job while total CPU >85%; PRIVATE-repo uploads go automatically for any packed set that passed the rules + training's C1/C2 intake and is listed in loops/approved-uploads.json (lead 81232); PUBLIC repos always need lead's ruling; never overwrites an HF file."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from lane_config import LANE_ROOT, M_ROOT, SEAT_LEAD, SEAT_TRAIN
+from lane_config import HF_TRAIN_REPO, LANE_ROOT, M_ROOT, SEAT_LEAD, SEAT_TRAIN
 import sys, os, json, time, glob, subprocess, hashlib, shutil
 from lane_config import LANE_ROOT as ROOT; L = ROOT + "/loops"; os.makedirs(L, exist_ok=True)
 LOOP = sys.argv[1]
@@ -40,8 +40,8 @@ def gate_ok(gate_path, intake_path):
         return False
     if v.get("verdict") != "PASS":
         return False
-    c = (v.get("inputs") or {}).get("candidate_sha256"); l = it.get("ledger_sha256")
-    return not (c and l and c != l)
+    c = (v.get("inputs") or {}).get("candidate_sha256"); l = it.get("ledger_sha256") or it.get("index_sha256")      # text packs bind to the ledger sha, media sets to the index sha
+    return bool(c) and bool(l) and c == l      # fail closed (lead 82448 / review row tick.py): a PASS missing either hash, or an intake with no binding key, approves nothing
 
 
 def mglob(tail): return sorted(x for d in MEDIA_DIRS for x in glob.glob(d + "/" + tail))
@@ -140,7 +140,7 @@ BACKLOG = [   # ordered; start=None means another tick manages it; needs = file 
  dict(id="remedy-move", done=ROOT + "/logs/remedy-move-final.json", alive="remedy_move.py", start="python scripts/pinned_run.py scripts/remedy_move.py", prog=lambda: "move flagged public heldout archives to private, one delete commit (lead 81698)"),
  dict(id="redact-r1", done=ROOT + "/redact-r1/ALL.done", alive="redact_r1.py", start="python scripts/pinned_run.py scripts/redact_r1.py", prog=lambda: "wikipedia redaction pass r1 (lead 81713)"),
  dict(id="repack-r1", done=ROOT + "/redact-r1/REPACK.done", alive="repack_r1", start="python scripts/pinned_run.py scripts/repack_r1_all.py", prog=lambda: "wikipedia -r1 repack, smallest pack first (training 81727)"),
- dict(id="audit-secrets-train", done=ROOT + "/audit/secret-audit-ember-train-private.done", alive="audit_secrets.py wordingone/ember-train-private", start="python scripts/audit_secrets.py wordingone/ember-train-private", prog=lambda: "secret audit of ember-train-private (lead 81693)"),
+ dict(id="audit-secrets-train", done=ROOT + ("/audit/secret-audit-" + HF_TRAIN_REPO + ".done"), alive=("audit_secrets.py wordingone/" + HF_TRAIN_REPO), start=("python scripts/audit_secrets.py wordingone/" + HF_TRAIN_REPO), prog=lambda: ("secret audit of " + HF_TRAIN_REPO + " (lead 81693)")),
  dict(id="audit-secrets", needs=ROOT + "/loops/AUDIT-RUN.flag", done=ROOT + "/audit/secret-audit.done", alive="audit_secrets.py", start="python scripts/audit_secrets.py", prog=lambda: "secret audit of ember-corpus (lead 81676)"),
  dict(id="bulk-mls", done=ROOT + "/bulk/mls/ALL.done", alive="bulk_lane.py mls", start="python scripts/bulk_lane.py mls", prog=lambda: _bulk_prog("mls")),   # lead 81651 fill order: audio MLS-English bulk (3 workers)
  dict(id="bulk-pd12m", done=ROOT + "/bulk/pd12m/ALL.done", alive="bulk_lane.py pd12m", start="python scripts/bulk_lane.py pd12m", prog=lambda: _bulk_prog("pd12m")),   # images PD12M (1 proc, 12 I/O threads)
@@ -328,6 +328,16 @@ def intake():
     try:
         sys.path.insert(0, ROOT + "/scripts"); import pack_gate; _pg = pack_gate.sweep(); _pgs = " | " + pack_gate.summary(_pg)      # lead 82278: packed = all artifacts present, else in progress or an orphan (moved, receipted)
     except Exception as _e: _pgs = f" | pack_gate error {type(_e).__name__}: {_e}"
+    try:   # skill-probe contamination scan (lead 82428): every local text pack is scanned once against the frozen test split; a hit is PROBE_HIT <pack> in this line -> mail lead
+        _packs = [os.path.basename(os.path.dirname(x)) for x in glob.glob(ROOT + "/packed/*/objects") if glob.glob(x + "/*.jsonl.zst")]
+        if any(not os.path.exists(ROOT + f"/logs/probe-scan-{n}.json") for n in _packs) and not alive("probe_scan_all.py"): spawn("python scripts/probe_scan_all.py", ROOT + "/logs/probe-scan-all.out")
+        _hits = []
+        for _p in glob.glob(ROOT + "/logs/probe-scan-*.json"):
+            try:
+                if json.load(open(_p)).get("prompt_hits", 0) > 0: _hits.append(os.path.basename(_p)[11:-5])
+            except Exception: pass
+        _pgs += f" | probe_scan {len(glob.glob(ROOT + '/logs/probe-scan-*.json'))}/{len(_packs)} packs" + (" PROBE_HIT " + ",".join(sorted(_hits)) if _hits else ", 0 hits")
+    except Exception as _e: _pgs += f" | probe_scan error {type(_e).__name__}: {_e}"
     done("worked" if new else "idle", (("NEW_PACKED " + " NEW_PACKED ".join(new)) if new else "no new packed datasets") + _pgs)
 
 def upload():
@@ -340,14 +350,14 @@ def upload():
         if ent in have or nm == "arxiv-pdf-prewall": continue   # arXiv was uploaded earlier under text/arxiv-pdf (entries arxiv-pdf-prewall-train/raw)
         gates = sorted(glob.glob(f"{M_ROOT}/avir/{SEAT_TRAIN}/state/c1c2-{nm}-*.json"))
         if gates and gate_ok(gates[-1], ip):
-            items.append(dict(name=ent, repo="wordingone/ember-train-private", path="text/" + nm, local=os.path.dirname(ip).replace(chr(92), "/"), approved_by="lead 81232 + training c1c2 PASS " + os.path.basename(gates[-1])))
+            items.append(dict(name=ent, repo=("wordingone/" + HF_TRAIN_REPO), path="text/" + nm, local=os.path.dirname(ip).replace(chr(92), "/"), approved_by="lead 81232 + training c1c2 PASS " + os.path.basename(gates[-1])))
     # media sets (image/audio): same standing rule (lead 81232/81393): rules + training C1/C2 PASS -> private train repo, path <modality>/<name>
     for ip in sorted(mglob("*/intake.json")):
         nm = os.path.basename(os.path.dirname(ip)); ent = "train-" + nm; mod = json.load(open(ip, encoding="utf-8")).get("modality", "image")
         if ent in have or nm == "lv-pilot-v1": continue   # lv-pilot-v1 is a format sample, never registered
         gates = sorted(glob.glob(f"{M_ROOT}/avir/{SEAT_TRAIN}/state/c1c2-{nm}-*.json"))
         if gates and gate_ok(gates[-1], ip):
-            items.append(dict(name=ent, repo="wordingone/ember-train-private", path=mod.split("-")[0] + "/" + nm, local=os.path.dirname(ip).replace(chr(92), "/"), approved_by="standing rule (lead 81232/81393): rules + training c1c2 PASS " + os.path.basename(gates[-1])))
+            items.append(dict(name=ent, repo=("wordingone/" + HF_TRAIN_REPO), path=mod.split("-")[0] + "/" + nm, local=os.path.dirname(ip).replace(chr(92), "/"), approved_by="standing rule (lead 81232/81393): rules + training c1c2 PASS " + os.path.basename(gates[-1])))
     if os.path.exists(ROOT + "/loops/RESTORE-PRIORITY.flag"): done("held", "uploads HELD while RESTORE-PRIORITY.flag exists (training 82037 / lead 82035: the uplink is saturated; restore first)")
     sys.path.insert(0, ROOT + "/scripts"); import upload_refuse      # lead 82100: pre-redaction originals never upload
     _ref = [i for i in items if upload_refuse.refused(i["local"])]; items = [i for i in items if i not in _ref]
@@ -394,7 +404,7 @@ def upload():
             else: bad.append(f"{it['name']}: still missing {len(miss)} after {it.get('restarts', 0)} relaunches")
         else:
             it["verified"] = time.strftime("%Y-%m-%dT%H:%M:%S"); acts.append(f"{it['name']}: VERIFIED {len(loc)} files vs HF")
-            if it["repo"] == "wordingone/ember-train-private" and it["path"].startswith("text/"):      # lead 82379(4)/82381: a set is dropped locally the moment its upload is server-verified, then lead is mailed
+            if it["repo"] == ("wordingone/" + HF_TRAIN_REPO) and it["path"].startswith("text/"):      # lead 82379(4)/82381: a set is dropped locally the moment its upload is server-verified, then lead is mailed
                 try:
                     sys.path.insert(0, ROOT + "/scripts"); import drop_uploaded
                     _r, _m = drop_uploaded.run(it["local"], it["repo"], it["path"], go=True); acts.append("DROPPED " + _m); it["dropped"] = time.strftime("%Y-%m-%dT%H:%M:%S")

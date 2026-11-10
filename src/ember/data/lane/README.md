@@ -25,6 +25,7 @@ Everything machine-specific arrives through the environment; a missing variable 
 | `EMBER_LANE_ROOT` | Runtime data root of the lane (`logs`, `packed`, `loops`, `scratch`, `upq` ...). This directory is deployed as `<root>/scripts`. |
 | `EMBER_M_ROOT` | Parent directory holding the lane root and the sibling trees the lane reads (custody, receipts, seat state trees). |
 | `EMBER_SEAT_LEAD`, `EMBER_SEAT_TRAIN`, `EMBER_SEAT_DATA` | Seat ids of the coordinating, training and data roles: mailbox recipient and state-directory name. |
+| `EMBER_HF_RAW_REPO`, `EMBER_HF_TRAIN_REPO` | Names of the lane's private raw-sources and training-ready Hub dataset repos. Local configuration only: no private repo name is stored in this tree. |
 | `EMBER_CENSUS_SKIP_PREFIXES` | `;`-separated lower-case path prefixes the census skips. |
 
 ## What is here
@@ -37,8 +38,8 @@ Everything machine-specific arrives through the environment; a missing variable 
 | `pack.py`, `pack_gate.py`, `source_manifest.py`, `text_lane.py`, `pack_prov_fix.py`, `pack_media.py` | Packing and the pack-completeness gate. |
 | `reserve_plan.py` | Disk-floor source of truth: `floor_gib()` re-reads the standing floor file on every call (so a floor change reaches already-running lane processes), measured-harm waits, `write_gate()` for scratch writes, `scan_floor_gib()` (a bounded band under the lane floor, never under the press minimum) for the pre-upload scan's transient scratch so scan -> upload -> verified drop is never starved by lanes. |
 | `scratch_dir.py` | Owner-stamped scratch directories: removed at exit by their writer; a killed writer's directory is swept with a receipt row. |
-| `drop_manifest.py`, `drop_execute.py`, `drop_uploaded.py`, `clear_uploaded_shards.py` | Local eviction of packed sets whose bytes are on the Hub: manifest first, then per-file server read-back plus local sha256 recompute, receipt row before `os.remove`, skip on any mismatch, hard-linked files (in the training catalog) never touched. |
-| `reserve_manifest.py`, `reserve_evict.py`, `ckpt_*.py`, `dup_ckpt_*.py`, `evict_ckpt_list.py` | Checkpoint custody and verified eviction. A child of a scored hour is kept until a server-verified copy exists. |
+| `drop_manifest.py`, `drop_execute.py`, `drop_uploaded.py`, `clear_uploaded_shards.py` | Local eviction of packed sets whose bytes are on the Hub. `drop_uploaded.py` is the verified path (per-file server read-back plus local sha256 recompute, receipt row before `os.remove`, skip on any mismatch, hard-linked files in the training catalog never touched). `drop_execute.py` does NOT verify on its own path: do not run it (see Rules). |
+| `reserve_manifest.py`, `reserve_evict.py`, `ckpt_*.py`, `dup_ckpt_*.py`, `evict_ckpt_list.py` | Checkpoint custody and eviction. Of these only `evict_ckpt_list.py` is verified on its own path (and only for its pinned list); `ckpt_lineage_delete.py` and the remove path of `ckpt_backup.py` are not (see Rules). |
 | `fetch_child_objects.py`, `upload_child_state.py` | Verified restore and upload of checkpoint objects and optimizer/replay state. |
 | `heldout_*.py`, `overlap_*.py`, `build_heldout_index*.py` | Held-out custody and overlap sweeps. |
 | `kill_with_receipt.py`, `kill_lane.ps1` | The only sanctioned way to stop a lane process: receipt first. |
@@ -46,8 +47,9 @@ Everything machine-specific arrives through the environment; a missing variable 
 
 ## Rules the code enforces
 
-- Fail closed. A scanner crash, a missing receipt, a hash mismatch or a floor breach is a refusal, never a pass.
-- Receipt before action. Every delete, kill and upload writes its receipt row first; every delete is preceded by a server read-back and a local hash.
+- Fail closed is the design rule, not yet a property of every script. The independent review of this PR (follow-up issue #2454) found gates that fail open, for example a verdict missing a hash, skipped scan types and a missing overlap index. Treat any script not named below as unverified.
+- Receipt before action, verified delete. Only these executors read the server copy back and recompute a local hash on the same code path before they remove anything, with the receipt row written first: `drop_uploaded.py`, `pg_verify_delete.py`, `_pack_del.py`, `a_relocate.py`, `remedy_hheldout2.py`, `redact_r1.py`, and `evict_ckpt_list.py` (for its pinned list only).
+- Unverified executors, not to be run until #2454 fixes them: `ckpt_lineage_delete.py`, `drop_execute.py`, `delete_approved_dirs.py`, `_pg_obj_del.py`, `_wiki_del.py`, `_ws_del.py`, `free_b.py`, and the remove paths of `raw_roll.py` and `ckpt_backup.py`. They are in the tree for review, not as a runbook.
 - No secret value in any log, receipt or mail.
 - Scratch and pack writes wait on the disk floor (`reserve_plan.write_gate`); they never write below it.
 - Evaluation and held-out data are never mixed into training sets; every pack carries a provenance record.

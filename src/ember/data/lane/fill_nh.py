@@ -6,7 +6,7 @@ Pass 1 (this script, CPU-only): for every src with NULL nh, read the pack's LOCA
 Pass 2 (--hf, needs the downlink; deferred while RESTORE-PRIORITY.flag): fetch the remaining objects from HF, hash in memory, delete the download. Resumable (only touches nh IS NULL rows). Report: logs/fill-nh-20261109.json"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, time, sqlite3
 pass
 import overlap_gate as G
@@ -37,7 +37,7 @@ def hf_pass():
         print("DEFERRED: RESTORE-PRIORITY.flag (H39 restore owns the downlink)"); return
     import io, zstandard, shutil
     from huggingface_hub import HfApi, hf_hub_download
-    api = HfApi(); repo = "wordingone/ember-train-private"; tmp = BASE + "/scratch/fill-nh"; os.makedirs(tmp, exist_ok=True)
+    api = HfApi(); repo = ("wordingone/" + HF_TRAIN_REPO); tmp = BASE + "/scratch/fill-nh"; os.makedirs(tmp, exist_ok=True)
     for name in [r[0] for r in c.execute("select src from docs where nh is null group by src order by count(*) desc")]:
         base = "text/" + name.replace("-r1", "") + "/objects/"
         files = [f for f in api.list_repo_files(repo, repo_type="dataset") if f.startswith(base) and f.endswith(".jsonl.zst")]

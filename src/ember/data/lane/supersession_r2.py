@@ -6,11 +6,11 @@ Row schema = the existing supersession row (hf_inventory keys on original_hf_pre
 Example: supersession_r2.py wikipedia-20220501-p41243p151573-r1 wikipedia-20220501-p41243p151573-r2 "rescrub vs wiki-heldout-2M (44.2% docs had >=1 heldout sentence)"."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, re, time
 from huggingface_hub import HfApi, hf_hub_download
-REPO = "wordingone/ember-train-private"; from lane_config import LANE_ROOT as ROOT; api = HfApi()
+REPO = ("wordingone/" + HF_TRAIN_REPO); from lane_config import LANE_ROOT as ROOT; api = HfApi()
 old, new, reason = sys.argv[1], sys.argv[2], sys.argv[3]
 files = [t.path for t in api.list_repo_tree(REPO, repo_type="dataset", recursive=True) if hasattr(t, "size")]
 for n in (old, new):

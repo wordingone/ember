@@ -8,7 +8,7 @@ Cache: loops/remote-sizes.json {lane: {repo, prefix, fetched, bytes_expected, fi
 bytes_done for these lanes = sum of the REMOTE sizes of the files the lane's state.json marks done (same unit as bytes_expected)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, re, json, time
 from lane_config import LANE_ROOT as ROOT; CACHE = ROOT + "/loops/remote-sizes.json"; TTL_S = 12 * 3600
 
@@ -24,7 +24,7 @@ def lane_sources():
     t = _text_lane_specs()
     t["bulk-mls"] = ("parler-tts/mls_eng", "data", False, lambda p: p.endswith(".parquet"), "bulk/mls/state.json")
     t["bulk-ccby"] = ("common-canvas/commoncatalog-cc-by", "", True, lambda p: p.endswith(".parquet"), "bulk/ccby/state.json")
-    t["image-ccby-pack"] = ("wordingone/ember-raw-private", "image/commoncatalog-cc-by", True, lambda p: p.endswith(".parquet"), "staging/ccby-pack/state.json")
+    t["image-ccby-pack"] = (("wordingone/" + HF_RAW_REPO), "image/commoncatalog-cc-by", True, lambda p: p.endswith(".parquet"), "staging/ccby-pack/state.json")
     return t
 
 

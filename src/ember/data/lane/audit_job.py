@@ -5,10 +5,10 @@
 # dependencies = ["requests", "zstandard", "pyarrow", "py7zr", "huggingface_hub"]
 # ///
 """One-time secret audit of the PUBLIC repo wordingone/ember-corpus as an HF Job (lead 81731). Value-free output only: path, size, hits{pattern:count}, scanned_bytes.
-Never prints or stores a matched value. Results are written as NEW files audit/job/part-NNNN.jsonl in wordingone/ember-raw-private (never overwrites)."""
+Never prints or stores a matched value. Results are written as NEW files audit/job/part-NNNN.jsonl in wordingone/<raw-repo> (never overwrites)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 """Secret-scan gate for PUBLIC uploads (lead 81676). Counts credential-shaped spans; NEVER prints or logs a matched value.
 scan_path(path) -> {"hits": {pattern_name: count}, "scanned_bytes": n, "skipped": [...]}   (empty hits = clean)
 Handles: plain text/jsonl/json/csv/md, .gz, .zst, .tar / .tar.gz / .tgz (recursive, nested archives too), .parquet (every string column).
@@ -139,7 +139,7 @@ def redact(text, counts=None):
 import threading, tempfile, requests, time as _t
 from concurrent.futures import ThreadPoolExecutor
 from huggingface_hub import HfApi
-REPO = "wordingone/ember-corpus"; OUTREPO = "wordingone/ember-raw-private"; TOKEN = os.environ.get("HF_TOKEN")
+REPO = "wordingone/ember-corpus"; OUTREPO = ("wordingone/" + HF_RAW_REPO); TOKEN = os.environ.get("HF_TOKEN")
 SKIP_PREFIX = ("checkpoints/", "tokens/", "avir-cli/")
 DONE = set(json.loads(os.environ.get("DONE_PATHS", "[]")))
 api = HfApi(token=TOKEN); rev = api.dataset_info(REPO).sha

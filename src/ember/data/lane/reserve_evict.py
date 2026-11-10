@@ -10,7 +10,7 @@ Receipt row (appended BEFORE os.remove): logs/reserve-evict-receipts.jsonl. os.r
 Red: python scripts/tests/reserve_evict_red_test.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT, M_ROOT
 import os, sys, json, time, hashlib, threading
 pass
 import evict_ckpt_list as E
@@ -44,7 +44,7 @@ def main():
     api = HfApi(); lock = threading.Lock(); st = dict(n=0, phys=0, skipped=[]); os.makedirs(os.path.dirname(RC), exist_ok=True)
     import shutil; free0 = shutil.disk_usage("B:/").free
     hidx = {}
-    for e in api.list_repo_tree("wordingone/ember-raw-private", path_in_repo="checkpoints", recursive=True, expand=True, repo_type="dataset"):
+    for e in api.list_repo_tree(("wordingone/" + HF_RAW_REPO), path_in_repo="checkpoints", recursive=True, expand=True, repo_type="dataset"):
         if e.__class__.__name__ == "RepoFile" and e.lfs: hidx.setdefault(e.lfs["sha256"] if isinstance(e.lfs, dict) else e.lfs.sha256, e.size)
     gaps = E.guard_children([r["path"] for r in rows if not refuse_reason(r["path"]) and os.path.isfile(r["path"])], lambda s, b: hidx.get(s) == b)      # lead 82370: no child of a scored hour may become unrestorable
     for c, g in gaps.items(): print("CHILD-GAP (all its rows skipped):", c, g[:3], flush=True)

@@ -11,7 +11,7 @@ receipts) stay local. Dry run by default: --apply to delete.
 Usage: python ckpt_lineage_delete.py [--apply] [--keep NAME ...]"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, sys, json, time, shutil, hashlib, collections
 pass
 CHK = (LANE_ROOT + "/logs/ckpt-lineage-check.json"); PASS = (LANE_ROOT + "/logs/ckpt-roundtrip.PASS")
@@ -39,7 +39,7 @@ def main():
     for n, r in chk.items():                       # (a) already inside lineage-2119 on ember-corpus
         if r["status"] == "COVERED" and n not in keep and n not in KEEP_ALWAYS:
             sel.append(dict(name=n, dir=r["dir"], hf_repo="wordingone/ember-corpus", prefix=r["step_dir"], via="lineage-2119 server-side sha256"))
-    upl = {}                                       # (b) uploaded + server-verified to ember-raw-private/checkpoints/<id8>-<name> by ckpt_backup (log lines 'HF-verified')
+    upl = {}                                       # (b) uploaded + server-verified to <raw-repo>/checkpoints/<id8>-<name> by ckpt_backup (log lines 'HF-verified')
     for lg in ((LANE_ROOT + "/logs/ckpt-backup2.log"), (LANE_ROOT + "/logs/ckpt-backup.log")):
         if os.path.exists(lg):
             for l in open(lg, encoding="utf-8"):
@@ -47,7 +47,7 @@ def main():
     reg = {r["name"]: r for r in json.load(open((LANE_ROOT + "/logs/ckpt-old.json")))}
     for n, pth in upl.items():
         if n in reg and n not in keep and n not in KEEP_ALWAYS and not any(x["name"] == n for x in sel) and chk.get(n, {}).get("status") != "COVERED":
-            sel.append(dict(name=n, dir=reg[n]["dir"], hf_repo="wordingone/ember-raw-private", prefix=pth, via="ckpt_backup HF-verified (lfs sha256/size)"))
+            sel.append(dict(name=n, dir=reg[n]["dir"], hf_repo=("wordingone/" + HF_RAW_REPO), prefix=pth, via="ckpt_backup HF-verified (lfs sha256/size)"))
     for r in json.load(open((LANE_ROOT + "/logs/ckpt-probes.json"))):      # (c) Nov probe children: reproducible from pinned scripts, delete without upload; training 81920: all unbound
         if r["name"] not in keep: sel.append(dict(name=r["name"], dir=r["dir"], hf_repo=None, prefix=None, via="probe child, reproducible (disk-custody strategy 2026-11-09); training 81920 unbound"))
     import evict_ckpt_list as _E                       # lead 82363: KEEP markers (H41 child cb516ed9, H44 child e73486d2, depth 1/2, H45 child)

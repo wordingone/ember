@@ -10,7 +10,7 @@ zero-overlap gate (overlap_gate.check_hashes) refuses byte-identical duplicates 
 CPU: I/O bound; thread counts per lane below; the tick spawn pins CPUs 16-23 and BelowNormal."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, time, hashlib, shutil, threading, traceback, io, tarfile, urllib.request, urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +21,7 @@ def hf_hub_download(repo, path, repo_type="dataset", revision=None, local_dir=".
 from lane_config import LANE_ROOT as ROOT; FLOOR_GIB = None   # single source: reserve_plan.floor_gib() (lead 82070); no literal here
 LANE = sys.argv[1]; LIMIT = int(os.environ.get('LANE_LIMIT', '0'))   # smoke test: process only this many items
 PUBLIC_LANES = {"pd12m", "loc"}
-RAW = "wordingone/ember-corpus" if LANE in PUBLIC_LANES else "wordingone/ember-raw-private"
+RAW = "wordingone/ember-corpus" if LANE in PUBLIC_LANES else ("wordingone/" + HF_RAW_REPO)
 PRIV_CAP_BYTES = 1e12; PRIV_STOP = 0.85   # Pro private quota ~1 TB shared by raw+train; at 85% stop and let the tick mail lead
 STG = f"{ROOT}/bulk/{LANE}"; os.makedirs(STG, exist_ok=True)
 STATE = f"{STG}/state.json"; PROG = f"{STG}/progress.json"; RCPT = f"{ROOT}/logs/bulk-{LANE}-receipts.jsonl"
@@ -72,7 +72,7 @@ def remote_info(rp):
 _q = {"t": 0, "used": 0}
 def private_used():
     if time.time() - _q["t"] > 300:
-        _q["used"] = sum(api.dataset_info(r, expand=["usedStorage"]).used_storage for r in ("wordingone/ember-raw-private", "wordingone/ember-train-private")); _q["t"] = time.time()
+        _q["used"] = sum(api.dataset_info(r, expand=["usedStorage"]).used_storage for r in (("wordingone/" + HF_RAW_REPO), ("wordingone/" + HF_TRAIN_REPO))); _q["t"] = time.time()
     return _q["used"]
 def quota_guard(add):
     """lead 81851: shared hard guard (hf_cap.py): hold (wait + mail lead) instead of pushing past 900 GB total private; never exits, never deletes."""

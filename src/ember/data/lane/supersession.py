@@ -1,17 +1,17 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Supersession manifest (lead 81767): declare each original wikipedia pack -> its redacted -r1 twin in wordingone/ember-train-private. NO deletes; originals stay (H41 and other ledgers bind their shard shas).
+"""Supersession manifest (lead 81767): declare each original wikipedia pack -> its redacted -r1 twin in wordingone/<train-repo>. NO deletes; originals stay (H41 and other ledgers bind their shard shas).
 A pair is declared only when the -r1 pack is fully on HF (text/<name>-r1/intake.json present). Each run writes ONE NEW file (supersession.jsonl, then supersession-2.jsonl, ...) holding only
 pairs not already declared in an existing supersession*.jsonl (never overwrites an HF file). hf_inventory.py reads supersession*.jsonl: unique totals count only the -r1 side, declared pairs go on a
 'superseded (kept for provenance)' line and are NOT overlap; undeclared duplicates stay a failure. Rows carry shas, no text."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import os, sys, json, re, time
 from huggingface_hub import HfApi
-REPO = "wordingone/ember-train-private"; from lane_config import LANE_ROOT as ROOT; api = HfApi()
+REPO = ("wordingone/" + HF_TRAIN_REPO); from lane_config import LANE_ROOT as ROOT; api = HfApi()
 files = [t.path for t in api.list_repo_tree(REPO, repo_type="dataset", recursive=True) if hasattr(t, "size")]
 declared = set(); existing = []
 for p in files:

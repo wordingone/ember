@@ -9,14 +9,14 @@ Output: packed/<PACK>-r1/ {shards, objects (r1 twins + locally-present originals
 and logs/repack-r1/<PACK>.manifest.json  (old shard sha -> new shard sha, token counts).  --verify-identity: use ONLY original objects, write to a scratch dir and compare with the existing pack (must be byte-identical)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT, M_ROOT
 import os, sys, io, json, hashlib, array, time, shutil, requests
 os.environ.setdefault("RAYON_NUM_THREADS", "4")
 import zstandard
 from tokenizers import Tokenizer
 from huggingface_hub import get_token
 from lane_config import LANE_ROOT as ROOT; PACK = sys.argv[1]; VERIFY = "--verify-identity" in sys.argv
-REPO = "wordingone/ember-train-private"; S = 4194304
+REPO = ("wordingone/" + HF_TRAIN_REPO); S = 4194304
 TOKP = (M_ROOT + "/custody-tokenizer-2c557/tokenizer-2c557.json")
 old = f"{ROOT}/packed/{PACK}"; rec_old = json.load(open(old + "/receipt.json"))
 NAME = PACK + ("-verify" if VERIFY else "-r1"); base = f"{ROOT}/" + ("scratch-repack/" if VERIFY else "packed/") + NAME

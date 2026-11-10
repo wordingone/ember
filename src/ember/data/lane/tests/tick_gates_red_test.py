@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Reds for the tick upload gates (python scripts/tests/tick_gates_red_test.py). 1) a stale C1/C2 PASS (candidate_sha256 != intake ledger_sha256) is refused; 2) a matching PASS accepted; 3) FAIL refused;
-4) old-format verdict (no candidate_sha256) accepted on PASS only; 5) unreadable verdict refused; 6) tick upload and upload_worker both hold while RESTORE-PRIORITY.flag exists (source-level)."""
+4) old-format verdict (no candidate_sha256) REFUSED (fail closed, lead 82448); 5) unreadable verdict refused; 6) tick upload and upload_worker both hold while RESTORE-PRIORITY.flag exists (source-level)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 from lane_config import LANE_ROOT
@@ -18,7 +18,10 @@ it = w("intake.json", {"ledger_sha256": "NEW"})
 chk("RED stale PASS refused", g(w("a.json", {"verdict": "PASS", "inputs": {"candidate_sha256": "OLD"}}), it) is False)
 chk("matching PASS accepted", g(w("b.json", {"verdict": "PASS", "inputs": {"candidate_sha256": "NEW"}}), it) is True)
 chk("FAIL refused", g(w("c.json", {"verdict": "FAIL", "inputs": {"candidate_sha256": "NEW"}}), it) is False)
-chk("old-format PASS (no candidate_sha256) accepted", g(w("d.json", {"verdict": "PASS"}), it) is True)
+chk("RED old-format PASS (no candidate_sha256) refused (fail closed, lead 82448)", g(w("d.json", {"verdict": "PASS"}), it) is False)
+chk("RED PASS with an empty candidate_sha256 refused", g(w("d2.json", {"verdict": "PASS", "inputs": {"candidate_sha256": ""}}), it) is False)
+chk("RED intake with no ledger_sha256/index_sha256 refuses even a PASS with a hash", g(w("b2.json", {"verdict": "PASS", "inputs": {"candidate_sha256": "NEW"}}), w("intake-nokey.json", {"docs": 1})) is False)
+chk("media intake binds to index_sha256: matching accepted, stale refused", g(w("b3.json", {"verdict": "PASS", "inputs": {"candidate_sha256": "IDX"}}), w("intake-media.json", {"index_sha256": "IDX"})) is True and g(w("a3.json", {"verdict": "PASS", "inputs": {"candidate_sha256": "OLD"}}), w("intake-media.json", {"index_sha256": "IDX"})) is False)
 chk("unreadable verdict refused", g(os.path.join(d, "missing.json"), it) is False)
 chk("tick upload holds on RESTORE-PRIORITY.flag", 'RESTORE-PRIORITY.flag"): done("held"' in SRC)
 chk("upload_worker holds on RESTORE-PRIORITY.flag", "RESTORE-PRIORITY.flag" in open((LANE_ROOT + "/scripts/upload_worker.py"), encoding="utf-8").read())

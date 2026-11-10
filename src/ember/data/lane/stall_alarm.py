@@ -7,7 +7,7 @@ If the uploader queue is non-empty or a pack push is alive AND progress has not 
 last landed file and socket states of the push processes. State: upq/alarm-state.json (override with STALL_ALARM_STATE / STALL_ALARM_S for tests)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT, SEAT_LEAD
+from lane_config import HF_TRAIN_REPO, LANE_ROOT, M_ROOT, SEAT_LEAD
 import os, sys, json, time, subprocess, collections, re
 import psutil
 pass
@@ -42,7 +42,7 @@ def heal(ps, prog_by_log, now):
         if h["cw_since"] is not None and now - h["cw_since"] >= 120: why = f"CLOSE_WAIT socket for {now - h['cw_since']:.0f} s"
         elif now - h["since"] >= 300: why = f"no progress for {now - h['since']:.0f} s"
         if why:
-            sel = ("hf upload wordingone/ember-train-private " + LANE_ROOT + "/packed/") + name.replace("train-", "")
+            sel = ("hf upload wordingone/" + HF_TRAIN_REPO + " " + LANE_ROOT + "/packed/") + name.replace("train-", "")
             r = subprocess.run(["powershell", "-NoProfile", "-File", ROOT + "/scripts/kill_lane.ps1", "-Reason", f"auto-heal {name}: {why} (lead 81847); resumable push, tick relaunches", "-Only", sel], capture_output=True, text=True, timeout=120)
             acts.append(f"healed {name}: {why} -> {[x for x in r.stdout.splitlines() if 'STOPPED' in x]}"); hs.pop(name, None)
     json.dump(hs, open(Q + "/alarm-heal.json", "w"))

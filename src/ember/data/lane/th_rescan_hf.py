@@ -3,12 +3,12 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Rescan every text-bearing file already on HF with TruffleHog (operator / lead 81934 item 3). Resumable ledger: logs/th-rescan.jsonl (one row per file; hits are detector COUNTS only, never values).
 Source of bytes per file: the identical LOCAL copy when one exists (train repo packs under <lane-root>/packed/<pack>/..., verified by size + sha256 == HF LFS sha), else a download into
-<lane-root>/scratch/th-dl that is deleted right after the scan (stream-through). Order: ember-train-private first (the alert was there), ember-raw-private text/, then ember-corpus text-bearing paths.
+<lane-root>/scratch/th-dl that is deleted right after the scan (stream-through). Order: <train-repo> first (the alert was there), <raw-repo> text/, then ember-corpus text-bearing paths.
 Skipped: checkpoints/, audio+image media, binary extensions (th_gate.SKIP_EXT). CPU: scan runs BelowNormal on CPUs 16-23.
 Usage: python th_rescan_hf.py [repo_key ...]   (train | raw | public)      Summary: python th_rescan_hf.py summary"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, time, hashlib, shutil, collections
 pass
 import th_gate
@@ -17,7 +17,7 @@ import net_cap as _nc      # M-NET-2 (lead 82238): every lane download goes thro
 def hf_hub_download(repo, path, repo_type="dataset", revision=None, local_dir=".", **kw): return _nc.download(repo, path, rev=revision, local_dir=local_dir, repo_type=repo_type)
 
 from lane_config import LANE_ROOT as ROOT; LEDGER = ROOT + "/logs/th-rescan.jsonl"; DL = ROOT + "/scratch/th-dl"
-REPOS = {"train": "wordingone/ember-train-private", "raw": "wordingone/ember-raw-private", "public": "wordingone/ember-corpus"}
+REPOS = {"train": ("wordingone/" + HF_TRAIN_REPO), "raw": ("wordingone/" + HF_RAW_REPO), "public": "wordingone/ember-corpus"}
 SKIP_PREFIX = ("checkpoints/", "audio/", "image/", "sources/pd12m/", "sources/wikimedia-commons-pd/", "sources/librispeech-seed/", "avir-cli/", "tokens/", "catalog/", "staging/")
 api = HfApi()
 

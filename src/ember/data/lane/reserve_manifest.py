@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Read-only eviction MANIFEST for B: free space (lead 82254). Deletes nothing.
-Candidates: *.pt objects under <m-root>/ember-live-receipts that are NOT in a protected tree and whose sha256 (content-addressed file name, recomputed locally) has a server-side LFS copy of equal size in wordingone/ember-raw-private (read back from HF now, not from our ledger).
+Candidates: *.pt objects under <m-root>/ember-live-receipts that are NOT in a protected tree and whose sha256 (content-addressed file name, recomputed locally) has a server-side LFS copy of equal size in wordingone/<raw-repo> (read back from HF now, not from our ledger).
 Protected trees: selected head + its ancestry (hour-result lineage.parent_checkpoint chain), the newest N hour dirs by mtime (default 2) and their probes, the H45 child, depth 1/2 KEEP nodes of evict_ckpt_list, anything in --pin files (paths listed one per line, e.g. training's H48 derive).
 Physical GiB counts unique inodes whose EVERY link is a candidate (lead 82147).
 Usage: python scripts/reserve_manifest.py [--newest N] [--pin file]   -> logs/reserve-manifest-<ts>.tsv/.json"""

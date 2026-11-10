@@ -40,8 +40,11 @@ class Cfg:
         self.words = [tuple(w.split("=", 1)) for w in a.word]
         self.word_res = [(re.compile(r"(?<![A-Za-z])" + re.escape(o) + r"(?![A-Za-z])"), n) for o, n in self.words]
         self.role = {cn: dict(self.words).get(sid.capitalize()) or dict(self.words).get(sid, sid) for sid, cn in self.seats}
+        self.repos = [tuple(s.split("=", 1)) for s in getattr(a, "repo", [])]         # (private repo name, config name): names of private HF repos never sit in the public tree
+        self.repo_res = [(re.compile(r"(?<![A-Za-z0-9_])" + re.escape(nm) + r"(?![A-Za-z0-9_])"), cn, "<" + cn.lower().replace("hf_", "").replace("_", "-") + ">") for nm, cn in self.repos]
         self.vals = {"LANE_ROOT": self.m_root + "/" + self.lane_dir, "M_ROOT": self.m_root}
         for sid, cn in self.seats: self.vals[cn] = sid
+        for nm, cn in self.repos: self.vals[cn] = nm
 
 
 def words(c, s):
@@ -53,6 +56,7 @@ def doc_text(c, s):
     """documentary text (comment, docstring): roots and seat dirs become placeholders, then role words"""
     s = c.LANE_RE.sub("<lane-root>", s); s = c.M_RE.sub("<m-root>", s)
     for sid, cn in c.seats: s = re.sub(r"(?<=[/\\])" + re.escape(sid) + r"(?=[/\\]|$)", "<" + c.role[cn] + ">", s)
+    for rx, cn, ph in c.repo_res: s = rx.sub(ph, s)
     return words(c, s)
 
 
@@ -79,6 +83,7 @@ def code_string(c, tok, warn, where):
     for sid, cn in c.seats:
         marked = re.sub(r"(?<=[/\\])" + re.escape(sid) + r"(?=[/\\]|$)", "\x00" + cn + "\x00", marked)
         if marked == sid: marked = "\x00" + cn + "\x00"
+    for rx, cn, _ in c.repo_res: marked = rx.sub("\x00" + cn + "\x00", marked)
     parts = marked.split("\x00")
     if len(parts) == 1:
         nb = words(c, body)
@@ -157,10 +162,10 @@ def export_py(c, text, depth, warn, rel):
     lines = text.splitlines(keepends=True); starts = [0]
     for l in lines: starts.append(starts[-1] + len(l))
     toks = list(tokenize.generate_tokens(io.StringIO(text).readline)); edits = []; used = set()
-    sig = [t for t in toks if t.type not in (tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT, tokenize.NEWLINE)]
+    sig = [t for t in toks if t.type not in (tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT)]      # NEWLINE stays: two string STATEMENTS on adjacent lines are not an implicit concatenation
     for i, t in enumerate(sig):
         if t.type == tokenize.STRING and ((i + 1 < len(sig) and sig[i + 1].type == tokenize.STRING) or (i > 0 and sig[i - 1].type == tokenize.STRING)):
-            if c.M_RE.search(t.string) or any(re.search(re.escape(s), t.string) for s, _ in c.seats):
+            if c.M_RE.search(t.string) or any(re.search(re.escape(s), t.string) for s, _ in c.seats) or any(rx.search(t.string) for rx, _, _ in c.repo_res):
                 warn.append(f"{rel}:{t.start[0]}: implicit string concatenation carries a root or seat id")
     for t in toks:
         where = f"{rel}:{t.start[0]}"
@@ -203,6 +208,7 @@ def export_sh(c, text):
 
 def doc_text_sh(c, text):
     for sid, cn in c.seats: text = re.sub(r"(?<=[/\\])" + re.escape(sid) + r"(?=[/\\]|$)", "$EMBER_" + cn, text)
+    for rx, cn, _ in c.repo_res: text = rx.sub("$EMBER_" + cn, text)
     return words(c, text)
 
 
@@ -212,6 +218,7 @@ def export_ps1(c, text):
     text = re.sub(r"'" + c.M_RE.pattern + r"((?:[/\\][^'\r\n]*)?)'", lambda m: "(Join-Path $env:EMBER_M_ROOT '" + m.group(1).lstrip("\\/") + "')", text)
     for sid, cn in c.seats: text = text.replace("'" + sid + "'", "$env:EMBER_" + cn)
     text = c.LANE_RE.sub("$env:EMBER_LANE_ROOT", text); text = c.M_RE.sub("$env:EMBER_M_ROOT", text)
+    for rx, cn, _ in c.repo_res: text = rx.sub("$env:EMBER_" + cn, text)
     return words(c, text)
 
 
@@ -223,7 +230,10 @@ def norm_str(c, s, strict=False):
             if s == sid: return tag
             s = re.sub(r"(?<=[/\\])" + re.escape(sid) + r"(?=[/\\]|$)", tag, s)
     lt, mt = ("\x01L\x01", "\x01M\x01") if strict else ("", "")      # code strings keep WHICH root they name (lane root vs machine root): swapping one for the other must fail the proof; docstrings drop roots (reworded as role words)
-    s = c.LANE_RE.sub(lt, s); s = c.M_RE.sub(mt, s); s = re.sub(r"<[a-z\-]+>", "", s)
+    s = c.LANE_RE.sub(lt, s); s = c.M_RE.sub(mt, s)
+    if not strict:
+        for rx, _, _ in c.repo_res: s = rx.sub("", s)      # docstrings/comments: the name is reworded to a placeholder; code strings keep WHICH repo (a swap must fail the proof)
+    s = re.sub(r"<[a-z\-]+>", "", s)
     for rx, n in c.word_res: s = rx.sub("", s)
     for _, n in c.words: s = re.sub(r"(?<![A-Za-z])" + re.escape(n) + r"(?![A-Za-z])", "", s)
     for sid, _ in c.seats: s = re.sub(r"(?<![A-Za-z])" + re.escape(sid) + r"(?![A-Za-z])", "", s, flags=re.I)
@@ -282,7 +292,7 @@ def verify(c, orig, new):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--src", required=True); ap.add_argument("--dst", required=True); ap.add_argument("--m-root", required=True)
-    ap.add_argument("--lane-dir", required=True); ap.add_argument("--seat", action="append", default=[]); ap.add_argument("--word", action="append", default=[])
+    ap.add_argument("--lane-dir", required=True); ap.add_argument("--seat", action="append", default=[]); ap.add_argument("--word", action="append", default=[]); ap.add_argument("--repo", action="append", default=[], help="PRIVATE_REPO_NAME=CONFIG_NAME: a private HF repo name replaced by a lane_config value")
     ap.add_argument("--exclude", action="append", default=[]); ap.add_argument("--receipt"); ap.add_argument("--keep", action="append", default=[], help="relative path copied verbatim (already neutral)")
     a = ap.parse_args(argv); c = Cfg(a); warn = []; rows = []; bad = []
     for dp, dn, fn in os.walk(a.src):

@@ -2,12 +2,12 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Bulk TEXT lanes (lead 81651/81661): LoC-PD-Books (CC0), peS2o and PubMed (common-pile, per-doc licence). One raw file at a time:
-download -> upload raw to ember-raw-private text/<lane>/ (verify LFS sha) -> prep (date wall, licence, quality, zero-overlap gate) -> scrub vs heldout -> dedup
+download -> upload raw to <raw-repo> text/<lane>/ (verify LFS sha) -> prep (date wall, licence, quality, zero-overlap gate) -> scrub vs heldout -> dedup
 -> keep final-*.jsonl.zst -> delete raw -> every ~1B tokens pack into packed/<lane>-<first>-<last>/ (+prov, source manifest) for the intake tick -> training C1/C2 -> train upload.
 Usage: python scripts/text_lane.py loc|pes2o|pubmed        (resumable; state in bulk/<lane>/state.json)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys, os, io, re, json, gzip, time, glob, subprocess, hashlib
 LANE = sys.argv[1]; from lane_config import LANE_ROOT as ROOT
 sys.argv = ["bulk_lane.py", LANE]
@@ -244,7 +244,7 @@ def maybe_pack(force=False):
                 for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
                     r = json.loads(line); pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"))) + "\n")
     run([sys.executable, ROOT + "/scripts/pack.py", ROOT + "/packed", name] + [fin[k]["path"] for k in todo], f"{ROOT}/logs/pack-{name}.log")
-    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in ember-raw-private {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), WALL, "text"], f"{ROOT}/logs/srcman-{name}.log")
+    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), WALL, "text"], f"{ROOT}/logs/srcman-{name}.log")
     json.dump(dict(domain=SPEC.get("domain", "mixed"), wall=WALL, source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{ROOT}/packed/{name}/domain.json", "w"))   # lead 81977: domain tag per pack so training can weight the mix
     for k in todo: fin[k]["packed"] = name
     import overlap_gate as G; G.build_docs([name])   # later shards must not duplicate this pack

@@ -4,11 +4,11 @@
 """Sample stackexchange 7z yield: download 3 mid-size sites (one thread), measure compressed->Posts.xml bytes->clean body chars (html stripped, entity-decoded). Output logs/yield-se-sample.json"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, re, json, html, shutil, sys
 from huggingface_hub import HfApi, hf_hub_download
 import py7zr
-api = HfApi(); R = "wordingone/ember-raw-private"; D = (LANE_ROOT + "/scratch/se-sample")
+api = HfApi(); R = ("wordingone/" + HF_RAW_REPO); D = (LANE_ROOT + "/scratch/se-sample")
 fs = sorted((t.size, t.path) for t in api.list_repo_tree(R, repo_type="dataset", path_in_repo="text/stackexchange-20221005") if hasattr(t, "size"))
 picks = [next(f for f in fs if f[0] > x) for x in (20e6, 60e6, 120e6)]
 tag = re.compile(r"<[^>]+>"); body = re.compile(r'Body="([^"]*)"')

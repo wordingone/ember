@@ -5,11 +5,11 @@
 Streams one tar part (hf_hub_download to a temp dir under bulk/audit, deleted after), hashes each member, intersects with the raw-private PDF sha256 set."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys, os, tarfile, hashlib, json
 from huggingface_hub import hf_hub_download
 part = sys.argv[1]
-prov = hf_hub_download("wordingone/ember-raw-private", "text/arxiv-pdf/provenance-per-paper.jsonl", repo_type="dataset")
+prov = hf_hub_download(("wordingone/" + HF_RAW_REPO), "text/arxiv-pdf/provenance-per-paper.jsonl", repo_type="dataset")
 pdfs = {}
 for l in open(prov, encoding="utf-8"):
     r = json.loads(l); pdfs[r["pdf_sha256"]] = r["doc_id"]

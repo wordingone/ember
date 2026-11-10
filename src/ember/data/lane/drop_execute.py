@@ -8,13 +8,13 @@ Per Tier-1 file: st_nlink==1 re-checked now; server size + LFS sha256 read back 
 Usage: python drop_execute.py <manifest.tsv> [--go] [--tier2]   (default: dry, verifies but deletes nothing)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, time, hashlib, shutil, threading
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from huggingface_hub import HfApi
 
-from lane_config import LANE_ROOT as ROOT; REPO = "wordingone/ember-train-private"; ACK = "lead 82379 (ack of 82377)"
+from lane_config import LANE_ROOT as ROOT; REPO = ("wordingone/" + HF_TRAIN_REPO); ACK = "lead 82379 (ack of 82377)"
 TIER2 = ["pes2o-00000-00002-pre-redaction-1230", "pes2o-00000-00002-redacted", "thdbg-t691x_z_",
          "wikipedia-20220501-p41243p151573-r2-pre-redaction-1223", "wikipedia-20220501-p41243p151573-r2"]
 RC = f"{ROOT}/logs/drop-exec-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.jsonl"

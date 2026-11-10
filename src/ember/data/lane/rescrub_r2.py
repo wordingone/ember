@@ -5,7 +5,7 @@
 Originals / -r1 are never touched (ledgers bind them). Steps: fetch missing -r1 inputs from HF (sha256-verified vs the r1 receipt) -> scrub.py -> pack.py -> source_manifest.py. Log: logs/rescrub-r2.log"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, subprocess, hashlib, shutil, time
 pass
 from huggingface_hub import hf_hub_download
@@ -27,7 +27,7 @@ for name, o in zip(ins, r1["objects"]):
         lp = f"{ROOT}/packed/{PACK}/objects/{name}"
     if not (os.path.exists(lp) and sha(lp) == o["sha256"]):
         repo_path = f"text/{PACK}-r1/objects/{name}" if name.endswith("-r1.jsonl.zst") else f"text/{PACK}/objects/{name}"
-        log("fetch", repo_path); lp = hf_hub_download("wordingone/ember-train-private", repo_path, repo_type="dataset", local_dir=SCR + "/dl")
+        log("fetch", repo_path); lp = hf_hub_download(("wordingone/" + HF_TRAIN_REPO), repo_path, repo_type="dataset", local_dir=SCR + "/dl")
         assert sha(lp) == o["sha256"], "sha mismatch " + name
     out = f"{SCR}/{name.replace('-r1.jsonl.zst', '.jsonl.zst')}"
     log("scrub", name); rr = subprocess.run([sys.executable, f"{ROOT}/scripts/scrub.py", lp, out], env=ENV, capture_output=True, text=True); log(rr.stdout.strip()[-400:], rr.stderr.strip()[-200:])

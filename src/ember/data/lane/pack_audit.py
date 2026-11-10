@@ -7,9 +7,9 @@ supersession*.jsonl pairs (r1_pack -> original) both on HF and r1 present locall
 Usage: python pack_audit.py [--deep] [--no-hf]"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, sys, json, glob, re, time, hashlib
-from lane_config import LANE_ROOT as ROOT; REPO = "wordingone/ember-train-private"; DEEP = "--deep" in sys.argv; HF = "--no-hf" not in sys.argv
+from lane_config import LANE_ROOT as ROOT; REPO = ("wordingone/" + HF_TRAIN_REPO); DEEP = "--deep" in sys.argv; HF = "--no-hf" not in sys.argv
 def sha(p):
     h = hashlib.sha256()
     with open(p, "rb") as f:

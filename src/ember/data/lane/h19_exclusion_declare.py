@@ -1,15 +1,15 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Declare the H19-overlap exclusion (lead 81829) as supersession-3.jsonl in ember-train-private + the exclusion id list under exclusions/. NO deletes, no pack edits, never overwrites an HF file.
+"""Declare the H19-overlap exclusion (lead 81829) as supersession-3.jsonl in <train-repo> + the exclusion id list under exclusions/. NO deletes, no pack edits, never overwrites an HF file.
 Rows are kind=article_exclusion (one per pack): hf_inventory subtracts them from the unique train-ready text count; admission applies them at ledger time."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import sys as _hs; _hs.path.insert(0, (LANE_ROOT + "/scripts")); import hf_push   # lead 82104: one funnel for HF writes
 import json, hashlib, time, collections
 from huggingface_hub import HfApi
-REPO = "wordingone/ember-train-private"; api = HfApi(); from lane_config import LANE_ROOT as ROOT
+REPO = ("wordingone/" + HF_TRAIN_REPO); api = HfApi(); from lane_config import LANE_ROOT as ROOT
 LIST = ROOT + "/audit/h19-overlap-exclude-proposal.jsonl"; LREMOTE = "exclusions/h19-overlap-exclude-20261108.jsonl"
 sha = hashlib.sha256(open(LIST, "rb").read()).hexdigest(); assert sha.startswith("3afb3eb3"), sha
 agg = collections.defaultdict(lambda: collections.Counter())

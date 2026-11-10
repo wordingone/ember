@@ -3,10 +3,10 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT
+from lane_config import HF_TRAIN_REPO, LANE_ROOT
 import os, glob, json, hashlib, time
 from huggingface_hub import HfApi
-api = HfApi(); REPO = "wordingone/ember-train-private"; M = (LANE_ROOT + "/logs/manifests-20261108/pg-objects-manifest.jsonl")
+api = HfApi(); REPO = ("wordingone/" + HF_TRAIN_REPO); M = (LANE_ROOT + "/logs/manifests-20261108/pg-objects-manifest.jsonl")
 rows = []; bad = []
 for d in sorted(glob.glob((LANE_ROOT + "/packed/pg-*/"))):
     pack = os.path.basename(d.rstrip("/\\")); od = d + "objects"

@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Read-only DROP MANIFEST for packed sets (lead 82361/82373). Deletes nothing.
-Per file under packed/<pack>/(shards|objects): size, st_nlink, whether ember-train-private text/<pack>/<sub>/<file> exists with equal size (the executor re-reads the server and recomputes the local sha256 per file before each delete),
+Per file under packed/<pack>/(shards|objects): size, st_nlink, whether <train-repo> text/<pack>/<sub>/<file> exists with equal size (the executor re-reads the server and recomputes the local sha256 per file before each delete),
 and a class:
   KEEP-H49-UNION   st_nlink > 1: another name lives in the catalog train cache the next hour reads
   KEEP-NOT-ON-HF   no server copy of equal size

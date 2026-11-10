@@ -6,15 +6,15 @@ List: <m-root>/avir/<training>/state/evict-list-final-20261109.tsv (sha256 pinne
 Per file, ALL must hold or the file is SKIPPED (and listed for lead; never deleted on a mismatch):
   - the path is in the list, is a regular file under an objects/ dir, is not under a KEEP node (walk depth 1 d4a908e3, depth 2 8ed2307c, the H45 child);
   - local size == list size and local sha256 (recomputed now) == the file's content-addressed name objects/<sha>.pt;
-  - HF custody in wordingone/ember-raw-private: a file whose LFS sha256 == that sha and size == local, re-read from the server (get_paths_info) immediately before the delete.
+  - HF custody in wordingone/<raw-repo>: a file whose LFS sha256 == that sha and size == local, re-read from the server (get_paths_info) immediately before the delete.
 Receipt (appended BEFORE each os.remove): logs/evict-ckpt-20261109.jsonl {ts, path, size, sha256, hf_path, verified, walk_receipt, list_sha256}.
 Usage: python scripts/evict_ckpt_list.py [--dry] [--workers N]      Red: python scripts/tests/evict_ckpt_red_test.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT, SEAT_TRAIN
+from lane_config import HF_RAW_REPO, LANE_ROOT, M_ROOT, SEAT_TRAIN
 import os, sys, json, time, hashlib, threading
 LIST = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/evict-list-final-20261109.tsv"); LIST_SHA = "90a747e8e5e52950a9737699b561af6a81e46cd10e8bbc056a49071a73a666a4"
-WALK = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/h44-walk-20261109.json"); REPO = "wordingone/ember-raw-private"; RC = (LANE_ROOT + "/logs/evict-ckpt-20261109.jsonl")
+WALK = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/h44-walk-20261109.json"); REPO = ("wordingone/" + HF_RAW_REPO); RC = (LANE_ROOT + "/logs/evict-ckpt-20261109.jsonl")
 KEEP_MARKERS = ("cia-hour-a1-five-attn-stage-d4-20261107T073017Z/measurement-60bd6b8de01742389ea577ca2ccdbd0a/",      # walk depth 1 = d4a908e3
                 "cia-hour-a1-five-attn-stage-d4-20261106T065417Z/measurement-0dd76650ae8b43a8be5ce845f72eeb49/",       # walk depth 2 = 8ed2307c
                 "cia-hour-a1-five-attn-stage-d4-20261109T100107Z/",                                                    # H45 child

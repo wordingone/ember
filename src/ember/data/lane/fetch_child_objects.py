@@ -4,10 +4,13 @@
 """Download checkpoint objects from private HF custody into a staging dir and verify them (lead 82368: H44 child core + two experts, ~0.9 GiB, ahead of other fetches).
 Never writes into the live receipts tree; the owner of the checkpoint places the files. Per object: server LFS sha256/size read first, then the download, then a local sha256 recompute; a receipt row is appended after each verified file.
 Usage: python fetch_child_objects.py <dest_dir> <receipt.jsonl> <sha256>[:<sha256>...]     (objects are located by LFS sha256 in the private raw repo under checkpoints/)"""
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from lane_config import HF_RAW_REPO
 import os, sys, json, time, hashlib
 from huggingface_hub import HfApi, hf_hub_download
 
-REPO = "wordingone/ember-raw-private"
+REPO = ("wordingone/" + HF_RAW_REPO)
 
 
 def sha_of(p):
