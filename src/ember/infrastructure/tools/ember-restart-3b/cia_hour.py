@@ -635,7 +635,7 @@ def counter_io_report():
     return counter.counter_io_report()
 
 
-def hold_resident_set(resources, declared_bytes, private_bytes):
+def hold_resident_set(holder, declared_bytes, private_bytes):
     """The checkpoint probe's end-of-hour dry run (#2119, H50): the probe trains two updates, so at its restore verify it holds less than the
     hour does (the hour's resident set had grown by thousands of updates, and the probe never ran the continuation). That is how a probe
     that passed could precede an hour whose verify died at the job limit. This commits (does not touch) the missing bytes so the probe's
@@ -645,7 +645,7 @@ def hold_resident_set(resources, declared_bytes, private_bytes):
     if type(declared_bytes) is not int or declared_bytes <= 0 or type(private_bytes) is not int or private_bytes < 0:
         raise ValueError('resident set sizes must be integers in bytes')
     shortfall = declared_bytes - private_bytes
-    return resources.CommittedBallast(shortfall) if shortfall > 0 else None
+    return holder.CommittedBallast(shortfall) if shortfall > 0 else None
 
 
 def release_training_buffers():
@@ -1442,9 +1442,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     at_verify = memory.mark('before_verify')
     held, probe_hold = None, None
     if probe:
-        from ember.governance.scripts import cia_conformance_resources as resources
         declared = prediction['probe_verify_resident_bytes']
-        held = hold_resident_set(resources, declared, at_verify['process_private_bytes'])
+        held = hold_resident_set(runner, declared, at_verify['process_private_bytes'])
         probe_hold = dict(declared_bytes=declared, process_private_bytes_before_hold=at_verify['process_private_bytes'],
                           ballast_bytes=held.nbytes if held is not None else 0)
     try:

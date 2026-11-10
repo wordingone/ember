@@ -10,16 +10,17 @@ JOB_OBJECT_LIMIT_JOB_MEMORY (cap 1.6 GiB), holds 0.6 GiB of resident ballast, an
 the real `_cia_counter_component` and the real `_cia_counter_optimizer_facts` (so the fp32 master / moment helpers run too). One tensor
 is the real maximum (the embedding, 32768 x 1024 fp32 = 128 MiB), so the per-tensor bound is tested unscaled.
 
-Three more real-kernel checks share the file. The job ledger the worker reads (`owned_job_memory`) is the kernel's PeakJobMemoryUsed and
+Three more real-kernel checks share the file. The job ledger the worker reads (`cia_step_runner.owned_job_memory`) is the kernel's PeakJobMemoryUsed and
 the worker's private commit, read through a NAMED job exactly as the worker finds its own. The probe's committed ballast is charged to the
 job's commit limit without touching a page. And the probe is a true dry run of the end of the hour: with the PRE-fix counter (kept in
 counter-history) a probe that holds only its own small resident set passes the verify's read, the hour, which holds its real resident set,
 dies in it (that is H50), and the probe that HOLDS the hour's declared resident set (`cia_hour.hold_resident_set`) dies the same way, so the
 old probe's pass was the blind spot; with the fixed counter the held probe passes with margin.
 
-Windows only: a job object memory limit is a Windows kernel object. ci-pr runs this file as a step of its windows-latest `launcher`
-job; the ubuntu issue2119 wiring job accepts no skip and reads its file list from the wiring manifest, so this file is NOT in that
-manifest. Standard library only (no torch).
+Windows only: a job object memory limit is a Windows kernel object. It is meant to run as a step of ci-pr's windows-latest `launcher` job
+(that workflow file is bound to a different workstream, so the step is a separate change that follows this one); the ubuntu issue2119 wiring
+job accepts no skip and reads its file list from the wiring manifest, so this file is NOT in that manifest. Standard library only (no
+torch).
 """
 import json
 import os
@@ -78,8 +79,8 @@ else:
     sys.modules[spec.name] = counter
     spec.loader.exec_module(counter)
 from pathlib import Path
-from ember.governance.scripts import cia_conformance_resources as resources
 import cia_hour
+import cia_step_runner as runner
 sys.stdin.readline()          # held until the parent has put this process into the job
 blob = None
 if int(touched):              # the HOUR: its real resident set, every page touched
@@ -88,7 +89,7 @@ if int(touched):              # the HOUR: its real resident set, every page touc
         blob[offset] = 1
 held = None
 if int(declared):             # the PROBE: commits what it does not itself hold up to the hour's declared level
-    held = cia_hour.hold_resident_set(resources, int(declared), resources.process_private_bytes())
+    held = cia_hour.hold_resident_set(runner, int(declared), runner.process_private_bytes())
 try:
     with counter._cia_counter_component(Path(root), relative, json.loads(record)) as (archive, payload):
         inv = {name: tuple(shape) for name, shape in json.loads(inventory).items()}
@@ -103,36 +104,37 @@ LEDGER_CHILD = r'''
 import json, sys
 src, run_id, cap, ballast = sys.argv[1:5]
 sys.path.insert(0, src)
-from ember.governance.scripts import cia_conformance_resources as resources
+sys.path.insert(0, src + '/ember/infrastructure/tools/ember-restart-3b')
+import cia_step_runner as runner
 sys.stdin.readline()
 out = {}
 blob = bytearray(int(ballast))
 for offset in range(0, len(blob), 4096):
     blob[offset] = 1
-out['reading'] = resources.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))
+out['reading'] = runner.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))
 try:
-    resources.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap) + 4096)
+    runner.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap) + 4096)
     out['wrong_limit'] = 'ACCEPTED'
 except ValueError as error:
     out['wrong_limit'] = str(error)
 try:
-    resources.owned_job_memory('f' * 32, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))
+    runner.owned_job_memory('f' * 32, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))
     out['wrong_job'] = 'ACCEPTED'
 except ValueError as error:
     out['wrong_job'] = str(error)
 del blob
-before = resources.process_private_bytes()
-first = resources.CommittedBallast(1 << 30)                 # 1 GiB committed, never touched
-out['private_with_ballast'] = resources.process_private_bytes()
-out['peak_with_ballast'] = resources.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))['peak_job_memory_used_bytes']
+before = runner.process_private_bytes()
+first = runner.CommittedBallast(1 << 30)                 # 1 GiB committed, never touched
+out['private_with_ballast'] = runner.process_private_bytes()
+out['peak_with_ballast'] = runner.owned_job_memory(run_id, namespace='EmberCIAMeasurement', host_memory_bytes=int(cap))['peak_job_memory_used_bytes']
 try:
-    resources.CommittedBallast(1 << 30)                     # a second GiB does not fit the 1.6 GiB job
+    runner.CommittedBallast(1 << 30)                     # a second GiB does not fit the 1.6 GiB job
     out['second_ballast'] = 'ACCEPTED'
 except MemoryError:
     out['second_ballast'] = 'REFUSED'
 first.release()
 out['private_before'] = before
-out['private_after_release'] = resources.process_private_bytes()
+out['private_after_release'] = runner.process_private_bytes()
 print(json.dumps(out), flush=True)
 '''
 

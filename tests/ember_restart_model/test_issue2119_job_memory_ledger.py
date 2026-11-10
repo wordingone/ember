@@ -94,13 +94,12 @@ class Ledger(unittest.TestCase):
 
 class Runner(unittest.TestCase):
     def test_job_memory_reads_the_runs_own_job_against_the_bound_limit(self):
-        from ember.governance.scripts import cia_conformance_resources as resources
         seen = {}
 
         def owned(run_id, *, namespace, host_memory_bytes):
             seen.update(run_id=run_id, namespace=namespace, host_memory_bytes=host_memory_bytes)
             return {'host_memory_bytes': host_memory_bytes, 'peak_job_memory_used_bytes': 1, 'process_private_bytes': 2}
-        with patch.object(resources, 'owned_job_memory', owned):
+        with patch.object(cia_step_runner, 'owned_job_memory', owned):
             reading = cia_step_runner.job_memory({'run_id': 'a' * 32})
         self.assertEqual(seen, {'run_id': 'a' * 32, 'namespace': 'EmberCIAMeasurement', 'host_memory_bytes': 40 * GIB})
         self.assertEqual(reading['peak_job_memory_used_bytes'], 1)

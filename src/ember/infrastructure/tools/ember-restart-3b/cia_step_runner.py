@@ -476,13 +476,113 @@ def check_predicted_peak_job_memory(predicted, limit):
             % (predicted, PEAK_JOB_MEMORY_MARGIN_BYTES, limit, limit - predicted))
 
 
+def _owned_job_limits(run_id, namespace):
+    """Open the run's named job, prove this process is a member of it, and return its JOBOBJECT_EXTENDED_LIMIT_INFORMATION and the
+    limit flags a bound job must carry.
+
+    The same open and membership proof as `cia_conformance_resources.require_owned_job`, which the worker has already passed at its start;
+    this keeps the job object's own limit and peak, which that function does not return."""
+    from ctypes import wintypes
+    from ember.governance.scripts import cia_conformance_resources as resources, owned_process
+    kernel = owned_process._kernel32
+    kernel.OpenJobObjectW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    kernel.OpenJobObjectW.restype = wintypes.HANDLE
+    kernel.IsProcessInJob.argtypes = [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)]
+    kernel.IsProcessInJob.restype = wintypes.BOOL
+    kernel.QueryInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p]
+    kernel.QueryInformationJobObject.restype = wintypes.BOOL
+    handle = kernel.OpenJobObjectW(4, False, resources.job_name(run_id, namespace=namespace))
+    if not handle:
+        raise ValueError('owned numerical job is missing')
+    try:
+        member = wintypes.BOOL()
+        if not kernel.IsProcessInJob(wintypes.HANDLE(-1), handle, ctypes.byref(member)) or not member.value:
+            raise ValueError('consumer is not in the bound owned job')
+        info = owned_process._JobExtendedLimitInformation()
+        if not kernel.QueryInformationJobObject(handle, 9, ctypes.byref(info), ctypes.sizeof(info), None):
+            raise ValueError('cannot query owned numerical job')
+        return info, owned_process._JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | 0x200
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def process_private_bytes():
+    """This process's private committed bytes right now (PROCESS_MEMORY_COUNTERS_EX.PrivateUsage): the part of the job's commit charge
+    this process owns. The job's PeakJobMemoryUsed is a high-water mark; this is the current level."""
+    if os.name != 'nt':
+        raise ValueError('this numerical resource envelope requires Windows')
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD), ('PeakWorkingSetSize', ctypes.c_size_t),
+                    ('WorkingSetSize', ctypes.c_size_t), ('QuotaPeakPagedPoolUsage', ctypes.c_size_t),
+                    ('QuotaPagedPoolUsage', ctypes.c_size_t), ('QuotaPeakNonPagedPoolUsage', ctypes.c_size_t),
+                    ('QuotaNonPagedPoolUsage', ctypes.c_size_t), ('PagefileUsage', ctypes.c_size_t),
+                    ('PeakPagefileUsage', ctypes.c_size_t), ('PrivateUsage', ctypes.c_size_t)]
+    psapi = ctypes.WinDLL('psapi', use_last_error=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise ValueError('cannot read this process memory counters')
+    return int(counters.PrivateUsage)
+
+
+def owned_job_memory(run_id, *, namespace, host_memory_bytes):
+    """The memory ledger of the actual containing job, read from the kernel (#2119, the H50 hour).
+
+    Same open and membership proof as require_owned_job, and the same refusal when the limit differs from the bound envelope. Returns the
+    job's JobMemoryLimit and its PeakJobMemoryUsed, the high-water mark of the job's committed memory: the number the limit is enforced
+    against (a charge that would cross the limit is counted in the peak even though it is refused, so a peak above the limit means a
+    process in the job was refused memory), and this process's own private commit now. The peak only rises, so a reading at the end of a
+    phase is the highest commit any phase up to it reached."""
+    if os.name != 'nt':
+        raise ValueError('this numerical resource envelope requires Windows')
+    if type(host_memory_bytes) is not int or host_memory_bytes <= 0:
+        raise ValueError('host memory ceiling must be a positive integer')
+    info, required = _owned_job_limits(run_id, namespace)
+    if info.JobMemoryLimit != host_memory_bytes or info.BasicLimitInformation.LimitFlags & required != required:
+        raise ValueError('owned job resource limits differ from the bound envelope')
+    return {'host_memory_bytes': int(info.JobMemoryLimit), 'peak_job_memory_used_bytes': int(info.PeakJobMemoryUsed),
+            'process_private_bytes': process_private_bytes()}
+
+
+class CommittedBallast:
+    """Committed, untouched virtual memory (VirtualAlloc MEM_COMMIT): charged against the job's commit limit like any private allocation,
+    holds no physical page until it is touched. The probe uses it to stand in for the part of the hour's resident set the probe does not
+    itself hold (#2119)."""
+    def __init__(self, nbytes):
+        if os.name != 'nt':
+            raise ValueError('committed ballast requires Windows')
+        if type(nbytes) is not int or nbytes <= 0:
+            raise ValueError('ballast size must be a positive integer')
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.VirtualAlloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong]
+        kernel.VirtualAlloc.restype = ctypes.c_void_p
+        kernel.VirtualFree.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong]
+        kernel.VirtualFree.restype = ctypes.c_int
+        self._kernel = kernel
+        self.nbytes = nbytes
+        self.address = kernel.VirtualAlloc(None, nbytes, 0x3000, 0x04)   # MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE
+        if not self.address:
+            raise MemoryError('the committed ballast was refused (job or system commit limit)')
+
+    def release(self):
+        if self.address:
+            self._kernel.VirtualFree(self.address, 0, 0x8000)   # MEM_RELEASE
+            self.address = None
+
+
 def job_memory(identity):
-    """The hour's measured job memory ledger, read from the kernel: {'host_memory_bytes', 'peak_job_memory_used_bytes'} (#2119).
+    """The hour's measured job memory ledger, read from the kernel: {'host_memory_bytes', 'peak_job_memory_used_bytes',
+    'process_private_bytes'} (#2119).
 
     The worker has already proved at its start that it is a member of the run's own job (`require_owned_job`); this reads the same job's
     PeakJobMemoryUsed, the high-water mark of committed memory that the job limit is enforced against."""
-    from ember.governance.scripts import cia_conformance_resources as resources
-    return resources.owned_job_memory(identity['run_id'], namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    return owned_job_memory(identity['run_id'], namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
 
 
 def validate_prediction(prediction, *, expected_identity, positions_per_step):

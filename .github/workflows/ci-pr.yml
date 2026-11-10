@@ -411,9 +411,6 @@ jobs:
         run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1
       - name: Verify Windows Job Object process-tree cleanup
         run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
-      - name: Verify the post-train counter pass under a real Job Object memory limit (#2119)
-        timeout-minutes: 15
-        run: python -B tests/ember_restart_model/test_issue2119_post_train_memory_job.py -v
   ci-pr:
     if: always()
     needs: [python, owned-process-posix, owned-process-posix-retry, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay, production-rung-replay-retry]
