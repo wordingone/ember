@@ -15,7 +15,7 @@ def check(l, c):
     global ok; ok &= bool(c); print("PASS" if c else "FAIL", l)
 src = open(os.path.join(HERE, "ckpt_lineage_delete.py"), encoding="utf-8").read()
 check("source: ONLY_PROBES empties branch (a) and the (b) log list", "({} if ONLY_PROBES else chk)" in src and "() if ONLY_PROBES else BK_LOGS" in src)
-check("source: the flags are parsed before --keep consumes the rest of argv (documented in the usage line)", "[--apply] [--only-probes] [--expect-dirs FILE.json] [--ruling ID] [--keep NAME ...]" in src)
+check("source: the flags are parsed before --keep consumes the rest of argv (documented in the usage line)", "[--apply] [--only-probes] [--expect-dirs FILE.json] [--ruling ID] [--plan-sha256 SHA] [--keep NAME ...]" in src)
 check("source: --expect-dirs refuses (exit 4) before any hashing, manifest row or remove when the selected dirs differ", 'if _exp != _got:' in src and "sys.exit(4)" in src and src.index("sys.exit(4)") < src.index("rows = []; keep_shared") < src.index("VR.remove_ruled("))
 def dry(*flags):
     assert "--apply" not in flags
