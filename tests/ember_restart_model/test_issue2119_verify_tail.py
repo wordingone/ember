@@ -75,7 +75,7 @@ def fake_modules(*, facts=FACTS, restored_facts=None, child_for_receipt=None):
         published_checkpoint_receipt=published_checkpoint_receipt,
         load_checkpoint_artifacts=lambda *a, **k: {'data_cursor': dict(CURSOR)},
         capture_cia_placed_optimizer_state=lambda *a, **k: {'state': 'native'},
-        _cia_lineage_facts=lambda inventory, state: restored_facts if restored_facts is not None else facts)
+        _cia_lineage_facts=lambda inventory, state, masters=None: restored_facts if restored_facts is not None else facts)
 
     def realization_receipt(root, child, *, model_config_sha256, _facts=None):
         _facts.update(facts)
@@ -405,12 +405,15 @@ class TailEntryTests(Fixture):
     def test_run_verify_tail_hands_the_built_model_and_the_lost_custody_to_verify_tail(self):
         calls = []
         identity = self.identity_for()
-        with patch.object(cia_hour, 'build_hour_model', lambda **kw: ('m', {'i': 1}, 'o')), \
-                patch.object(cia_hour, 'verify_tail', lambda *a: calls.append(a) or {'status': 'RESTORE_VERIFIED_FROM_WITNESS'}):
-            result = cia_hour.run_verify_tail(runner='R', config=None, prepared=None, prediction={'identity': identity}, binding=None,
-                                              custody=self.tail_custody, device=None, compiler=None, applied=None)
+        runner = types.SimpleNamespace(job_memory=lambda _identity: {'host_memory_bytes': 40 * 2 ** 30,
+            'peak_job_memory_used_bytes': 30 * 2 ** 30, 'process_private_bytes': 28 * 2 ** 30})
+        with patch.object(cia_hour, 'build_hour_model', lambda **kw: ('m', {'i': 1}, 'o')),                 patch.object(cia_hour, 'verify_tail', lambda *a: calls.append(a) or {'status': 'RESTORE_VERIFIED_FROM_WITNESS'}):
+            result = cia_hour.run_verify_tail(runner=runner, config=None, prepared=None,
+                                              prediction={'identity': identity, 'predicted_peak_job_memory_bytes': 35 * 2 ** 30},
+                                              binding=None, custody=self.tail_custody, device=None, compiler=None, applied=None)
         self.assertEqual(result['status'], 'RESTORE_VERIFIED_FROM_WITNESS')
-        self.assertEqual(calls, [('R', 'm', 'o', {'i': 1}, identity, str(self.custody))])      # the LOST custody is read; the tail custody is untouched
+        self.assertEqual(result['peak_job_memory_used_bytes'], 30 * 2 ** 30)      # #2119: the tail states the peak its own job reached
+        self.assertEqual(calls, [(runner, 'm', 'o', {'i': 1}, identity, str(self.custody))])      # the LOST custody is read; the tail custody is untouched
         self.assertEqual(self.listing(self.tail_custody), [])
 
 

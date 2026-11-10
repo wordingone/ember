@@ -456,9 +456,44 @@ def measurement_summary(rates):
                                      'max': ordered[-1], 'mean': sum(ordered) / len(ordered)}}
 
 
+# A predicted peak within this many bytes of the Job Object memory limit refuses at preflight (#2119): the H50 hour published its child and
+# then died in the restore verify with 43.27 GiB of charges against a 40 GiB limit; its predicted peak had never been stated.
+PEAK_JOB_MEMORY_MARGIN_BYTES = 4 * GIB
+
+
+def check_predicted_peak_job_memory(predicted, limit):
+    """The hour's declared peak job memory, in bytes, must leave at least PEAK_JOB_MEMORY_MARGIN_BYTES under the job memory limit.
+    A missing, non-integer or non-positive prediction refuses: an hour with no stated memory peak is not governed."""
+    if type(predicted) is not int or predicted <= 0:
+        raise ValueError('prediction predicted_peak_job_memory_bytes must be a positive integer number of bytes')
+    if type(limit) is not int or limit <= 0:
+        raise ValueError('job memory limit must be a positive integer number of bytes')
+    if limit - predicted < PEAK_JOB_MEMORY_MARGIN_BYTES:
+        raise ValueError(
+            'predicted peak job memory %d bytes is within %d bytes of the job memory limit %d (headroom %d): '
+            'the hour would run too close to the limit that killed H50; reduce the peak or declare a larger limit with its commit gate'
+            % (predicted, PEAK_JOB_MEMORY_MARGIN_BYTES, limit, limit - predicted))
+
+
+def job_memory(identity):
+    """The hour's measured job memory ledger, read from the kernel: {'host_memory_bytes', 'peak_job_memory_used_bytes'} (#2119).
+
+    The worker has already proved at its start that it is a member of the run's own job (`require_owned_job`); this reads the same job's
+    PeakJobMemoryUsed, the high-water mark of committed memory that the job limit is enforced against."""
+    from ember.governance.scripts import cia_conformance_resources as resources
+    return resources.owned_job_memory(identity['run_id'], namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+
+
 def validate_prediction(prediction, *, expected_identity, positions_per_step):
+    if isinstance(prediction, dict) and 'predicted_peak_job_memory_bytes' not in prediction:
+        raise ValueError('prediction requires predicted_peak_job_memory_bytes (the declared peak job memory of the hour, #2119)')
+    probe = (isinstance(expected_identity.get('hour'), dict) and expected_identity['hour'].get('schema') == 'checkpoint-probe-v1')
+    if probe and isinstance(prediction, dict) and 'probe_verify_resident_bytes' not in prediction:
+        raise ValueError('a checkpoint probe prediction requires probe_verify_resident_bytes (the resident set the hour holds at its '
+                         'restore verify, which the probe must hold too, #2119)')
     if (not isinstance(prediction, dict) or set(prediction) != {
-            'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis'}
+            'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis',
+            'predicted_peak_job_memory_bytes'} | ({'probe_verify_resident_bytes'} if probe else set())
             or prediction['schema'] != 'ember-cia-step-prediction-v1'):
         raise ValueError('prediction fields or schema differ')
     if not isinstance(prediction['basis'], str) or not prediction['basis'].strip():
@@ -467,6 +502,11 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
         raise ValueError('prediction identity differs from opened inputs and execution')
     if canonical(expected_identity.get('resources')) != canonical(resource_limits(expected_identity)):
         raise ValueError('prediction resource envelope differs')
+    check_predicted_peak_job_memory(prediction['predicted_peak_job_memory_bytes'], resource_limits(expected_identity)['host_memory_bytes'])
+    if probe:
+        held = prediction['probe_verify_resident_bytes']
+        if type(held) is not int or held <= 0 or held >= prediction['predicted_peak_job_memory_bytes']:
+            raise ValueError('probe_verify_resident_bytes must be a positive integer below predicted_peak_job_memory_bytes')
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
         raise ValueError('prediction timing and rate must be finite positive numbers')

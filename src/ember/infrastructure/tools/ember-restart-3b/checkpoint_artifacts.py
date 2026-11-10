@@ -4950,6 +4950,8 @@ def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_trans
         if tensor.shape != parameters[name].shape or tensor.dtype != parameters[name].dtype:
             raise ValueError('CIA restore parameter shape or dtype mismatch')
     prepared = prepare_cia_placed_optimizer_state(model,optimizer,optimizer_payload,max_state_bytes=verified['max_restore_payload_bytes'])
+    # `prepared` owns its own placed copies: the host payload (the optimizer state, ~5.3 GiB at 3B) is dead from here (#2119, H50 restore verify).
+    del optimizer_payload
     cuda_rng = replay['rng_state']['cuda']
     if any(parameter.device.type == 'cuda' for parameter in parameters.values()):
         device = next(parameter.device for parameter in parameters.values() if parameter.device.type == 'cuda')
@@ -4961,7 +4963,10 @@ def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_trans
         raise ValueError('CIA runtime identity changed during restore preparation')
     # All checkpoint, optimizer, RNG and placement checks precede this boundary.
     with torch.no_grad():
-        for name,value in tensors.items(): parameters[name].copy_(value)
+        # Each verified tensor is released as soon as it is copied: the host copy of the model (~5.7 GiB at 3B) falls while the restore
+        # proceeds instead of staying until this function returns. Nothing below reads `tensors`.
+        for name in list(tensors): parameters[name].copy_(tensors.pop(name))
+    del tensors
     import cia_fp32_master
     master_runtime = cia_fp32_master.enabled(optimizer)
     if master_runtime: cia_fp32_master.masters(optimizer).clear()
@@ -4973,6 +4978,7 @@ def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_trans
     else:
         optimizer.load_state_dict(prepared)
         if master_runtime: cia_fp32_master.convert_loaded(optimizer)
+    del prepared
     if master_runtime and cia_fp32_master.check_invariant(optimizer):
         raise ValueError('CIA restore broke the fp32 master invariant: a working weight differs from bf16(master)')
     torch.set_rng_state(replay['rng_state']['cpu'])

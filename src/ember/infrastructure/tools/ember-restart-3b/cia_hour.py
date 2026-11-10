@@ -600,9 +600,70 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     return publish, owner_update_counts
 
 
+class JobMemoryLedger:
+    """Peak job memory at the end of each phase of the worker, read from the job object (#2119).
+
+    PeakJobMemoryUsed only rises, so the reading taken at the end of a phase is the highest commit any phase up to it reached; the
+    difference between two readings bounds what the phase in between added. The worker's own private commit at each mark is the current
+    level (what the hour holds at that instant), which is the number a probe's declared resident set is taken from. The last peak is the
+    hour's peak; the hour result and the verify-tail result carry it with the declared prediction it is compared against. A reading that
+    cannot be taken refuses: an hour that cannot say what it used is not governed."""
+    def __init__(self, runner, identity):
+        self.runner, self.identity = runner, identity
+        self.phases, self.private, self.host_memory_bytes = {}, {}, None
+
+    def mark(self, phase):
+        reading = self.runner.job_memory(self.identity)
+        self.host_memory_bytes = reading['host_memory_bytes']
+        self.phases[phase] = reading['peak_job_memory_used_bytes']
+        self.private[phase] = reading['process_private_bytes']
+        return reading
+
+    def fields(self, prediction):
+        peak = max(self.phases.values())
+        return dict(peak_job_memory_used_bytes=peak, host_memory_bytes=self.host_memory_bytes,
+                    peak_headroom_bytes=self.host_memory_bytes - peak,
+                    job_memory_phase_peaks_bytes=dict(self.phases), job_memory_phase_private_bytes=dict(self.private),
+                    predicted_peak_job_memory_bytes=prediction['predicted_peak_job_memory_bytes'],
+                    peak_within_predicted=peak <= prediction['predicted_peak_job_memory_bytes'])
+
+
+def hold_resident_set(resources, declared_bytes, private_bytes):
+    """The checkpoint probe's end-of-hour dry run (#2119, H50): the probe trains two updates, so at its restore verify it holds less than the
+    hour does (the hour's resident set had grown by thousands of updates, and the probe never ran the continuation). That is how a probe
+    that passed could precede an hour whose verify died at the job limit. This commits (does not touch) the missing bytes so the probe's
+    verify starts from the commit level the hour declared: the verify then runs against the same headroom, and the job limit itself refuses
+    it exactly where it would refuse the hour. Returns the ballast (kept alive until the verify is done) or None when the probe already
+    holds the declared level."""
+    if type(declared_bytes) is not int or declared_bytes <= 0 or type(private_bytes) is not int or private_bytes < 0:
+        raise ValueError('resident set sizes must be integers in bytes')
+    shortfall = declared_bytes - private_bytes
+    return resources.CommittedBallast(shortfall) if shortfall > 0 else None
+
+
+def release_training_buffers():
+    """Hand back what the training loop no longer needs, before the end-of-hour verification (#2119, H50: the published child was
+    verified at 39-43 GiB of job commit because the whole training footprint was still charged).
+
+    What the verification needs LIVE: the model, the optimizer and its inventory (the restore overwrites them in place), the identity, the
+    custody and child receipts, and the terminal-state facts. Nothing else is read after the child is published: the training capture
+    and its static buffers, the last step's row and pack, and the staged next pack are dead. Cyclic garbage is collected here (the timed
+    loop runs with the collector gated), and where torch has initialised CUDA the caching allocator and the pinned host cache are
+    emptied. This never allocates and never touches a live tensor, so it cannot change a result bit."""
+    gc.collect()
+    import torch
+    if torch.cuda.is_available() and torch.cuda.is_initialized():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        empty_host = getattr(torch._C, '_host_emptyCache', None)
+        if empty_host is not None:
+            empty_host()
+
+
 def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
+    release_training_buffers()
     cap = checkpoint_cap(runner, optimizer)
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
@@ -624,6 +685,7 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
     facts = artifacts._cia_lineage_facts(inventory, native['state'], native.get('master_weights'))
+    del native
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
 
@@ -763,8 +825,12 @@ def run_verify_tail(*, runner, config, prepared, prediction, binding, custody, d
     """Same signature as run_hour. `custody` is the TAIL's own custody (the lost hour's is the digest-pinned read-only input named by
     `identity['verify_tail']`). Returns the result record; the worker writes it after its worker-terminal (`write_verify_tail_result`)."""
     identity = prediction['identity']
+    memory = JobMemoryLedger(runner, identity)
     model, inventory, optimizer = build_hour_model(runner=runner, config=config, prepared=prepared, identity=identity, device=device)
-    return verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
+    memory.mark('built')
+    result = verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
+    memory.mark('verified')
+    return dict(result, **memory.fields(prediction))
 
 
 def continuation_state(runner, model, optimizer, cursor, device):
@@ -999,7 +1065,10 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
         return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=runner.execution_mode(identity), optimizer_factory=optimizer_factory)
+    memory = JobMemoryLedger(runner, identity)
+    memory.mark('built')
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, source['root'], source['child'])
+    memory.mark('verified')
     before = continuation_state(runner, model, optimizer, source['child']['data_cursor'], device)
     expected = source['reference']['before']
     if before != expected:
@@ -1013,6 +1082,8 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
         source_hour_result_sha256=identity['continuation']['source_hour_result_sha256'],
         c_compiler=compiler, prediction_sha256=binding['launch']['prediction_sha256'],
         claim='Observed next update from a separate owned worker; independent comparison remains required.')
+    memory.mark('reproduced')
+    reproduced.update(job_memory=memory.fields(prediction))
     if any(runner.file_sha256(runner.ROOT/name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('source changed during continuation reproduction')
     if runner.file_sha256(source['root']/'trained-child/checkpoint-manifest.json') != source['child']['checkpoint_manifest_sha256']:
@@ -1121,6 +1192,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     import torch
     from ember.model.ember_v0_decoder import CIADecoder
     identity = prediction['identity']
+    memory = JobMemoryLedger(runner, identity)
     positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
     import cia_hour_energy
     energy = cia_hour_energy.load(runner=runner, identity=identity, custody=custody, device=device)
@@ -1180,6 +1252,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
+    memory.mark('startup')
     check_image_start(prepared['binding'], base_steps)
     # Declared fp32 master hour (#2119, lead rulings 82495 / 82501): the hour must PROVE the path ran and show the effective step size.
     # The first row is read here, after the parent restored and before any update; the result is refused at its end without the block.
@@ -1335,11 +1408,14 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         capture.invalidate()
     optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize(device)
+    memory.mark('training')
     runner.tail_stamp(custody, 'child_publish_start')
     child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
                     cursor=pack['cursor_after'], parent=parent_root)
     checkpoint_finished = time.perf_counter()
+    memory.mark('published')
     terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
+    memory.mark('terminal_state')
     # H35: the terminal state lived only in memory when the verification refused, so the published child could never be re-verified. Persist it first.
     p10_at_publish = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)] if step_rates else None
     write_terminal_witness(runner, custody, child, terminal_state, dict(
@@ -1347,8 +1423,24 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
         complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
         parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id']))
-    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
+    # Nothing below reads the training capture, its static buffers, the last pack or the staged next pack: drop them before the verify.
+    capture = buffers = upcoming = pack = row = contention = None
+    release_training_buffers()
+    at_verify = memory.mark('before_verify')
+    held, probe_hold = None, None
+    if probe:
+        from ember.governance.scripts import cia_conformance_resources as resources
+        declared = prediction['probe_verify_resident_bytes']
+        held = hold_resident_set(resources, declared, at_verify['process_private_bytes'])
+        probe_hold = dict(declared_bytes=declared, process_private_bytes_before_hold=at_verify['process_private_bytes'],
+                          ballast_bytes=held.nbytes if held is not None else 0)
+    try:
+        verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
+    finally:
+        if held is not None:
+            held.release()
     restore_finished = time.perf_counter()
+    memory.mark('verified')
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
@@ -1364,6 +1456,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     continuation = None if probe or learning else publish_continuation_reference(
         runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
         device, applied, governed_wall, energy_binding)
+    memory.mark('continuation')
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
     p10 = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)]
     runner._write_new(custody / 'hour-result.json', dict(schema='ember-cia-hour-result-v1', hour=hour,
@@ -1384,6 +1477,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         prediction_sha256=binding['launch']['prediction_sha256'],
         energy=energy_binding,
         continuation=continuation,
+        **memory.fields(prediction),
+        **({'probe_verify_resident': probe_hold} if probe else {}),
         **({'fp32_master': fp32_block} if fp32_declared else {}),
         production_mixture_validation=prepared['mixture_validation'],
         learning_snapshots=snapshots if learning else None,
