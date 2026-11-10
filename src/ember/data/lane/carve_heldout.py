@@ -13,6 +13,7 @@ for sha, line, n, i in docs:
     if t >= T: break
     held.add(i); t += n
 c1 = zstandard.ZstdCompressor(level=6); c2 = zstandard.ZstdCompressor(level=6); ntr = 0; ttr = 0
+import reserve_plan; assert reserve_plan.write_gate("carve_heldout.py out", os.path.getsize(IN) + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324 / lead 82669: every lane write path waits on the floor
 with open(TR, "wb") as f1, open(HE, "wb") as f2, c1.stream_writer(f1) as w1, c2.stream_writer(f2) as w2:
     for sha, line, n, i in docs:
         if i in held: w2.write(line.encode())

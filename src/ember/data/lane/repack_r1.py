@@ -38,6 +38,7 @@ def fetch(hf_path, want_sha, dest):
     from huggingface_hub import HfApi
     size = HfApi().get_paths_info(REPO, [hf_path], repo_type="dataset", expand=True)[0].size
     have = os.path.getsize(dest) if os.path.exists(dest) else 0
+    import reserve_plan; assert reserve_plan.write_gate("repack_r1.py fetch", max(size - have, 0) + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324 / lead 82669
     while have < size:
         try:
             with requests.get(f"https://huggingface.co/datasets/{REPO}/resolve/main/{hf_path}", stream=True, timeout=(30, 90), headers={"Range": f"bytes={have}-", "Authorization": "Bearer " + tok, "User-Agent": "ember-repack/1.0"}) as r:
@@ -67,12 +68,14 @@ log(f"{PACK}: {len(srcs)} objects ({sum(1 for s in srcs if s['old_sha'] != s['sh
 # ---- tokenize exactly like pack.py ----
 tk = Tokenizer.from_file(TOKP)
 cctx = zstandard.ZstdCompressor(level=6)
+import reserve_plan; assert reserve_plan.write_gate("repack_r1.py rebuild", sum(os.path.getsize(s["path"]) for s in srcs) + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # index + ledger + hardlink/copy fallback; the shards re-gate per shard in flush_shards
 docidx = open(f"{base}/docs-index.jsonl", "w", encoding="utf-8")
 buf = array.array("H"); shard_idx = 0; total = 0; sep = 0; ndocs = 0; shard_rows = []; parts = []
 def flush_shards(final=False):
     global buf, shard_idx
     while len(buf) >= S or (final and len(buf) > 0):
         chunk = buf[:S]; buf = buf[S:]
+        import reserve_plan; assert reserve_plan.write_gate("repack_r1.py shard", len(chunk) * 2 + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # same gate as pack.py
         tmp = f"{base}/shards/tmp.bin"
         with open(tmp, "wb") as f: chunk.tofile(f)
         sha = sha_file(tmp); name = f"v1-{shard_idx:05d}-{sha[:12]}.bin"

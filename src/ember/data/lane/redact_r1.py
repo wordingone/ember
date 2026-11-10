@@ -30,6 +30,7 @@ for p in todo:
     info = api.get_paths_info(REPO, [p], repo_type="dataset", expand=True)[0]; oid = info.lfs.sha256; size = info.size
     name = os.path.basename(p); loc = f"{OUTD}/{name}"; newname = name.replace(".jsonl.zst", "-r1.jsonl.zst"); newloc = f"{OUTD}/{newname}"; newp = p.rsplit("/", 1)[0] + "/" + newname
     have = os.path.getsize(loc) if os.path.exists(loc) else 0
+    import reserve_plan; assert reserve_plan.write_gate("redact_r1.py object", max(size - have, 0) + size + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324 / lead 82669: download + the redacted copy, per object
     while have < size:
         try:
             with requests.get(f"https://huggingface.co/datasets/{REPO}/resolve/main/{p}", stream=True, timeout=(30, 90), headers={"Range": f"bytes={have}-", "Authorization": "Bearer " + tok, "User-Agent": "ember-redact/1.0"}) as r:
