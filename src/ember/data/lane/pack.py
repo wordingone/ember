@@ -57,7 +57,9 @@ def flush_shards(final=False):
     global buf, shard_idx
     while len(buf) >= S or (final and len(buf) > 0):
         chunk = buf[:S]; buf = buf[S:]
-        import reserve_plan; assert reserve_plan.write_gate("pack.py shard", len(chunk) * 2 + (64 << 20)), "B: below the reserve floor for the whole gate cap: not writing"      # lead 82324: every lane write path waits on the floor
+        import reserve_plan
+        if not reserve_plan.write_gate("pack.py shard", len(chunk) * 2 + (64 << 20)):      # lead 82324: every lane write path waits on the floor
+            sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: pack.py shard not writing")
         tmp = os.path.join(base, "shards", "tmp.bin")
         with open(tmp, "wb") as f: chunk.tofile(f)
         sha = sha_file(tmp); name = f"v1-{shard_idx:05d}-{sha[:12]}.bin"
