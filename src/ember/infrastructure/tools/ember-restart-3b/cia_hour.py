@@ -1251,7 +1251,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 _leak_probe(custody, total_steps)
             total_steps += 1
             positions += row['applied_positions']
-            if fp32_evidence is not None and fp32_evidence.due(total_steps):
+            if fp32_evidence is not None and fp32_evidence.due(total_steps, probe=probe):
                 fp32_evidence.observe(total_steps)   # reads device-side optimizer state only; its wall is reported in the block
             # An unrouted expert owner under the deferred verdict keeps its gradient but its fused step is gated by
             # found_inf, so its clock does not advance; the row names those owners, and they are not counted.
@@ -1358,7 +1358,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     fp32_block = None
     if fp32_declared:
         fp32_block = cia_fp32_evidence.require(fp32_evidence.finish(
-            total_steps, child_optimizer_state_path=custody / 'trained-child' / 'optimizer-state.pt'), declared=True)
+            total_steps, child_optimizer_state_path=custody / 'trained-child' / 'optimizer-state.pt'), declared=True, probe=probe)
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
     continuation = None if probe or learning else publish_continuation_reference(
