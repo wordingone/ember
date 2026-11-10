@@ -457,7 +457,8 @@ def measurement_summary(rates):
 
 
 # A predicted peak within this many bytes of the Job Object memory limit refuses at preflight (#2119): the H50 hour published its child and
-# then died in the restore verify with 43.27 GiB of charges against a 40 GiB limit; its predicted peak had never been stated.
+# then died in the verify that restores its terminal state: the job peak at the refusal was 43,271,577,600 B (40.30 GiB) against the
+# 40 GiB limit, and its predicted peak had never been stated.
 PEAK_JOB_MEMORY_MARGIN_BYTES = 4 * GIB
 
 

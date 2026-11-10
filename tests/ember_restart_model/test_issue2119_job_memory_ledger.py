@@ -3,7 +3,8 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """The hour states its job memory peak and the probe holds the hour's resident set at the verify (#2119, H50).
 
-H50 published its child and died in the restore verify (43.27 GiB charged against a 40 GiB job limit). Nothing had declared a peak, the hour
+H50 published its child and died in the verify that restores its terminal state (job peak 43,271,577,600 B = 40.30 GiB at the refusal, against
+the 40 GiB limit). Nothing had declared a peak, the hour
 result carried none, and the probe that was meant to rehearse the end of the hour held far less than the hour does. These tests pin the
 platform independent half: the ledger the worker keeps (`JobMemoryLedger`, read from the job object through `runner.job_memory`), where
 run_hour, run_verify_tail and run_continuation mark it and what they write, the probe's hold (`hold_resident_set`), and the preparer flags.
@@ -142,6 +143,20 @@ class Wiring(unittest.TestCase):
                  "terminal_state = continuation_state(", "memory.mark('terminal_state')", "release_training_buffers()",
                  "memory.mark('before_verify')", "verify_checkpoint_restore(runner", "memory.mark('verified')",
                  "publish_continuation_reference(", "memory.mark('continuation')", "runner._write_new(custody / 'hour-result.json'"]
+        positions = [text.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_the_continuation_reads_the_ledger_after_its_update_and_its_second_verify(self):
+        """H50 died in the verify that restores S after the S+1 update, not in the first verify: that update has its own peak (the sampler
+        saw 39.1 GiB there) and the level the second verify starts from, so the continuation reads the ledger twice itself."""
+        self.assertEqual(self.marks(cia_hour.publish_continuation_reference), [])     # the reads are plain calls of the local `mark`
+        tree = ast.parse(inspect.getsource(cia_hour.publish_continuation_reference))
+        reads = sorted((node.lineno, node.args[0].value) for node in ast.walk(tree) if isinstance(node, ast.Call)
+                       and getattr(node.func, 'id', None) == 'mark' and node.args and isinstance(node.args[0], ast.Constant))
+        self.assertEqual([phase for _, phase in reads], ['reference_update', 'restored'])
+        self.assertIn('device, applied, governed_wall, energy_binding, memory=memory)', inspect.getsource(cia_hour.run_hour))
+        text = inspect.getsource(cia_hour.publish_continuation_reference)
+        order = ["next_update_reference(runner", "mark('reference_update')", "verify_checkpoint_restore(runner", "mark('restored')"]
         positions = [text.index(item) for item in order]
         self.assertEqual(positions, sorted(positions))
 

@@ -1142,7 +1142,11 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
 
 
 def publish_continuation_reference(runner, model, optimizer, inventory, identity, custody, child,
-                                   terminal_state, prepared, device, applied, governed_wall, energy_binding):
+                                   terminal_state, prepared, device, applied, governed_wall, energy_binding, memory=None):
+    """The uncredited S+1 update and the restore of S. `memory` is the hour's JobMemoryLedger: 'reference_update' is read when the update
+    has returned (the level the second verify starts from, and the peak the update itself reached), 'restored' when that verify is done.
+    H50 died in this second verify, not in the first one."""
+    mark = memory.mark if memory is not None else (lambda phase: None)
     positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
     total_steps, positions = child['data_cursor']['global_step'], child['data_cursor']['tokens_seen']
     checkpoint_identity = dict(manifest_sha256=child['checkpoint_manifest_sha256'],
@@ -1164,10 +1168,12 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
         runner._write_new(custody / 'continuation-next-pack.json', next_pack)
         reference = next_update_reference(runner, model, optimizer, inventory, identity, next_pack,
                                           child, terminal_state, device, applied)
+        mark('reference_update')
     finally:
         # S+1 is never published. Restore S even when the reference step refuses.
         try:
             verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
+            mark('restored')
         finally:
             prepared['packs'].cursor, prepared['packs'].index = saved_cursor, saved_index
         if continuation_state(runner, model, optimizer, child['data_cursor'], device) != terminal_state:
@@ -1455,7 +1461,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
     # belongs only to the resource ledger and the continuation comparison.
     continuation = None if probe or learning else publish_continuation_reference(
         runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
-        device, applied, governed_wall, energy_binding)
+        device, applied, governed_wall, energy_binding, memory=memory)
     memory.mark('continuation')
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
     p10 = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)]
