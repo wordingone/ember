@@ -71,6 +71,7 @@ def main():
         if not g["ok"]: print("PROBE REFUSED", r["name"], g["reason"], [d for _, d in g["consumers"]]); continue
         sel.append(dict(name=r["name"], dir=r["dir"], hf_repo=None, prefix=None, via="probe child, reproducible (disk-custody strategy 2026-11-09); training 81920 unbound; " + g["clause"],
                         probe_consumers=[d for _, d in g["consumers"]], probe_terminal=g["terminal_receipt"], probe_clause=g["clause"]))
+    import protected_set as _PS                        # #2450: the declared protected set, re-read per remove
     import evict_ckpt_list as _E                       # lead 82363: KEEP markers (H41 child cb516ed9, H44 child e73486d2, depth 1/2, H45 child)
     kept_names = [r["name"] for r in sel if _E.kept(r["dir"])]
     if kept_names: print("KEEP MARKER: refusing", kept_names)
@@ -146,10 +147,14 @@ def main():
     failed, kept, n_ok = [], [], 0
     nl_left = {}                                       # round 2 F-A: per-inode countdown. Every name of an inode is in the set (inset[ino] == nlink), so the k-th name removed must see nlink - (names of that inode already removed)
     for r in rows:
+        cur = _PS.load()      # #2450: the declared protected set re-read right before this remove (selection and hashing ran minutes ago); a marker declared since refuses the file, and the receipt records the set that admitted it
+        _k = _E.kept(r["path"], cur["markers"])
+        if _k: kept.append((r["path"], "under a KEEP node (re-declared during the run): " + _k)); continue
+        r["protected_set_sha256"] = cur["sha256"]; r["protected_set_path"] = cur["path"]
         roots = [child_dir[r["child"]]]
         req = nl_left.setdefault(r["ino"], r["nlink"])      # planned nlink minus the names already removed; a name added after the plan still refuses (#2459 F5)
         if r["hf_ref"]:
-            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=req, extra=dict(child=r["child"], via=r["verified_via"]))
+            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=req, extra=dict(child=r["child"], via=r["verified_via"], protected_set_sha256=cur["sha256"], protected_set_path=cur["path"]))   # nlink as planned: a name added after the plan refuses (#2459 F5)
         else:
             res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=req)
         if res["ok"]: n_ok += 1; nl_left[r["ino"]] = req - 1

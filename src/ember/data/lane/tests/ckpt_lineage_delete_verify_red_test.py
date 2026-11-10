@@ -31,7 +31,7 @@ def mkfile(path, data):
 
 # stubs for the three guards the script imports inside main()
 G = types.ModuleType("probe_terminal_guard"); G.probe_eligibility = lambda d, kept=None: dict(ok=True, reason="", clause="A: test", consumers=[], terminal_receipt=None)
-E = types.ModuleType("evict_ckpt_list"); E.kept = lambda d: False
+E = types.ModuleType("evict_ckpt_list"); E.kept = lambda d, markers=None: False
 B = types.ModuleType("ckpt_bound"); B.bound_dirs = lambda: []; B.is_bound = lambda d, b: False
 for m in (G, E, B): sys.modules[m.__name__] = m
 
@@ -112,6 +112,16 @@ rc, out = run(m)
 m.VR.remove_verified = orig_rv
 check("RED F5 a name hard-linked AFTER the plan: the file is kept (nlink 2 != 1 at remove time), exit 7", os.path.exists(C3 + "/h.pt") and os.path.exists(OUT3) and rc == 7 and "nlink 2 != 1" in out)
 os.remove(OUT3)
+# #2450 finding 5: a marker declared AFTER the selection and the hashing (here: only the per-file re-check, called with the freshly loaded markers, reports one) keeps the file
+C4 = T + "/C4"; d4 = os.urandom(MB + 13); mkfile(C4 + "/k.pt", d4)
+json.dump({"C4": dict(status="COVERED", dir=C4, step_dir="lineage/C4")}, open(T + "/chk.json", "w"))
+m = load(["--apply"]); m.READER = lambda repo, hp: (len(d4), sha(d4))
+E.kept = lambda d, markers=None: ("cia-hour-redeclared/" if markers is not None else False)
+rc, out = run(m)
+E.kept = lambda d, markers=None: False
+check("RED #2450 a marker declared after the plan: the file is kept, exit 7, the line says re-declared during the run", os.path.exists(C4 + "/k.pt") and rc == 7 and "re-declared during the run" in out and "cia-hour-redeclared/" in out)
+check("RED ... and no receipt row exists for the kept file", not any(x.get("path", "").endswith("/C4/k.pt") for x in rcpts()))
+shutil.rmtree(C4, ignore_errors=True)
 src5 = open(SC + "/ckpt_lineage_delete.py", encoding="utf-8").read()
 check("source (F5): no require_nlink=0 in the script; both remove calls pass the countdown nlink (planned nlink minus names already removed)", "require_nlink=0" not in src5 and src5.count("require_nlink=req") == 2 and "nl_left.setdefault" in src5)
 
