@@ -16,8 +16,7 @@ import json, os, sys, types, tempfile, glob, time, hashlib
 
 LANE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))      # the lane dir this test sits in (live scripts/ or the tree copy)
 SRC = open(os.environ.get("TICK_SRC", LANE + "/loops/tick.py"), encoding="utf-8").read()
-PSS = os.environ.get("PSS_DIR", LANE)
-sys.path.insert(0, PSS)
+sys.path.insert(0, LANE)
 import pack_scan_status as real_pss
 
 i = SRC.index("\ndef upload()"); j = SRC.index("\ndef census()")
