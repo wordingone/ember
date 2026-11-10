@@ -16,7 +16,8 @@ rc = json.load(open(SRC + "/receipt.json")); ins = rc["inputs"]; outs = []; nv =
 src0 = json.loads(open(SRC + "/source-manifest.jsonl", encoding="utf-8").readline())
 import reserve_plan
 for p in ins:
-    assert reserve_plan.write_gate("redact copy", 2 * os.path.getsize(p) + (256 << 20)), "B: below the reserve floor: not writing"      # lead 82324
+    if not reserve_plan.write_gate("redact copy", 2 * os.path.getsize(p) + (256 << 20)):      # lead 82324
+        sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: redact copy not writing")
     o = f"{OUTD}/{os.path.basename(p)}"; vals = th_gate.find_values(p); nv += len(vals)
     with open(p, "rb") as f, open(o, "wb") as fo, zstandard.ZstdCompressor(level=6).stream_writer(fo) as w:
         for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
