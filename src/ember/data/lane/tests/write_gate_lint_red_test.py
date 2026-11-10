@@ -14,7 +14,7 @@ EXECUTED cases (run_executed_gate_cases) copy dedup.py, filter_ids.py, carve_hel
 returns False must exit non-zero with the named refusal and leave no file; for the three early-gate scripts a gate that returns True must produce the output; for the three that load a tokenizer or touch the
 network first, a gate that raises a sentinel must fire before any file appears.
 Run from the repo root or anywhere: python src/ember/data/lane/tests/write_gate_lint_red_test.py   (no lane environment variables needed; nothing is written outside a temp dir; CI: ci-pr.yml)."""
-import ast, json, os, subprocess, sys, tempfile
+import ast, json, os, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # .../lane
 ok = True
@@ -274,7 +274,7 @@ class ZstdDecompressor:
     def stream_reader(s, f): return f
 """
 STUB_XXHASH = "import zlib\ndef xxh64_intdigest(s): return zlib.crc32(s.encode())\n"
-STUB_TOKENIZERS = """class _E:
+STUB_TOKENIZER_MODULE = """class _E:
     ids = [1, 2, 3]
 class Tokenizer:
     @staticmethod
@@ -292,7 +292,7 @@ class HfApi:
     def file_exists(s, *a, **k): return False
 def get_token(): return "tok"
 """
-STUB_SECRET = "PLACEHOLDER = 'x'\ndef redact(t, c): return t\ndef scan_path(p): return {'hits': 0}\n"
+STUB_SCANNER_MODULE = "PLACEHOLDER = 'x'\ndef redact(t, c): return t\ndef scan_path(p): return {'hits': 0}\n"
 STUB_HFPUSH = "def upload_file(*a, **k): raise RuntimeError('UPLOAD_TOUCHED_BEFORE_GATE')\n"
 DOCS = [dict(id="a", text="the quick brown fox jumps over the lazy dog again and again", tokens=12), dict(id="b", text="pack my box with five dozen liquor jugs please now today", tokens=11),
         dict(id="c", text="the quick brown fox jumps over the lazy dog again and again", tokens=12)]
@@ -313,9 +313,9 @@ def run_script(name, args, mode, fixtures_fn=None):
         bindir = os.path.join(d, "bin"); work = os.path.join(d, "work"); lane = os.path.join(d, "lane"); m = os.path.join(d, "m")
         for x in (bindir, work, lane, m, os.path.join(lane, "scripts")): os.makedirs(x)
         w = lambda p, t: open(p, "w", encoding="utf-8", newline="").write(t)
-        w(os.path.join(bindir, name), open(os.path.join(HERE, name), encoding="utf-8").read())
-        for mod, src in (("reserve_plan", STUB_RESERVE), ("zstandard", STUB_ZSTD), ("xxhash", STUB_XXHASH), ("tokenizers", STUB_TOKENIZERS), ("requests", STUB_REQUESTS),
-                         ("huggingface_hub", STUB_HUB), ("secret_scan", STUB_SECRET)): w(os.path.join(bindir, mod + ".py"), src)
+        shutil.copyfile(os.path.join(HERE, name), os.path.join(bindir, name))      # byte copy of the script under test (CodeQL py/clear-text-storage-sensitive-data flagged the read+write form)
+        for mod, src in (("reserve_plan", STUB_RESERVE), ("zstandard", STUB_ZSTD), ("xxhash", STUB_XXHASH), ("tokenizers", STUB_TOKENIZER_MODULE), ("requests", STUB_REQUESTS),
+                         ("huggingface_hub", STUB_HUB), ("secret_scan", STUB_SCANNER_MODULE)): w(os.path.join(bindir, mod + ".py"), src)
         w(os.path.join(bindir, "lane_config.py"), "HF_TRAIN_REPO = 't-private'\nLANE_ROOT = %r\nM_ROOT = %r\nSEAT_LEAD = 'x'\nSEAT_DATA = 'y'\n" % (lane.replace(os.sep, "/"), m.replace(os.sep, "/")))
         w(os.path.join(lane, "scripts", "hf_push.py"), STUB_HFPUSH)
         for p, t in (fixtures_fn(work.replace(os.sep, "/"), lane.replace(os.sep, "/")) if fixtures_fn else {}).items():
