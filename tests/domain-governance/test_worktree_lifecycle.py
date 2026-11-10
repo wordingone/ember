@@ -13,6 +13,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py"
@@ -2406,3 +2408,354 @@ def test_retire_without_any_pin_dirs_file_is_unchanged(tmp_path: Path) -> None:
     payload = json.loads(lifecycle(repo, "retire", "--path", str(tree)).stdout)
 
     assert payload["status"] == "RETIRED"
+
+
+# ---- Issue #2457: the read-only audit takes a shared lock; only writers take the exclusive one ----------------------------
+
+LOCK_WAIT = "EMBER_LIFECYCLE_LOCK_WAIT_SECONDS"
+LOCK_BACKOFF = "EMBER_LIFECYCLE_LOCK_BACKOFF_SECONDS"
+
+
+def lock_file(repo: Path) -> Path:
+    return state_path(repo).with_name("ember-worktree-lifecycle.lock")
+
+
+def installed_repo(tmp_path: Path) -> Path:
+    repo = make_repo(tmp_path)
+    lifecycle(repo, "install", "--target", "3")
+    return repo
+
+
+def test_an_audit_finishes_while_another_audit_holds_the_lock(tmp_path: Path) -> None:
+    """The issue's red: two commits in two worktrees, neither waits for the other's audit.
+
+    The first audit is modelled by a shared holder that stays inside its lock for the whole
+    second run. Before the change the second audit was refused LIFECYCLE_LOCKED after its wait.
+    """
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    with module.RepositoryLock(lock_file(repo), shared=True):
+        result = lifecycle_with_env(
+            repo, "audit", "--strict", "--quiet", env={LOCK_WAIT: "1", LOCK_BACKOFF: "0.1"}, check=False
+        )
+    assert result.returncode == 0, result.stderr
+    assert "waiting for lifecycle lock" not in result.stderr
+
+
+# Each real audit process runs the tool's own main() and, inside its lock (strict_report runs
+# under it), arrives at a file barrier and waits for the other audit to arrive too. Both can
+# only arrive if both hold the lock at the same moment; serialised audits never meet.
+OVERLAP_DRIVER = """
+import importlib.util, sys, time
+from pathlib import Path
+
+script, repo, barrier, me, other = sys.argv[1:6]
+spec = importlib.util.spec_from_file_location("lifecycle_overlap_driver", script)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+real = module.strict_report
+
+
+def meet(*args, **kwargs):
+    (Path(barrier) / me).write_text("here", encoding="utf-8")
+    deadline = time.monotonic() + 30
+    while not (Path(barrier) / other).exists():
+        if time.monotonic() > deadline:
+            print("NO_OVERLAP: the other audit never reached its lock", file=sys.stderr)
+            sys.exit(3)
+        time.sleep(0.05)
+    return real(*args, **kwargs)
+
+
+module.strict_report = meet
+sys.exit(module.main(["--allow-modified-self", "--repo", repo, "audit", "--strict", "--quiet"]))
+"""
+
+
+def test_two_real_audits_overlap_without_waiting(tmp_path: Path) -> None:
+    """Two real audit processes are inside the lock at the same time (forced by a file barrier)."""
+    repo = installed_repo(tmp_path)
+    barrier = tmp_path / "barrier"
+    barrier.mkdir()
+    driver = tmp_path / "overlap_driver.py"
+    driver.write_text(OVERLAP_DRIVER, encoding="utf-8")
+    env = {**os.environ, LOCK_WAIT: "1", LOCK_BACKOFF: "0.1"}
+    processes = [
+        subprocess.Popen(
+            [sys.executable, str(driver), str(SCRIPT), str(repo), str(barrier), me, other],
+            cwd=repo, env=env, text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        for me, other in (("a", "b"), ("b", "a"))
+    ]
+    results = [process.communicate(timeout=120) + (process.returncode,) for process in processes]
+    for _stdout, stderr, code in results:
+        assert code == 0, stderr
+        assert "waiting for lifecycle lock" not in stderr
+
+
+def test_writers_stay_exclusive_against_a_shared_holder(tmp_path: Path) -> None:
+    """renew and audit --ratchet (run here) still need the lock to themselves."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    managed = _managed(repo, tmp_path, "writer")
+    env = {LOCK_WAIT: "0.5", LOCK_BACKOFF: "0.1"}
+    with module.RepositoryLock(lock_file(repo), shared=True):
+        for argv in (
+            ("renew", "--path", str(managed), "--days", "7"),
+            ("audit", "--ratchet", "--quiet"),
+        ):
+            result = lifecycle_with_env(repo, *argv, env=env, check=False)
+            assert result.returncode == 2, (argv, result.stderr)
+            assert "LIFECYCLE_LOCKED" in result.stderr
+            assert f"pid={os.getpid()}" in result.stderr and "shared" in result.stderr
+
+
+def test_a_writer_blocks_a_reader_and_readers_share_with_each_other(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    with module.RepositoryLock(lock):
+        reader = module.RepositoryLock(lock, shared=True, wait_seconds=0.3, backoff_seconds=0.1, notify=lambda line: None)
+        try:
+            reader.__enter__()
+        except module.LifecycleError as exc:
+            assert exc.code == "LIFECYCLE_LOCKED"
+            assert f"pid={os.getpid()}" in str(exc)
+        else:  # pragma: no cover - the failure being tested
+            raise AssertionError("a shared lock was granted while an exclusive holder was inside")
+    with module.RepositoryLock(lock, shared=True, wait_seconds=0):
+        with module.RepositoryLock(lock, shared=True, wait_seconds=0):
+            pass
+    # Both readers left: the writer gets the lock at once, and no sidecar is left behind.
+    with module.RepositoryLock(lock, wait_seconds=0):
+        pass
+    holders = lock.with_name(lock.name + ".holders")
+    assert not holders.exists() or list(holders.iterdir()) == []
+
+
+def test_a_waiting_lane_names_the_holder_every_interval(tmp_path: Path) -> None:
+    """A waiting hook prints who holds the lock (pid, since when, command line) first at once, then each interval."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    lines: list[str] = []
+    with module.RepositoryLock(lock):
+        waiter = module.RepositoryLock(
+            lock, wait_seconds=1.0, backoff_seconds=0.1, notify_seconds=0.25, notify=lines.append
+        )
+        try:
+            waiter.__enter__()
+        except module.LifecycleError as exc:
+            assert exc.code == "LIFECYCLE_LOCKED"
+        else:  # pragma: no cover
+            raise AssertionError("the exclusive lock was granted twice")
+    assert len(lines) >= 3, lines
+    assert lines[0].startswith("waiting for lifecycle lock held by ")
+    assert all(line.startswith("still waiting for lifecycle lock") for line in lines[1:])
+    for line in lines:
+        assert f"pid={os.getpid()} acquired=" in line
+        assert "cmd=" in line
+
+
+def test_a_holder_that_exited_is_not_named_and_its_sidecar_is_swept(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    finished = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True, check=True)
+    dead_pid = int(finished.stdout.strip())
+    holders = lock.with_name(lock.name + ".holders")
+    holders.mkdir(parents=True, exist_ok=True)
+    sidecar = holders / f"{dead_pid}-1.json"
+    sidecar.write_text(json.dumps({"acquired": "2026-01-01T00:00:00+00:00", "argv": "audit", "pid": dead_pid}), encoding="utf-8")
+    assert module.RepositoryLock(lock).holder() == "unknown"
+    assert not sidecar.exists()
+    with module.RepositoryLock(lock, shared=True):
+        live = module.RepositoryLock(lock).holder()
+    assert f"pid={os.getpid()}" in live and "shared" in live
+
+
+def test_a_reader_is_refused_across_processes_while_a_writer_holds(tmp_path: Path) -> None:
+    """The real `audit --strict` process, not an in-process lock object, refuses while a writer holds."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    with module.RepositoryLock(lock_file(repo)):
+        result = lifecycle_with_env(
+            repo, "audit", "--strict", "--quiet", env={LOCK_WAIT: "0.5", LOCK_BACKOFF: "0.1"}, check=False
+        )
+    assert result.returncode == 2, result.stderr
+    assert "LIFECYCLE_LOCKED" in result.stderr
+    assert f"pid={os.getpid()}" in result.stderr
+
+
+def test_a_garbled_or_oversized_holder_record_never_crashes_a_waiter(tmp_path: Path) -> None:
+    import time
+
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    holders = lock.with_name(lock.name + ".holders")
+    holders.mkdir(parents=True, exist_ok=True)
+    oversized = holders / "oversized.json"
+    oversized.write_text(
+        json.dumps({"acquired": "2026-01-01T00:00:00+00:00", "argv": "audit", "pid": 2**70}), encoding="utf-8"
+    )
+    old_garbage = holders / "old-garbage.json"
+    old_garbage.write_text("{not json", encoding="utf-8")
+    long_ago = time.time() - 600
+    os.utime(old_garbage, (long_ago, long_ago))
+    young_garbage = holders / "young-garbage.json"
+    young_garbage.write_text("{not json", encoding="utf-8")
+    # The exclusive record too: a pid no OS can have must read as "not running", not raise.
+    lock.write_bytes(
+        b"0\n" + json.dumps({"acquired": "2026-01-01T00:00:00+00:00", "argv": "x", "pid": 2**70}).encode("utf-8")
+    )
+
+    assert module._process_alive(2**70) is False
+    assert module.RepositoryLock(lock).holder() == "unknown"
+    assert not oversized.exists()
+    assert not old_garbage.exists()  # unreadable and older than the sweep age: removed
+    assert young_garbage.exists()  # unreadable but young: may be a write in progress, kept
+
+
+def test_shared_holders_in_one_process_get_distinct_sidecar_names(tmp_path: Path) -> None:
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    lock = lock_file(repo)
+    holders = lock.with_name(lock.name + ".holders")
+    with module.RepositoryLock(lock, shared=True), module.RepositoryLock(lock, shared=True):
+        names = sorted(path.name for path in holders.iterdir())
+    assert len(names) == 2 and len(set(names)) == 2, names
+    for name in names:
+        assert re.fullmatch(rf"{os.getpid()}-[0-9a-f]{{32}}\.json", name), name
+    assert list(holders.iterdir()) == []
+
+
+def test_a_malformed_notify_interval_in_the_environment_falls_back_to_the_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_lifecycle_module()
+    path = tmp_path / "x.lock"
+    for bad in ("soon", "-5", "nan", "inf"):
+        monkeypatch.setenv(module.LOCK_NOTIFY_ENV, bad)
+        assert module.RepositoryLock(path).notify_seconds == module.DEFAULT_LOCK_NOTIFY_SECONDS, bad
+    # Only this display interval is lenient: a bad explicit argument and a bad WAIT still refuse.
+    monkeypatch.setenv(module.LOCK_NOTIFY_ENV, "soon")
+    with pytest.raises(module.LifecycleError) as explicit:
+        module.RepositoryLock(path, notify_seconds=-1)
+    assert explicit.value.code == "LIFECYCLE_LOCK_CONFIG"
+    monkeypatch.setenv(module.LOCK_WAIT_ENV, "soon")
+    with pytest.raises(module.LifecycleError) as wait:
+        module.RepositoryLock(path)
+    assert wait.value.code == "LIFECYCLE_LOCK_CONFIG"
+
+
+def _watch_registry_opens(module, monkeypatch: pytest.MonkeyPatch, registry: Path, *, probe_replace: bool):
+    """Record, for every open of the registry file, whether the lifecycle lock was held at that moment.
+
+    With ``probe_replace`` an open made while the lock is NOT held also tries what a writer
+    inside the exclusive lock ends with, os.replace onto the registry, while that handle is
+    still open: Windows refuses it with PermissionError (the failures are returned).
+    """
+    import builtins
+    import io
+    import pathlib
+
+    original = registry.read_bytes()
+    held = {"now": False}
+    events: list[bool] = []
+    failures: list[str] = []
+    target = os.path.normcase(os.path.realpath(registry))
+    real_enter = module.RepositoryLock.__enter__
+    real_exit = module.RepositoryLock.__exit__
+
+    def entered(self):
+        result = real_enter(self)
+        held["now"] = True
+        return result
+
+    def left(self, *exc):
+        held["now"] = False
+        return real_exit(self, *exc)
+
+    def observe(file) -> None:
+        try:
+            hit = (
+                isinstance(file, (str, bytes, os.PathLike))
+                and os.path.normcase(os.path.realpath(os.fsdecode(file))) == target
+            )
+        except (TypeError, ValueError):
+            hit = False
+        if not hit:
+            return
+        events.append(held["now"])
+        if probe_replace and not held["now"]:
+            probe = registry.with_name(registry.name + ".probe")
+            probe.write_bytes(original)
+            try:
+                os.replace(probe, registry)
+            except PermissionError as exc:
+                failures.append(str(exc))
+            finally:
+                probe.unlink(missing_ok=True)
+
+    def wrap(real_open):
+        def watched(file, *args, **kwargs):
+            handle = real_open(file, *args, **kwargs)
+            observe(file)
+            return handle
+
+        return watched
+
+    real_open = builtins.open
+    real_path_open = pathlib.Path.open
+
+    def path_open(self, *args, **kwargs):
+        # Python 3.10 binds io.open into pathlib's accessor at import, so patching io.open
+        # alone would miss Path.read_text / Path.open; patch Path.open itself too.
+        handle = real_path_open(self, *args, **kwargs)
+        observe(self)
+        return handle
+
+    monkeypatch.setattr(module.RepositoryLock, "__enter__", entered)
+    monkeypatch.setattr(module.RepositoryLock, "__exit__", left)
+    monkeypatch.setattr(builtins, "open", wrap(real_open))
+    monkeypatch.setattr(io, "open", wrap(real_open))
+    monkeypatch.setattr(pathlib.Path, "open", path_open)
+    return events, failures
+
+
+def test_the_audit_mode_probe_reads_no_registry_before_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PR 2464 blocking finding: choosing shared vs exclusive must not open the registry unlocked."""
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    events, _failures = _watch_registry_opens(module, monkeypatch, state_path(repo), probe_replace=False)
+
+    code = module.main(["--allow-modified-self", "--repo", str(repo), "audit", "--strict", "--quiet"])
+
+    assert code == 0
+    assert events, "the audit never read the registry at all"
+    assert all(events), f"the registry was opened before the lock was held (lock held at each open: {events})"
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="only Windows refuses os.replace onto a file another handle holds open"
+)
+def test_an_audit_cannot_make_a_writers_replace_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Windows consequence of the unlocked read: while an audit has the registry open, os.replace fails.
+
+    Every writer ends with write_state -> os.replace. An audit that opened the registry
+    outside the lock could sit under that replace and kill the writer after its worktree
+    change was already done. The probe runs the replace at each unlocked open.
+    """
+    module = load_lifecycle_module()
+    repo = installed_repo(tmp_path)
+    events, failures = _watch_registry_opens(module, monkeypatch, state_path(repo), probe_replace=True)
+
+    code = module.main(["--allow-modified-self", "--repo", str(repo), "audit", "--strict", "--quiet"])
+
+    assert code == 0
+    assert events
+    assert failures == [], failures
