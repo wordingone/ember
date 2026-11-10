@@ -542,10 +542,7 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
             };
             match daemon.start_hour(params) {
                 Ok(started) => (
-                    success(
-                        id,
-                        serde_json::to_value(&started).unwrap_or(Value::Null),
-                    ),
+                    success(id, serde_json::to_value(&started).unwrap_or(Value::Null)),
                     false,
                 ),
                 Err(crate::EmberLabError::HourRefused { code, rc, detail }) => (

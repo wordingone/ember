@@ -3032,7 +3032,10 @@ fn start_hour_cli(
             }
         }
     };
-    if writeln!(stream, "{encoded}").and_then(|_| stream.flush()).is_err() {
+    if writeln!(stream, "{encoded}")
+        .and_then(|_| stream.flush())
+        .is_err()
+    {
         println!("START_HOUR_FAILED stage=send detail=pipe write failed");
         return 1;
     }
@@ -3049,10 +3052,16 @@ fn start_hour_cli(
         }
     };
     if let Some(error) = response.get("error") {
-        if let Some(data) = error.get("data").filter(|data| data.get("refusal_code").is_some()) {
+        if let Some(data) = error
+            .get("data")
+            .filter(|data| data.get("refusal_code").is_some())
+        {
             let code = data["refusal_code"].as_str().unwrap_or("hour_refused");
             let rc = data["rc"].as_i64().unwrap_or(1);
-            let detail = data["detail"].as_str().unwrap_or("").replace(['\r', '\n'], " ");
+            let detail = data["detail"]
+                .as_str()
+                .unwrap_or("")
+                .replace(['\r', '\n'], " ");
             println!("START_HOUR_REFUSED code={code} rc={rc} detail={detail}");
             return rc as i32;
         }
@@ -3815,7 +3824,14 @@ mod tests {
         }
         let long = format!(r"\\.\pipe\ember-lab-{}", "a".repeat(240));
         assert_eq!(
-            start_hour_cli(&long, Path::new("x.sh"), &sha, Path::new("x.log"), None, None),
+            start_hour_cli(
+                &long,
+                Path::new("x.sh"),
+                &sha,
+                Path::new("x.log"),
+                None,
+                None
+            ),
             2
         );
     }

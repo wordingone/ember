@@ -25,23 +25,41 @@ const SCRIPT: &str = "#!/bin/bash\nwhile [ ! -f \"$STOP_FILE\" ]; do sleep 1; do
 
 #[test]
 fn the_hour_child_is_normal_priority_on_every_cpu_even_from_a_below_normal_single_cpu_daemon() {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("ember-lab-hour-risk1-{}-{nonce}", std::process::id()));
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "ember-lab-hour-risk1-{}-{nonce}",
+        std::process::id()
+    ));
     fs::create_dir_all(&dir).unwrap();
     let script = dir.join("h99_dispatch_v1.sh");
     fs::write(&script, SCRIPT).unwrap();
     let stop = dir.join("stop.flag");
     let mut env = hour_env(std::env::vars());
-    env.insert("STOP_FILE".into(), stop.to_string_lossy().replace('\\', "/"));
+    env.insert(
+        "STOP_FILE".into(),
+        stop.to_string_lossy().replace('\\', "/"),
+    );
 
     let me = unsafe { GetCurrentProcess() };
     let (mut original_process, mut system) = (0usize, 0usize);
-    assert_ne!(unsafe { GetProcessAffinityMask(me, &mut original_process, &mut system) }, 0);
-    assert!(system.count_ones() >= 2, "the host needs at least two logical CPUs for this test");
+    assert_ne!(
+        unsafe { GetProcessAffinityMask(me, &mut original_process, &mut system) },
+        0
+    );
+    assert!(
+        system.count_ones() >= 2,
+        "the host needs at least two logical CPUs for this test"
+    );
     let original_priority = unsafe { GetPriorityClass(me) };
 
     // Become the worst-case daemon: below normal, pinned to the lowest single CPU.
-    assert_ne!(unsafe { SetPriorityClass(me, BELOW_NORMAL_PRIORITY_CLASS) }, 0);
+    assert_ne!(
+        unsafe { SetPriorityClass(me, BELOW_NORMAL_PRIORITY_CLASS) },
+        0
+    );
     let lowest = 1usize << system.trailing_zeros();
     assert_ne!(unsafe { SetProcessAffinityMask(me, lowest) }, 0);
     let daemon = Daemon::open(&dir.join("lab.sqlite3")).unwrap();
@@ -62,21 +80,37 @@ fn the_hour_child_is_normal_priority_on_every_cpu_even_from_a_below_normal_singl
 
     let deadline = Instant::now() + Duration::from_secs(10);
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, started.pid) };
-    assert!(!handle.is_null(), "cannot open the hour process {}", started.pid);
+    assert!(
+        !handle.is_null(),
+        "cannot open the hour process {}",
+        started.pid
+    );
     let (mut child_mask, mut child_system) = (0usize, 0usize);
     let child_priority = unsafe { GetPriorityClass(handle) };
-    assert_ne!(unsafe { GetProcessAffinityMask(handle, &mut child_mask, &mut child_system) }, 0);
+    assert_ne!(
+        unsafe { GetProcessAffinityMask(handle, &mut child_mask, &mut child_system) },
+        0
+    );
     unsafe { CloseHandle(handle) };
     assert!(Instant::now() < deadline);
 
     fs::write(&stop, b"stop").unwrap();
     thread::sleep(Duration::from_millis(200));
-    assert_eq!(child_priority, NORMAL_PRIORITY_CLASS, "hour child priority class");
-    assert_eq!(child_mask, system, "hour child CPU mask must be the full system mask");
+    assert_eq!(
+        child_priority, NORMAL_PRIORITY_CLASS,
+        "hour child priority class"
+    );
+    assert_eq!(
+        child_mask, system,
+        "hour child CPU mask must be the full system mask"
+    );
     // The receipt records what the daemon was, as a covariate.
     let receipt: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&started.receipt_path).unwrap()).unwrap();
-    assert_eq!(receipt["daemon_priority_class"], BELOW_NORMAL_PRIORITY_CLASS);
+    assert_eq!(
+        receipt["daemon_priority_class"],
+        BELOW_NORMAL_PRIORITY_CLASS
+    );
     assert_eq!(receipt["daemon_affinity_mask"], lowest);
     assert_eq!(receipt["daemon_system_mask"], system);
 }

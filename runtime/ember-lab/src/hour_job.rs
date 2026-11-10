@@ -160,12 +160,17 @@ pub fn is_ember_key(key: &str) -> bool {
 
 /// The cockpit's `hourEnv`: every variable except the `EMBER_*` ones.
 pub fn hour_env<I: IntoIterator<Item = (String, String)>>(env: I) -> BTreeMap<String, String> {
-    env.into_iter().filter(|(key, _)| !is_ember_key(key)).collect()
+    env.into_iter()
+        .filter(|(key, _)| !is_ember_key(key))
+        .collect()
 }
 
 /// Pinned-bash rule of `resolveHourBash`: the System32 shim is refused; on Windows the file must exist.
 pub fn bash_refusal(candidate: &Path) -> Option<String> {
-    let mut text = candidate.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    let mut text = candidate
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
     while text.contains("//") {
         text = text.replace("//", "/");
     }
@@ -290,7 +295,10 @@ fn check_request(request: &HourStartRequest) -> Result<Checked> {
         if !cwd.is_absolute() || !cwd.is_dir() {
             return Err(refuse(
                 "hour_cwd_invalid",
-                format!("cwd is not an absolute existing directory: {}", cwd.display()),
+                format!(
+                    "cwd is not an absolute existing directory: {}",
+                    cwd.display()
+                ),
             ));
         }
     }
@@ -406,12 +414,19 @@ impl Daemon {
         if let Err(error) = create_new(&checked.log) {
             release(self);
             return Err(if error.kind() == std::io::ErrorKind::AlreadyExists {
-                refuse("hour_log_exists", format!("log already exists: {}", checked.log.display()))
+                refuse(
+                    "hour_log_exists",
+                    format!("log already exists: {}", checked.log.display()),
+                )
             } else {
-                refuse("hour_log_unwritable", format!("{}: {error}", checked.log.display()))
+                refuse(
+                    "hour_log_unwritable",
+                    format!("{}: {error}", checked.log.display()),
+                )
             });
         }
-        let receipt_path = PathBuf::from(format!("{}.lab-start.json", checked.log.to_string_lossy()));
+        let receipt_path =
+            PathBuf::from(format!("{}.lab-start.json", checked.log.to_string_lossy()));
         let base = json!({
             "schema": START_RECEIPT_SCHEMA,
             "job_id": job_id,
@@ -438,7 +453,10 @@ impl Daemon {
                     .and_then(|_| file.sync_all())
                 {
                     release(self);
-                    return Err(refuse("hour_receipt_write", format!("{}: {error}", receipt_path.display())));
+                    return Err(refuse(
+                        "hour_receipt_write",
+                        format!("{}: {error}", receipt_path.display()),
+                    ));
                 }
             }
             Err(error) => {
@@ -446,7 +464,10 @@ impl Daemon {
                 return Err(if error.kind() == std::io::ErrorKind::AlreadyExists {
                     refuse("hour_receipt_exists", receipt_path.display().to_string())
                 } else {
-                    refuse("hour_receipt_write", format!("{}: {error}", receipt_path.display()))
+                    refuse(
+                        "hour_receipt_write",
+                        format!("{}: {error}", receipt_path.display()),
+                    )
                 });
             }
         }
@@ -534,7 +555,11 @@ mod tests {
 
     #[test]
     fn dispatch_names_follow_the_cockpit_rule() {
-        for ok in ["h49_dispatch_v2.sh", "h1_dispatch_v10.sh", "h0_dispatch_v0.sh"] {
+        for ok in [
+            "h49_dispatch_v2.sh",
+            "h1_dispatch_v10.sh",
+            "h0_dispatch_v0.sh",
+        ] {
             assert!(dispatch_name_ok(ok), "{ok}");
         }
         for bad in [
@@ -590,7 +615,10 @@ mod tests {
     #[test]
     fn refusal_codes_are_distinct_and_stable() {
         let mut rcs = REFUSAL_CODES.iter().map(|(_, rc)| *rc).collect::<Vec<_>>();
-        let mut names = REFUSAL_CODES.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        let mut names = REFUSAL_CODES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
         rcs.sort_unstable();
         rcs.dedup();
         names.sort_unstable();
@@ -606,9 +634,13 @@ mod tests {
     fn child_cpu_refusal_names_priority_and_mask() {
         assert!(child_cpu_refusal(NORMAL_PRIORITY_CLASS, 0xFFFF, 0xFFFF).is_none());
         let priority = child_cpu_refusal(0x4000, 0xFFFF, 0xFFFF).unwrap();
-        assert!(matches!(&priority, EmberLabError::HourRefused { code, rc: 30, .. } if code == "hour_child_priority"));
+        assert!(
+            matches!(&priority, EmberLabError::HourRefused { code, rc: 30, .. } if code == "hour_child_priority")
+        );
         let mask = child_cpu_refusal(NORMAL_PRIORITY_CLASS, 0xFF, 0xFFFF).unwrap();
-        assert!(matches!(&mask, EmberLabError::HourRefused { code, rc: 31, .. } if code == "hour_child_affinity"));
+        assert!(
+            matches!(&mask, EmberLabError::HourRefused { code, rc: 31, .. } if code == "hour_child_affinity")
+        );
     }
 
     #[test]
