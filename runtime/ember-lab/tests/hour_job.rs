@@ -86,12 +86,26 @@ fn env_for(fx: &Fixture, extra: &[(&str, &str)]) -> BTreeMap<String, String> {
 
 fn request(fx: &Fixture, log_name: &str, extra: &[(&str, &str)]) -> HourStartRequest {
     HourStartRequest {
+        kind: "hour".into(),
         script: fx.script.clone(),
         sha256: fx.sha.clone(),
         log: fx.dir.join(log_name),
         cwd: Some(fx.dir.clone()),
         bash: None,
         env: env_for(fx, extra),
+    }
+}
+
+/// The same script and sha under a LEARN name (`learn_measure_001.sh`), kind learn.
+fn learn_request(fx: &Fixture, log_name: &str) -> HourStartRequest {
+    let script = fx.dir.join("learn_measure_001.sh");
+    if !script.exists() {
+        fs::write(&script, SCRIPT.as_bytes()).unwrap();
+    }
+    HourStartRequest {
+        kind: "learn".into(),
+        script,
+        ..request(fx, log_name, &[])
     }
 }
 
@@ -145,6 +159,13 @@ fn refusal(result: Result<ember_lab::hour_job::HourStarted, EmberLabError>) -> (
     match result {
         Err(EmberLabError::HourRefused { code, rc, .. }) => (code, rc),
         other => panic!("expected an hour refusal, got {other:?}"),
+    }
+}
+
+fn check_refusal(result: Result<ember_lab::hour_job::HourChecked, EmberLabError>) -> (String, u8) {
+    match result {
+        Err(EmberLabError::HourRefused { code, rc, .. }) => (code, rc),
+        other => panic!("expected an hour refusal from check_hour, got {other:?}"),
     }
 }
 
@@ -356,6 +377,213 @@ fn a_second_hour_is_refused_while_one_holds_the_lease() {
         "a refused start must not create its log"
     );
     daemon.stop_job(&first.job_id).unwrap();
+}
+
+#[test]
+fn a_learn_job_runs_under_its_own_name_prefix_and_shares_the_card_lease() {
+    // Lead ruling 82485 (#2453): kind learn takes learn_<name>.sh, job id prefix learn-, the same hour-chain lease.
+    let fx = fixture("learn");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+    let learn = daemon.start_hour(learn_request(&fx, "learn.log")).unwrap();
+    assert_eq!(learn.kind, "learn");
+    assert!(learn.job_id.starts_with("learn-"), "{}", learn.job_id);
+    assert!(learn.line().starts_with("START_HOUR_OK pid="));
+    assert!(wait_until(30, || log_text(&learn.log).contains("TICK 1")));
+    let receipt: Value =
+        serde_json::from_str(&fs::read_to_string(&learn.receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["kind"], "learn");
+    assert_eq!(receipt["phase"], "started");
+    let events = daemon.job_events(&learn.job_id, 0, 100).unwrap();
+    assert!(
+        events.iter().any(|e| e["kind"] == "job_started"),
+        "learn jobs emit job_events as hours do: {events:?}"
+    );
+    // One job at a time on the shared card: an hour (and another learn) is refused while the learn job holds the lease.
+    assert_eq!(
+        refusal(daemon.start_hour(request(&fx, "hour-during-learn.log", &[]))),
+        ("hour_lease_conflict".into(), 32)
+    );
+    assert_eq!(
+        refusal(daemon.start_hour(learn_request(&fx, "learn-two.log"))),
+        ("hour_lease_conflict".into(), 32)
+    );
+    // stop works on a learn job and frees the lease for an hour.
+    daemon.stop_job(&learn.job_id).unwrap();
+    assert!(wait_until(30, || daemon
+        .lease_owner("hour-chain")
+        .unwrap()
+        .is_none()));
+    assert_ne!(
+        daemon.job_state(&learn.job_id).unwrap(),
+        Some(JobState::Running)
+    );
+    let hour = daemon
+        .start_hour(request(&fx, "hour-after.log", &[]))
+        .unwrap();
+    assert_eq!(hour.kind, "hour");
+    assert!(hour.job_id.starts_with("hour-"), "{}", hour.job_id);
+    daemon.stop_job(&hour.job_id).unwrap();
+}
+
+#[test]
+fn each_kind_refuses_the_other_kinds_script_name_and_an_unknown_kind() {
+    let fx = fixture("kinds");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+    // A learn name under kind hour.
+    let learn_name_as_hour = HourStartRequest {
+        kind: "hour".into(),
+        ..learn_request(&fx, "a.log")
+    };
+    assert_eq!(
+        refusal(daemon.start_hour(learn_name_as_hour)),
+        ("hour_script_name".into(), 21)
+    );
+    // An hNN dispatch name under kind learn.
+    let hour_name_as_learn = HourStartRequest {
+        kind: "learn".into(),
+        ..request(&fx, "b.log", &[])
+    };
+    assert_eq!(
+        refusal(daemon.start_hour(hour_name_as_learn)),
+        ("hour_script_name".into(), 21)
+    );
+    // Unknown kinds, in every spelling, are refused before anything else is looked at.
+    for unknown in ["train", "", "Hour", "LEARN", "hour ", "hours"] {
+        let bad = HourStartRequest {
+            kind: unknown.into(),
+            ..request(&fx, "c.log", &[])
+        };
+        assert_eq!(
+            refusal(daemon.start_hour(bad)),
+            ("hour_kind_unknown".into(), 37),
+            "{unknown:?}"
+        );
+    }
+    assert!(!fx.dir.join("c.log").exists());
+}
+
+#[test]
+fn a_request_without_a_kind_field_is_an_hour() {
+    // The wire shape existing callers send (no `kind`) decodes as kind hour and keeps the hNN rule.
+    let fx = fixture("nokind");
+    let mut wire = serde_json::to_value(request(&fx, "w.log", &[])).unwrap();
+    wire.as_object_mut().unwrap().remove("kind");
+    let decoded: HourStartRequest = serde_json::from_value(wire).unwrap();
+    assert_eq!(decoded.kind, "hour");
+}
+
+#[test]
+fn check_hour_gives_start_hours_verdict_and_creates_nothing() {
+    let fx = fixture("check");
+    let daemon = Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap();
+
+    // Every refusal start_hour raises on the request itself, check_hour raises with the same code and rc.
+    let mut cases: Vec<(&str, HourStartRequest)> = Vec::new();
+    let mut relative = request(&fx, "a.log", &[]);
+    relative.log = PathBuf::from("relative.log");
+    cases.push(("relative", relative));
+    let bad_name = fx.dir.join("not_an_hour.sh");
+    fs::write(&bad_name, SCRIPT.as_bytes()).unwrap();
+    let mut named = request(&fx, "b.log", &[]);
+    named.script = bad_name;
+    cases.push(("name", named));
+    cases.push((
+        "learn name under hour",
+        HourStartRequest {
+            kind: "hour".into(),
+            ..learn_request(&fx, "b2.log")
+        },
+    ));
+    cases.push((
+        "hour name under learn",
+        HourStartRequest {
+            kind: "learn".into(),
+            ..request(&fx, "b3.log", &[])
+        },
+    ));
+    cases.push((
+        "unknown kind",
+        HourStartRequest {
+            kind: "train".into(),
+            ..request(&fx, "b4.log", &[])
+        },
+    ));
+    let mut missing = request(&fx, "c.log", &[]);
+    missing.script = fx.dir.join("h98_dispatch_v1.sh");
+    cases.push(("missing", missing));
+    let mut malformed = request(&fx, "d.log", &[]);
+    malformed.sha256 = fx.sha.to_ascii_uppercase();
+    cases.push(("sha malformed", malformed));
+    let mut mismatch = request(&fx, "e.log", &[]);
+    mismatch.sha256 = "0".repeat(64);
+    cases.push(("sha mismatch", mismatch));
+    let existing = request(&fx, "f.log", &[]);
+    fs::write(&existing.log, b"").unwrap();
+    cases.push(("log exists", existing));
+    let mut unwritable = request(&fx, "g.log", &[]);
+    unwritable.log = fx.dir.join("no-such-dir").join("g.log");
+    cases.push(("log dir missing", unwritable));
+    let mut shim = request(&fx, "h.log", &[]);
+    shim.bash = Some(PathBuf::from("C:\\Windows\\System32\\bash.exe"));
+    cases.push(("bash shim", shim));
+    cases.push((
+        "ember key",
+        request(&fx, "i.log", &[("EMBER_API_KEY", "x")]),
+    ));
+    let mut empty_env = request(&fx, "j.log", &[]);
+    empty_env.env.clear();
+    cases.push(("empty env", empty_env));
+    let mut bad_cwd = request(&fx, "k.log", &[]);
+    bad_cwd.cwd = Some(fx.dir.join("no-such-cwd"));
+    cases.push(("bad cwd", bad_cwd));
+    let receipt_clash = request(&fx, "l.log", &[]);
+    fs::write(
+        format!("{}.lab-start.json", receipt_clash.log.display()),
+        b"{}",
+    )
+    .unwrap();
+    cases.push(("receipt clash", receipt_clash));
+    for (name, case) in cases {
+        let checked = check_refusal(daemon.check_hour(case.clone()));
+        let started = refusal(daemon.start_hour(case));
+        assert_eq!(
+            checked, started,
+            "check_hour and start_hour disagree on {name}"
+        );
+    }
+
+    // An acceptable request: check says OK, creates no log, receipt, identity, lease or process, and names the job id start will use.
+    let good = request(&fx, "good.log", &[]);
+    let checked = daemon.check_hour(good.clone()).unwrap();
+    assert_eq!(checked.kind, "hour");
+    assert!(checked
+        .line()
+        .starts_with("CHECK_HOUR_OK kind=hour job_id=hour-"));
+    assert!(!good.log.exists(), "check_hour must not create the log");
+    assert!(
+        !checked.receipt_path.exists(),
+        "check_hour must not create the receipt"
+    );
+    assert_eq!(daemon.lease_owner("hour-chain").unwrap(), None);
+    assert_eq!(daemon.job_state(&checked.job_id).unwrap(), None);
+    let learn_checked = daemon
+        .check_hour(learn_request(&fx, "good-learn.log"))
+        .unwrap();
+    assert_eq!(learn_checked.kind, "learn");
+    assert!(learn_checked.job_id.starts_with("learn-"));
+
+    let started = daemon.start_hour(good).unwrap();
+    assert_eq!(started.job_id, checked.job_id);
+    // With a job holding the card, check refuses exactly as start does.
+    assert_eq!(
+        check_refusal(daemon.check_hour(learn_request(&fx, "while-live.log"))),
+        ("hour_lease_conflict".into(), 32)
+    );
+    assert!(
+        !fx.dir.join("while-live.log").exists(),
+        "a refused check must not create its log"
+    );
+    daemon.stop_job(&started.job_id).unwrap();
 }
 
 #[test]

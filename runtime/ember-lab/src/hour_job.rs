@@ -5,6 +5,10 @@
 //! The hour job class (issue #2119, Relates only): `start_hour` runs an already-derived lineage hour dispatch script
 //! (`hNN_dispatch_vN.sh`) as a lab JOB instead of a detached child of the cockpit.
 //!
+//! Job kinds (lead ruling 82485, #2453): the request's `kind` is `hour` (the default, the lineage hour above) or `learn` (a LEARN
+//! job, script `learn_<name>.sh`, job id prefix `learn-`). Both take the one `hour-chain` lease, so the shared card runs one job at
+//! a time, and both get the same events, stop and re-adoption. `check_hour` runs the same checks as `start_hour` and creates nothing.
+//!
 //! It keeps the exact contract of the cockpit's `/resume-hour` (ember-cli `commands/resume-hour.ts`, shared golden
 //! fixture `resume-hour-contract.json`): the script's name, its exact sha256, a log that does not exist yet, a pinned
 //! Git bash (never the System32 shim), and an environment that carries no `EMBER_*` variable. What the lab adds: the
@@ -52,7 +56,57 @@ pub const REFUSAL_CODES: &[(&str, u8)] = &[
     ("hour_receipt_write", 34),
     ("hour_spawn_failed", 35),
     ("hour_cwd_invalid", 36),
+    ("hour_kind_unknown", 37),
 ];
+
+/// What a lab job of this class is. Both kinds run a sha-pinned bash script under the one `hour-chain` lease (one job at a
+/// time on the shared card); they differ in the script-name rule and the job id prefix. `hour` is the lineage hour
+/// (`hNN_dispatch_vN.sh`, unchanged); `learn` is a LEARN job (`learn_<name>.sh`, issue #2453).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JobKind {
+    Hour,
+    Learn,
+}
+
+impl JobKind {
+    pub fn parse(text: &str) -> Option<JobKind> {
+        match text {
+            "hour" => Some(JobKind::Hour),
+            "learn" => Some(JobKind::Learn),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JobKind::Hour => "hour",
+            JobKind::Learn => "learn",
+        }
+    }
+
+    /// The job id prefix (`hour-<sha12>-<log8>` or `learn-<sha12>-<log8>`).
+    pub fn job_prefix(self) -> &'static str {
+        self.as_str()
+    }
+
+    pub fn name_ok(self, name: &str) -> bool {
+        match self {
+            JobKind::Hour => dispatch_name_ok(name),
+            JobKind::Learn => learn_name_ok(name),
+        }
+    }
+
+    fn name_rule(self) -> &'static str {
+        match self {
+            JobKind::Hour => "hNN_dispatch_vN.sh",
+            JobKind::Learn => "learn_<name>.sh",
+        }
+    }
+}
+
+fn default_kind() -> String {
+    JobKind::Hour.as_str().to_string()
+}
 
 pub fn refusal_rc(code: &str) -> u8 {
     REFUSAL_CODES
@@ -78,7 +132,10 @@ pub(crate) struct HourChainSpec {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HourStartRequest {
-    /// Absolute path of the `hNN_dispatch_vN.sh` script.
+    /// Job kind: `hour` (default, the lineage hour) or `learn` (a LEARN job). Anything else is refused `hour_kind_unknown`.
+    #[serde(default = "default_kind")]
+    pub kind: String,
+    /// Absolute path of the `hNN_dispatch_vN.sh` script (kind hour) or `learn_<name>.sh` script (kind learn).
     pub script: PathBuf,
     /// Expected sha256 of the script's bytes (64 lowercase hex).
     pub sha256: String,
@@ -96,6 +153,8 @@ pub struct HourStartRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HourStarted {
+    #[serde(default = "default_kind")]
+    pub kind: String,
     pub job_id: String,
     pub pid: u32,
     pub script: PathBuf,
@@ -119,7 +178,34 @@ impl HourStarted {
     }
 }
 
+/// What `check_hour` answers: the start would be accepted right now (same checks, nothing created).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HourChecked {
+    pub kind: String,
+    pub job_id: String,
+    pub script: PathBuf,
+    pub sha256: String,
+    pub log: PathBuf,
+    pub receipt_path: PathBuf,
+    pub bash: PathBuf,
+    pub cwd: Option<PathBuf>,
+}
+
+impl HourChecked {
+    /// The one machine-readable line printed when a start would be accepted.
+    pub fn line(&self) -> String {
+        format!(
+            "CHECK_HOUR_OK kind={} job_id={} log={} receipt={}",
+            self.kind,
+            self.job_id,
+            self.log.display(),
+            self.receipt_path.display()
+        )
+    }
+}
+
 struct Checked {
+    kind: JobKind,
     script: PathBuf,
     sha256: String,
     log: PathBuf,
@@ -142,6 +228,20 @@ pub fn dispatch_name_ok(name: &str) -> bool {
     };
     let second = rest.bytes().take_while(u8::is_ascii_digit).count();
     second > 0 && &rest[second..] == ".sh"
+}
+
+/// `^learn_[A-Za-z0-9_-]+\.sh$` (ASCII; no path separators, no spaces, no extra extension).
+pub fn learn_name_ok(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("learn_") else {
+        return false;
+    };
+    let Some(stem) = rest.strip_suffix(".sh") else {
+        return false;
+    };
+    !stem.is_empty()
+        && stem
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 /// `/^[0-9a-f]{64}$/` (the cockpit's expected-sha256 shape).
@@ -236,15 +336,25 @@ fn check_request(request: &HourStartRequest) -> Result<Checked> {
             "script and log must be absolute paths",
         ));
     }
+    let kind = JobKind::parse(&request.kind).ok_or_else(|| {
+        refuse(
+            "hour_kind_unknown",
+            format!("job kind must be hour or learn, not {:?}", request.kind),
+        )
+    })?;
     let name = request
         .script
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    if !dispatch_name_ok(&name) {
+    if !kind.name_ok(&name) {
         return Err(refuse(
             "hour_script_name",
-            format!("not an hour dispatch script name (hNN_dispatch_vN.sh): {name}"),
+            format!(
+                "not a {} script name ({}): {name}",
+                kind.as_str(),
+                kind.name_rule()
+            ),
         ));
     }
     if !request.script.is_file() {
@@ -278,6 +388,21 @@ fn check_request(request: &HourStartRequest) -> Result<Checked> {
             ),
         ));
     }
+    // The same two refusals `start_hour` would raise after the lease, raised here so `check_hour` gives the identical verdict.
+    if let Some(parent) = request.log.parent() {
+        if !parent.as_os_str().is_empty() && !parent.is_dir() {
+            return Err(refuse(
+                "hour_log_unwritable",
+                format!("log directory does not exist: {}", parent.display()),
+            ));
+        }
+    }
+    if start_receipt_path(&request.log).exists() {
+        return Err(refuse(
+            "hour_receipt_exists",
+            start_receipt_path(&request.log).display().to_string(),
+        ));
+    }
     let bash = request.bash.clone().unwrap_or_else(default_bash);
     if let Some(reason) = bash_refusal(&bash) {
         return Err(refuse("hour_bash_refused", reason));
@@ -303,6 +428,7 @@ fn check_request(request: &HourStartRequest) -> Result<Checked> {
         }
     }
     Ok(Checked {
+        kind,
         script: request.script.clone(),
         sha256: actual,
         log: request.log.clone(),
@@ -310,6 +436,20 @@ fn check_request(request: &HourStartRequest) -> Result<Checked> {
         cwd: request.cwd.clone(),
         env: request.env.clone(),
     })
+}
+
+/// `<log>.lab-start.json`, the start receipt next to the log.
+fn start_receipt_path(log: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.lab-start.json", log.to_string_lossy()))
+}
+
+fn job_id_for(checked: &Checked) -> String {
+    format!(
+        "{}-{}-{}",
+        checked.kind.job_prefix(),
+        &checked.sha256[..12],
+        &hash_bytes(checked.log.to_string_lossy().as_bytes())[..8]
+    )
 }
 
 pub const NORMAL_PRIORITY_CLASS: u32 = 0x0000_0020;
@@ -385,17 +525,37 @@ fn create_new(path: &Path) -> std::io::Result<fs::File> {
 }
 
 impl Daemon {
+    /// Would `start_hour` accept this request right now? Runs the SAME `check_request` (kind, script name, sha, log, bash, env, cwd)
+    /// and peeks the `hour-chain` lease; creates nothing (no log, no receipt, no identity, no lease, no process). A caller that
+    /// preflights with this and then starts sees the same refusal code on every path the lab itself checks; what only the spawn can
+    /// prove (the child's priority and CPU mask readback) is still refused at start.
+    pub fn check_hour(&self, request: HourStartRequest) -> Result<HourChecked> {
+        let checked = check_request(&request)?;
+        if let Some(owner) = self.lease_owner(HOUR_RESOURCE)? {
+            return Err(refuse(
+                "hour_lease_conflict",
+                format!("another hour chain holds the lease: {owner}"),
+            ));
+        }
+        Ok(HourChecked {
+            kind: checked.kind.as_str().to_string(),
+            job_id: job_id_for(&checked),
+            receipt_path: start_receipt_path(&checked.log),
+            script: checked.script,
+            sha256: checked.sha256,
+            log: checked.log,
+            bash: checked.bash,
+            cwd: checked.cwd,
+        })
+    }
+
     /// Start one hour dispatch script as a lab job. Every check refuses with its own `HourRefused { code, rc }`
     /// before anything is created; the start receipt (`<log>.lab-start.json`) exists before this returns.
     pub fn start_hour(&self, request: HourStartRequest) -> Result<HourStarted> {
         let checked = check_request(&request)?;
         // The daemon's own priority and CPU mask are receipted as covariates; the child gets NORMAL / full mask regardless.
         let (priority, process_mask, system_mask) = daemon_inherit_snapshot()?;
-        let job_id = format!(
-            "hour-{}-{}",
-            &checked.sha256[..12],
-            &hash_bytes(checked.log.to_string_lossy().as_bytes())[..8]
-        );
+        let job_id = job_id_for(&checked);
         self.bind_identity(&job_id, &checked.script, &checked.sha256)?;
         match self.acquire_lease(HOUR_RESOURCE, &job_id) {
             Ok(()) => {}
@@ -425,10 +585,10 @@ impl Daemon {
                 )
             });
         }
-        let receipt_path =
-            PathBuf::from(format!("{}.lab-start.json", checked.log.to_string_lossy()));
+        let receipt_path = start_receipt_path(&checked.log);
         let base = json!({
             "schema": START_RECEIPT_SCHEMA,
+            "kind": checked.kind.as_str(),
             "job_id": job_id,
             "script": checked.script,
             "sha256": checked.sha256,
@@ -514,6 +674,7 @@ impl Daemon {
             )
         })?;
         Ok(HourStarted {
+            kind: checked.kind.as_str().to_string(),
             job_id,
             pid: handle.pid,
             script: checked.script,
@@ -580,6 +741,49 @@ mod tests {
     }
 
     #[test]
+    fn learn_names_follow_their_own_rule() {
+        for ok in [
+            "learn_measure_001.sh",
+            "learn_a.sh",
+            "learn_Run-2_x.sh",
+            "learn_0.sh",
+        ] {
+            assert!(learn_name_ok(ok), "{ok}");
+        }
+        for bad in [
+            "learn_.sh",
+            "learn.sh",
+            "learn_measure_001.sh.bak",
+            "learn_measure 001.sh",
+            "learn_measure.001.sh",
+            "Learn_measure_001.sh",
+            "xlearn_measure_001.sh",
+            "learn_measure_001.bash",
+            "learn_mesure\u{0664}.sh",
+            "h49_dispatch_v1.sh",
+            "chain_segment_H49_v1.sh",
+            "",
+        ] {
+            assert!(!learn_name_ok(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn each_kind_accepts_only_its_own_script_name() {
+        assert_eq!(JobKind::parse("hour"), Some(JobKind::Hour));
+        assert_eq!(JobKind::parse("learn"), Some(JobKind::Learn));
+        for unknown in ["", "Hour", "LEARN", "hour ", "train", "hours"] {
+            assert_eq!(JobKind::parse(unknown), None, "{unknown:?}");
+        }
+        assert!(JobKind::Hour.name_ok("h49_dispatch_v2.sh"));
+        assert!(!JobKind::Hour.name_ok("learn_measure_001.sh"));
+        assert!(JobKind::Learn.name_ok("learn_measure_001.sh"));
+        assert!(!JobKind::Learn.name_ok("h49_dispatch_v2.sh"));
+        assert_eq!(JobKind::Hour.job_prefix(), "hour");
+        assert_eq!(JobKind::Learn.job_prefix(), "learn");
+    }
+
+    #[test]
     fn ember_keys_are_matched_case_insensitively() {
         assert!(is_ember_key("EMBER_API_KEY"));
         assert!(is_ember_key("ember_startup_resume_hour"));
@@ -625,8 +829,9 @@ mod tests {
         names.dedup();
         assert_eq!(rcs.len(), REFUSAL_CODES.len());
         assert_eq!(names.len(), REFUSAL_CODES.len());
-        assert!(REFUSAL_CODES.iter().all(|(_, rc)| (20..=36).contains(rc)));
+        assert!(REFUSAL_CODES.iter().all(|(_, rc)| (20..=37).contains(rc)));
         assert_eq!(refusal_rc("hour_sha_mismatch"), 24);
+        assert_eq!(refusal_rc("hour_kind_unknown"), 37);
         assert_eq!(refusal_rc("not_a_code"), 99);
     }
 

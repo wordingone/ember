@@ -560,6 +560,32 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(error) => (operation_error(id, error), false),
             }
         }
+        "check_hour" => {
+            // The preflight verb: the same checks as `start_hour`, nothing created (hour_job::check_hour).
+            let params: crate::hour_job::HourStartRequest = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.check_hour(params) {
+                Ok(checked) => (
+                    success(id, serde_json::to_value(&checked).unwrap_or(Value::Null)),
+                    false,
+                ),
+                Err(crate::EmberLabError::HourRefused { code, rc, detail }) => (
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": {
+                            "code": -32001,
+                            "message": "hour_refused",
+                            "data": {"refusal_code": code, "rc": rc, "detail": detail},
+                        },
+                    }),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
         "job_events" => {
             let params: JobEventsParams = match decode(&id, request.params) {
                 Ok(value) => value,

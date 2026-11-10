@@ -1788,7 +1788,7 @@ fn prepare_cockpit_launch_with(
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab storage-reconcile --pipe <\\\\.\\pipe\\name> --repository-root <path> --policy <path> --declarations <path> --models-root <path> --state-root <path> --custody <path> --pin-set-sha256 <hex> --current-master <sha> --projected-models-bytes <n> --projected-state-bytes <n> --mode <dry-run|execute>\n  ember-lab start-hour --pipe <\\\\.\\pipe\\name> --script <path> --sha256 <hex> --log <path> [--cwd <path>] [--bash <path>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab data-catalog-quarantine-overlaps --db <path> --audit <path> --reason <text> --receipt <path>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab storage-reconcile --pipe <\\\\.\\pipe\\name> --repository-root <path> --policy <path> --declarations <path> --models-root <path> --state-root <path> --custody <path> --pin-set-sha256 <hex> --current-master <sha> --projected-models-bytes <n> --projected-state-bytes <n> --mode <dry-run|execute>\n  ember-lab start-hour --pipe <\\\\.\\pipe\\name> --script <path> --sha256 <hex> --log <path> [--cwd <path>] [--bash <path>] [--kind <hour|learn>] [--check]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab data-catalog-quarantine-overlaps --db <path> --audit <path> --reason <text> --receipt <path>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -1810,6 +1810,8 @@ enum Command {
         log: PathBuf,
         cwd: Option<PathBuf>,
         bash: Option<PathBuf>,
+        kind: String,
+        check: bool,
     },
     ResourceGuardRearm {
         pipe: String,
@@ -2119,7 +2121,13 @@ where
 }
 
 fn parse_args() -> Result<Command, String> {
-    let mut args = std::env::args().skip(1);
+    parse_args_from(std::env::args().skip(1))
+}
+
+fn parse_args_from<I>(mut args: I) -> Result<Command, String>
+where
+    I: Iterator<Item = String>,
+{
     let command = args.next().ok_or_else(|| usage().to_string())?;
 
     if command == "launch" {
@@ -2180,7 +2188,13 @@ fn parse_args() -> Result<Command, String> {
     if command == "start-hour" {
         let (mut pipe, mut script, mut sha256, mut log) = (None, None, None, None);
         let (mut cwd, mut bash) = (None, None);
+        let (mut kind, mut check) = ("hour".to_string(), false);
         while let Some(flag) = args.next() {
+            if flag == "--check" {
+                // The preflight form: the lab runs the same checks as a start and creates nothing.
+                check = true;
+                continue;
+            }
             let value = args
                 .next()
                 .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
@@ -2191,10 +2205,13 @@ fn parse_args() -> Result<Command, String> {
                 "--log" => log = Some(PathBuf::from(value)),
                 "--cwd" => cwd = Some(PathBuf::from(value)),
                 "--bash" => bash = Some(PathBuf::from(value)),
+                "--kind" => kind = value,
                 _ => return Err(format!("unknown argument {flag}\n{}", usage())),
             }
         }
         return Ok(Command::StartHour {
+            kind,
+            check,
             pipe: pipe.ok_or_else(|| format!("missing --pipe\n{}", usage()))?,
             script: script.ok_or_else(|| format!("missing --script\n{}", usage()))?,
             sha256: sha256.ok_or_else(|| format!("missing --sha256\n{}", usage()))?,
@@ -2975,6 +2992,13 @@ fn dispatch(pipe: &str, manifest: &Path) -> Result<Value, Box<dyn std::error::Er
     call_rpc(pipe, &request, "dispatch")
 }
 
+/// Which job kind `start-hour` asks for, and whether it only asks the lab to check (`--check`: the same checks as a start,
+/// nothing created; prints `CHECK_HOUR_OK ...` or `CHECK_HOUR_REFUSED code=<name> rc=<n> detail=<text>`).
+struct HourCliMode<'a> {
+    kind: &'a str,
+    check: bool,
+}
+
 /// `ember-lab start-hour`: one machine-readable line, `START_HOUR_OK ...` on exit 0, or
 /// `START_HOUR_REFUSED code=<name> rc=<n> detail=<text>` on the refusal's own exit code.
 /// The environment sent is this process's environment minus every `EMBER_*` key, exactly as `/resume-hour` sends it.
@@ -2985,10 +3009,16 @@ fn start_hour_cli(
     log: &Path,
     cwd: Option<PathBuf>,
     bash: Option<PathBuf>,
+    mode: &HourCliMode,
 ) -> i32 {
+    let (refused_tag, failed_tag) = if mode.check {
+        ("CHECK_HOUR_REFUSED", "CHECK_HOUR_FAILED")
+    } else {
+        ("START_HOUR_REFUSED", "START_HOUR_FAILED")
+    };
     if !pipe.starts_with(r"\\.\pipe\ember-lab-") || pipe.len() > 240 {
         println!(
-            "START_HOUR_FAILED stage=pipe_name detail=--pipe must be \\\\.\\pipe\\ember-lab-<name> (at most 240 characters); received {pipe:?}"
+            "{failed_tag} stage=pipe_name detail=--pipe must be \\\\.\\pipe\\ember-lab-<name> (at most 240 characters); received {pipe:?}"
         );
         return 2;
     }
@@ -3004,8 +3034,9 @@ fn start_hour_cli(
     let request = json!({
         "jsonrpc": "2.0",
         "id": 1,
-        "method": "start_hour",
+        "method": if mode.check { "check_hour" } else { "start_hour" },
         "params": {
+            "kind": mode.kind,
             "script": absolute(script),
             "sha256": sha256,
             "log": absolute(log),
@@ -3017,7 +3048,7 @@ fn start_hour_cli(
     let encoded = match serde_json::to_string(&request) {
         Ok(encoded) => encoded,
         Err(error) => {
-            println!("START_HOUR_FAILED stage=encode detail={error}");
+            println!("{failed_tag} stage=encode detail={error}");
             return 1;
         }
     };
@@ -3027,7 +3058,7 @@ fn start_hour_cli(
             Ok(stream) => break stream,
             Err(_) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
             Err(error) => {
-                println!("START_HOUR_FAILED stage=connect detail={error}");
+                println!("{failed_tag} stage=connect detail={error}");
                 return 1;
             }
         }
@@ -3036,18 +3067,18 @@ fn start_hour_cli(
         .and_then(|_| stream.flush())
         .is_err()
     {
-        println!("START_HOUR_FAILED stage=send detail=pipe write failed");
+        println!("{failed_tag} stage=send detail=pipe write failed");
         return 1;
     }
     let mut line = String::new();
     if let Err(error) = BufReader::new(stream).read_line(&mut line) {
-        println!("START_HOUR_FAILED stage=read detail={error}");
+        println!("{failed_tag} stage=read detail={error}");
         return 1;
     }
     let response: Value = match serde_json::from_str(&line) {
         Ok(response) => response,
         Err(error) => {
-            println!("START_HOUR_FAILED stage=decode detail={error}");
+            println!("{failed_tag} stage=decode detail={error}");
             return 1;
         }
     };
@@ -3062,16 +3093,29 @@ fn start_hour_cli(
                 .as_str()
                 .unwrap_or("")
                 .replace(['\r', '\n'], " ");
-            println!("START_HOUR_REFUSED code={code} rc={rc} detail={detail}");
+            println!("{refused_tag} code={code} rc={rc} detail={detail}");
             return rc as i32;
         }
         let detail = error.to_string().replace(['\r', '\n'], " ");
-        println!("START_HOUR_FAILED stage=rpc detail={detail}");
+        println!("{failed_tag} stage=rpc detail={detail}");
         return 1;
     }
-    match response
-        .get("result")
-        .cloned()
+    let result = response.get("result").cloned();
+    if mode.check {
+        return match result.and_then(|result| {
+            serde_json::from_value::<ember_lab::hour_job::HourChecked>(result).ok()
+        }) {
+            Some(checked) => {
+                println!("{}", checked.line());
+                0
+            }
+            None => {
+                println!("{failed_tag} stage=decode detail=result is not a check receipt");
+                1
+            }
+        };
+    }
+    match result
         .and_then(|result| serde_json::from_value::<ember_lab::hour_job::HourStarted>(result).ok())
     {
         Some(started) => {
@@ -3079,7 +3123,7 @@ fn start_hour_cli(
             0
         }
         None => {
-            println!("START_HOUR_FAILED stage=decode detail=result is not a start receipt");
+            println!("{failed_tag} stage=decode detail=result is not a start receipt");
             1
         }
     }
@@ -3585,8 +3629,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             log,
             cwd,
             bash,
+            kind,
+            check,
         } => {
-            let rc = start_hour_cli(&pipe, &script, &sha256, &log, cwd, bash);
+            let mode = HourCliMode { kind: &kind, check };
+            let rc = start_hour_cli(&pipe, &script, &sha256, &log, cwd, bash, &mode);
             if rc != 0 {
                 std::process::exit(rc);
             }
@@ -3810,30 +3857,90 @@ mod tests {
     fn start_hour_cli_refuses_a_malformed_pipe_name_before_any_connect() {
         let sha = "0".repeat(64);
         // A non-raw string in a caller collapses `\\.\pipe` to one leading backslash; the CLI must name the cause, not os error 3.
-        for bad in [
-            "\\.\\pipe\\ember-lab-studio",
-            r"\\.\pipe\other-studio",
-            "ember-lab-studio",
-            "",
+        for mode in [
+            HourCliMode {
+                kind: "hour",
+                check: false,
+            },
+            HourCliMode {
+                kind: "learn",
+                check: true,
+            },
         ] {
+            for bad in [
+                "\\.\\pipe\\ember-lab-studio",
+                r"\\.\pipe\other-studio",
+                "ember-lab-studio",
+                "",
+            ] {
+                assert_eq!(
+                    start_hour_cli(
+                        bad,
+                        Path::new("x.sh"),
+                        &sha,
+                        Path::new("x.log"),
+                        None,
+                        None,
+                        &mode
+                    ),
+                    2,
+                    "pipe {bad:?} must be refused with rc 2 (check={})",
+                    mode.check
+                );
+            }
+            let long = format!(r"\\.\pipe\ember-lab-{}", "a".repeat(240));
             assert_eq!(
-                start_hour_cli(bad, Path::new("x.sh"), &sha, Path::new("x.log"), None, None),
-                2,
-                "pipe {bad:?} must be refused with rc 2"
+                start_hour_cli(
+                    &long,
+                    Path::new("x.sh"),
+                    &sha,
+                    Path::new("x.log"),
+                    None,
+                    None,
+                    &mode
+                ),
+                2
             );
         }
-        let long = format!(r"\\.\pipe\ember-lab-{}", "a".repeat(240));
-        assert_eq!(
-            start_hour_cli(
-                &long,
-                Path::new("x.sh"),
-                &sha,
-                Path::new("x.log"),
-                None,
-                None
-            ),
-            2
-        );
+    }
+
+    #[test]
+    fn start_hour_parses_kind_and_the_valueless_check_flag() {
+        let parse = |args: &[&str]| {
+            parse_args_from(
+                args.iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            )
+        };
+        let base = [
+            "start-hour",
+            "--pipe",
+            r"\\.\pipe\ember-lab-studio",
+            "--script",
+            "B:/x/learn_measure_001.sh",
+            "--sha256",
+            &"0".repeat(64),
+            "--log",
+            "B:/x/l.log",
+        ];
+        let plain = parse(&base).unwrap();
+        assert!(matches!(&plain, Command::StartHour { kind, check: false, .. } if kind == "hour"));
+        let mut learn_check = base.to_vec();
+        learn_check.extend(["--kind", "learn", "--check"]);
+        let parsed = parse(&learn_check).unwrap();
+        assert!(matches!(&parsed, Command::StartHour { kind, check: true, .. } if kind == "learn"));
+        // --check takes no value, so a flag after it still parses and a dangling --kind is an error.
+        let mut check_first = base.to_vec();
+        check_first.extend(["--check", "--kind", "learn"]);
+        assert!(matches!(
+            parse(&check_first).unwrap(),
+            Command::StartHour { check: true, .. }
+        ));
+        let mut dangling = base.to_vec();
+        dangling.push("--kind");
+        assert!(parse(&dangling).is_err());
     }
 
     use ember_lab::storage_retention::{CensusDeclaration, CustodyClass};

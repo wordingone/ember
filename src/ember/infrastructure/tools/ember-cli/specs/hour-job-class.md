@@ -26,6 +26,22 @@ closed on exit for the hour class, and a restarted daemon re-adopts the running
 hour through `reconcile()`. The typed client returns a refusal as a value
 (`EmberLabRpcError` carries the server's error object).
 
+Job kinds. The request carries `kind`, `hour` (the default, everything above) or
+`learn` (a LEARN job, issue #2453). Kind `learn` takes a script named
+`^learn_[A-Za-z0-9_-]+\.sh$` and a job id prefixed `learn-`; kind `hour` still
+takes only `hNN_dispatch_vN.sh`, so a learn name under `hour`, an hour name under
+`learn` and any other kind (`hour_kind_unknown`, exit code 37) are refused. Both
+kinds hold the one `hour-chain` lease, so the shared card runs one job at a time,
+and both get the same job events, stop, start receipt (which records `kind`) and
+re-adoption. The `learn` kind adds no hour-only clause.
+
+Preflight. `check_hour` (`ember-lab start-hour --check`) runs the same checks as
+`start_hour` and peeks the lease, then returns `CHECK_HOUR_OK` or the same refusal
+code; it creates no log, receipt, identity, lease or process. A client that asks
+the lab before it presses therefore sees the refusal the start would raise, on
+every check the lab makes itself. Only what the spawn alone can prove (the child
+priority and CPU mask readback) is still refused at start.
+
 This class grants no execution, model-update, or scientific-result credit. The
 pre-press checks of an hour (loop hypothesis rows, commit gate, tree pins, the
 B: floor wait) stay inside the pinned dispatch script, not in the lab.

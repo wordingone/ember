@@ -64,6 +64,7 @@ fn the_hour_child_is_normal_priority_on_every_cpu_even_from_a_below_normal_singl
     assert_ne!(unsafe { SetProcessAffinityMask(me, lowest) }, 0);
     let daemon = Daemon::open(&dir.join("lab.sqlite3")).unwrap();
     let started = daemon.start_hour(HourStartRequest {
+        kind: "hour".into(),
         script: script.clone(),
         sha256: format!("{:x}", Sha256::digest(SCRIPT.as_bytes())),
         log: dir.join("hour.log"),
