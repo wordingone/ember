@@ -163,17 +163,34 @@ pub struct HourStarted {
     pub receipt_path: PathBuf,
     pub bash: PathBuf,
     pub cwd: Option<PathBuf>,
+    /// False when the child is RUNNING but the `phase: started` receipt could not be written (the `intent` receipt stays on disk).
+    /// The start still SUCCEEDED: the hour is live and `job_id`/`pid` are the handle to it, so a refusal here would invite a retry.
+    #[serde(default = "default_receipt_complete")]
+    pub receipt_complete: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_error: Option<String>,
+}
+
+fn default_receipt_complete() -> bool {
+    true
 }
 
 impl HourStarted {
-    /// The one machine-readable line printed on a successful start.
+    /// The one machine-readable line printed on a successful start. A running hour whose receipt is incomplete says so on the
+    /// same line (`receipt_incomplete=<error>`) and still returns success, because the child exists.
     pub fn line(&self) -> String {
+        let incomplete = match (&self.receipt_error, self.receipt_complete) {
+            (Some(error), _) => format!(" receipt_incomplete={}", error.replace(['\r', '\n'], " ")),
+            (None, false) => " receipt_incomplete=unknown".to_string(),
+            (None, true) => String::new(),
+        };
         format!(
-            "START_HOUR_OK pid={} job_id={} log={} receipt={}",
+            "START_HOUR_OK pid={} job_id={} log={} receipt={}{}",
             self.pid,
             self.job_id,
             self.log.display(),
-            self.receipt_path.display()
+            self.receipt_path.display(),
+            incomplete
         )
     }
 }
@@ -520,6 +537,26 @@ fn daemon_inherit_snapshot() -> Result<(u32, usize, usize)> {
     Ok((NORMAL_PRIORITY_CLASS, 0, 0))
 }
 
+/// Complete the start receipt of a hour that is already RUNNING. `None` = written; `Some(text)` = it could not be, with the job id,
+/// pid and path in the text. The caller turns that into a successful `HourStarted { receipt_complete: false }`, never a refusal.
+fn complete_receipt(
+    receipt_path: &Path,
+    complete: &Value,
+    job_id: &str,
+    pid: u32,
+) -> Option<String> {
+    serde_json::to_string_pretty(complete)
+        .map_err(|error| error.to_string())
+        .and_then(|text| fs::write(receipt_path, text).map_err(|error| error.to_string()))
+        .err()
+        .map(|error| {
+            format!(
+                "hour_receipt_write: hour {job_id} is RUNNING (pid {pid}); completing {} failed: {error}",
+                receipt_path.display()
+            )
+        })
+}
+
 fn create_new(path: &Path) -> std::io::Result<fs::File> {
     OpenOptions::new().write(true).create_new(true).open(path)
 }
@@ -557,7 +594,9 @@ impl Daemon {
         let (priority, process_mask, system_mask) = daemon_inherit_snapshot()?;
         let job_id = job_id_for(&checked);
         self.bind_identity(&job_id, &checked.script, &checked.sha256)?;
-        match self.acquire_lease(HOUR_RESOURCE, &job_id) {
+        // Exclusive: an identical concurrent start names the SAME job id, and the plain acquire is idempotent for the same owner, so
+        // the loser would run on and its failure-path release would delete the winner's lease. `Ok` here means this call inserted it.
+        match self.acquire_lease_exclusive(HOUR_RESOURCE, &job_id) {
             Ok(()) => {}
             Err(EmberLabError::LeaseConflict { owner, .. }) => {
                 return Err(refuse(
@@ -663,17 +702,12 @@ impl Daemon {
         complete["phase"] = json!("started");
         complete["pid"] = json!(handle.pid);
         complete["started_at_ms"] = json!(now_ms());
-        fs::write(&receipt_path, serde_json::to_string_pretty(&complete)?).map_err(|error| {
-            refuse(
-                "hour_receipt_write",
-                format!(
-                    "hour {job_id} is RUNNING (pid {}); completing {} failed: {error}",
-                    handle.pid,
-                    receipt_path.display()
-                ),
-            )
-        })?;
+        // The child is running. A failure to complete the receipt must NOT turn into a refusal (the caller would retry, or lose the
+        // handle): report success carrying job_id/pid and the receipt state, and leave the `intent` receipt on disk.
+        let receipt_error = complete_receipt(&receipt_path, &complete, &job_id, handle.pid);
         Ok(HourStarted {
+            receipt_complete: receipt_error.is_none(),
+            receipt_error,
             kind: checked.kind.as_str().to_string(),
             job_id,
             pid: handle.pid,
@@ -859,5 +893,67 @@ mod tests {
         assert!(summary.values().all(|value| !value.contains("secret")));
         assert_eq!(summary["hour_env_key_count"], "2");
         assert_eq!(summary["hour_env_sha256"], env_sha256(&env));
+    }
+
+    #[test]
+    fn a_receipt_that_cannot_be_completed_reports_the_job_id_pid_and_path_instead_of_failing_the_start(
+    ) {
+        let dir = std::env::temp_dir().join(format!("ember-lab-receipt-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("good.lab-start.json");
+        assert!(complete_receipt(&good, &json!({"phase": "started"}), "hour-x", 7).is_none());
+        assert!(fs::read_to_string(&good).unwrap().contains("started"));
+        // A directory in place of the receipt file makes the write fail on every platform.
+        let bad = dir.join("bad.lab-start.json");
+        fs::create_dir_all(&bad).unwrap();
+        let error = complete_receipt(&bad, &json!({"phase": "started"}), "hour-x", 7).unwrap();
+        assert!(error.starts_with("hour_receipt_write:"), "{error}");
+        assert!(
+            error.contains("hour-x") && error.contains("pid 7") && error.contains("RUNNING"),
+            "{error}"
+        );
+        assert!(error.contains(&bad.display().to_string()), "{error}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_start_line_names_an_incomplete_receipt_and_stays_unchanged_when_complete() {
+        let mut started = HourStarted {
+            kind: "hour".into(),
+            job_id: "hour-aaaaaaaaaaaa-bbbbbbbb".into(),
+            pid: 4321,
+            script: PathBuf::from("B:/s/h49_dispatch_v2.sh"),
+            sha256: "a".repeat(64),
+            log: PathBuf::from("B:/l/hour.log"),
+            receipt_path: PathBuf::from("B:/l/hour.log.lab-start.json"),
+            bash: PathBuf::from("bash.exe"),
+            cwd: None,
+            receipt_complete: true,
+            receipt_error: None,
+        };
+        let complete = started.line();
+        assert!(
+            complete.starts_with("START_HOUR_OK pid=4321 job_id=hour-aaaaaaaaaaaa-bbbbbbbb "),
+            "{complete}"
+        );
+        assert!(!complete.contains("receipt_incomplete"), "{complete}");
+        started.receipt_complete = false;
+        started.receipt_error = Some("hour_receipt_write: disk\nfull".into());
+        let incomplete = started.line();
+        assert!(
+            incomplete.starts_with("START_HOUR_OK pid=4321 "),
+            "{incomplete}"
+        );
+        assert!(
+            incomplete.ends_with("receipt_incomplete=hour_receipt_write: disk full"),
+            "{incomplete}"
+        );
+        assert!(!incomplete.contains('\n'));
+        // A result from an older daemon without the new fields reads as complete.
+        let old: HourStarted = serde_json::from_value(json!({
+            "job_id": "j", "pid": 1, "script": "s", "sha256": "x", "log": "l", "receipt_path": "r", "bash": "b", "cwd": null,
+        }))
+        .unwrap();
+        assert!(old.receipt_complete && old.receipt_error.is_none());
     }
 }

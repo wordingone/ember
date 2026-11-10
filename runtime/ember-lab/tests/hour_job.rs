@@ -379,6 +379,54 @@ fn a_second_hour_is_refused_while_one_holds_the_lease() {
     daemon.stop_job(&first.job_id).unwrap();
 }
 
+/// Lead review 82524 item 1. Two identical starts (same script, sha and LOG) name the SAME job id. The plain lease acquire is
+/// idempotent for the same owner, so the loser used to run on, fail at the create-new log, and its failure-path release deleted the
+/// WINNER's lease: a third hour could then start next to a live one. Now the loser conflicts at the lease and releases nothing.
+#[test]
+fn two_concurrent_identical_starts_one_wins_and_the_loser_leaves_the_winners_lease() {
+    for round in 0..3 {
+        let fx = fixture(&format!("race{round}"));
+        let daemon = std::sync::Arc::new(Daemon::open(&fx.dir.join("lab.sqlite3")).unwrap());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let daemon = daemon.clone();
+                let barrier = barrier.clone();
+                let req = request(&fx, "same.log", &[]);
+                thread::spawn(move || {
+                    barrier.wait();
+                    daemon.start_hour(req)
+                })
+            })
+            .collect();
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let (won, lost): (Vec<_>, Vec<_>) = results.into_iter().partition(|r| r.is_ok());
+        assert_eq!(
+            won.len(),
+            1,
+            "exactly one identical start may win: {lost:?}"
+        );
+        assert_eq!(lost.len(), 1);
+        let winner = won.into_iter().next().unwrap().unwrap();
+        let (code, rc) = refusal(lost.into_iter().next().unwrap());
+        assert_eq!((code.as_str(), rc), ("hour_lease_conflict", 32));
+        // The loser released nothing: the winner still owns the lease and is still running.
+        assert_eq!(
+            daemon.lease_owner("hour-chain").unwrap().as_deref(),
+            Some(winner.job_id.as_str())
+        );
+        assert_eq!(
+            daemon.job_state(&winner.job_id).unwrap(),
+            Some(JobState::Running)
+        );
+        // So a third start, even with a fresh log, is still refused.
+        let (code, _) = refusal(daemon.start_hour(request(&fx, "third.log", &[])));
+        assert_eq!(code, "hour_lease_conflict");
+        assert!(!fx.dir.join("third.log").exists());
+        daemon.stop_job(&winner.job_id).unwrap();
+    }
+}
+
 #[test]
 fn a_learn_job_runs_under_its_own_name_prefix_and_shares_the_card_lease() {
     // Lead ruling 82485 (#2453): kind learn takes learn_<name>.sh, job id prefix learn-, the same hour-chain lease.

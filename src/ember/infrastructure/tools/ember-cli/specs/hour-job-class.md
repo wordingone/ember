@@ -26,6 +26,19 @@ closed on exit for the hour class, and a restarted daemon re-adopts the running
 hour through `reconcile()`. The typed client returns a refusal as a value
 (`EmberLabRpcError` carries the server's error object).
 
+Surviving descendants. `stop_job` ends the hour's whole process tree. When the hour's main process exits on its own, a
+descendant it spawned and left running is NOT killed and is outside lab custody: the job is recorded `exited`, its
+`hour-chain` lease is released, and `stop_job` on the `exited` row opens nothing, so a second job can start on the card while
+the survivor runs and the lab cannot stop it (parity with a detached `/resume-hour`). The pinned hour and learn scripts run
+their work in the foreground, so this does not arise for them; a script that detaches breaks one-job-at-a-time and the follow-up
+issue (#2460) tracks keeping the lease and reporting `job_exited_with_survivors`.
+
+Exclusive lease and receipt state. A start takes the `hour-chain` lease exclusively: any existing owner, including the same job
+id from an identical concurrent start (same script, sha and log), refuses with `hour_lease_conflict`, and a refused start releases
+no lease. If the child is already running but the `started`-phase receipt cannot be completed, the start still SUCCEEDS: the
+result carries `job_id`, `pid`, `receipt_complete: false` and `receipt_error`, `START_HOUR_OK` ends with
+`receipt_incomplete=<error>`, and the `intent` receipt stays on disk; the caller must not retry, because the hour is running.
+
 Job kinds. The request carries `kind`, `hour` (the default, everything above) or
 `learn` (a LEARN job, issue #2453). Kind `learn` takes a script named
 `^learn_[A-Za-z0-9_-]+\.sh$` and a job id prefixed `learn-`; kind `hour` still

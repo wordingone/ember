@@ -214,6 +214,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The hour job class tests are cfg(windows): the Linux job compiles none of them, and the compile-only step above never
+          # runs them. They start real Git bash hour scripts, so they run here (lead review 82524 item 3).
+          cargo test --locked --test hour_job
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test hour_job_process
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --test hour_job_risk1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   rust-linux-test:
     # Run the same ember-lab suite and verdict semantics that ci-main consumes,
     # while enumerating every target after a red so one PR run names the class.

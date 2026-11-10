@@ -37,6 +37,12 @@ export interface HourStarted {
   receiptPath: string;
   bash: string;
   cwd: string | null;
+  /**
+   * False when the hour is RUNNING but its `phase: started` receipt could not be completed (the intent receipt stays on disk).
+   * The start succeeded: `jobId`/`pid` are the handle, so do not retry; `receiptError` says what failed.
+   */
+  receiptComplete: boolean;
+  receiptError?: string;
 }
 
 export interface HourRefused {
@@ -118,6 +124,8 @@ export async function startHour(options: StartHourOptions): Promise<StartHourRes
     receiptPath: str(result["receipt_path"], "receipt_path"),
     bash: str(result["bash"], "bash"),
     cwd: typeof cwd === "string" ? cwd : null,
+    receiptComplete: result["receipt_complete"] !== false,
+    ...(typeof result["receipt_error"] === "string" ? { receiptError: result["receipt_error"] } : {}),
   };
 }
 

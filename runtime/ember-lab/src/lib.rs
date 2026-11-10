@@ -4071,6 +4071,17 @@ impl Daemon {
     }
 
     pub fn acquire_lease(&self, resource: &str, job_id: &str) -> Result<()> {
+        self.acquire_lease_as(resource, job_id, false)
+    }
+
+    /// Like [`Daemon::acquire_lease`], but ANY existing owner conflicts, including the same job id. A caller that releases the lease
+    /// on its own failure paths (the hour job class: a second identical start with the same log names the same job id) must have
+    /// inserted the lease itself, or its release would delete another call's lease. `Ok` therefore means this call inserted it.
+    pub fn acquire_lease_exclusive(&self, resource: &str, job_id: &str) -> Result<()> {
+        self.acquire_lease_as(resource, job_id, true)
+    }
+
+    fn acquire_lease_as(&self, resource: &str, job_id: &str, exclusive: bool) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if let Some(artifact_class) = resource.strip_prefix("schedule:") {
@@ -4094,7 +4105,7 @@ impl Daemon {
             )
             .optional()?;
         match owner {
-            Some(owner) if owner == job_id => {
+            Some(owner) if owner == job_id && !exclusive => {
                 tx.commit()?;
                 Ok(())
             }

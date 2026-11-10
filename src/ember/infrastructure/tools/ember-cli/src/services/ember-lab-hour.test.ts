@@ -70,6 +70,7 @@ describe("startHour", () => {
       receiptPath: "B:/l/hour.log.lab-start.json",
       bash: "C:/Program Files/Git/bin/bash.exe",
       cwd: null,
+      receiptComplete: true,
     });
     expect(daemon.requests.length).toBe(1);
     const sent = daemon.requests[0]!;
@@ -80,6 +81,30 @@ describe("startHour", () => {
     expect(sent.params["cwd"]).toBe(null);
     expect(sent.params["bash"]).toBe(null);
     expect(Object.keys(sent.params).sort()).toEqual(["bash", "cwd", "env", "log", "script", "sha256"]);
+  });
+
+  winTest("a running hour whose start receipt could not be completed is a SUCCESS carrying jobId, pid and the receipt error", async () => {
+    const daemon = fakeDaemon(() => ({
+      result: {
+        job_id: "hour-aaaaaaaaaaaa-bbbbbbbb",
+        pid: 4321,
+        script: "B:/s/h49_dispatch_v2.sh",
+        sha256: SHA,
+        log: "B:/l/hour.log",
+        receipt_path: "B:/l/hour.log.lab-start.json",
+        bash: "C:/Program Files/Git/bin/bash.exe",
+        cwd: null,
+        receipt_complete: false,
+        receipt_error: "hour_receipt_write: hour hour-aaaaaaaaaaaa-bbbbbbbb is RUNNING (pid 4321); completing the receipt failed: disk full",
+      },
+    }));
+    const result = await startHour({ pipeName: daemon.pipe, script: "B:/s/h49_dispatch_v2.sh", sha256: SHA, log: "B:/l/hour.log", env: {} });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.jobId).toBe("hour-aaaaaaaaaaaa-bbbbbbbb");
+    expect(result.pid).toBe(4321);
+    expect(result.receiptComplete).toBe(false);
+    expect(result.receiptError).toContain("disk full");
   });
 
   winTest("returns a contract refusal as a value with its own code and rc, never a throw", async () => {
