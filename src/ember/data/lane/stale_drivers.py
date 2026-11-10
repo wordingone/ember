@@ -11,6 +11,7 @@ import os, re, ast, time, sys
 
 SCRIPTS = os.environ.get("STALE_SCRIPTS", (LANE_ROOT + "/scripts")).replace("\\", "/")
 SLACK = 3.0   # seconds: a file written at process start is not newer
+STATS = dict(checked=0, unreadable=0, unresolved=0)      # filled by stale(): lane processes checked, modules that could not be stat'ed, python processes whose script is not under SCRIPTS
 
 
 def _imports(path, seen, depth=0):
@@ -46,12 +47,17 @@ def script_of(cmdline):
 def stale(procs, mtime=os.path.getmtime):
     """procs: iterable of (pid, create_time_epoch, cmdline list) -> [(pid, script, [(module, mtime_epoch)...], started_epoch)]"""
     res = []
+    STATS.update(checked=0, unreadable=0, unresolved=0)
+    def _mt(m):
+        try: return mtime(m)
+        except OSError: STATS["unreadable"] += 1; return 0.0      # a module that cannot be stat'ed is counted, never silently treated as fresh
     for pid, started, cmd in procs:
         if not cmd or "python" not in os.path.basename(cmd[0]).lower(): continue
         s = script_of(cmd)
-        if not s: continue
+        if not s: STATS["unresolved"] += 1; continue
+        STATS["checked"] += 1
         mods = {s} | _imports(s, set())
-        newer = sorted(((os.path.basename(m)[:-3], mtime(m)) for m in mods if mtime(m) > started + SLACK), key=lambda x: -x[1])
+        newer = sorted(((os.path.basename(m)[:-3], t) for m in mods if (t := _mt(m)) > started + SLACK), key=lambda x: -x[1])
         if newer: res.append((pid, os.path.basename(s)[:-3] + (" " + " ".join(a for a in cmd[2:4] if not a.startswith("-") and "/" not in a and "\\" not in a)).rstrip(), newer, started))
     return res
 
@@ -68,7 +74,7 @@ def line(procs=None, mtime=os.path.getmtime, show=8):
         r = stale(list(procs) if procs is not None else _procs(), mtime)
     except Exception as e:
         return "stale_drivers error %s: %s" % (type(e).__name__, e)
-    if not r: return "stale_drivers 0"
+    if not r: return "stale_drivers 0 (checked %d lane processes; %d modules unreadable; %d python processes outside scripts/)" % (STATS["checked"], STATS["unreadable"], STATS["unresolved"])
     hm = lambda t: time.strftime("%H:%M", time.localtime(t))
     return "STALE_DRIVERS %d (restart each at a step boundary; kill_lane.ps1): " % len(r) + "; ".join("pid %d %s: %s edited %s > start %s" % (pid, nm, nw[0][0], hm(nw[0][1]), hm(st)) + ("+%d" % (len(nw) - 1) if len(nw) > 1 else "") for pid, nm, nw, st in sorted(r, key=lambda x: x[3])[:show]) + ("; +%d more" % (len(r) - show) if len(r) > show else "")
 

@@ -2,30 +2,37 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """The declared protected set for checkpoint deletion (issue 2450).
-One file, <lane-root>/loops/protected-set.json (override: env PROTECTED_SET_FILE, tests only), read by every checkpoint-deleting script:
-evict_ckpt_list.KEEP_MARKERS (shared by ckpt_backup, ckpt_lineage_delete, reserve_manifest, probe_*) and reserve_evict.KEEP (= shared markers + reserve_markers).
-Fail closed: a missing, unreadable, malformed or empty file raises ProtectedSetError, so a deleter that cannot read the declaration removes nothing.
+One file, <lane-root>/loops/protected-set.json, read by every checkpoint-deleting script:
+evict_ckpt_list.KEEP_MARKERS (shared by ckpt_backup, ckpt_lineage_delete, reserve_manifest, probe_*) and reserve_evict (shared markers + reserve_markers).
+The path is fixed: there is no environment override. A test points protected_set.PATH at a temporary file; every receipt that uses the set records the path and the sha256 it read.
+Fail closed (ProtectedSetError, so the deleter removes nothing) on: a missing, unreadable or non-object file; a missing 'markers' or 'reserve_markers' key (an explicit empty reserve_markers list is allowed, an absent key is not);
+an empty 'markers' list; a marker that is not a string, has leading or trailing whitespace, is shorter than 8 characters, or is a bare root (the lane root, the live-receipts root, a drive).
 Usage: python scripts/protected_set.py      (prints the markers and the file sha256 that the receipts record)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from lane_config import LANE_ROOT, M_ROOT
+from lane_config import LANE_ROOT
 import os, json, hashlib
 
-PATH = os.environ.get("PROTECTED_SET_FILE", (LANE_ROOT + "/loops/protected-set.json"))
+PATH = (LANE_ROOT + "/loops/protected-set.json")
+_HERE = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/").rstrip("/")
+_BROAD = {"", "b:", "b:/m", _HERE.lower(), os.path.dirname(_HERE).lower(), "ember-live-receipts", "b:/m/ember-live-receipts"}
 
 
 class ProtectedSetError(RuntimeError):
     pass
 
 
-def _markers(doc, key, required):
-    rows = doc.get(key)
-    if rows is None and not required: return ()
-    if not isinstance(rows, list) or (required and not rows): raise ProtectedSetError("protected set: '%s' must be a non-empty list" % key)
+def _markers(doc, key, nonempty):
+    if key not in doc: raise ProtectedSetError("protected set: key '%s' is missing (an explicit [] is allowed for reserve_markers, an absent key is not)" % key)
+    rows = doc[key]
+    if not isinstance(rows, list) or (nonempty and not rows): raise ProtectedSetError("protected set: '%s' must be a %slist" % (key, "non-empty " if nonempty else ""))
     out = []
     for r in rows:
         m = r.get("marker") if isinstance(r, dict) else r
-        if not isinstance(m, str) or len(m.strip()) < 8 or m.strip() in ("/", "B:/", (M_ROOT + "/")):
+        if not isinstance(m, str): raise ProtectedSetError("protected set: marker %r in '%s' is not a string" % (m, key))
+        if m != m.strip(): raise ProtectedSetError("protected set: marker %r in '%s' has leading or trailing whitespace (it would never match a path)" % (m, key))
+        n = m.replace("\\", "/").rstrip("/").lower()
+        if len(m) < 8 or n in _BROAD:
             raise ProtectedSetError("protected set: marker %r in '%s' is empty or too broad to be a path marker" % (m, key))
         out.append(m.replace("\\", "/"))
     return tuple(out)
