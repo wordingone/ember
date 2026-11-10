@@ -4136,7 +4136,7 @@ def cia_optimizer_identity(model, optimizer) -> dict[str, Any]:
     }
 
 
-def _cia_validate_named_optimizer_state(model, optimizer, state, *, max_state_bytes):
+def _cia_validate_named_optimizer_state(model, optimizer, state, *, max_state_bytes, moment_dtype=torch.bfloat16):
     """Validate all named native BF16 CPU moments before creating a snapshot."""
     if type(max_state_bytes) is not int or max_state_bytes <= 0:
         raise ValueError('CIA optimizer state byte cap must be a positive integer')
@@ -4149,10 +4149,10 @@ def _cia_validate_named_optimizer_state(model, optimizer, state, *, max_state_by
     if any(group.get('capturable') or group.get('differentiable')
            for group in optimizer.param_groups) or optimizer.defaults.get('differentiable'):
         raise ValueError('CIA native CPU state does not support this optimizer execution mode')
-    _cia_validate_optimizer_fields(parameters, groups, state, max_state_bytes=max_state_bytes)
+    _cia_validate_optimizer_fields(parameters, groups, state, max_state_bytes=max_state_bytes, moment_dtype=moment_dtype)
 
 
-def _cia_validate_optimizer_fields(parameters, groups, state, *, max_state_bytes):
+def _cia_validate_optimizer_fields(parameters, groups, state, *, max_state_bytes, moment_dtype=torch.bfloat16):
     if type(state) is not dict:
         raise ValueError('CIA optimizer named state must be a dictionary')
     total_bytes = 0
@@ -4169,7 +4169,7 @@ def _cia_validate_optimizer_fields(parameters, groups, state, *, max_state_bytes
             raise ValueError('CIA optimizer state fields do not match native AdamW')
         for key, tensor in fields.items():
             shape = () if key == 'step' else tuple(parameters[name].shape)
-            dtype = torch.float32 if key == 'step' else torch.bfloat16
+            dtype = torch.float32 if key == 'step' else moment_dtype
             if (type(tensor) is not torch.Tensor or tuple(tensor.shape) != shape
                     or tensor.dtype != dtype or tensor.device.type != 'cpu'
                     or tensor.requires_grad or not tensor.is_contiguous()
@@ -4249,7 +4249,8 @@ def _cia_tensor_identity(value):
             value.storage_offset(), value.requires_grad)
 
 
-def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=False, fused_names=frozenset()):
+def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=False, fused_names=frozenset(),
+                                 moment_dtype=torch.bfloat16):
     """Bound native moments and execution-mode-specific clocks; serialize all state on CPU.
 
     No model/device migration, checkpoint write, optimizer mutation or receipt is
@@ -4296,7 +4297,7 @@ def _cia_snapshot_placed_moments(parameters, state, *, max_state_bytes, restore=
                 raise ValueError('unknown native moment field')
             expected_device = torch.device('cpu') if restore or (key == 'step' and name not in fused_names) else parameter.device
             expected_shape = () if key == 'step' else tuple(parameter.shape)
-            expected_dtype = torch.float32 if key == 'step' else torch.bfloat16
+            expected_dtype = torch.float32 if key == 'step' else moment_dtype
             if (type(value) is not torch.Tensor or value.device != expected_device
                     or tuple(value.shape) != expected_shape or value.dtype != expected_dtype
                     or value.requires_grad or not value.is_contiguous()
@@ -4366,30 +4367,93 @@ def _cia_live_optimizer_state_identity(optimizer):
     return id(optimizer.state), tuple(rows)
 
 
-def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
-    """Capture v2 native moments once on CPU, under owner-held update exclusion.
+_CIA_PLACED_V2 = 'ember-cia-placed-optimizer-state-v2'
+_CIA_PLACED_V3 = 'ember-cia-placed-optimizer-state-v3'   # fp32 master weights + fp32 moments (cia_fp32_master, #2119)
 
-    All model parameters must be physical. The owner must be outside a candidate
+
+def _cia_validate_master_weights(parameters, state, masters, *, max_state_bytes):
+    """v3 masters: exactly one fp32 CPU tensor per owner that has optimizer state, parameter-shaped, contiguous, owning its
+    storage, finite. The byte cap covers the moments and the masters together."""
+    if type(masters) is not dict:
+        raise ValueError('CIA master weights must be a dictionary')
+    stateful = {name for name, fields in state.items() if fields}
+    if set(masters) != stateful or not masters:
+        raise ValueError('CIA master weights must cover exactly the owners with optimizer state')
+    total = sum(tensor.numel() * tensor.element_size() for fields in state.values() for tensor in fields.values())
+    ranges = []
+    for name, tensor in masters.items():
+        if (type(tensor) is not torch.Tensor or tuple(tensor.shape) != tuple(parameters[name].shape)
+                or tensor.dtype != torch.float32 or tensor.device.type != 'cpu' or tensor.requires_grad
+                or not tensor.is_contiguous() or tensor.storage_offset() != 0
+                or tensor.untyped_storage().nbytes() != tensor.numel() * tensor.element_size()):
+            raise ValueError('CIA master weight layout or dtype is invalid')
+        total += tensor.numel() * tensor.element_size()
+        if total > max_state_bytes:
+            raise ValueError('CIA optimizer state and master weights exceed their byte cap')
+        pointer = tensor.untyped_storage().data_ptr()
+        ranges.append((pointer, pointer + tensor.untyped_storage().nbytes()))
+        if not torch.isfinite(tensor).all().item():
+            raise ValueError('CIA master weights must be finite')
+    ranges.sort()
+    if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
+        raise ValueError('CIA master weights have overlapping tensor storage')
+
+
+def _cia_live_master_identity(optimizer):
+    import cia_fp32_master
+    return tuple(sorted((key, _cia_tensor_identity(value)) for key, value in cia_fp32_master.masters(optimizer).items()))
+
+
+def capture_cia_placed_optimizer_state(model, optimizer, *, max_state_bytes):
+    """Capture native moments once on CPU, under owner-held update exclusion.
+
+    v2 (bf16 moments, no master) for the native treatment; v3 (fp32 moments + fp32 master weights) when the optimizer carries
+    the fp32 master treatment. All model parameters must be physical. The owner must be outside a candidate
     step with a quiescent paging cache, and reserve live state plus snapshot memory.
     max_state_bytes bounds payload, not process peak. No checkpoint is admitted.
     """
+    import cia_fp32_master
+    master_mode = cia_fp32_master.enabled(optimizer)
+    moment_dtype = torch.float32 if master_mode else torch.bfloat16
     identity = cia_optimizer_identity(model, optimizer)
     parameters = model.parameter_inventory()
     placement = _cia_physical_placement(parameters)
     names = {id(parameter): name for name, parameter in parameters.items()}
-    live_identity = _cia_live_optimizer_state_identity(optimizer)
+    live_identity = (_cia_live_optimizer_state_identity(optimizer), _cia_live_master_identity(optimizer) if master_mode else None)
     state = {names[id(parameter)]: fields for parameter, fields in optimizer.state.items()}
     fused_names = {names[id(parameter)] for group in optimizer.param_groups if group.get('fused')
                    for parameter in group['params']}
-    snapshot = _cia_snapshot_placed_moments(parameters, state, max_state_bytes=max_state_bytes, fused_names=fused_names)
-    _cia_validate_named_optimizer_state(model, optimizer, snapshot, max_state_bytes=max_state_bytes)
-    if _cia_live_optimizer_state_identity(optimizer) != live_identity:
+    snapshot = _cia_snapshot_placed_moments(parameters, state, max_state_bytes=max_state_bytes, fused_names=fused_names,
+                                           moment_dtype=moment_dtype)
+    _cia_validate_named_optimizer_state(model, optimizer, snapshot, max_state_bytes=max_state_bytes, moment_dtype=moment_dtype)
+    master_weights = None
+    if master_mode:
+        if cia_fp32_master.check_invariant(optimizer):
+            raise ValueError('CIA fp32 master invariant broken: a working weight differs from bf16(master)')
+        table = cia_fp32_master.masters(optimizer)
+        live = {names[id(parameter)]: table[id(parameter)] for group in optimizer.param_groups
+                for parameter in group['params'] if id(parameter) in table and optimizer.state.get(parameter)}
+        for device in {value.device for value in live.values() if value.device.type != 'cpu'}:
+            torch.cuda.synchronize(device)
+        master_weights = {name: value.detach().to('cpu', copy=True) for name, value in live.items()}
+        _cia_validate_master_weights(parameters, snapshot, master_weights, max_state_bytes=max_state_bytes)
+    if (_cia_live_optimizer_state_identity(optimizer), _cia_live_master_identity(optimizer) if master_mode else None) != live_identity:
         raise ValueError('CIA live optimizer state changed during capture')
     if (cia_optimizer_identity(model, optimizer) != identity
             or _cia_physical_placement(model.parameter_inventory()) != placement):
         raise ValueError('CIA optimizer identity or placement changed during capture')
-    return {'schema_version': 'ember-cia-placed-optimizer-state-v2',
-            'identity': identity, 'placement': placement, 'master_weights': None, 'state': snapshot}
+    return {'schema_version': _CIA_PLACED_V3 if master_mode else _CIA_PLACED_V2,
+            'identity': identity, 'placement': placement, 'master_weights': master_weights, 'state': snapshot}
+
+
+def _cia_placed_payload_kind(payload):
+    """'v2' or 'v3' for a well-formed placed optimizer payload, else ValueError. v2 carries no master, v3 carries masters."""
+    if (type(payload) is not dict
+            or set(payload) != {'schema_version', 'identity', 'placement', 'master_weights', 'state'}
+            or payload['schema_version'] not in (_CIA_PLACED_V2, _CIA_PLACED_V3)
+            or (payload['schema_version'] == _CIA_PLACED_V2) != (payload['master_weights'] is None)):
+        raise ValueError('CIA placed optimizer state payload schema is invalid')
+    return 'v3' if payload['schema_version'] == _CIA_PLACED_V3 else 'v2'
 
 
 def prepare_cia_placed_optimizer_state(model, optimizer, payload, *, max_state_bytes):
@@ -4397,16 +4461,19 @@ def prepare_cia_placed_optimizer_state(model, optimizer, payload, *, max_state_b
 
     This prepares native optimizer input only. The complete recovery transaction
     owns update exclusion, cache quiescence, peak memory and checkpoint admission.
+    A v3 payload (fp32 master) prepares only for an optimizer in the fp32 master treatment and returns its masters
+    under 'masters' (keyed like the state); a v2 payload prepares for either treatment (the master treatment converts it
+    exactly after the load, cia_fp32_master.convert_loaded).
     """
     import copy
+    import cia_fp32_master
     identity = cia_optimizer_identity(model, optimizer)
     parameters = model.parameter_inventory()
     placement = _cia_physical_placement(parameters)
-    if (type(payload) is not dict
-            or set(payload) != {'schema_version', 'identity', 'placement', 'master_weights', 'state'}
-            or payload['schema_version'] != 'ember-cia-placed-optimizer-state-v2'
-            or payload['master_weights'] is not None):
-        raise ValueError('CIA placed optimizer state payload schema is invalid')
+    kind = _cia_placed_payload_kind(payload)
+    if kind == 'v3' and not cia_fp32_master.enabled(optimizer):
+        raise ValueError('CIA fp32-master optimizer state requires the fp32 master treatment in the runtime')
+    moment_dtype = torch.float32 if kind == 'v3' else torch.bfloat16
     try:
         actual = json.dumps({'identity': payload['identity'], 'placement': payload['placement']},
                             sort_keys=True, allow_nan=False)
@@ -4417,12 +4484,15 @@ def prepare_cia_placed_optimizer_state(model, optimizer, payload, *, max_state_b
     if actual != expected:
         raise ValueError('CIA placed optimizer identity or placement differs from runtime')
     # Validation does not copy: every field is checked before any device transfer.
-    _cia_validate_named_optimizer_state(model, optimizer, payload['state'], max_state_bytes=max_state_bytes)
+    _cia_validate_named_optimizer_state(model, optimizer, payload['state'], max_state_bytes=max_state_bytes, moment_dtype=moment_dtype)
+    if kind == 'v3':
+        _cia_validate_master_weights(parameters, payload['state'], payload['master_weights'], max_state_bytes=max_state_bytes)
     names = {id(parameter): name for name, parameter in parameters.items()}
     fused_names = {names[id(parameter)] for group in optimizer.param_groups if group.get('fused')
                    for parameter in group['params']}
     snapshot = _cia_snapshot_placed_moments(parameters, payload['state'],
-                                           max_state_bytes=max_state_bytes, restore=True, fused_names=fused_names)
+                                           max_state_bytes=max_state_bytes, restore=True, fused_names=fused_names,
+                                           moment_dtype=moment_dtype)
     if (cia_optimizer_identity(model, optimizer) != identity
             or _cia_physical_placement(model.parameter_inventory()) != placement):
         raise ValueError('CIA optimizer identity or placement changed during preparation')
@@ -4430,8 +4500,12 @@ def prepare_cia_placed_optimizer_state(model, optimizer, payload, *, max_state_b
     ids_by_name = {}
     for named_group, runtime_group in zip(identity['param_groups'], runtime_groups):
         ids_by_name.update(zip(named_group['params'], runtime_group['params']))
-    return {'state': {ids_by_name[name]: fields for name, fields in snapshot.items()},
-            'param_groups': copy.deepcopy(runtime_groups)}
+    prepared = {'state': {ids_by_name[name]: fields for name, fields in snapshot.items()},
+                'param_groups': copy.deepcopy(runtime_groups)}
+    if kind == 'v3':
+        prepared['masters'] = {ids_by_name[name]: tensor.detach().to(parameters[name].device, copy=True)
+                               for name, tensor in payload['master_weights'].items()}
+    return prepared
 
 
 _CIA_CHECKPOINT_SCHEMA = 'ember-cia-checkpoint-v1'
@@ -4463,8 +4537,10 @@ def _cia_parameter_snapshot_identity(parameters):
     return {name: _cia_tensor_identity(value) for name, value in parameters.items()}
 
 
-def _cia_lineage_facts(parameters, optimizer_state):
-    """Hash current or reopened tensor values without changing their placement."""
+def _cia_lineage_facts(parameters, optimizer_state, master_weights=None):
+    """Hash current or reopened tensor values without changing their placement. master_weights (a v3 payload's name -> fp32 CPU
+    tensor, else None) adds the fp32-master lineage facts through the counter's own builders, so these facts and the counter's
+    file-read facts are one computation."""
     def digest(value):
         view = value.detach().cpu().contiguous().view(torch.uint8)
         return hashlib.sha256(memoryview(view.numpy())).hexdigest()
@@ -4474,6 +4550,16 @@ def _cia_lineage_facts(parameters, optimizer_state):
         if state:
             facts['optimizer'][name] = {key:int(value.item()) if key=='step' else digest(value)
                                        for key,value in state.items()}
+    if master_weights is not None:
+        import parameter_counter as cia_counter
+        def raw(value): return value.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes()
+        extra = cia_counter._cia_new_master_facts()
+        for name,state in optimizer_state.items():
+            if state:
+                cia_counter._cia_add_moment_view(extra, name, int(state['step'].item()), raw(state['exp_avg']), raw(state['exp_avg_sq']))
+        for name,value in master_weights.items():
+            cia_counter._cia_add_master_facts(extra, name, raw(value))
+        facts.update(extra)
     return facts
 
 
@@ -4681,15 +4767,23 @@ def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_res
     membership = [name for group in manifest['optimizer_identity'].get('param_groups', []) for name in group['params']]
     if len(membership) != len(inventory) or set(membership) != set(inventory):
         raise ValueError('CIA checkpoint optimizer full membership mismatch')
-    if (type(optimizer) is not dict or set(optimizer) != {'schema_version','identity','placement','master_weights','state'}
-            or optimizer['schema_version'] != 'ember-cia-placed-optimizer-state-v2' or optimizer['master_weights'] is not None):
-        raise ValueError('CIA checkpoint native optimizer payload schema mismatch')
+    try:
+        optimizer_kind = _cia_placed_payload_kind(optimizer)
+    except ValueError:
+        raise ValueError('CIA checkpoint native optimizer payload schema mismatch') from None
     from types import SimpleNamespace
     shapes = {name: SimpleNamespace(shape=shape) for name,(shape,_) in inventory.items()}
     groups = {name: group['hyperparameters'] for group in manifest['optimizer_identity']['param_groups'] for name in group['params']}
     if any(group.get('capturable') or group.get('differentiable') for group in groups.values()):
         raise ValueError('CIA checkpoint optimizer execution mode is unsupported')
-    _cia_validate_optimizer_fields(shapes,groups,optimizer['state'],max_state_bytes=cap)
+    _cia_validate_optimizer_fields(shapes,groups,optimizer['state'],max_state_bytes=cap,
+                                   moment_dtype=torch.float32 if optimizer_kind == 'v3' else torch.bfloat16)
+    if optimizer_kind == 'v3':
+        _cia_validate_master_weights(shapes,optimizer['state'],optimizer['master_weights'],max_state_bytes=cap)
+        if retain_model:
+            for name,master in optimizer['master_weights'].items():
+                if not torch.equal(master.to(torch.bfloat16), tensors[name]):
+                    raise ValueError('CIA fp32 master does not round to the checkpoint working weight')
     replay = _cia_read_component(root, manifest['replay'])
     _cia_checkpoint_replay(manifest, replay)
     total = sum(value[1] for value in inventory.values())
@@ -4706,7 +4800,8 @@ def _cia_validated_checkpoint_impl(root, receipt, *, retain_model=False, max_res
     if not descendant and manifest['expert_genesis_sha256'] != manifest['expert_parameter_sha256']:
         raise ValueError('CIA zero-step genesis object map differs from immutable expert objects')
     if descendant:
-        lineage_facts['optimizer'] = _cia_lineage_facts({},optimizer['state'])['optimizer']
+        lineage_facts.update({key: value for key, value in _cia_lineage_facts({},optimizer['state'],optimizer['master_weights']).items()
+                              if key not in ('parameters','elements')})
         derived = cia_counter._cia_derive_first_lineage(Path(manifest['lineage']['parent_checkpoint']),
             parent,parent_facts,manifest,lineage_facts)
         if manifest['lineage'] != derived:
@@ -4811,7 +4906,7 @@ def _write_cia_checkpoint_artifacts(model, optimizer, root, *, launch_seed, rng_
                 if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False},
             qualification={'clean_genesis':False,'trained':False,'served':False})
         if descendant:
-            facts = _cia_lineage_facts(parameters,optimizer_payload['state'])
+            facts = _cia_lineage_facts(parameters,optimizer_payload['state'],optimizer_payload['master_weights'])
             manifest['lineage'] = cia_counter._cia_derive_first_lineage(Path(cia_parent_checkpoint),
                 parent,parent_facts,manifest,facts, owner_update_counts=cia_owner_update_counts,
                 lr_declaration=None if cia_lr_declaration is None else dict(cia_lr_declaration))
@@ -4864,7 +4959,19 @@ def _load_cia_checkpoint_artifacts(model, optimizer, root, receipt, *, max_trans
     # All checkpoint, optimizer, RNG and placement checks precede this boundary.
     with torch.no_grad():
         for name,value in tensors.items(): parameters[name].copy_(value)
-    optimizer.load_state_dict(prepared)
+    import cia_fp32_master
+    master_runtime = cia_fp32_master.enabled(optimizer)
+    if master_runtime: cia_fp32_master.masters(optimizer).clear()
+    if 'masters' in prepared:
+        # A v3 payload holds fp32 moments: torch's load_state_dict would cast them to the bf16 parameter dtype, so only the
+        # param groups go through it and the state and masters are installed directly (cia_fp32_master.install).
+        optimizer.load_state_dict({'state':{}, 'param_groups':prepared['param_groups']})
+        cia_fp32_master.install(optimizer, prepared['state'], prepared['masters'])
+    else:
+        optimizer.load_state_dict(prepared)
+        if master_runtime: cia_fp32_master.convert_loaded(optimizer)
+    if master_runtime and cia_fp32_master.check_invariant(optimizer):
+        raise ValueError('CIA restore broke the fp32 master invariant: a working weight differs from bf16(master)')
     torch.set_rng_state(replay['rng_state']['cpu'])
     if cuda_rng.numel(): torch.cuda.set_rng_state(cuda_rng,device=device)
     return {'data_cursor':dict(replay['data_cursor'])}
