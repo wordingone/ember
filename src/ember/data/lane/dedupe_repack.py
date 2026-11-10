@@ -33,7 +33,8 @@ def keep_batch(batch, lane, self_srcs, seen, check=None):
 
 
 def filter_final(src, dst, lane, self_srcs, seen, check=None, gate=True, batch_n=2000, drop_log=None):
-    if gate: assert reserve_plan.write_gate("dedupe copy", os.path.getsize(src) + (256 << 20)), "B: below the reserve floor for the whole gate cap: not writing"
+    if gate and not reserve_plan.write_gate("dedupe copy", os.path.getsize(src) + (256 << 20)):
+        raise RuntimeError("write_gate refused: B: below the reserve floor for the whole gate cap: dedupe copy not writing")
     n_in = n_keep = 0; batch = []
     def flush(w):
         nonlocal n_keep

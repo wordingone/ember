@@ -74,3 +74,5 @@ Deploy this directory as `<EMBER_LANE_ROOT>/scripts`, set the variables above, a
 
 Each prints `ALL PASS` or exits non-zero. Most tests build throwaway directories and inject their own server doubles; they do not touch the lane's live data.
 Wiring these tests into the repository's pytest discovery is follow-up work: they are script-style tests that take the lane root from the environment.
+
+One of them runs in CI today: `python -B src/ember/data/lane/tests/write_gate_lint_red_test.py` is a step of `ci-pr` (the Linux python job; it needs no lane environment). It fails a pull request that adds a bulk writer without an enforced `reserve_plan.write_gate` (`if not ...write_gate(...): sys.exit/raise`, in the write's own function) and is not listed in its `TINY_OK` / `GATE_DEBT`. It also executes dedup, filter_ids, carve_heldout, gh_assemble, redact_r1 and repack_r1 against a stub gate, and prints `unscannable: N files` (write forms a static scan cannot see) under a frozen ceiling. The other lane red tests are still run by hand.
