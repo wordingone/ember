@@ -10,7 +10,7 @@ is ever touched and the freed space is real. Small files (manifest, expert index
 Deletes go through verified_remove.py (#2454), two named paths, and the status json / HF-verified log lines only SELECT candidates, they prove nothing at delete time:
   branches (a)/(b) (a server copy exists): per file, in the remove call itself, the server entry is read back NOW (size AND LFS sha256; a missing entry, an entry without an LFS sha256 or an unreadable
     server keeps the file), the local sha256 is recomputed NOW, and the receipt row (both hashes) is fsynced BEFORE the os.remove. Plan rows (path, size, nlink, HF path) are written first too.
-  branch (c) (probe children, no copy anywhere, reproducible): needs --ruling ID; the manifest (path, size, sha256, mtime_ns, inode, ruling) for ALL files is fsynced before the first remove and each remove re-checks
+  branch (c) (probe children, no copy anywhere, reproducible): needs --ruling ID (a mail id) AND --expect-dirs FILE.json (the ruled dir list is the pin; --apply refuses without it); the manifest (path, size, sha256, mtime_ns, inode, ruling) for ALL files is fsynced before the first remove and each remove re-checks
     that the file is still the one in the manifest. This path is "ruled, no copy" and is never labelled verified.
 Receipts: logs/manifests-20261108/ckpt-lineage-delete-receipts.jsonl. Every path must be inside its child dir with no link or junction on the way.
 Usage: python ckpt_lineage_delete.py [--apply] [--only-probes] [--expect-dirs FILE.json] [--ruling ID] [--keep NAME ...]   (--only-probes: branch (c), the guarded terminal probes, only; --expect-dirs: refuse, exit 4, unless the selected child dirs equal that list; --ruling: required by --apply when any no-copy child is selected, else exit 5; put --expect-dirs/--ruling BEFORE --keep; lead rulings 82451/82461)"""
@@ -93,12 +93,13 @@ def main():
                 cand.append((r["name"], p, rel, st.st_size, st.st_ino, st.st_nlink, (f"{r['hf_repo']}:{r['prefix']}/{rel}" if r["prefix"] else None), r["via"]))
     inset = collections.Counter(c[4] for c in cand)
     probe_info = {r["name"]: {k: r[k] for k in ("probe_consumers", "probe_terminal", "probe_clause")} for r in sel if "probe_clause" in r}   # manifest: consumer hour, its terminal receipt, the clause that passed (82451)
+    _pb = ("expect-dirs sha256 " + hashlib.sha256(open(EXPECT, "rb").read()).hexdigest()) if EXPECT else None      # the pin of branch (c): the ruled dir list (#2459 F1)
     rows = []; keep_shared = 0; keep_small = 0; keep_shared_b = 0
     for name, p, rel, sz, ino, nl, hp, via in cand:
         if sz < (1 << 20): keep_small += 1; continue
         if inset[ino] != nl: keep_shared += 1; keep_shared_b += sz; continue      # another name exists outside the set: not touched
         _st = os.stat(p); _repo, _, _hpath = (hp or "").partition(":")
-        rows.append(dict(child=name, path=p, size=sz, nlink=nl, hf_ref=hp, hf_repo=(_repo or None), hf_path=(_hpath or None), mtime_ns=_st.st_mtime_ns, ino=_st.st_ino, kind=("server-verify" if hp else "ruled-no-copy"), ruling=(None if hp else RULING),
+        rows.append(dict(child=name, path=p, size=sz, nlink=nl, hf_ref=hp, hf_repo=(_repo or None), hf_path=(_hpath or None), mtime_ns=_st.st_mtime_ns, ino=_st.st_ino, kind=("server-verify" if hp else "ruled-no-copy"), ruling=(None if hp else RULING), pinned_by=(None if hp else _pb),
                          verified_via=via, authority="lead 81925/81919/81916 + training 81920 (none bound) + HF round-trip PASS", ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **probe_info.get(name, {})))
     names_per_ino = collections.defaultdict(list)
     for r in rows: names_per_ino[os.stat(r["path"]).st_ino].append(r)
@@ -107,8 +108,10 @@ def main():
     nocopy = sorted({r["child"] for r in rows if not r["hf_ref"]})
     if not apply_:
         print("DRY RUN (use --apply)" + (f" | {len(nocopy)} no-copy children need --ruling ID" if nocopy and not RULING else "")); return
-    if nocopy and not RULING:
-        print("REFUSED: children with no server copy (branch c) need --ruling ID", nocopy[:5]); sys.exit(5)
+    if nocopy and not VR.ruling_ok(RULING):
+        print("REFUSED: children with no server copy (branch c) need --ruling ID, a mail id such as 'lead 82451'", nocopy[:5]); sys.exit(5)
+    if nocopy and not EXPECT:
+        print("REFUSED: children with no server copy (branch c) need --expect-dirs FILE.json (the ruled dir list is the pin of the no-copy path; NO_PIN)", nocopy[:5]); sys.exit(5)
     reader = READER or VR.hub_reader()
     child_dir = {r["name"]: r["dir"] for r in sel}
     for r in rows:
@@ -121,9 +124,9 @@ def main():
     for r in rows:
         roots = [child_dir[r["child"]]]
         if r["hf_ref"]:
-            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=0, extra=dict(child=r["child"], via=r["verified_via"]))
+            res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=r["nlink"], extra=dict(child=r["child"], via=r["verified_via"]))   # nlink as planned: a name added after the plan refuses (#2459 F5)
         else:
-            res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=0)
+            res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=r["nlink"])
         if res["ok"]: n_ok += 1
         elif res["why"].startswith("remove failed: PermissionError"): failed.append(r["path"])          # file held open by another process: left in place, retried on the next run
         else: kept.append((r["path"], res["why"]))

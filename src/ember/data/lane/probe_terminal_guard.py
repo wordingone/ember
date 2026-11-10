@@ -17,6 +17,8 @@ Refusals (stable codes in `reason`), checked in this order:
                          (the running H49 v5 hour's probe is this shape)
   WINDOW_NEWEST          gpu-window-open exists and this is the newest cia-probe dir
   FRESH_ORPHAN           no consumer names it and a file under the probe changed within MIN_ORPHAN_IDLE_S (covers the b-floor wait between probe and hour prep)
+  UNREADABLE_EVIDENCE    the receipts root is missing / not a directory, or a cia-hour-* prediction.json cannot be read (a pending hour's file locked by its writer), or a file under the probe cannot be stat'ed:
+                         evidence that cannot be read is a refusal, never "no consumer" (#2459 F2)
   LINKED_OUTSIDE         a file of 1 MiB or more has a hard link whose other name is not inside this child (the delete set is never allowed to free it by name)
 Clauses that pass: A (every consumer hour has a terminal receipt) and B (no hour names the probe and it has been idle >= MIN_ORPHAN_IDLE_S).
 The module never removes or writes anything."""
@@ -47,18 +49,24 @@ def locate(path):
     return (m.group("probe"), m.group("mid")) if m else (None, None)
 
 
+class EvidenceUnreadable(Exception):
+    """A receipt the decision needs cannot be read. probe_eligibility turns this into the refusal UNREADABLE_EVIDENCE."""
+
+
 def _read(p):
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
             return f.read()
-    except OSError:
-        return ""
+    except OSError as e:
+        raise EvidenceUnreadable("%s: %s" % (_norm(p), type(e).__name__))
 
 
 def consumers(mid, receipts=RECEIPTS, in_root=IN_RECEIPTS):
     """Hours that name this probe measurement: [(kind, dir, terminal_receipt or None)]. kind 'hour' = a cia-hour-* prediction.json, 'ref' = a
     checkpoint-probe-reference.json (a dispatch that has the probe but may not have prepared its hour yet; a REUSE_PROBE_IN retry reads one)."""
     out = []
+    if not os.path.isdir(receipts):
+        raise EvidenceUnreadable("receipts root missing: " + _norm(receipts))
     for p in sorted(glob.glob(receipts + "/cia-hour-*/prediction.json")):
         if mid in _read(p):
             d = os.path.dirname(_norm(p))
@@ -66,20 +74,25 @@ def consumers(mid, receipts=RECEIPTS, in_root=IN_RECEIPTS):
             out.append(("hour", d, term))
     if os.path.isdir(in_root):
         for p in sorted(glob.glob(in_root + "/**/checkpoint-probe-reference.json", recursive=True)):
-            if mid in _read(p):
+            try:
+                named = mid in _read(p)
+            except EvidenceUnreadable:
+                named = True           # a reference that cannot be read is listed as naming the probe (it decides nothing by itself, but it is not silently dropped)
+            if named:
                 out.append(("ref", _norm(p), None))
     return out
 
 
 def _newest_mtime(d):
-    newest = 0.0
-    for dp, _, fs in os.walk(d):
+    """Newest mtime under d. A directory or file that cannot be read counts as changed just now (unknown = fresh), so the orphan clause cannot pass on a guess (#2459 F2)."""
+    newest = 0.0; bad = []
+    for dp, _, fs in os.walk(d, onerror=bad.append):
         for f in fs:
             try:
                 newest = max(newest, os.path.getmtime(os.path.join(dp, f)))
             except OSError:
-                pass
-    return newest
+                bad.append(f)
+    return time.time() if bad else newest
 
 
 def _linked_outside(child):
@@ -91,7 +104,7 @@ def _linked_outside(child):
             try:
                 st = os.stat(p)
             except OSError:
-                continue
+                return [_norm(p) + " (stat failed)"]
             if st.st_size >= BIG:
                 rec = names.setdefault((st.st_dev, st.st_ino), [st.st_nlink, 0, _norm(p)])
                 rec[1] += 1
@@ -108,7 +121,11 @@ def probe_eligibility(path, kept=None, receipts=RECEIPTS, in_root=IN_RECEIPTS, w
     if kept is not None and kept(_norm(path)):
         res["reason"] = "KEEP"
         return res
-    allc = consumers(mid, receipts, in_root)
+    try:
+        allc = consumers(mid, receipts, in_root)
+    except EvidenceUnreadable as e:
+        res["reason"] = "UNREADABLE_EVIDENCE " + str(e)
+        return res
     res["consumers"] = [(k, d) for k, d, _ in allc]
     # A checkpoint-probe-reference.json stays on disk for ever after its hour ended, so a ref alone decides nothing (it is listed for the manifest);
     # the hours that name the probe decide. Current chains `unset REUSE_PROBE_IN` and refuse H*_REUSE_PROBE_IN, so no retry reads an old ref.

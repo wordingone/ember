@@ -111,6 +111,42 @@ with tempfile.TemporaryDirectory() as r:
     os.makedirs(hour_child)
     check("RED an hour's own trained-child is not in this class (NOT_A_PROBE)", PG.probe_eligibility(hour_child, receipts=r + "/receipts")["reason"] == "NOT_A_PROBE")
 
+# #2459 F2: evidence that cannot be read is a refusal, never "no consumer"
+with tempfile.TemporaryDirectory() as r:
+    c = build(r, "20261109T142405Z", M1, age_s=5 * 3600)          # idle 5 h, no hour names it: clause B would pass on an empty evidence set
+    check("control: the idle orphan with readable (empty) evidence passes clause B", verdict(r, c)["ok"])
+    hd = r + "/receipts/cia-hour-a1-five-attn-stage-d4-20261109T142405Z"
+    os.makedirs(hd + "/prediction.json")                           # open() on it raises OSError (stands for a prediction.json locked by its writer)
+    v = verdict(r, c)
+    check("RED F2 an unreadable cia-hour prediction.json: UNREADABLE_EVIDENCE, not an orphan", (not v["ok"]) and v["reason"].startswith("UNREADABLE_EVIDENCE") and "prediction.json" in v["reason"])
+
+with tempfile.TemporaryDirectory() as r:
+    c = build(r, "20261109T142405Z", M2, age_s=5 * 3600)
+    v = PG.probe_eligibility(c, receipts=r + "/no-such-receipts-root", in_root=r + "/in", window=r + "/gpu-window-open")
+    check("RED F2 a missing receipts root: UNREADABLE_EVIDENCE (an empty glob is not 'no consumers')", (not v["ok"]) and v["reason"].startswith("UNREADABLE_EVIDENCE") and "receipts root missing" in v["reason"])
+
+with tempfile.TemporaryDirectory() as r:
+    c = build(r, "20261109T142405Z", M3, age_s=5 * 3600)
+    real = os.path.getmtime
+    def bad_mtime(path):
+        if str(path).endswith("a.pt"): raise PermissionError(13, "locked")
+        return real(path)
+    os.path.getmtime = bad_mtime
+    try: v = verdict(r, c)
+    finally: os.path.getmtime = real
+    check("RED F2 a file under the probe whose mtime cannot be read counts as fresh (FRESH_ORPHAN), never idle", (not v["ok"]) and v["reason"] == "FRESH_ORPHAN")
+
+with tempfile.TemporaryDirectory() as r:
+    c = build(r, "20261109T142405Z", M4, age_s=5 * 3600)
+    real = os.stat
+    def bad_stat(path, *a, **k):
+        if str(path).replace("\\", "/").endswith("objects/a.pt"): raise PermissionError(13, "locked")
+        return real(path, *a, **k)
+    os.stat = bad_stat; real_nm = PG._newest_mtime; PG._newest_mtime = lambda d: 0.0       # isolate the link-count read from the mtime read (os.path.getmtime goes through os.stat)
+    try: v = verdict(r, c)
+    finally: os.stat = real; PG._newest_mtime = real_nm
+    check("RED F2 a file whose link count cannot be read is not skipped: LINKED_OUTSIDE (stat failed)", (not v["ok"]) and v["reason"].startswith("LINKED_OUTSIDE") and "stat failed" in v["reason"])
+
 src = open(os.path.join(os.path.dirname(HERE), "probe_terminal_guard.py"), encoding="utf-8").read()
 check("the guard never removes or writes a file", not any(t in src for t in ("os." + "remove", "unlink", "rmtree", "open(p, \"w", "os.rename")))
 ld = open(os.path.join(os.path.dirname(HERE), "ckpt_lineage_delete.py"), encoding="utf-8").read()

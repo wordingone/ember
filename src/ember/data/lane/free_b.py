@@ -6,7 +6,8 @@
   1) <m-root>/shards-v0 files that are sha256-identical duplicates of <m-root>/ember-data/shards-v0 (remove_dup: both hashed now, the duplicate must be a different file),
   2) upload/raw + upload/train files with a server copy (remove_verified: server entry read back NOW with size AND LFS sha256; an entry without an LFS sha256 is not accepted on size; the candidate HF paths come from a tree listing but the
      proof is the fresh per-file read),
-  3) NO-COPY garbage (wiki .bad partials, the TextCaps source zip): ruled-no-copy only, ruling id required (--ruling, default none -> these two are skipped), manifest fsynced first, never labelled verified.
+  3) NO-COPY garbage (wiki .bad partials, the TextCaps source zip): ruled-no-copy only, NOT a verification. Needs --ruling ID (a mail id) AND --manifest-sha256 <nocopy_plan_sha256 the dry run printed> (the lead rules on that plan; a different plan refuses all);
+     default none -> these are skipped. Manifest fsynced first, never labelled verified.
 Python only; no rmtree; emptied directories go with os.rmdir."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
@@ -73,16 +74,22 @@ def main(argv=None):
     if os.path.isdir(WIKI_PARTS): garbage += [(WIKI_PARTS + "/" + f, WIKI_PARTS, "failed partial download (sha1 mismatch), superseded") for f in sorted(os.listdir(WIKI_PARTS)) if ".bad" in f]
     n = len(files(TEXTCAPS_TRAIN)) if os.path.isdir(TEXTCAPS_TRAIN) else 0
     if os.path.exists(TEXTCAPS_ZIP) and n >= 21953: garbage.append((TEXTCAPS_ZIP, os.path.dirname(TEXTCAPS_ZIP), f"re-downloadable public source zip; {n} train images already extracted"))
-    if garbage and not ruling: R["skipped"] += [f"{g[0].replace(BS, '/')}: no copy exists, needs --ruling ID" for g in garbage]
+    gplan = VR.plan_sha([g[0] for g in garbage]) if garbage else None; R["nocopy_plan_sha256"] = gplan      # the pin the lead rules on (printed by the dry run)
+    pin = VR.pins_from_argv(argv).get("")
+    if garbage and not VR.ruling_ok(ruling): R["skipped"] += [f"{g[0].replace(BS, '/')}: no copy exists, needs --ruling ID (a mail id such as 'lead 81345')" for g in garbage]
+    elif garbage and not go:
+        for p, root, why in garbage: R["deleted"].append(dict(path=p.replace(BS, "/"), bytes=os.path.getsize(p), why="DRY: " + why))
+    elif garbage and not pin: R["skipped"] += [f"{g[0].replace(BS, '/')}: NO_PIN, needs --manifest-sha256 <nocopy_plan_sha256 of the dry run>" for g in garbage]
     elif garbage:
-        for p, root, why in garbage:
-            if not go: R["deleted"].append(dict(path=p.replace(BS, "/"), bytes=os.path.getsize(p), why="DRY: " + why)); continue
-            rows, refused = VR.ruled_manifest([p], MAN, ruling=ruling, note=why, roots=[root], require_nlink=1)
-            if refused: R["skipped"].append(f"{p.replace(BS, '/')}: {refused[0][1]}"); continue
-            tally(p, VR.remove_ruled(rows[0], roots=[root], receipt=RC, require_nlink=1), why)
+        rows, refused = VR.ruled_manifest([g[0] for g in garbage], MAN, ruling=ruling, note="; ".join(sorted({g[2] for g in garbage})), roots=sorted({g[1] for g in garbage}), require_nlink=1, pin=pin)
+        if refused and refused[0][0] == "*": R["skipped"] += [f"{g[0].replace(BS, '/')}: {refused[0][1]}" for g in garbage]
+        else:
+            R["skipped"] += [f"{p.replace(BS, '/')}: {w}" for p, w in refused]
+            why_of = {g[0].replace(BS, "/"): g[2] for g in garbage}
+            for r in rows: tally(r["path"], VR.remove_ruled(r, roots=sorted({g[1] for g in garbage}), receipt=RC, require_nlink=1), why_of.get(r["path"], r["note"]))
     R["free_after_gib"] = shutil.disk_usage("B:/").free / 2**30; R["freed_gib"] = round(sum(d["bytes"] for d in R["deleted"]) / 2**30, 2)
     json.dump(R, open(f"{AUDIT}/free-b-receipt-{ts}.json", "w"), indent=1)
-    print(json.dumps(dict(mode=R["mode"], freed_gib=R["freed_gib"], free_before=round(R["free_before_gib"], 1), free_after=round(R["free_after_gib"], 1), deleted=len(R["deleted"]), skipped=R["skipped"][:8]), indent=1))
+    print(json.dumps(dict(mode=R["mode"], nocopy_plan_sha256=R.get("nocopy_plan_sha256"), freed_gib=R["freed_gib"], free_before=round(R["free_before_gib"], 1), free_after=round(R["free_after_gib"], 1), deleted=len(R["deleted"]), skipped=R["skipped"][:8]), indent=1))
     return R
 
 

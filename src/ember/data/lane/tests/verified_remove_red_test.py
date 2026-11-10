@@ -138,16 +138,29 @@ mk(B, D)
 r = V.remove_dup(A, B, roots=[R], other_roots=[T + "/elsewhere"], receipt=RC, authority="t")
 check("RED duplicate outside the allowed duplicate roots: kept", (not r["ok"]) and os.path.exists(A))
 
-# ruled, no-copy path
+# ruled, no-copy path (#2459 F1: a ruling id that is a mail id + a PIN on the plan the lead ruled on)
 MAN = T + "/m/manifest.jsonl"
 g1 = mk(R + "/g/1.zst", b"x" * 3000); g2 = mk(R + "/g/2.zst", b"y" * 3000); g3 = mk(R + "/g/3.zst", b"z" * 3000)
-try:
-    V.ruled_manifest([g1], MAN, ruling="", note="n", roots=[R]); raised = False
-except ValueError:
-    raised = True
-check("RED a no-copy delete without a ruling id is refused", raised and not os.path.exists(MAN))
-mrows, refused = V.ruled_manifest([g1, g2, g3, fo], MAN, ruling="lead 99999", note="regenerable intermediate", roots=[R])
-check("GREEN manifest holds 3 rows (path, size, sha256, mtime, inode, ruling), the outside path is refused", len(mrows) == 3 and len(refused) == 1 and all(m["ruling"] == "lead 99999" and m["sha256"] for m in mrows) and len(open(MAN).read().splitlines()) == 3)
+for badruling in ("", "x", "ok", "lead", "lead 8", "approved"):
+    try:
+        V.ruled_manifest([g1], MAN, ruling=badruling, note="n", roots=[R], pin="a" * 64); raised = False
+    except ValueError:
+        raised = True
+    check("RED a no-copy delete with ruling %r (not a mail id) is refused" % badruling, raised and not os.path.exists(MAN))
+check("ruling_ok accepts 'lead 82451', '82499' and 'lead 82379 (ack of 82377)'", V.ruling_ok("lead 82451") and V.ruling_ok("82499") and V.ruling_ok("lead 82379 (ack of 82377)"))
+PLAN3 = V.plan_sha([g1, g2, g3])
+check("plan_sha is order independent and names a missing path", PLAN3 == V.plan_sha([g3, g1, g2]) and V.plan_sha([g1]) != V.plan_sha([g1, T + "/nope"]) and len(PLAN3) == 64)
+r0, f0 = V.ruled_manifest([g1, g2, g3], MAN, ruling="lead 99999", note="n", roots=[R])
+check("RED no pin: NO_PIN, nothing hashed, no manifest written", r0 == [] and f0 and f0[0][1].startswith("NO_PIN") and not os.path.exists(MAN))
+r0, f0 = V.ruled_manifest([g1, g2, g3], MAN, ruling="lead 99999", note="n", roots=[R], pin="0" * 64)
+check("RED a pin that is not the plan found now: PIN_MISMATCH, nothing written", r0 == [] and f0 and f0[0][1].startswith("PIN_MISMATCH") and not os.path.exists(MAN))
+extra = mk(R + "/g/extra.zst", b"e" * 3000)
+r0, f0 = V.ruled_manifest([g1, g2, g3, extra], MAN, ruling="lead 99999", note="n", roots=[R], pin=PLAN3)
+check("RED a file added after the ruling (the _wiki_del case): the plan differs, PIN_MISMATCH, nothing written", r0 == [] and f0 and f0[0][1].startswith("PIN_MISMATCH") and not os.path.exists(MAN))
+os.remove(extra)
+PLAN4 = V.plan_sha([g1, g2, g3, fo])
+mrows, refused = V.ruled_manifest([g1, g2, g3, fo], MAN, ruling="lead 99999", note="regenerable intermediate", roots=[R], pin=PLAN4)
+check("GREEN manifest holds 3 rows (path, size, sha256, mtime, inode, ruling, plan pin), the outside path is refused", len(mrows) == 3 and len(refused) == 1 and all(m["ruling"] == "lead 99999" and m["sha256"] and m["plan_sha256"] == PLAN4 for m in mrows) and len(open(MAN).read().splitlines()) == 3)
 open(g2, "ab").write(b"!")
 os.remove(g3); open(g3, "wb").write(b"z" * 3000)
 seen2 = {}
@@ -157,9 +170,71 @@ res = [V.remove_ruled(m, roots=[R], receipt=RC, remove=spy2) for m in mrows]
 check("RED a file appended to after the manifest is kept (stale manifest row)", (not res[1]["ok"]) and os.path.exists(g2))
 check("RED a file replaced by a new inode after the manifest is kept", (not res[2]["ok"]) and os.path.exists(g3))
 check("GREEN the untouched file is removed; the full manifest and its receipt row were on disk first", res[0]["ok"] and not os.path.exists(g1) and seen2["man"] == 3 and g1.replace("\\", "/") in seen2["rc"])
-check("the ruled receipt is labelled ruled-no-copy, never server-verified", rows()[-1]["kind"] == "ruled-no-copy-remove" and "no server or local copy was compared" in rows()[-1]["compared"])
-bad_rows = [dict(mrows[0], kind="server-verified"), dict(mrows[0], ruling=""), dict(mrows[0], sha256="")]
-check("RED a row of the wrong kind / without ruling / without sha256 is refused", all(not V.remove_ruled(b, roots=[R], receipt=RC)["ok"] for b in bad_rows))
+check("the ruled receipt is labelled ruled-no-copy, never server-verified, and carries the plan pin", rows()[-1]["kind"] == "ruled-no-copy-remove" and "no server or local copy was compared" in rows()[-1]["compared"] and rows()[-1]["plan_sha256"] == PLAN4)
+bad_rows = [dict(mrows[0], kind="server-verified"), dict(mrows[0], ruling=""), dict(mrows[0], ruling="x"), dict(mrows[0], sha256="")]
+check("RED a row of the wrong kind / without a mail-id ruling / without sha256 is refused", all(not V.remove_ruled(b, roots=[R], receipt=RC)["ok"] for b in bad_rows))
+h1 = mk(R + "/h/1.zst", b"h" * 3000)
+hrows, _ = V.ruled_manifest([h1], T + "/m/h.jsonl", ruling="lead 99999", note="n", roots=[R], pin=V.plan_sha([h1]))
+unp = V.remove_ruled(dict(hrows[0], plan_sha256=None, pinned_by=None), roots=[R], receipt=RC)
+check("RED F1 a manifest row with no pin is refused (UNPINNED), the file stays", (not unp["ok"]) and "UNPINNED" in unp["why"] and os.path.exists(h1))
+nrows, _ = V.ruled_manifest([h1], T + "/m/h2.jsonl", ruling="lead 99999", note="n", roots=[R], pinned_by="expect-dirs sha256 abc")
+check("GREEN a named pin (pinned_by) is accepted and recorded in the row", len(nrows) == 1 and nrows[0]["pinned_by"] == "expect-dirs sha256 abc" and nrows[0]["plan_sha256"] is None and V.remove_ruled(nrows[0], roots=[R], receipt=RC)["ok"] and not os.path.exists(h1))
+check("pins_from_argv: NAME=SHA and a bare SHA", V.pins_from_argv(["--go", "--manifest-sha256", "pg=AB", "--manifest-sha256", "CD"]) == {"pg": "ab", "": "cd"})
+
+# F3: the file is replaced after the hash and the receipt fsync, before the remove (same size, same mtime, new inode)
+orig_rcp = V._receipt
+def swapper(path_):
+    def f(rc, row):
+        orig_rcp(rc, row)
+        st = os.stat(path_); os.remove(path_); open(path_, "wb").write(b"B" * st.st_size); os.utime(path_, ns=(st.st_atime_ns, st.st_mtime_ns))
+    return f
+f4 = mk(R + "/t/f4.bin", D); called = []
+V._receipt = swapper(f4)
+r = V.remove_verified(f4, "r", "x/f4", reader=reader_for({("r", "x/f4"): (len(D), sha(D))}), remove=lambda p: called.append(p), **KW)
+V._receipt = orig_rcp
+check("RED F3 server path: file replaced after the receipt (same size+mtime, new inode): kept, remove never called, an -aborted row is written", (not r["ok"]) and os.path.exists(f4) and not called and "changed after verification" in r["why"] and rows()[-1]["kind"] == "server-verified-aborted")
+a4 = mk(R + "/t/a4.bin", D); b4 = mk(T + "/other/b4.bin", D); called = []
+V._receipt = swapper(a4)
+r = V.remove_dup(a4, b4, remove=lambda p: called.append(p), **KD)
+V._receipt = orig_rcp
+check("RED F3 duplicate path: file replaced after the receipt: kept, remove never called", (not r["ok"]) and os.path.exists(a4) and not called and rows()[-1]["kind"] == "local-duplicate-aborted")
+k4 = mk(R + "/t/k4.bin", b"k" * 3000); krow, _ = V.ruled_manifest([k4], T + "/m/k.jsonl", ruling="lead 99999", note="n", roots=[R], pin=V.plan_sha([k4])); called = []
+V._receipt = swapper(k4)
+r = V.remove_ruled(krow[0], roots=[R], receipt=RC, remove=lambda p: called.append(p))
+V._receipt = orig_rcp
+check("RED F3 ruled path: file replaced after the receipt: kept, remove never called", (not r["ok"]) and os.path.exists(k4) and not called and rows()[-1]["kind"] == "ruled-no-copy-remove-aborted")
+
+# F4: a locked or vanished file while hashing is a named refusal, never a traceback
+f5 = mk(R + "/t/f5.bin", D); orig_sha = V.sha256_file
+def locked(p): raise PermissionError(13, "locked")
+V.sha256_file = locked
+try:
+    r = V.remove_verified(f5, "r", "x/f5", reader=reader_for({("r", "x/f5"): (len(D), sha(D))}), **KW); exc = None
+except Exception as e:
+    r = None; exc = e
+V.sha256_file = orig_sha
+check("RED F4 a locked file (sha256 raises PermissionError): refused with 'hash failed: PermissionError', no exception, file kept", exc is None and r and (not r["ok"]) and r["why"] == "hash failed: PermissionError" and os.path.exists(f5))
+def vanishes(p):
+    h = orig_sha(p); os.remove(p); return h
+V.sha256_file = vanishes
+try:
+    r = V.remove_verified(f5, "r", "x/f5", reader=reader_for({("r", "x/f5"): (len(D), sha(D))}), **KW); exc = None
+except Exception as e:
+    r = None; exc = e
+V.sha256_file = orig_sha
+check("RED F4 the file vanishes while it is hashed: 'stat failed after hashing: FileNotFoundError', no exception", exc is None and r and (not r["ok"]) and r["why"] == "stat failed after hashing: FileNotFoundError")
+f5 = mk(R + "/t/f5.bin", D); f6 = mk(R + "/t/f6.bin", D)
+V.sha256_file = locked
+try:
+    r2 = V.remove_dup(f5, f6, roots=[R], other_roots=[R], receipt=RC, authority="t"); exc = None
+except Exception as e:
+    r2 = None; exc = e
+try:
+    rm, rf = V.ruled_manifest([f5], T + "/m/f5.jsonl", ruling="lead 99999", note="n", roots=[R], pin=V.plan_sha([f5])); exc2 = None
+except Exception as e:
+    rm = rf = None; exc2 = e
+V.sha256_file = orig_sha
+check("RED F4 the duplicate and ruled paths also name a locked file instead of raising", exc is None and r2 and (not r2["ok"]) and "hash failed" in r2["why"] and exc2 is None and rm == [] and rf and "hash failed: PermissionError" in rf[0][1])
 
 # dry run: every check runs, nothing is written or removed
 fd = mk(R + "/dry/d.bin", D); n_rc = len(rows())

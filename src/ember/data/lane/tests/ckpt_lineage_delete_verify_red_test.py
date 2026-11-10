@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Red/green for ckpt_lineage_delete.py after #2454: a status json that says COVERED, a log line that says HF-verified, or a stale PASS file select candidates but prove nothing at delete time.
 Branches (a)/(b) delete a file only when the fake server (injected as READER) has the path with equal size AND LFS sha256 right now; a same-size corrupt upload, an entry with no LFS sha256 and a missing entry keep the file.
-Branch (c) (no copy) refuses --apply without --ruling and, with it, writes the sha256 manifest before the first remove. Tmp tree and stubbed guards only; nothing real is read or deleted.
+Branch (c) (no copy) refuses --apply without a mail-id --ruling and without --expect-dirs (the pin of the no-copy path, #2459 F1), and, with both, writes the sha256 manifest before the first remove. Tmp tree and stubbed guards only; nothing real is read or deleted.
 Run: python scripts/tests/ckpt_lineage_delete_verify_red_test.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
@@ -100,6 +100,21 @@ rc, out = run(m)
 check("RED branch (b): the 'HF-verified' log line is not proof, the server has no entry: kept", os.path.exists(C2 + "/w.pt") and rc == 7)
 shutil.rmtree(C2); json.dump([], open(T + "/old.json", "w")); open(T + "/bk.log", "w").write("")
 
+# F5 (#2459): the per-call nlink guard is the planned nlink, so a name hard-linked after the plan makes the remove refuse
+C3 = T + "/C3"; d3 = os.urandom(MB + 11); mkfile(C3 + "/h.pt", d3); OUT3 = T + "/linked-later.pt"
+json.dump({"C3": dict(status="COVERED", dir=C3, step_dir="lineage/C3")}, open(T + "/chk.json", "w"))
+m = load(["--apply"]); m.READER = lambda repo, hp: (len(d3), sha(d3))
+orig_rv = m.VR.remove_verified
+def link_then_remove(path, *a, **k):
+    os.link(path, OUT3); return orig_rv(path, *a, **k)
+m.VR.remove_verified = link_then_remove
+rc, out = run(m)
+m.VR.remove_verified = orig_rv
+check("RED F5 a name hard-linked AFTER the plan: the file is kept (nlink 2 != 1 at remove time), exit 7", os.path.exists(C3 + "/h.pt") and os.path.exists(OUT3) and rc == 7 and "nlink 2 != 1" in out)
+os.remove(OUT3)
+src5 = open(SC + "/ckpt_lineage_delete.py", encoding="utf-8").read()
+check("source (F5): no require_nlink=0 in the script; both remove calls pass the planned nlink", "require_nlink=0" not in src5 and src5.count('require_nlink=r["nlink"]') == 2)
+
 # branch (c): no copy -> --ruling required
 P = T + "/P1"; pd = os.urandom(MB + 9); mkfile(P + "/payload.pt", pd)
 json.dump([dict(name="P1", dir=P)], open(T + "/probes.json", "w"))
@@ -107,10 +122,15 @@ n0 = len(open(T + "/man/manifest.jsonl").read().splitlines())
 m = load(["--apply", "--only-probes"]); m.READER = lambda repo, hp: None; rc, out = run(m)
 before = len(open(T + "/man/manifest.jsonl").read().splitlines())
 check("RED --apply on a no-copy probe child without --ruling: refused (exit 5), nothing deleted, and no manifest row written", rc == 5 and os.path.exists(P + "/payload.pt") and "need --ruling" in out and before == n0)
+m = load(["--apply", "--only-probes", "--ruling", "x"]); m.READER = lambda repo, hp: None; rc, out = run(m)
+check("RED (#2459 F1) a ruling that is not a mail id ('x') is refused (exit 5), payload stays", rc == 5 and os.path.exists(P + "/payload.pt") and len(open(T + "/man/manifest.jsonl").read().splitlines()) == n0)
 m = load(["--apply", "--only-probes", "--ruling", "82499"]); m.READER = lambda repo, hp: None; rc, out = run(m)
+check("RED (#2459 F1) --ruling but no --expect-dirs: refused (exit 5, NO_PIN), payload stays, no manifest row", rc == 5 and "NO_PIN" in out and os.path.exists(P + "/payload.pt") and len(open(T + "/man/manifest.jsonl").read().splitlines()) == n0)
+json.dump([P.replace(chr(92), "/")], open(T + "/expect.json", "w"))
+m = load(["--apply", "--only-probes", "--expect-dirs", T + "/expect.json", "--ruling", "82499"]); m.READER = lambda repo, hp: None; rc, out = run(m)
 mf = [json.loads(l) for l in open(T + "/man/manifest.jsonl")][before:]
-check("GREEN with --ruling the no-copy payload is removed, manifest row has sha256 + ruling + probe_clause", rc == 0 and not os.path.exists(P + "/payload.pt") and len(mf) == 1 and mf[0]["sha256"] == sha(pd) and mf[0]["ruling"] == "82499" and mf[0]["probe_clause"] == "A: test")
-check("the no-copy receipt is labelled ruled-no-copy-remove, never server-verified", rcpts()[-1]["kind"] == "ruled-no-copy-remove")
+check("GREEN with --ruling and --expect-dirs the no-copy payload is removed, manifest row has sha256 + ruling + probe_clause + the pin", rc == 0 and not os.path.exists(P + "/payload.pt") and len(mf) == 1 and mf[0]["sha256"] == sha(pd) and mf[0]["ruling"] == "82499" and mf[0]["probe_clause"] == "A: test" and mf[0]["pinned_by"].startswith("expect-dirs sha256 "))
+check("the no-copy receipt is labelled ruled-no-copy-remove, never server-verified, and carries the pin", rcpts()[-1]["kind"] == "ruled-no-copy-remove" and rcpts()[-1]["pinned_by"].startswith("expect-dirs sha256 "))
 mkfile(P + "/payload.pt", pd)
 m = load(["--only-probes", "--ruling", "82499"]); rc, out = run(m)
 check("dry run (no --apply) deletes nothing and prints the DRY RUN line", rc == 0 and "DRY RUN" in out and os.path.exists(P + "/payload.pt"))

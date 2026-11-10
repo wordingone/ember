@@ -8,7 +8,7 @@ Tier 1 goes through verified_remove.py (#2454): per file, in the remove call its
 NOW (size AND LFS sha256; no snapshot index, no size-only fallback, an unreadable server keeps the file), the local sha256 is recomputed NOW, and the receipt row (both hashes) is fsynced BEFORE the os.remove.
 Tier 2 has no copy to compare ("ruled, no copy": intermediates of finished jobs, lead 82377): ruling id = the ACK, the manifest of every file (path, size, sha256, mtime, inode) is fsynced before the first remove, and each
 remove re-checks that the file is still the manifest's file; never labelled verified. No shutil.rmtree anywhere; emptied directories are removed with os.rmdir.
-Usage: python drop_execute.py <manifest.tsv> [--go] [--tier2] [--no-orphan] [--ack TEXT]   (default: dry, verifies against the server but writes and deletes nothing)"""
+Usage: python drop_execute.py <manifest.tsv> [--go] [--tier2 [--manifest-sha256 NAME=SHA ...]] [--no-orphan] [--ack 'lead NNNNN']   (default: dry, verifies against the server but writes and deletes nothing; the dry run prints one tier2 PLAN_SHA256 NAME=SHA per directory, tier 2 --go removes only a directory whose plan the lead ruled on)"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import HF_TRAIN_REPO, LANE_ROOT
@@ -36,7 +36,8 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     go = "--go" in argv; tier2 = "--tier2" in argv; no_orphan = "--no-orphan" in argv
     if "--ack" in argv: ACK = argv[argv.index("--ack") + 1]
-    man = [a for a in argv if not a.startswith("--") and a != ACK][0]
+    pins = VR.pins_from_argv(argv); pin_vals = [argv[i + 1] for i, a in enumerate(argv) if a == "--manifest-sha256" and i + 1 < len(argv)]
+    man = [a for a in argv if not a.startswith("--") and a != ACK and a not in pin_vals][0]
     reader = READER or VR.hub_reader()
     allowed = [f"{ROOT}/packed", f"{ROOT}/scratch/orphan-packs"]
     work = []
@@ -82,10 +83,13 @@ def main(argv=None):
                     files.append((q, st.st_size, st.st_nlink)); newest = max(newest, st.st_mtime)
             if time.time() - newest < 600: print("tier2 SKIP (changed in the last 10 min)", name, flush=True); continue
             if any(n > 1 for _, _, n in files): print("tier2 SKIP (hard-linked file inside)", name, flush=True); continue
-            size = sum(s for _, s, _ in files)
+            size = sum(s for _, s, _ in files); plan = VR.plan_sha([q for q, _, _ in files])
+            if not go: print("tier2 PLAN_SHA256", name + "=" + plan, flush=True)
             if go:
-                rows, refused = VR.ruled_manifest([q for q, _, _ in files], f"{ROOT}/logs/drop-exec-tier2-manifest.jsonl", ruling=ACK, note="intermediate of a finished job; packed form on HF (lead 82377 tier 2); NO copy compared", roots=[d], require_nlink=1)
-                if refused: print("tier2 SKIP (manifest refused files, nothing removed from this dir)", name, refused[:3], flush=True); continue
+                if not VR.ruling_ok(ACK): print("tier2 SKIP (--ack must be a mail id such as 'lead 82379'; no copy is compared)", name, flush=True); continue
+                if not pins.get(name): print("tier2 SKIP (NO_PIN: needs --manifest-sha256 " + name + "=<PLAN_SHA256 of the dry run>)", name, flush=True); continue
+                rows, refused = VR.ruled_manifest([q for q, _, _ in files], f"{ROOT}/logs/drop-exec-tier2-manifest.jsonl", ruling=ACK, note="intermediate of a finished job; packed form on HF (lead 82377 tier 2); NO copy compared", roots=[d], require_nlink=1, pin=pins[name])
+                if refused: print("tier2 SKIP (manifest refused, nothing removed from this dir)", name, refused[:3], flush=True); continue
                 bad = [(r["path"], x["why"]) for r in rows for x in [VR.remove_ruled(r, roots=[d], receipt=RC, require_nlink=1)] if not x["ok"]]
                 if bad: print("tier2 kept", len(bad), "files that no longer match the manifest:", bad[:3], flush=True)
                 prune_empty(d)
