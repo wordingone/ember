@@ -6,7 +6,7 @@ borrowed_lineage=frozen_reference_only
 mechanism_erasure=forbidden
 -->
 
-<!-- state-as-of: 2026-08-01 --> Work paused 2026-10-10; the state-as-of marker dates only the generated current-subject manifest block, not this page. Entries below are the last recorded state.
+<!-- state-as-of: 2026-08-01 --> Training resumed after 2026-10-10: the October chain ran to H36, and the November hours H37-H44 are active as of 2026-11-09. The state-as-of marker dates only the generated current-subject manifest block, not this page. Entries below are the last recorded state (through H31) and this line does not update them.
 
 # Continuity
 

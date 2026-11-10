@@ -56,11 +56,12 @@ class StepRunnerCensus(unittest.TestCase):
         self.check(base_rows() + [python_row(3, True)], gpu={3})
 
     def test_live_or_unknown_state_still_refuses(self):
+        # A live or unknown-state python that nvidia-smi lists still refuses. (Whether a NON-GPU live python with a large commit
+        # refuses is the commit arm, dropped by lead ruling 81914; each copy's own test file pins that.)
         for exited in (False, None, ...):
-            for gpu in (set(), {3}):
-                with self.subTest(exited=exited, gpu=gpu):
-                    with self.assertRaisesRegex(ValueError, 'requires coordination'):
-                        self.check(base_rows() + [python_row(3, exited)], gpu)
+            with self.subTest(exited=exited):
+                with self.assertRaisesRegex(ValueError, 'requires coordination'):
+                    self.check(base_rows() + [python_row(3, exited)], {3})
 
     def test_live_small_gpu_listed_python_still_refuses(self):
         with self.assertRaisesRegex(ValueError, 'requires coordination'):
@@ -127,6 +128,8 @@ class StepRunnerCensus(unittest.TestCase):
                                         (2048, 'python.exe train.py'), (2048, 'python.exe telemetry_meter.py')):
                     cases.append((exited, gpu, commit, command))
         for exited, gpu, commit, command in cases:
+            if not gpu and commit >= GIB_KIB and 'train' not in command:
+                continue  # the own-commit arm (lead ruling 81914) is judged per copy, not by agreement
             with self.subTest(exited=exited, gpu=gpu, commit=commit, command=command):
                 rows = base_rows() + [python_row(3, exited, commit, command)]
                 verdicts = []

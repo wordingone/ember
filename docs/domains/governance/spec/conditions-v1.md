@@ -82,7 +82,7 @@ violation. Premature clearing is a spec violation.
   frozen/borrowed base used load-bearing; a dead lineage; reserved-vocab/config plumbing reported as
   a trained base; a seed whose graph cannot be grown function-preserving. ✗ `invalid_frozen_base_escape`,
   `invalid_calcified_seed`. CHK: checkpoint exists with real (non-placeholder) hashes; manifest
-  complete; no borrowed weights load-bearing; a grow-operator dry-run yields a valid larger-shape
+  complete; no undeclared borrowed weights load-bearing (GOAL §6); a grow-operator dry-run yields a valid larger-shape
   checkpoint that replays.
 
 ### 4.2 Goal-clear conditions (each law folded in as invalid-token / "does NOT count")
@@ -277,7 +277,7 @@ pre-epoch history.
   memory-fit-only receipt is `invalid_memory_fit_as_scale_affordability`.
 
 - **C-E2B — owned core surpasses the E2B baseline at being Ember (both legs; milestone 2026-06-12,
-  not retired by name).** R: the from-scratch owned core (no borrowed weights load-bearing) beats
+  not retired by name).** R: the from-scratch owned core (no borrowed weights load-bearing; the H1-H43 baseline) beats
   Gemma-E2B-swapped-into-Ember's-own-seat on BOTH legs at matched governed budget, with the paired
   protocol frozen before any verdict: **(i) Ember-work** — on the verify-floor worlds + self-curriculum
   accumulation loop, the owned core produces verified, transferring, deletion-surviving gains where
@@ -530,7 +530,7 @@ are cadence results, never GREEN — 2026-07-02). ✗ `invalid_condition_without
   conditioned update / harness action channel removed. Budgets/evaluator/data/seeds matched. C beats A
   and B; Deleted degrades/blocks; per-task rows; C transfers beyond the slice; the neural delta is
   load-bearing.
-- **Owned base** = pretrained from scratch on this machine, no borrowed weights load-bearing. A frozen
+- **Owned base** = pretrained from scratch on this machine, no borrowed weights load-bearing (a lineage that declares borrowed weights under GOAL §6 is not an owned base). A frozen
   base is NOT acceptable (the historical "or frozen base checkpoint" escape is closed).
 - **Substrate invariant:** softmax(QKᵀ/√d)V is the only *empirically proven* non-biological-intelligence
   substrate (the principle = lossless content-addressable associative routing). Ember's base stays

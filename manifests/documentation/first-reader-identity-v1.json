@@ -1,0 +1,50 @@
+{
+  "schema_version": "ember-first-reader-identity-v1",
+  "note": "First-reader surfaces must not state a retired identity claim. A rule fires when its pattern (case-insensitive regex) matches the text of any listed surface; fix the sentence, never the rule. Historical research records (the Pages journal and ledger) keep their dated wording and are not listed.",
+  "surfaces": [
+    "README.md",
+    "docs/OVERVIEW.md",
+    "docs/GLOSSARY.md",
+    "docs/domains/governance/guides/START-HERE.md",
+    "docs/domains/governance/anatomy/14_MODEL_CARD.md",
+    "docs/domains/lab/research/index.html",
+    "docs/domains/lab/research/export/research-index.json"
+  ],
+  "stale_rules": [
+    {
+      "id": "clean-genesis-identity",
+      "pattern": "(?:complete|one|the)\\s+clean-genesis\\s+(?:sovereign|foundation)",
+      "why": "Ember is no longer presented as a clean-genesis project; clean genesis is a lineage property that only the hours before the first declared external-model resource have (GOAL section 6)."
+    },
+    {
+      "id": "borrowed-signals-excluded",
+      "pattern": "(?:borrowed|learned or evaluative)[^.]{0,80}(?:excluded|forbidden)\\s+from\\s+the\\s+target\\s+lineage",
+      "why": "Declared, licence-recorded external models may assist training since 2026-11-07."
+    },
+    {
+      "id": "no-teacher-no-judge",
+      "pattern": "no\\s+teacher\\s+model\\s+and\\s+no\\s+judge\\s+model",
+      "why": "Retired by the INVARIANT-v2 succession; model-assisted hours are declared, not forbidden."
+    },
+    {
+      "id": "owned-from-scratch-genesis",
+      "pattern": "an\\s+owned,\\s+from-scratch\\s+genesis",
+      "why": "The lineage block is the baseline lineage; model-assisted hours are named in claims."
+    },
+    {
+      "id": "work-paused",
+      "pattern": "(?:work|project|training)\\s+(?:is\\s+|was\\s+|has\\s+been\\s+)?paused",
+      "why": "Training continued after 2026-10-10; a paused line on a first-reader surface is false."
+    },
+    {
+      "id": "unfinished-attempt",
+      "pattern": "unfinished\\s+attempt",
+      "why": "Retired lede; the page states what exists and what is admitted."
+    },
+    {
+      "id": "from-scratch-attempt",
+      "pattern": "(?:attempt|project)\\s+to\\s+(?:train|build)\\s+(?:a|an|the|its\\s+own)\\s+(?:language\\s+|AI\\s+)?model\\s+from\\s+scratch",
+      "why": "An unqualified from-scratch identity sentence is false once declared external-model resources are admitted (GOAL section 6); only the model-free baseline hours are from scratch, and the sentence must say so."
+    }
+  ]
+}
