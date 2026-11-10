@@ -70,6 +70,37 @@ class Gh:
             endpoint += f"/{suffix}"
         return self._run(["api", endpoint], allow_missing=allow_missing)
 
+    def names_or_unsupported(self, suffix: str, envelope_key: str) -> Any:
+        """Return sorted ``name`` values, or a labelled UNSUPPORTED non-reading.
+
+        The workflow ``GITHUB_TOKEN`` cannot be granted read access to the
+        repository secrets (or variables) listing: no ``permissions:`` key
+        covers it, and the API answers HTTP 403 "Resource not accessible by
+        integration". That is a property of the credential, not of the
+        repository, so it is recorded as UNSUPPORTED -- never as an empty list,
+        which would read as "the repository has zero secrets". Any other
+        failure still raises.
+        """
+        value = self.api(suffix, allow_missing=True)
+        if isinstance(value, dict) and value.get("unavailable"):
+            stderr = str(value.get("stderr", ""))
+            # Only the credential-scope 403. A rate-limit 403 ("API rate limit
+            # exceeded") is transient and must still raise.
+            if "Resource not accessible by integration" in stderr:
+                return {
+                    "status": "UNSUPPORTED",
+                    "endpoint": f"repos/{self.repository}/{suffix}",
+                    "reason": stderr,
+                }
+            raise SnapshotError(
+                f"gh api repos/{self.repository}/{suffix} failed "
+                f"({value.get('returncode')}): {stderr}"
+            )
+        rows = value.get(envelope_key) if isinstance(value, dict) else None
+        if not isinstance(rows, list):
+            raise SnapshotError(f"{suffix}: response has no {envelope_key!r} list")
+        return sorted(row["name"] for row in rows)
+
     def paginate(self, suffix: str, *, envelope_key: str | None = None) -> list[Any]:
         value = self._run(
             [
@@ -197,14 +228,10 @@ def capture(gh: Gh, *, include_comments: bool = True) -> dict[str, Any]:
             }
             for row in workflow_rows
         ],
-        "secret_names": sorted(
-            row["name"]
-            for row in gh.api("actions/secrets").get("secrets", [])
-        ),
-        "variable_names": sorted(
-            row["name"]
-            for row in gh.api("actions/variables").get("variables", [])
-        ),
+        # A list when readable; {"status": "UNSUPPORTED", ...} when the
+        # credential cannot read it (HTTP 403). Never [] for "could not read".
+        "secret_names": gh.names_or_unsupported("actions/secrets", "secrets"),
+        "variable_names": gh.names_or_unsupported("actions/variables", "variables"),
     }
     snapshot["snapshot_sha256"] = canonical_sha256(snapshot)
     return snapshot

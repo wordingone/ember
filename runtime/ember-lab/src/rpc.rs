@@ -189,6 +189,20 @@ struct JobIdParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct JobEventsParams {
+    job_id: String,
+    #[serde(default)]
+    after_seq: i64,
+    #[serde(default = "default_job_events_limit")]
+    limit: u32,
+}
+
+fn default_job_events_limit() -> u32 {
+    200
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct IssueRunCertificateParams {
     certificate_json: String,
 }
@@ -518,6 +532,67 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                     Ok(value) => (success(id, value), false),
                     Err(error) => (operation_error(id, error), false),
                 },
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "start_hour" => {
+            let params: crate::hour_job::HourStartRequest = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.start_hour(params) {
+                Ok(started) => (
+                    success(id, serde_json::to_value(&started).unwrap_or(Value::Null)),
+                    false,
+                ),
+                Err(crate::EmberLabError::HourRefused { code, rc, detail }) => (
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": {
+                            "code": -32001,
+                            "message": "hour_refused",
+                            "data": {"refusal_code": code, "rc": rc, "detail": detail},
+                        },
+                    }),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "check_hour" => {
+            // The preflight verb: the same checks as `start_hour`, nothing created (hour_job::check_hour).
+            let params: crate::hour_job::HourStartRequest = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.check_hour(params) {
+                Ok(checked) => (
+                    success(id, serde_json::to_value(&checked).unwrap_or(Value::Null)),
+                    false,
+                ),
+                Err(crate::EmberLabError::HourRefused { code, rc, detail }) => (
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": {
+                            "code": -32001,
+                            "message": "hour_refused",
+                            "data": {"refusal_code": code, "rc": rc, "detail": detail},
+                        },
+                    }),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "job_events" => {
+            let params: JobEventsParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.job_events(&params.job_id, params.after_seq, params.limit) {
+                Ok(events) => (success(id, json!({"events": events})), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
