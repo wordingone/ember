@@ -1,0 +1,48 @@
+{
+  "schema": "resume-hour-contract-v1",
+  "note": "Shared golden fixture: commands/resume-hour.test.ts (ember-cli) and runtime/ember-lab/tests/hour_job_contract.rs (ember-lab start_hour) must both satisfy every case. A change here changes both implementations or fails one of them.",
+  "redirect": "exec bash \"$0\" >>\"$1\" 2>&1",
+  "name_cases": [
+    {"name": "h49_dispatch_v2.sh", "ok": true},
+    {"name": "h1_dispatch_v10.sh", "ok": true},
+    {"name": "h0_dispatch_v0.sh", "ok": true},
+    {"name": "h_dispatch_v1.sh", "ok": false},
+    {"name": "h49_dispatch_v.sh", "ok": false},
+    {"name": "h49_dispatch_v1.sh.bak", "ok": false},
+    {"name": "H49_dispatch_v1.sh", "ok": false},
+    {"name": "xh49_dispatch_v1.sh", "ok": false},
+    {"name": "h49_dispatch_v1.bash", "ok": false},
+    {"name": "chain_segment_H49_v1.sh", "ok": false},
+    {"name": "h49-dispatch-v1.sh", "ok": false},
+    {"name": "h٤٩_dispatch_v1.sh", "ok": false},
+    {"name": "", "ok": false}
+  ],
+  "sha_cases": [
+    {"sha": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "well_formed": true},
+    {"sha": "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef", "well_formed": false},
+    {"sha": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde", "well_formed": false},
+    {"sha": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0", "well_formed": false},
+    {"sha": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg", "well_formed": false},
+    {"sha": "", "well_formed": false}
+  ],
+  "ember_key_cases": [
+    {"key": "EMBER_API_KEY", "ember": true},
+    {"key": "ember_startup_resume_hour", "ember": true},
+    {"key": "Ember_X", "ember": true},
+    {"key": "EMBER", "ember": false},
+    {"key": "EMBERS_X", "ember": false},
+    {"key": "XEMBER_X", "ember": false},
+    {"key": "PATH", "ember": false}
+  ],
+  "env_cases": [
+    {
+      "in": {"PATH": "p", "EMBER_API_KEY": "k", "Ember_model_seat": "s", "HOME": "h", "SystemRoot": "C:\\Windows"},
+      "out": {"HOME": "h", "PATH": "p", "SystemRoot": "C:\\Windows"}
+    }
+  ],
+  "bash_shim_cases": [
+    "C:\\Windows\\System32\\bash.exe",
+    "c:/windows/system32/bash.exe",
+    "C:/WINDOWS/SYSTEM32//bash.exe"
+  ]
+}

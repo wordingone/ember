@@ -15,7 +15,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::RwLock;
 use std::sync::{Arc, Condvar, Mutex, Weak};
@@ -23,6 +23,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod data_catalog;
 pub mod data_census;
+pub mod hour_job;
 pub mod rehearsal;
 pub mod rpc;
 pub mod run_certificate;
@@ -496,6 +497,12 @@ pub enum EmberLabError {
         job_id: String,
         detail: String,
     },
+    /// Hour job class refusal (issue #2119 lab hour job): `code` is the stable machine name, `rc` the distinct process exit code.
+    HourRefused {
+        code: String,
+        rc: u8,
+        detail: String,
+    },
     Poisoned,
 }
 
@@ -690,6 +697,7 @@ pub struct JobSpec {
     requires_ui_responsiveness: bool,
     window_contract: DispatchWindowContract,
     dispatch_token: Option<DispatchToken>,
+    hour_chain: Option<hour_job::HourChainSpec>,
 }
 
 #[derive(Clone, Debug)]
@@ -1860,7 +1868,12 @@ impl JobSpec {
             requires_ui_responsiveness: false,
             window_contract: DispatchWindowContract::HeadlessNoWindows,
             dispatch_token: None,
+            hour_chain: None,
         }
+    }
+    pub(crate) fn with_hour_chain(mut self, hour_chain: hour_job::HourChainSpec) -> Self {
+        self.hour_chain = Some(hour_chain);
+        self
     }
     pub fn with_env<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.env.insert(key.into(), value.into());
@@ -2228,6 +2241,9 @@ struct ExitMonitorRegistration {
     terminal_process: OwnedHandle,
     terminal_port: OwnedHandle,
     memory_barrier: Arc<JobMemoryObserverBarrier>,
+    /// Hour job class: the main process exiting must not terminate its surviving descendants (a detached
+    /// `/resume-hour` never did either). Every other job class keeps the stop-the-whole-job terminal path.
+    keep_descendants: bool,
 }
 
 #[cfg(windows)]
@@ -2283,6 +2299,11 @@ pub struct Daemon {
     monitor_ownership: Arc<RwLock<bool>>,
     #[cfg(all(windows, debug_assertions))]
     resource_guard_monitor_started_for_test: bool,
+    /// Armed only by `arm_start_tail_fault`: the next `start_job` fails right after its child was resumed and `running` was committed
+    /// (the window the hour class must survive without freeing a live hour's lease).
+    start_tail_fault: AtomicBool,
+    /// Armed only by `arm_receipt_write_fault`: the next `phase: started` receipt write of an hour fails (a running hour, a failed write).
+    receipt_write_fault: AtomicBool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3189,6 +3210,8 @@ impl Daemon {
             monitor_ownership: Arc::new(RwLock::new(true)),
             #[cfg(all(windows, debug_assertions))]
             resource_guard_monitor_started_for_test: false,
+            start_tail_fault: AtomicBool::new(false),
+            receipt_write_fault: AtomicBool::new(false),
         };
         #[cfg(all(windows, debug_assertions))]
         let mut daemon = daemon;
@@ -4055,6 +4078,17 @@ impl Daemon {
     }
 
     pub fn acquire_lease(&self, resource: &str, job_id: &str) -> Result<()> {
+        self.acquire_lease_as(resource, job_id, false)
+    }
+
+    /// Like [`Daemon::acquire_lease`], but ANY existing owner conflicts, including the same job id. A caller that releases the lease
+    /// on its own failure paths (the hour job class: a second identical start with the same log names the same job id) must have
+    /// inserted the lease itself, or its release would delete another call's lease. `Ok` therefore means this call inserted it.
+    pub fn acquire_lease_exclusive(&self, resource: &str, job_id: &str) -> Result<()> {
+        self.acquire_lease_as(resource, job_id, true)
+    }
+
+    fn acquire_lease_as(&self, resource: &str, job_id: &str, exclusive: bool) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if let Some(artifact_class) = resource.strip_prefix("schedule:") {
@@ -4078,7 +4112,7 @@ impl Daemon {
             )
             .optional()?;
         match owner {
-            Some(owner) if owner == job_id => {
+            Some(owner) if owner == job_id && !exclusive => {
                 tx.commit()?;
                 Ok(())
             }
@@ -5718,14 +5752,19 @@ impl Daemon {
         let checkpoint_response_path = self.log_dir.join(format!(
             "{protective_key}.protective-checkpoint-response.json"
         ));
-        spec.env.insert(
-            PROTECTIVE_CHECKPOINT_REQUEST_ENV.into(),
-            checkpoint_request_path.to_string_lossy().into_owned(),
-        );
-        spec.env.insert(
-            PROTECTIVE_CHECKPOINT_RESPONSE_ENV.into(),
-            checkpoint_response_path.to_string_lossy().into_owned(),
-        );
+        // The hour job class runs with the EXACT environment its caller sent (parity with a detached /resume-hour spawn):
+        // the daemon injects nothing into it.
+        let exact_env = spec.hour_chain.is_some();
+        if !exact_env {
+            spec.env.insert(
+                PROTECTIVE_CHECKPOINT_REQUEST_ENV.into(),
+                checkpoint_request_path.to_string_lossy().into_owned(),
+            );
+            spec.env.insert(
+                PROTECTIVE_CHECKPOINT_RESPONSE_ENV.into(),
+                checkpoint_response_path.to_string_lossy().into_owned(),
+            );
+        }
         if spec.env.get("EMBER_LAB_MINIMAL_SLICE").map(String::as_str) == Some("1") {
             let output_root = self
                 .log_dir
@@ -5792,20 +5831,26 @@ impl Daemon {
             );
         }
         let job_object_name = job_object_name(&spec.job_id);
-        if spec.env.contains_key(DISPATCH_JOB_OBJECT_NAME_ENV) {
-            return Err(EmberLabError::InvalidDispatchManifest {
-                detail: "Job Object name environment is daemon-owned".into(),
-            });
+        if !exact_env {
+            if spec.env.contains_key(DISPATCH_JOB_OBJECT_NAME_ENV) {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "Job Object name environment is daemon-owned".into(),
+                });
+            }
+            spec.env
+                .insert(DISPATCH_JOB_OBJECT_NAME_ENV.into(), job_object_name.clone());
         }
-        spec.env
-            .insert(DISPATCH_JOB_OBJECT_NAME_ENV.into(), job_object_name.clone());
         let argv_json = serde_json::to_string(&spec.args)?;
-        let persisted_env = spec
-            .env
-            .iter()
-            .filter(|(key, _)| key.as_str() != DISPATCH_TOKEN_ENV)
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<BTreeMap<_, _>>();
+        // The hour job class persists a fingerprint of its environment, never the values (the cockpit environment can carry secrets).
+        let persisted_env = if spec.hour_chain.is_some() {
+            hour_job::env_summary(&spec.env)
+        } else {
+            spec.env
+                .iter()
+                .filter(|(key, _)| key.as_str() != DISPATCH_TOKEN_ENV)
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect::<BTreeMap<_, _>>()
+        };
         let env_json = serde_json::to_string(&persisted_env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
         let log_key = hash_bytes(spec.job_id.as_bytes());
@@ -6082,12 +6127,41 @@ impl Daemon {
             let _ = self.mark_failed(&spec.job_id, failure_kind);
             return Err(error);
         }
+        if self.start_tail_fault.swap(false, Ordering::SeqCst) {
+            return Err(EmberLabError::Poisoned);
+        }
         let lease_epoch = self.job_process_row(&spec.job_id)?.lease_epoch;
         #[cfg(windows)]
         self.retain_and_monitor(&spec.job_id, lease_epoch, spawned.into_live())?;
         #[cfg(not(windows))]
         spawned.detach_reaper(Arc::downgrade(&self.db), spec.job_id.clone(), lease_epoch);
         Ok(JobHandle { pid })
+    }
+
+    /// In-process seam for tests (not reachable over the pipe): the next `start_job` returns an error AFTER the child was resumed and
+    /// `running` + `job_started` were committed, as a failure of its tail (`job_process_row`, `retain_and_monitor`) would.
+    #[doc(hidden)]
+    pub fn arm_start_tail_fault(&self) {
+        self.start_tail_fault.store(true, Ordering::SeqCst);
+    }
+
+    /// In-process seam for tests: the next completing (`phase: started`) hour receipt write fails, as a full disk or a locked file would.
+    #[doc(hidden)]
+    pub fn arm_receipt_write_fault(&self) {
+        self.receipt_write_fault.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn take_receipt_write_fault(&self) -> bool {
+        self.receipt_write_fault.swap(false, Ordering::SeqCst)
+    }
+
+    /// The pid of `job_id` when its row says `running`, else `None`. A start that returned an error while this answers `Some` has a
+    /// live child: its lease must be kept and the start reported as success with the error attached, never as a refusal.
+    pub fn running_pid(&self, job_id: &str) -> Option<u32> {
+        match self.job_state(job_id) {
+            Ok(Some(JobState::Running)) => self.job_process_row(job_id).ok().map(|row| row.pid),
+            _ => None,
+        }
     }
 
     pub fn job_state(&self, job_id: &str) -> Result<Option<JobState>> {
@@ -7157,6 +7231,17 @@ impl Daemon {
             );
             drop(retained);
         }
+        let keep_descendants = self
+            .db
+            .lock()
+            .map_err(|_| EmberLabError::Poisoned)?
+            .query_row(
+                "SELECT resource FROM jobs WHERE job_id=?1",
+                params![job_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map(|resource| resource == hour_job::HOUR_RESOURCE)
+            .unwrap_or(false);
         spawn_exit_monitor(ExitMonitorRegistration {
             db: Arc::downgrade(&self.db),
             retained: Arc::downgrade(&self.live),
@@ -7170,6 +7255,7 @@ impl Daemon {
             terminal_process: handles.terminal_process,
             terminal_port: handles.terminal_port,
             memory_barrier,
+            keep_descendants,
         });
         Ok(())
     }
@@ -16012,7 +16098,13 @@ fn spawn_managed(
     }
 
     let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
-    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    // The hour job class must not turn "its main process exited" into "kill every survivor": a detached /resume-hour chain
+    // keeps its descendants, so the flag is withheld from it.
+    limits.BasicLimitInformation.LimitFlags = if spec.hour_chain.is_some() {
+        0
+    } else {
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    };
     if let Some(maximum) = maximum_job_memory {
         limits.JobMemoryLimit = maximum;
         limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
@@ -16141,7 +16233,16 @@ fn spawn_managed(
         .encode_wide()
         .chain(Some(0))
         .collect();
-    let environment = windows_environment(&spec.env);
+    let environment = if spec.hour_chain.is_some() {
+        windows_environment_exact(&spec.env)
+    } else {
+        windows_environment(&spec.env)
+    };
+    let hour_cwd_wide: Option<Vec<u16>> = spec
+        .hour_chain
+        .as_ref()
+        .and_then(|hour| hour.cwd.as_ref())
+        .map(|cwd| wide(&cwd.to_string_lossy()));
     let mut startup: STARTUPINFOEXW = unsafe { zeroed() };
     startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -16150,6 +16251,14 @@ fn spawn_managed(
     startup.StartupInfo.hStdError = inherited_stderr.raw();
     startup.lpAttributeList = attributes.ptr;
     let mut info: PROCESS_INFORMATION = unsafe { zeroed() };
+    // The hour job class always starts at NORMAL priority: an explicit class flag stops the child inheriting a
+    // below-normal parent (the daemon may have been started from a below-normal lane).
+    let creation_flags = managed_windows_creation_flags()
+        | if spec.hour_chain.is_some() {
+            windows_sys::Win32::System::Threading::NORMAL_PRIORITY_CLASS
+        } else {
+            0
+        };
     let created = unsafe {
         CreateProcessW(
             application.as_ptr(),
@@ -16157,9 +16266,11 @@ fn spawn_managed(
             std::ptr::null(),
             std::ptr::null(),
             1,
-            managed_windows_creation_flags(),
+            creation_flags,
             environment.as_ptr().cast(),
-            std::ptr::null(),
+            hour_cwd_wide
+                .as_ref()
+                .map_or(std::ptr::null(), |cwd| cwd.as_ptr()),
             &startup.StartupInfo,
             &mut info,
         )
@@ -16168,6 +16279,20 @@ fn spawn_managed(
     if created == 0 {
         unsafe { windows_sys::Win32::Foundation::CloseHandle(job) };
         return Err(std::io::Error::last_os_error().into());
+    }
+    // Hour job class (RISK 1): while the child is still suspended, give it the full system CPU mask and prove by readback
+    // that it is at NORMAL priority on every CPU. A daemon pinned to a subset of CPUs must not pin the hour with it.
+    if spec.hour_chain.is_some() {
+        if let Err(error) = hour_job::enforce_child_cpu(info.hProcess) {
+            unsafe {
+                TerminateJobObject(job, 1);
+                WaitForSingleObject(info.hProcess, 5000);
+                windows_sys::Win32::Foundation::CloseHandle(info.hThread);
+                windows_sys::Win32::Foundation::CloseHandle(info.hProcess);
+                windows_sys::Win32::Foundation::CloseHandle(job);
+            }
+            return Err(error);
+        }
     }
 
     // This is strictly stronger than an external live sampler: CreateProcessW
@@ -16739,6 +16864,7 @@ fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
         terminal_process,
         terminal_port,
         memory_barrier,
+        keep_descendants,
     } = registration;
     std::thread::spawn(move || {
         use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
@@ -16768,7 +16894,9 @@ fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
         // Dedicated duplicates keep terminal accounting alive even when an
         // explicit stop path has removed the retained-map entry. Stop this
         // exact owned job to zero active processes before the sentinel.
-        if terminate_handles(terminal_job.raw(), terminal_process.raw(), pid).is_err() {
+        if !keep_descendants
+            && terminate_handles(terminal_job.raw(), terminal_process.raw(), pid).is_err()
+        {
             return;
         }
         if unsafe {
@@ -17275,6 +17403,19 @@ fn windows_environment(overrides: &BTreeMap<String, String>) -> Vec<u16> {
     block
 }
 
+/// The hour job class environment: exactly the caller's map, nothing merged from the daemon's own environment.
+#[cfg(windows)]
+fn windows_environment_exact(env: &BTreeMap<String, String>) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut block = Vec::new();
+    for (key, value) in env {
+        block.extend(std::ffi::OsStr::new(&format!("{key}={value}")).encode_wide());
+        block.push(0);
+    }
+    block.push(0);
+    block
+}
+
 #[cfg(windows)]
 fn job_object_name(job_id: &str) -> String {
     format!(
@@ -17351,8 +17492,15 @@ fn spawn_managed(
     stdout_path: &Path,
     stderr_path: &Path,
 ) -> Result<SpawnedProcess> {
-    let child = Command::new(&spec.program)
-        .args(&spec.args)
+    let mut command = Command::new(&spec.program);
+    command.args(&spec.args);
+    if let Some(hour) = spec.hour_chain.as_ref() {
+        command.env_clear();
+        if let Some(cwd) = hour.cwd.as_ref() {
+            command.current_dir(cwd);
+        }
+    }
+    let child = command
         .envs(&spec.env)
         .stdin(Stdio::null())
         .stdout(Stdio::from(
