@@ -50,6 +50,7 @@ def main():
             sel.append(dict(name=n, dir=reg[n]["dir"], hf_repo=("wordingone/" + HF_RAW_REPO), prefix=pth, via="ckpt_backup HF-verified (lfs sha256/size)"))
     for r in json.load(open((LANE_ROOT + "/logs/ckpt-probes.json"))):      # (c) Nov probe children: reproducible from pinned scripts, delete without upload; training 81920: all unbound
         if r["name"] not in keep: sel.append(dict(name=r["name"], dir=r["dir"], hf_repo=None, prefix=None, via="probe child, reproducible (disk-custody strategy 2026-11-09); training 81920 unbound"))
+    import protected_set as _PS                        # #2450: the declared protected set, re-read per remove
     import evict_ckpt_list as _E                       # lead 82363: KEEP markers (H41 child cb516ed9, H44 child e73486d2, depth 1/2, H45 child)
     kept_names = [r["name"] for r in sel if _E.kept(r["dir"])]
     if kept_names: print("KEEP MARKER: refusing", kept_names)
@@ -82,17 +83,22 @@ def main():
     if not apply_:
         print("DRY RUN (use --apply)"); return
     for r in rows: r["sha256"] = sha256(r["path"])
+    ps0 = _PS.load()                                   # #2450: the set the manifest rows were written under (each remove below re-reads it)
+    for r in rows: r["protected_set_sha256"] = ps0["sha256"]; r["protected_set_path"] = ps0["path"]
     with open(MAN, "a") as mf:
         mf.write("".join(json.dumps(r) + "\n" for r in rows)); mf.flush(); os.fsync(mf.fileno())
     b0 = shutil.disk_usage("B:/").free
-    failed = []
+    failed = []; kept = []
     for r in rows:
+        _k = _E.kept(r["path"], _PS.load()["markers"])   # #2450: re-read right before this remove (selection and hashing ran minutes ago): a marker declared since keeps the file
+        if _k: kept.append((r["path"], _k)); continue
         try: os.remove(r["path"])
         except FileNotFoundError: pass
         except PermissionError as e: failed.append(r["path"])          # file held open by another process: left in place, retried on the next run
     if failed:
         json.dump(failed, open(os.path.dirname(MAN) + "/ckpt-lineage-delete-failed.json", "w"), indent=1); print("could not remove (in use):", len(failed), failed[:3])
-    print(f"deleted {len(rows)} names; B free {b0/2**30:.1f} -> {shutil.disk_usage('B:/').free/2**30:.1f} GiB; manifest {MAN}")
+    if kept: print(f"KEPT {len(kept)} files under a KEEP node (re-declared during the run), not deleted:", kept[:3])
+    print(f"deleted {len(rows) - len(kept) - len(failed)} names; B free {b0/2**30:.1f} -> {shutil.disk_usage('B:/').free/2**30:.1f} GiB; manifest {MAN}")
 
 
 if __name__ == "__main__":

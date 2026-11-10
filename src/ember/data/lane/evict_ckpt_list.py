@@ -17,19 +17,19 @@ LIST = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/evict-list-final-20261109.tsv")
 WALK = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state/h44-walk-20261109.json"); REPO = ("wordingone/" + HF_RAW_REPO); RC = (LANE_ROOT + "/logs/evict-ckpt-20261109.jsonl")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import protected_set as _PS
-KEEP_MARKERS = _PS.markers()      # issue 2450: the keep-list is the declared protected set (loops/protected-set.json), not a literal here; unreadable/empty file raises ProtectedSetError = nothing is removed
-PROTECTED_SET_SHA256 = _PS.load()["sha256"]
+KEEP_MARKERS = _PS.markers()      # issue 2450: the declared protected set (loops/protected-set.json), not a literal here; an unreadable/invalid file raises ProtectedSetError at import = nothing is removed. This is an IMPORT-TIME SNAPSHOT for short-lived readers (reserve_manifest); every deleter asks kept(), which re-reads the file on each call
 
 
 class EvictRefused(RuntimeError):
     pass
 
 
-def kept(path):
-    """The KEEP marker that covers `path` (a file or a directory), else None. Every checkpoint-deleting script (this one, reserve_evict, reserve_manifest, ckpt_backup, ckpt_lineage_delete) asks this one function (lead 82363)."""
+def kept(path, markers=None):
+    """The KEEP marker that covers `path` (a file or a directory), else None. The deleters (this one, ckpt_backup, ckpt_lineage_delete) ask this one function (lead 82363).
+    markers=None reads the declared protected set now (on every call: a long-lived caller never keeps a stale, smaller set); a caller that already loaded the set passes its markers so the check and the receipt use the same read."""
     p = path.replace("\\", "/")
     p = p if p.endswith("/") else p + "/"
-    return next((k for k in _PS.markers() if k in p), None)      # re-read on every call: a long-lived caller never keeps a stale (smaller) protected set
+    return next((k for k in (_PS.markers() if markers is None else markers) if k in p), None)
 
 
 def load_list(path=LIST, want_sha=LIST_SHA):
@@ -158,11 +158,14 @@ def main():
             return
         stt = os.stat(p); nlink = stt.st_nlink; phys = sz if nlink == 1 else 0      # lead 82144: bytes are only freed when the LAST name of an inode goes
         with lock:
+            cur = _PS.load()      # re-read immediately before the remove (the hash above can take minutes): a re-declaration in that window is honoured and recorded
+            k = kept(p, cur["markers"])
+            if k: st["skipped"].append((p, "under a KEEP node (re-declared during the run): " + k)); return
             with open(RC, "a", encoding="utf-8") as f:
                 f.write(json.dumps(dict(st_nlink=nlink, physical_bytes_freed=phys, inode=f"{stt.st_dev}:{stt.st_ino}", ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), path=p, size=sz, sha256=s, hf_path=f"{REPO}:{hit[0]}", verified="local sha256 recomputed == name == server LFS sha256, size equal, server re-read just before delete",
-                                        walk_receipt=WALK, list_sha256=LIST_SHA, authority="lead 82130 / training 82141")) + "\n")
-        os.remove(p)
-        with lock: st["deleted"] += 1; st["bytes"] += sz; st["phys"] += phys; st["shared"] += (nlink > 1)
+                                        walk_receipt=WALK, list_sha256=LIST_SHA, authority="lead 82130 / training 82141", protected_set_sha256=cur["sha256"], protected_set_path=cur["path"])) + "\n")
+            os.remove(p)
+            st["deleted"] += 1; st["bytes"] += sz; st["phys"] += phys; st["shared"] += (nlink > 1)
 
     import shutil; free0 = shutil.disk_usage("B:/").free
     with ThreadPoolExecutor(nw) as ex: list(ex.map(one, rows))
