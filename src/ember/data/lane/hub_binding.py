@@ -9,9 +9,8 @@ refresh_all(): rebuild every pack's entry from one recursive listing of text/ (t
 Refusals (nothing is written, the old entry stays): empty/unreadable Hub listing, an unreadable existing binding file when only one entry is refreshed (use refresh_all), lock not obtained.
 Returns dicts with ok/why; never raises into the tick. Counts and names only. Usage: hub_binding.py PACK | --all"""
 import os, sys, json, time, hashlib
-from lane_config import LANE_ROOT, HF_TRAIN_REPO
+from lane_config import LANE_ROOT as ROOT, HF_TRAIN_REPO
 
-ROOT = LANE_ROOT
 BINDING = os.environ.get("HB_BINDING", ROOT + "/loops/scan-hub-binding.json")
 SCAN_ROWS = os.environ.get("HB_SCAN_DIR", ROOT + "/logs/th-scan")
 REPO = os.environ.get("HB_REPO", HF_TRAIN_REPO)
