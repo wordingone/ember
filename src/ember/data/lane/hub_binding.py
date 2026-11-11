@@ -39,7 +39,8 @@ class _Lock:
         t0 = time.time()
         while True:
             try:
-                fd = os.open(self.p, os.O_CREAT | os.O_EXCL | os.O_WRONLY); os.write(fd, str(os.getpid()).encode()); os.close(fd); return self
+                with open(self.p, "x") as _f: _f.write(str(os.getpid()))      # exclusive create: FileExistsError when another refresh holds the lock
+                return self
             except FileExistsError:
                 try:
                     if time.time() - os.path.getmtime(self.p) > LOCK_STALE_S: os.remove(self.p); continue
