@@ -22,6 +22,9 @@ def check(label, cond):
 SCR = (LANE_ROOT + "/scratch"); os.makedirs(SCR, exist_ok=True)
 T = tempfile.mkdtemp(dir=SCR, prefix="vr-test-"); R = T + "/root"; O = T + "/outside"; os.makedirs(R); os.makedirs(O); RC = T + "/rc/receipts.jsonl"
 sha = lambda b: hashlib.sha256(b).hexdigest()
+import protected_set as PS
+PS_FILE = T + "/protected-set.json"
+open(PS_FILE, "w").write(json.dumps({"markers": [{"marker": "keep-this-hour-zz-20991231T000000Z/measurement-aaaa/"}], "reserve_markers": []})); PS.PATH = PS_FILE      # F8: every removal first reads the declared protected set
 
 
 def mk(path, data):
@@ -242,5 +245,24 @@ r = V.remove_verified(fd, "r", "x/d", reader=reader_for({("r", "x/d"): (len(D), 
 check("GREEN dry run on a verified file: ok but the file stays and no receipt row is written", r["ok"] and r.get("dry") and os.path.exists(fd) and len(rows()) == n_rc)
 r = V.remove_verified(fd, "r", "x/d", reader=reader_for({("r", "x/d"): (len(D), sha(bytes(bad)))}), dry=True, **KW)
 check("RED dry run still refuses a same-size corrupt upload", (not r["ok"]) and os.path.exists(fd))
+
+# F8 (lead 82906): a path under a protected-set marker is never removed, by any of the three paths; an unreadable set refuses everything
+prot = mk(R + "/keep-this-hour-zz-20991231T000000Z/measurement-aaaa/payload.pt", D); n_rc = len(rows())
+rd = reader_for({("r", "x/p"): (len(D), sha(D))})
+r1 = V.remove_verified(prot, "r", "x/p", reader=rd, **KW)
+mf_rows, mf_ref = V.ruled_manifest([prot], T + "/m/prot.jsonl", ruling="lead 99999", note="n", roots=[R], pin=V.plan_sha([prot]))
+other = mk(R + "/other/dup.pt", D)
+r3 = V.remove_dup(prot, other, roots=[R], other_roots=[R], receipt=RC, authority="t")
+check("RED F8 a file under a protected-set marker is refused by remove_verified, ruled_manifest and remove_dup, stays on disk, and writes no receipt row",
+      (not r1["ok"]) and "protected-set marker" in r1["why"] and mf_rows == [] and mf_ref and "protected-set marker" in str(mf_ref) and (not r3["ok"]) and "protected-set marker" in r3["why"] and os.path.exists(prot) and len(rows()) == n_rc)
+sib = mk(R + "/keep-this-hour-zz-20991231T000000Z/measurement-bbbb/payload.pt", D)
+r4 = V.remove_verified(sib, "r", "x/s", reader=reader_for({("r", "x/s"): (len(D), sha(D))}), **KW)
+check("GREEN F8 a sibling directory of the same hour that is NOT under the marker is still removable", r4["ok"] and not os.path.exists(sib))
+mk_hit, mk_why = V.protected_hit(R + "/keep-this-hour-zz-20991231T000000Z/measurement-aaaa")
+check("RED F8 the marker directory itself (no trailing slash) is also protected", mk_hit is not None and "protected-set marker" in mk_why)
+PS.PATH = T + "/no-such-protected-set.json"
+fz = mk(R + "/z/z.bin", D); rz = V.remove_verified(fz, "r", "x/z", reader=reader_for({("r", "x/z"): (len(D), sha(D))}), **KW)
+check("RED F8 an unreadable protected set refuses every removal (fail closed) and the file stays", (not rz["ok"]) and "protected set unreadable" in rz["why"] and os.path.exists(fz))
+PS.PATH = PS_FILE
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
