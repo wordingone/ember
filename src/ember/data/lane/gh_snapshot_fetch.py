@@ -26,7 +26,22 @@ Staging (<lane>/code-snapshot/staging/w<k>/) is capped at 5 GiB resident across 
 the write gate is asked for budget in use + need, the dir is MEASURED after the clone and after every fetch chunk and the reservation is raised to what is on disk (+ one chunk) or the repo ends as an error row staging_over_budget.
 Each repo's dir is removed right after its ledger row, inside the staging tree only, receipt row first (loops/code-snapshot-removes.jsonl).
 Timing stop rule: after the first 50 repos of a run finish, predicted hours = mean total_s x repos remaining / workers / 3600; above 8.0 -> loops/code-snapshot-STOP.json and exit 3.
-Packing into tokenized shards is a later step; this script never touches pack.py. No model anywhere."""
+Packing into tokenized shards is a later step; this script never touches pack.py. No model anywhere.
+
+HEAD FORM (--form head; lead 83076 / 83077 / 83080 / 83135): the source class "post-wall public code" = each tranche-1 catalogue repo (clean signals, MIT, size_kb <= --max-size-mb, default 100) at its catalogue commit sha itself.
+Usage: python gh_snapshot_fetch.py run --form head [--limit N] [--workers 8] [--max-size-mb 100] [--ignore-stop]   |   python gh_snapshot_fetch.py status --form head
+Same per-repo steps 1, 3-8 with these differences. NO created_at pre-filter, NO wall commit, NO ancestry / monotone check, NO no_pre_wall_history skip, NO WallViolation: the tree read is the catalogue commit (`git cat-file -e <sha>^{commit}`;
+unreachable -> error row catalogue_commit_missing, no ledger row). Licence reasons: no_licence_file_at_head, licence_not_mit_at_head, licence_mixed_at_head. A clone failure is retried ONCE (a repo-gone answer is not retried), then an error row as in the snapshot form.
+Files: <lane>/code-head/docs/<owner>__<name>@<sha12>.jsonl.zst, staging <lane>/code-head/staging/w<k>/, ledger loops/code-head-ledger.jsonl (resume key (repo, catalogue sha, HEAD_RULES_VERSION): the snapshot ledger and its rows never mark a head repo done),
+loops/code-head-errors.jsonl, code-head-deferred.jsonl, code-head-removes.jsonl, code-head-STOP.json, code-head-timing.json. Ledger row = the snapshot row minus the wall fields plus form "head", source_class, head_commit_ts, history_commits, history_truncated, agent_attribution, scan_state NOT_SCANNED;
+every shard row carries agent_attribution and source_class (and head_commit instead of wall_commit).
+agent_attribution is stated by the repo, read locally from the clone, never inferred from code style: {"state": "attributed", "evidence": [{signal, where, count, ...}]} or {"state": "none_stated", "evidence": []}. Signals:
+  trailer           Co-Authored-By lines (and an author / committer email of noreply@anthropic.com; a plain first name in an author field never counts) naming claude (incl. noreply@anthropic.com), copilot, cursor, devin, codex, aider, gemini or openhands, as whole words, case-insensitive; one evidence entry per family, count = commits.
+  bot_contributor   author / committer name or email containing "[bot]" and one of those words (copilot-swe-agent[bot], claude[bot], devin-ai-integration[bot], cursor[bot], codex[bot], ...); dependabot, renovate, github-actions are not agents.
+  instruction_file  tree paths AGENTS.md, CLAUDE.md, GEMINI.md, .cursorrules (any depth), .github/copilot-instructions.md, .cursor/rules/* ; where = the paths (at most 5), count = total.
+The commit log read is capped (`git log -n 20000`); history_commits is the number read, history_truncated says the cap was reached. Priority: the run lowers its process priority to below normal (psutil) and spawns git with the below-normal creation flag (0x4000).
+Timing report: after the first 100 repos of a run finish, loops/code-head-timing.json = {repos, rows_per_hour (wall clock), predicted_hours = remaining / rows_per_hour, attributed, none_stated, skipped reasons} is written and printed; predicted_hours > 8.0 writes the STOP file and exits 3.
+The end-of-run summary (printed) and `status --form head` report attributed N, none_stated M and the skipped-reason counts."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import os, sys, re, json, time, base64, hashlib, shutil, stat, subprocess, threading, argparse, collections
@@ -37,6 +52,14 @@ import reserve_plan
 WALL_TS = 1667260800                       # 2022-11-01T00:00:00Z: a commit is inside the wall only when its committer time is STRICTLY before this
 BEFORE_ISO = "2022-10-31T23:59:59Z"        # rev-list --before is inclusive; one second earlier keeps `<= BEFORE` identical to `< WALL_TS`
 AUTHORITY = "lead 82956"
+HEAD_AUTHORITY = "lead 83076"
+HEAD_RULES_VERSION = "d3h-r1"              # the head form's own resume key version: a snapshot row (rules d3-r2) can never mark a head repo done
+HEAD_SOURCE_CLASS = "post-wall public code"
+HEAD_STOP_AFTER = 100                      # head form: timing report (and stop rule) after this many repos of a run
+HEAD_WORKERS = 8
+HEAD_MAX_SIZE_MB = 100                     # tranche 1
+LOG_CAP = 20000                            # git log -n: commits read for the attribution
+BELOW_NORMAL = 0x4000                      # Windows creation flag BELOW_NORMAL_PRIORITY_CLASS
 RULES_VERSION = "d3-r2"                    # part of the resume key: a change of rule is a new version, old rows do not count as done
 SOURCE_CLASS = "code, pre-wall snapshot"
 EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"      # the empty file: its sha says it is empty, nothing to fetch
@@ -64,6 +87,11 @@ GONE = re.compile(r"repository not found|returned error: 404|dmca|access blocked
 
 def _log(*a):
     print(time.strftime("%H:%M:%S"), *a, file=sys.stderr, flush=True)
+
+
+class CatalogueCommitMissing(RuntimeError):
+    """Head form: the catalogue commit is not reachable in the clone. An error row, no ledger row."""
+    kind = "catalogue_commit_missing"
 
 
 class WallViolation(Exception):
@@ -101,8 +129,8 @@ class RunnerError(Exception):
 class Runner:
     """Every git subprocess of this script (there is no gh / GitHub API call). Tests inject a fake with the same method."""
 
-    def __init__(self, git_timeout=1800):
-        self.git_timeout = git_timeout
+    def __init__(self, git_timeout=1800, low_priority=False):
+        self.git_timeout = git_timeout; self.low_priority = low_priority
 
     def git(self, args, cwd=None, input=None):
         """-> stdout bytes; RunnerError (with stderr) on a non-zero exit. Lazy promisor fetch is OFF for everything except clone and the explicit blob fetch: a missing object is then an error, never a silent per-object download."""
@@ -111,7 +139,8 @@ class Runner:
         words = [a for a in args if not a.startswith("-") and "=" not in a]
         if not words or words[0] not in ("clone", "fetch"):
             env["GIT_NO_LAZY_FETCH"] = "1"
-        p = subprocess.run(cmd, input=input, capture_output=True, timeout=self.git_timeout, env=env)
+        kw = {"creationflags": BELOW_NORMAL} if getattr(self, "low_priority", False) and os.name == "nt" else {}
+        p = subprocess.run(cmd, input=input, capture_output=True, timeout=self.git_timeout, env=env, **kw)
         if p.returncode != 0:
             raise RunnerError("git %s: %s" % (" ".join(map(str, args[:3])), p.stderr.decode("utf-8", "replace")[-300:]))
         return p.stdout
@@ -119,17 +148,19 @@ class Runner:
 
 # ------------------------------------------------------------------ paths and files
 class Paths:
-    def __init__(self, lane):
+    def __init__(self, lane, form="snapshot"):
+        k = "code-head" if form == "head" else "code-snapshot"
         self.lane = lane.replace("\\", "/").rstrip("/")
         self.catalog = self.lane + "/catalog/gh-mit-candidates.jsonl"
-        self.out = self.lane + "/code-snapshot"
+        self.out = self.lane + "/" + k
         self.docs = self.out + "/docs"
         self.stage = self.out + "/staging"
-        self.ledger = self.lane + "/loops/code-snapshot-ledger.jsonl"
-        self.removes = self.lane + "/loops/code-snapshot-removes.jsonl"
-        self.stop = self.lane + "/loops/code-snapshot-STOP.json"
-        self.errors = self.lane + "/loops/code-snapshot-errors.jsonl"
-        self.deferred = self.lane + "/loops/code-snapshot-deferred.jsonl"
+        self.ledger = self.lane + "/loops/%s-ledger.jsonl" % k
+        self.removes = self.lane + "/loops/%s-removes.jsonl" % k
+        self.stop = self.lane + "/loops/%s-STOP.json" % k
+        self.errors = self.lane + "/loops/%s-errors.jsonl" % k
+        self.deferred = self.lane + "/loops/%s-deferred.jsonl" % k
+        self.timing = self.lane + "/loops/%s-timing.json" % k
 
 
 _IO = threading.Lock()
@@ -165,15 +196,19 @@ def now_z():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def select_repos(catalog_path):
-    """Catalogue rows that count: licence MIT and every clean signal (the 5,682-repo set); first row per repo wins. A missing signal key counts as NOT clean."""
+def select_repos(catalog_path, max_size_kb=None):
+    """Catalogue rows that count: licence MIT and every clean signal (the 5,682-repo set); first row per repo wins. A missing signal key counts as NOT clean.
+    max_size_kb (head form, tranche 1): a row whose size_kb is a number above it is not selected; a missing size_kb stays selected (it is deferred later, never guessed)."""
     out, seen = [], set()
     for r in read_rows(catalog_path):
         s = r.get("signals") or {}
         clean = (s.get("has_tests_root") and s.get("has_ci") and s.get("recent_commit_365d") and s.get("not_fork") and s.get("not_archived") and not s.get("awesome_or_dump_flag", True))
         if r.get("licence_spdx") != "MIT" or not clean or not r.get("full_name") or not r.get("commit_sha") or not r.get("url") or r["full_name"] in seen:
             continue
-        seen.add(r["full_name"]); out.append(r)
+        seen.add(r["full_name"])
+        if max_size_kb is not None and isinstance(r.get("size_kb"), (int, float)) and r["size_kb"] > max_size_kb:
+            continue
+        out.append(r)
     return out
 
 
@@ -200,7 +235,7 @@ def dir_bytes(p):
     return t
 
 
-def remove_staging(path, stage, removes_path, repo="", authority=AUTHORITY):
+def remove_staging(path, stage, removes_path, repo="", authority=AUTHORITY, kind="code-snapshot staging clone, refetchable from the catalogue commit"):
     """Remove one repo's staging dir. The target must resolve strictly inside the staging tree (StagingEscape otherwise); the receipt row is written (fsynced) before the remove. -> bytes removed (0 when absent)."""
     rp = os.path.normcase(os.path.realpath(path)); rs = os.path.normcase(os.path.realpath(stage))
     if not rp.startswith(rs + os.sep) or rp == rs:
@@ -208,7 +243,7 @@ def remove_staging(path, stage, removes_path, repo="", authority=AUTHORITY):
     if not os.path.lexists(path):
         return 0
     n = dir_bytes(path)
-    append_row(removes_path, dict(ts=now_z(), path=os.path.abspath(path).replace("\\", "/"), bytes=n, authority=authority, repo=repo, kind="code-snapshot staging clone, refetchable from the catalogue commit"), sync=True)
+    append_row(removes_path, dict(ts=now_z(), path=os.path.abspath(path).replace("\\", "/"), bytes=n, authority=authority, repo=repo, kind=kind), sync=True)
 
     def _writable(fn, p, exc):
         os.chmod(p, stat.S_IWRITE); fn(p)                       # git packs are read-only on Windows
@@ -274,6 +309,68 @@ def list_tree(runner, clone, wall_sha):
         meta, path = rec.split(b"\t", 1); mode, typ, sha = meta.decode("ascii").split()
         ents.append(dict(path=path.decode("utf-8", "replace"), mode=mode, type=typ, sha=sha))
     return ents
+
+
+# ------------------------------------------------------------------ head form: agent attribution (read locally, never inferred from code style)
+AGENT_FAMILIES = (("aider", r"aider"), ("claude", r"claude|noreply@anthropic\.com"), ("codex", r"codex"), ("copilot", r"copilot"), ("cursor", r"cursor"), ("devin", r"devin"), ("gemini", r"gemini"), ("openhands", r"openhands"))
+_FAM_RE = {k: re.compile(r"(?<![a-z0-9])(?:%s)(?![a-z0-9])" % v, re.I) for k, v in AGENT_FAMILIES}
+_COAUTH = re.compile(r"^[ \t]*co-authored-by:(.*)$", re.I | re.M)
+LOG_FORMAT = "%an%x09%ae%x09%cn%x09%ce%x09%B%x1e"
+INSTRUCTION_BASENAMES = {"AGENTS.md", "CLAUDE.md", "GEMINI.md", ".cursorrules"}
+
+
+def instruction_paths(ents):
+    """Tree paths (any depth) that are agent instruction files."""
+    out = []
+    for e in ents:
+        if e["type"] != "blob":
+            continue
+        p = e["path"]; base = p.rsplit("/", 1)[-1]
+        if base in INSTRUCTION_BASENAMES or p == ".github/copilot-instructions.md" or p.endswith("/.github/copilot-instructions.md") or p.startswith(".cursor/rules/") or "/.cursor/rules/" in p:
+            out.append(p)
+    return sorted(out)
+
+
+def agent_attribution(runner, clone, commit, ents):
+    """-> (attribution dict, commits read, truncated). Signals: trailer (Co-Authored-By lines, and non-bot author / committer names or emails, naming an agent), bot_contributor ([bot] identities naming an agent), instruction_file (tree paths).
+    Every signal is read from the local clone (one `git log` over the catalogue commit, the tree already listed); no API call; code style is never looked at."""
+    raw = runner.git(["log", "-n", str(LOG_CAP), "--format=" + LOG_FORMAT, commit], clone).decode("utf-8", "replace")
+    recs = [x for x in raw.split("\x1e") if x.strip()]
+    fam, bots, bot_names = collections.Counter(), 0, set()
+    for rec in recs:
+        f = rec.lstrip("\n").split("\t", 4); f += [""] * (5 - len(f)); ids, body = f[:4], f[4]
+        hit = set()
+        for line in _COAUTH.findall(body):
+            hit.update(k for k, rx in _FAM_RE.items() if rx.search(line))
+        isbot = False
+        for i in ids:
+            if any(rx.search(i) for rx in _FAM_RE.values()) and "[bot]" in i.lower():
+                isbot = True; bot_names.add(i.strip())
+            elif "[bot]" not in i.lower() and "noreply@anthropic.com" in i.lower():      # a human first name (Devin, Claude, Gemini) in an author field is never evidence; only the agent's own mail identity is
+                hit.add("claude")
+        for k in hit:
+            fam[k] += 1
+        bots += isbot
+    ev = [dict(signal="trailer", where="git log", count=fam[k], family=k) for k, _ in AGENT_FAMILIES if fam[k]]
+    if bots:
+        ev.append(dict(signal="bot_contributor", where="git log", count=bots, names=sorted(bot_names)[:5]))
+    ip = instruction_paths(ents)
+    if ip:
+        ev.append(dict(signal="instruction_file", where=ip[:5], count=len(ip)))
+    return dict(state="attributed" if ev else "none_stated", evidence=ev), len(recs), len(recs) >= LOG_CAP
+
+
+def lower_priority(psutil_mod=None):
+    """Once per run: this process below normal priority (psutil); git children are spawned below normal by the Runner. -> True when applied."""
+    try:
+        ps = psutil_mod or __import__("psutil")
+        flag = getattr(ps, "BELOW_NORMAL_PRIORITY_CLASS", None)
+        if flag is None:
+            return False
+        ps.Process().nice(flag)
+        return True
+    except Exception:
+        return False
 
 
 def ineligible_class(e):
@@ -420,12 +517,19 @@ def measure_staging(eng, res, clone):
 
 
 class Engine:
-    def __init__(self, lane, runner=None, workers=4, clock=time.time, budget_cap=None, log=_log, stop_after=None, stop_hours=None, grow_wait_s=900):
-        self.p = Paths(lane); self.runner = runner or Runner(); self.workers = workers; self.clock = clock; self.log = log
+    def __init__(self, lane, runner=None, workers=None, clock=time.time, budget_cap=None, log=_log, stop_after=None, stop_hours=None, grow_wait_s=900, form="snapshot", max_size_mb=None):
+        self.form = form; self.head = form == "head"
+        self.p = Paths(lane, form); self.runner = runner or Runner(low_priority=self.head); self.clock = clock; self.log = log
+        self.workers = workers if workers is not None else (HEAD_WORKERS if self.head else 4)
+        self.rules, self.source_class, self.authority = (HEAD_RULES_VERSION, HEAD_SOURCE_CLASS, HEAD_AUTHORITY) if self.head else (RULES_VERSION, SOURCE_CLASS, AUTHORITY)
+        self.kind = ("code-head" if self.head else "code-snapshot") + " staging clone, refetchable from the catalogue commit"
+        mb = max_size_mb if max_size_mb is not None else (HEAD_MAX_SIZE_MB if self.head else None); self.max_size_kb = None if mb is None else mb * 1024
         self.budget = Budget(BUDGET_CAP if budget_cap is None else budget_cap, grow_wait_s); self.stop = threading.Event(); self.lock = threading.Lock()
-        self.stop_after, self.stop_hours = (STOP_AFTER if stop_after is None else stop_after), (STOP_HOURS if stop_hours is None else stop_hours)
+        default_after = HEAD_STOP_AFTER if self.head else STOP_AFTER
+        self.stop_after, self.stop_hours = (default_after if stop_after is None else stop_after), (STOP_HOURS if stop_hours is None else stop_hours)
         self.totals, self.finished, self.pending_total, self.errors, self.deferred = [], 0, 0, 0, 0
         self.fatal, self.floor_hit, self.stop_rule = None, False, None
+        self.run_t0 = None; self.states, self.attr = collections.Counter(), collections.Counter()
 
     # ---- one repo
     def process_repo(self, row, wid=0):
@@ -439,13 +543,15 @@ class Engine:
         try:
             if not reserve_plan.write_gate("gh_snapshot_fetch clone " + repo, max(self.budget.used, need), log=self.log, cap_s=3600, floor_fn=reserve_plan.floor_gib):
                 raise DiskFloor("write_gate refused: B: below the reserve floor for the whole gate cap; %s not cloned" % repo)
-            remove_staging(clone, self.p.stage, self.p.removes, repo)            # a crashed earlier attempt left its dir: redo from scratch
+            remove_staging(clone, self.p.stage, self.p.removes, repo, self.authority, self.kind)            # a crashed earlier attempt left its dir: redo from scratch
             led = self._snapshot(row, clone, res)
-            led.update(total_s=round(self.clock() - t0, 3), ts=now_z(), staging_peak_bytes=res.peak_dir, rules_version=RULES_VERSION, source_class=SOURCE_CLASS, scan_state="NOT_SCANNED")
+            led.update(total_s=round(self.clock() - t0, 3), ts=now_z(), staging_peak_bytes=res.peak_dir, rules_version=self.rules, source_class=self.source_class, scan_state="NOT_SCANNED")
+            if self.head:
+                led["form"] = "head"
             append_row(self.p.ledger, led, sync=True)
         finally:
             try:
-                remove_staging(clone, self.p.stage, self.p.removes, repo)
+                remove_staging(clone, self.p.stage, self.p.removes, repo, self.authority, self.kind)
             finally:
                 self.budget.release(res)
         return led
@@ -454,13 +560,29 @@ class Engine:
         led["skipped_reason"] = reason
         return led
 
+    def _clone(self, row, clone):
+        """Blobless clone. Head form: one retry after a failure (the partial dir is removed first); a repo-gone answer is final at once."""
+        for attempt in range(2 if self.head else 1):
+            try:
+                self.runner.git(["clone", "--quiet", "--filter=blob:none", "--no-checkout", row["url"], clone])
+                return
+            except RunnerError as e:
+                if GONE.search(str(e)) or attempt or not self.head:
+                    raise
+                self.log("clone of %s failed (%s); one retry" % (row["full_name"], str(e)[:120]))
+                remove_staging(clone, self.p.stage, self.p.removes, row["full_name"], self.authority, self.kind)
+
     def _snapshot(self, row, clone, res):
-        repo, csha, r = row["full_name"], row["commit_sha"], self.runner
-        led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, wall_commit_author_ts=None, history_commits=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
-                   files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None)
+        repo, csha, r, head = row["full_name"], row["commit_sha"], self.runner, self.head
+        if head:
+            led = dict(repo=repo, catalog_commit_sha=csha, head_commit_ts=None, history_commits=None, history_truncated=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
+                       files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None, agent_attribution=None)
+        else:
+            led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, wall_commit_author_ts=None, history_commits=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
+                       files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None)
         os.makedirs(os.path.dirname(clone), exist_ok=True)
         try:
-            r.git(["clone", "--quiet", "--filter=blob:none", "--no-checkout", row["url"], clone])
+            self._clone(row, clone)
         except RunnerError as e:
             if GONE.search(str(e)):
                 return self._skip(led, "repo_unavailable")
@@ -469,20 +591,30 @@ class Engine:
         try:
             r.git(["cat-file", "-e", csha + "^{commit}"], clone)
         except RunnerError:
+            if head:
+                raise CatalogueCommitMissing("catalogue commit %s is not reachable in the clone of %s" % (csha, repo))
             return self._skip(led, "catalog_commit_missing")
-        wall = select_wall_commit(r, clone, csha)
-        if wall is None:
-            return self._skip(led, "no_pre_wall_history")
-        wsha, wts = wall; led["wall_commit"], led["wall_commit_ts"] = wsha, wts
-        hist = history_times(r, clone, wsha)
-        led["wall_commit_author_ts"], led["history_commits"] = hist[0][1], len(hist)
-        if any(ct >= WALL_TS or at >= WALL_TS for ct, at in hist):
-            return self._skip(led, "history_dates_not_monotone")
-        ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
+        if head:
+            wsha = csha                                          # the tree to read is the catalogue commit itself: no wall commit, no ancestry check
+            led["head_commit_ts"] = int(r.git(["show", "-s", "--format=%ct", csha], clone).decode().strip() or 0)
+            ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
+            attr, led["history_commits"], led["history_truncated"] = agent_attribution(r, clone, csha, ents); led["agent_attribution"] = attr
+            suf = "_at_head"
+        else:
+            wall = select_wall_commit(r, clone, csha)
+            if wall is None:
+                return self._skip(led, "no_pre_wall_history")
+            wsha, wts = wall; led["wall_commit"], led["wall_commit_ts"] = wsha, wts
+            hist = history_times(r, clone, wsha)
+            led["wall_commit_author_ts"], led["history_commits"] = hist[0][1], len(hist)
+            if any(ct >= WALL_TS or at >= WALL_TS for ct, at in hist):
+                return self._skip(led, "history_dates_not_monotone")
+            ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
+            suf = "_at_wall_commit"
         # licence: EVERY root licence file must be the MIT text
         root_lic = sorted((e for e in ents if e["type"] == "blob" and e["mode"] != "120000" and "/" not in e["path"] and LIC_ROOT.match(e["path"])), key=lambda e: e["path"])
         if not root_lic:
-            return self._skip(led, "no_licence_file_at_wall_commit")
+            return self._skip(led, "no_licence_file" + suf)
         led["licence_file_sha"] = root_lic[0]["sha"]
         sub = [e for e in ents if e["type"] == "blob" and e["mode"] != "120000" and "/" in e["path"] and LIC_ANY.search(e["path"])]
         t = self.clock()
@@ -493,9 +625,9 @@ class Engine:
             raise BlobUnavailable("licence blob(s) unreadable: %s" % ", ".join(miss[:5]))
         verdict = [len(lic[e["sha"]]) <= LICENCE_READ_MAX and is_mit(lic[e["sha"]].decode("utf-8", "replace")) for e in root_lic]
         if not any(verdict):
-            return self._skip(led, "licence_not_mit_at_wall_commit")
+            return self._skip(led, "licence_not_mit" + suf)
         if not all(verdict):
-            return self._skip(led, "licence_mixed_at_wall_commit")
+            return self._skip(led, "licence_mixed" + suf)
         # a subtree holding a non-MIT licence file is dropped whole
         bad = sorted({e["path"].rsplit("/", 1)[0] for e in sub if not (len(lic[e["sha"]]) <= LICENCE_READ_MAX and is_mit(lic[e["sha"]].decode("utf-8", "replace")))})
         inel, drops, cand = collections.Counter(), collections.Counter(), []
@@ -528,7 +660,10 @@ class Engine:
                     why, text = classify(e["path"], b)
                     if why:
                         drops[why] += 1; continue
-                    rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, spdx="MIT", source_class=SOURCE_CLASS))
+                    if head:
+                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], head_commit=wsha, spdx="MIT", source_class=HEAD_SOURCE_CLASS, agent_attribution=led["agent_attribution"]))
+                    else:
+                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, spdx="MIT", source_class=SOURCE_CLASS))
                     led["bytes_kept"] += len(b); kept += 1
                 if rows:
                     if shard is None:
@@ -550,6 +685,32 @@ class Engine:
         return led
 
     # ---- the rolling run
+    def _finish_head(self, led):
+        """Head form: tally the terminal state and attribution; after the first stop_after repos of the run write + print the timing report (wall-clock rows/hour); predicted hours above the limit write the STOP file."""
+        with self.lock:
+            self.finished += 1
+            self.states[led["skipped_reason"] or "kept"] += 1
+            a = led.get("agent_attribution"); self.attr[a["state"] if isinstance(a, dict) else "unattributable"] += 1
+            if self.finished == self.stop_after and self.stop_rule is None:
+                elapsed = max(self.clock() - self.run_t0, 1e-9); rate = self.finished / elapsed * 3600; remaining = max(0, self.pending_total - self.finished)
+                hours = remaining / rate if rate > 0 else float("inf")
+                self.stop_rule = dict(repos=self.finished, rows_per_hour=round(rate, 3), predicted_hours=round(hours, 3), repos_remaining=remaining, limit_hours=self.stop_hours, workers=self.workers,
+                                      attributed=self.attr["attributed"], none_stated=self.attr["none_stated"], skipped_reasons={k: v for k, v in self.states.items() if k != "kept"}, kept=self.states["kept"], ts=now_z())
+                os.makedirs(os.path.dirname(self.p.timing), exist_ok=True)
+                with open(self.p.timing, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(json.dumps(self.stop_rule, indent=1) + "\n")
+                print(json.dumps(self.stop_rule, indent=1), flush=True)
+                if hours > self.stop_hours:
+                    with open(self.p.stop, "w", encoding="utf-8", newline="\n") as f:
+                        f.write(json.dumps(self.stop_rule, indent=1) + "\n")
+                    self.stop.set(); self.log("STOP RULE: predicted %.1f h > %.1f h; workers stop" % (hours, self.stop_hours))
+                else:
+                    self.stop_rule["fired"] = False
+
+    def summary(self):
+        return dict(form=self.form, finished=self.finished, errors=self.errors, deferred=self.deferred, attributed=self.attr["attributed"], none_stated=self.attr["none_stated"],
+                    skipped_reasons={k: v for k, v in self.states.items() if k != "kept"}, kept=self.states["kept"])
+
     def _finish(self, total_s):
         with self.lock:
             self.finished += 1
@@ -578,8 +739,11 @@ class Engine:
                 return
             try:
                 led = self.process_repo(row, wid)
-                self.log("done %s %s kept=%d/%dB wall=%s" % (row["full_name"], led["skipped_reason"] or "kept", led["files_kept"], led["bytes_kept"], (led["wall_commit"] or "-")[:12]))
-                self._finish(led["total_s"])
+                self.log("done %s %s kept=%d/%dB %s=%s" % (row["full_name"], led["skipped_reason"] or "kept", led["files_kept"], led["bytes_kept"], "head" if self.head else "wall", ((row["commit_sha"] if self.head else led["wall_commit"]) or "-")[:12]))
+                if self.head:
+                    self._finish_head(led)
+                else:
+                    self._finish(led["total_s"])
             except Stopped:
                 return
             except WallViolation as e:
@@ -596,8 +760,11 @@ class Engine:
         if os.path.exists(self.p.stop) and not ignore_stop:
             self.log("STOP file exists (%s): the timing stop rule fired earlier; read it, then rerun with --ignore-stop" % self.p.stop)
             return 3
+        if self.head:
+            lower_priority()
+        self.run_t0 = self.clock()
         done = done_keys(self.p.ledger)
-        sel = [r for r in select_repos(self.p.catalog) if row_key(r["full_name"], r["commit_sha"]) not in done]
+        sel = [r for r in select_repos(self.p.catalog, self.max_size_kb) if row_key(r["full_name"], r["commit_sha"], self.rules) not in done]
         fits, self.deferred = [], 0
         for r in sel:
             why = "size_kb_missing" if not isinstance(r.get("size_kb"), (int, float)) else ("need_over_staging_cap" if predicted_need(r) > self.budget.cap else None)
@@ -615,6 +782,8 @@ class Engine:
         for t in threads:
             t.join()
         self.log("run end: finished %d, errors %d, deferred %d" % (self.finished, self.errors, self.deferred))
+        if self.head:
+            self.log("run end: attributed %d, none_stated %d, skipped %s" % (self.attr["attributed"], self.attr["none_stated"], dict(self.summary()["skipped_reasons"])))
         if self.fatal:
             return 4
         if self.floor_hit:
@@ -624,27 +793,36 @@ class Engine:
         return 1 if self.errors else 0
 
 
-def status(lane):
-    p = Paths(lane); sel = select_repos(p.catalog); led = {row_key(r["repo"], r.get("catalog_commit_sha"), r.get("rules_version")): r for r in read_rows(p.ledger) if r.get("repo")}
-    mine = [led[row_key(r["full_name"], r["commit_sha"])] for r in sel if row_key(r["full_name"], r["commit_sha"]) in led]
+def status(lane, form="snapshot", max_size_mb=None):
+    head = form == "head"; rules = HEAD_RULES_VERSION if head else RULES_VERSION
+    mb = max_size_mb if max_size_mb is not None else (HEAD_MAX_SIZE_MB if head else None)
+    p = Paths(lane, form); sel = select_repos(p.catalog, None if mb is None else mb * 1024); led = {row_key(r["repo"], r.get("catalog_commit_sha"), r.get("rules_version")): r for r in read_rows(p.ledger) if r.get("repo")}
+    mine = [led[row_key(r["full_name"], r["commit_sha"], rules)] for r in sel if row_key(r["full_name"], r["commit_sha"], rules) in led]
     reasons = collections.Counter(r["skipped_reason"] or "kept" for r in mine); dropped, inel = collections.Counter(), collections.Counter()
     for r in mine:
         dropped.update(r.get("files_dropped") or {}); inel.update(r.get("ineligible") or {})
     stage = sum(dir_bytes(os.path.join(p.stage, d)) for d in os.listdir(p.stage)) if os.path.isdir(p.stage) else 0
-    out = dict(rules_version=RULES_VERSION, selected=len(sel), in_ledger=len(mine), remaining=len(sel) - len(mine), terminal_states=dict(reasons), files_kept=sum(r["files_kept"] for r in mine), bytes_kept=sum(r["bytes_kept"] for r in mine),
+    out = dict(rules_version=rules, selected=len(sel), in_ledger=len(mine), remaining=len(sel) - len(mine), terminal_states=dict(reasons), files_kept=sum(r["files_kept"] for r in mine), bytes_kept=sum(r["bytes_kept"] for r in mine),
                files_dropped=dict(dropped), ineligible=dict(inel), mean_total_s=round(sum(r["total_s"] for r in mine) / len(mine), 2) if mine else None, mean_fetch_s=round(sum(r["fetch_s"] for r in mine) / len(mine), 2) if mine else None,
                staging_resident_bytes=stage, stop_file=os.path.exists(p.stop))
+    if head:
+        sts = collections.Counter((r.get("agent_attribution") or {}).get("state", "unattributable") for r in mine)
+        out.update(form="head", attributed=sts["attributed"], none_stated=sts["none_stated"], unattributable=sts["unattributable"], skipped_reasons={k: v for k, v in reasons.items() if k != "kept"}, max_size_mb=mb)
     print(json.dumps(out, indent=1)); return 0
 
 
 def main(argv=None, runner=None, lane=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0]); sp = ap.add_subparsers(dest="cmd", required=True)
-    r = sp.add_parser("run"); r.add_argument("--limit", type=int, default=0); r.add_argument("--workers", type=int, default=4); r.add_argument("--ignore-stop", action="store_true")
-    sp.add_parser("status")
+    r = sp.add_parser("run"); r.add_argument("--limit", type=int, default=0); r.add_argument("--workers", type=int, default=None, help="default 4 (snapshot form), 8 (head form)"); r.add_argument("--ignore-stop", action="store_true")
+    r.add_argument("--form", choices=("snapshot", "head"), default="snapshot"); r.add_argument("--max-size-mb", type=int, default=None, help="tranche cap on size_kb; default 100 in head form, none in snapshot form")
+    s = sp.add_parser("status"); s.add_argument("--form", choices=("snapshot", "head"), default="snapshot"); s.add_argument("--max-size-mb", type=int, default=None)
     a = ap.parse_args(argv); lane = lane or lane_config.LANE_ROOT
     if a.cmd == "status":
-        return status(lane)
-    return Engine(lane, runner=runner, workers=a.workers).run(limit=a.limit, ignore_stop=a.ignore_stop)
+        return status(lane, a.form, a.max_size_mb)
+    eng = Engine(lane, runner=runner, workers=a.workers, form=a.form, max_size_mb=a.max_size_mb); code = eng.run(limit=a.limit, ignore_stop=a.ignore_stop)
+    if a.form == "head":
+        print(json.dumps(eng.summary(), indent=1), flush=True)
+    return code
 
 
 if __name__ == "__main__":
