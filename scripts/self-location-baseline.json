@@ -1,6 +1,6 @@
 {
   "baselined_row_count": 205,
-  "expires_on": "2026-11-11",
+  "expires_on": "2026-11-12",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the scheduled master check (ci-nightly) fails on every baselined row; pull requests and the merge queue carry a warning and are not blocked",
   "goal_id": "EMBER-02",
@@ -2470,6 +2470,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "da717fe54c9e6f6ed56cfcb4d08b6a1a2a96246e8b9d37917d601610abebffa3",
+  "self_sha256": "5b2c7631416056ac5f319492b6efe0225fb2c84f8a0c6bcf6dd6cbaf6c872017",
   "workstream_id": "EMBER-02A"
 }
