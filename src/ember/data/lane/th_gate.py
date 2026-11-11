@@ -110,20 +110,56 @@ def _expand(path, d, k):
     return list(_expand_iter(path, d, k))
 
 
+def _stderr_json(err):
+    """Parsed JSON log lines of TruffleHog's stderr (a line that starts with { but does not parse is kept as a raw marker so an error-level fragment still counts)."""
+    out = []
+    for l in err.splitlines():
+        l = l.strip()
+        if not l.startswith(b"{"): continue
+        try: out.append(json.loads(l))
+        except Exception: out.append({"level": "error" if b'"level":"error"' in l else "?"})
+    return out
+
+
+def _stderr_errors(err):
+    """Number of error-level JSON log lines in stderr (count only: file contents never reach a message)."""
+    return sum(1 for j in _stderr_json(err) if isinstance(j, dict) and j.get("level") == "error")
+
+
+def _finished_bytes(err):
+    """`bytes` of the last "finished scanning" log line, or None when there is none."""
+    fin = [j for j in _stderr_json(err) if isinstance(j, dict) and j.get("msg") == "finished scanning"]
+    try: return int(fin[-1]["bytes"]) if fin else None
+    except (KeyError, TypeError, ValueError): return None
+
+
+def _changed(sizes):
+    """Number of targets now missing, unreadable or of a different size than recorded before launch."""
+    n = 0
+    for p, sz in sizes.items():
+        try:
+            if not os.path.isfile(p) or os.path.getsize(p) != sz: n += 1
+        except OSError: n += 1
+    return n
+
+
 def _run(targets, timeout, tmpdir=None):
     """ONE TruffleHog process over all `targets` -> list of finding dicts. Fail-closed: a missing/unreadable target, a non-zero exit after MAX_ATTEMPTS, a timeout on every attempt, or a stdout line
-    that starts with { but is not valid JSON raises ThError."""
+    that starts with { but is not valid JSON raises ThError. After a rc 0 run three more refusals apply (lead 83073, never retried): an error-level stderr line, a target that vanished or changed size, and
+    "finished scanning" bytes below the summed target sizes (or no such line)."""
     if not os.path.exists(TH):
         raise ThError("trufflehog binary missing: " + TH)
     targets = list(targets)
+    sizes = {}      # path -> size recorded just before launch: a part that vanished or changed during the run is detected afterwards (lead 83073)
     for t in targets:      # a part that vanished or cannot be read is never "clean"
         try:
             if not os.path.isfile(t): raise OSError("not a file")
             with open(t, "rb") as fh: fh.read(1)
+            sizes[t] = os.path.getsize(t)
         except OSError:
             raise ThError("unreadable scan target: " + os.path.basename(t))
     env = dict(os.environ, TMP=tmpdir, TEMP=tmpdir) if tmpdir else None      # archive handlers' temp files stay on the scratch drive (never C:)
-    size_mb = sum(os.path.getsize(t) for t in targets) // (1 << 20)
+    size_mb = sum(sizes.values()) // (1 << 20)
     out = b""; err = b""; rc = None; timeouts = 0
     for attempt in range(1, MAX_ATTEMPTS + 1):      # TruffleHog 3.99.8 exits rc=1 on ~half of runs after "finished scanning path" (same 20 MB file: rc 0 1 1 0 1 0 ...; not load, not network, not flags; 2026-11-10): retry, alternate concurrency 2/1; still fail-closed
         cmd = [TH, "filesystem"] + targets + ["--json", "--no-update", "--no-verification", "--results=" + RESULTS, "--concurrency=%d" % (2 if attempt % 2 else 1)]
@@ -138,6 +174,8 @@ def _run(targets, timeout, tmpdir=None):
         except subprocess.TimeoutExpired:      # a hung run is retried like a crashed one
             p.kill(); p.communicate(); timeouts += 1; rc = None
             continue
+        if _changed(sizes):      # a target vanished or changed size during the run (TruffleHog 3.99.8 then still exits 0 with empty stdout): refuse now, a retry would only meet the same missing file
+            raise ThError("%d scan target(s) vanished or changed size while trufflehog ran: part not fully scanned" % _changed(sizes))
         rc = p.returncode
         if rc == 0:
             break
@@ -145,6 +183,11 @@ def _run(targets, timeout, tmpdir=None):
         if rc is None:
             raise ThError("trufflehog timed out %d times" % timeouts)
         raise ThError("trufflehog rc=%s after %d tries: %s" % (rc, MAX_ATTEMPTS, err[-200:].decode("utf-8", "ignore")))
+    if _stderr_errors(err):      # rc 0 with an error-level log line: TruffleHog hit errors and skipped input (never "clean")
+        raise ThError("trufflehog logged %d error line(s) during the scan: not trusted" % _stderr_errors(err))
+    fin = _finished_bytes(err)
+    if fin is None or fin < sum(sizes.values()):      # measured on 3.99.8: bytes >= the summed target sizes on every clean run (chunks overlap), so fewer bytes than the targets hold means input was not read
+        raise ThError("trufflehog printed no 'finished scanning' line: scan not confirmed complete" if fin is None else "trufflehog scanned %d bytes of %d: part not fully scanned" % (fin, sum(sizes.values())))
     rows = []
     for l in out.splitlines():
         l = l.strip()
