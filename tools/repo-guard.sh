@@ -242,21 +242,23 @@ fi
 # regardless of what the commit actually introduces. The tree-wide scan
 # (default, no env var) is unchanged and is what CI / the freshness monitor
 # run. Same PATHPAT and conditional/fixture pathspecs, applied to the diff.
+RG_PATHS_OUT="$(mktemp)"
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
-  if git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git diff --cached -U0 --no-color -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATHPAT" >"$RG_PATHS_OUT" 2>/dev/null && [ -s "$RG_PATHS_OUT" ]; then
     fail "paths" "absolute local filesystem paths in staged changes"
-    sed 's/^/      /' /tmp/rg_paths | head -20
+    sed 's/^/      /' "$RG_PATHS_OUT" | head -20
   else
     ok "paths" "no absolute local paths (staged scope)"
   fi
 else
-  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >/tmp/rg_paths 2>/dev/null && [ -s /tmp/rg_paths ]; then
+  if git grep -nIE "$PATHPAT" -- . "${PATHPAT_SELF_EXCLUDE_ARGS[@]}" "${PATHPAT_FIXTURE_EXCLUDE_ARGS[@]}" >"$RG_PATHS_OUT" 2>/dev/null && [ -s "$RG_PATHS_OUT" ]; then
     fail "paths" "absolute local filesystem paths in tracked files"
-    sed 's/^/      /' /tmp/rg_paths | head -20
+    sed 's/^/      /' "$RG_PATHS_OUT" | head -20
   else
     ok "paths" "no absolute local paths"
   fi
 fi
+rm -f "$RG_PATHS_OUT"
 
 # ---- 2b. no local path fragments in tracked text (avir/, /mnt refs) -------
 # Detect private mount fragments that carry developer-local context.
