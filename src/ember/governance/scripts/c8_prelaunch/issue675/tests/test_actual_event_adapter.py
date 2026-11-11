@@ -13,16 +13,16 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-ADAPTER_PATH = ROOT / "q2_actual_event_adapter.py"
-LOADER_PATH = ROOT / "q2_capture_loader.py"
-MUON_PATH = ROOT / "q2_muon_primitives.py"
-LINEAGE_PATH = ROOT / "q2_model_lineage.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+ADAPTER_PATH = TRANCHE_DIR / "q2_actual_event_adapter.py"
+LOADER_PATH = TRANCHE_DIR / "q2_capture_loader.py"
+MUON_PATH = TRANCHE_DIR / "q2_muon_primitives.py"
+LINEAGE_PATH = TRANCHE_DIR / "q2_model_lineage.py"
 
 
 def _load():
     assert ADAPTER_PATH.exists(), "q2_actual_event_adapter.py is not implemented"
-    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(TRANCHE_DIR))
     try:
         spec = importlib.util.spec_from_file_location("q2_actual_event_adapter", ADAPTER_PATH)
         assert spec is not None and spec.loader is not None
@@ -30,7 +30,7 @@ def _load():
         spec.loader.exec_module(module)
         return module
     finally:
-        sys.path.remove(str(ROOT))
+        sys.path.remove(str(TRANCHE_DIR))
 
 
 def _load_loader():

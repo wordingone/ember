@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS_ROOT = os.path.dirname(HERE)
-sys.path.insert(0, SCRIPTS_ROOT)
+SCRIPTS_DIR = os.path.dirname(HERE)
+sys.path.insert(0, SCRIPTS_DIR)
 
 from w2_heldout.w1c_batch_orchestrator import (
     source_for_global_start,

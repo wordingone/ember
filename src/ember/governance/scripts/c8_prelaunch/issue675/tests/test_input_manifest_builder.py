@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import torch
 
-ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT))
+TRANCHE_DIR=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(TRANCHE_DIR))
 from q2_event_inputs import admit_event_inputs
 import q2_input_manifest_builder as builder
 import q2_model_lineage

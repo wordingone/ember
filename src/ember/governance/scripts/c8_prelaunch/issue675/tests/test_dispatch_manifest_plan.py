@@ -13,13 +13,13 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "q2_dispatch_manifest.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+MODULE_PATH = TRANCHE_DIR / "q2_dispatch_manifest.py"
 
 
 def _load():
     assert MODULE_PATH.exists(), "q2_dispatch_manifest.py is not implemented"
-    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(TRANCHE_DIR))
     try:
         spec = importlib.util.spec_from_file_location("q2_dispatch_manifest", MODULE_PATH)
         assert spec is not None and spec.loader is not None
@@ -27,7 +27,7 @@ def _load():
         spec.loader.exec_module(module)
         return module
     finally:
-        sys.path.remove(str(ROOT))
+        sys.path.remove(str(TRANCHE_DIR))
 
 
 def _files(root: Path) -> dict[str, Path]:

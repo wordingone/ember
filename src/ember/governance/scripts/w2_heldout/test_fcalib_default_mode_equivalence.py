@@ -23,9 +23,9 @@ import pytest
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS_ROOT = os.path.dirname(HERE)
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_ROOT))))  # <root>/src/ember/governance/scripts -> <root>
-sys.path.insert(0, SCRIPTS_ROOT)
+SCRIPTS_DIR = os.path.dirname(HERE)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_DIR))))  # <root>/src/ember/governance/scripts -> <root>
+sys.path.insert(0, SCRIPTS_DIR)
 
 
 def _make_synthetic_shard_receipt(tmpdir: str) -> tuple[str, dict]:
@@ -142,7 +142,7 @@ def test_fcalib_default_mode_equivalence():
         # Set PYTHONPATH for old fcalib to find scripts.lib and receipt_check modules
         env_old = os.environ.copy()
         pathsep = ";" if sys.platform == "win32" else ":"
-        env_old["PYTHONPATH"] = f"{REPO_ROOT}{pathsep}{SCRIPTS_ROOT}"
+        env_old["PYTHONPATH"] = f"{REPO_ROOT}{pathsep}{SCRIPTS_DIR}"
 
         old_result = subprocess.run([
             sys.executable, old_fcalib_path,

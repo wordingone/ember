@@ -62,7 +62,7 @@ from src.ember.governance.scripts.branch_inventory import (
     check_inventory,
 )
 
-DEFAULT_DATA_ROOT = os.path.join(
+DEFAULT_DATA_DIR = os.path.join(
     GOVERNANCE_SCRIPTS, "ember_totality", "receipts-totality"
 )
 README_PATH = os.path.join(ROOT, "README.md")
@@ -889,7 +889,7 @@ def main():
     )
     parser.add_argument(
         "--data-root",
-        default=DEFAULT_DATA_ROOT,
+        default=DEFAULT_DATA_DIR,
         help=(
             "directory to scan for ember-totality-*.json (default: this repo's "
             "scripts/ember_totality/receipts-totality/). Point this at a board-run lane's live "

@@ -10,8 +10,8 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "q2_muon_primitives.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+MODULE_PATH = TRANCHE_DIR / "q2_muon_primitives.py"
 
 
 def _load():
