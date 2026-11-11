@@ -290,7 +290,7 @@ def ruled_manifest(paths, manifest, *, ruling, note, roots, require_nlink=0, pin
 
 
 def remove_ruled(row, *, roots, receipt, remove=os.remove, require_nlink=0, dry=False):
-    """NO-COPY path, step 2: the file must still be the one the manifest row describes (size, mtime_ns, inode), under the same ruling and the same pin; receipt row first. Not server-verified and never labelled so."""
+    """NO-COPY path, step 2: the file must still be the one the manifest row describes (size, mtime_ns, inode), under the same ruling and the same pin; receipt row first. nlink is not compared against the manifest row: _pre(require_nlink) and the final _same in _remove_checked enforce it. Not server-verified and never labelled so."""
     if row.get("kind") != "ruled-no-copy" or not ruling_ok(row.get("ruling")) or not row.get("sha256"):
         return _refuse("not a ruled-no-copy manifest row")
     if not (row.get("plan_sha256") or row.get("pinned_by")):
