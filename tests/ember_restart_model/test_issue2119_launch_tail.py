@@ -94,12 +94,18 @@ class RealCallOrderTests(unittest.TestCase):
         self.assertEqual(verifier, ['quarantine', 'counter'])  # the checkpoint verifier runs inside the publish call below
         self.assertEqual([p for _, p in launch], ['segment_launch', 'segment_complete'])
         self.assertEqual([p for _, p in worker], ['worker_terminal'])
-        self.assertLess(run_hour['child_publish_start'], run_hour['hour_result'])
+        # review r1: the publish happens in publish_child_with_witness, the one path run_hour publishes through; it stamps child_publish_start
+        # and then calls publish() (which calls the verifier), and run_hour calls it once, before it stamps hour_result.
+        publisher = dict((phase, line) for line, phase in stamp_calls(hour, 'publish_child_with_witness'))
+        self.assertEqual(sorted(publisher), ['child_publish_start'])
+        self.assertNotIn('child_publish_start', run_hour)
         self.assertLess(run_hour['hour_result'], run_hour['pointer_cas'])
-        # publish() (which calls the verifier) is invoked between child_publish_start and hour_result in run_hour.
         source = hour.read_text(encoding='utf-8').splitlines()
-        publish_line = next(i + 1 for i, text in enumerate(source) if text.strip().startswith("child = publish('trained-child'"))
-        self.assertTrue(run_hour['child_publish_start'] < publish_line < run_hour['hour_result'])
+        inner = next(i + 1 for i, text in enumerate(source) if text.strip() == 'child = publish()')
+        self.assertGreater(inner, publisher['child_publish_start'])
+        calls = [i + 1 for i, text in enumerate(source) if text.strip().startswith('child, checkpoint_finished, terminal_state = publish_child_with_witness(')]
+        self.assertEqual(len(calls), 1)
+        self.assertLess(calls[0], run_hour['hour_result'])
         # Control flow: launch() start, then the worker runs run_hour then stamps worker_terminal, then launch() completes.
         return ['segment_launch', 'child_publish_start'] + verifier + ['hour_result', 'pointer_cas', 'worker_terminal', 'segment_complete']
 

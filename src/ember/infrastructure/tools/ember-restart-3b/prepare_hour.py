@@ -352,6 +352,13 @@ def main():
     parser.add_argument('--batch-documents', choices=('true', 'false'), required=True)
     parser.add_argument('--expected-step-seconds', type=float, required=True)
     parser.add_argument('--basis', required=True)
+    parser.add_argument('--predicted-peak-job-memory-bytes', type=int, required=True,
+                        help='declared peak Job Object memory of the hour in bytes (#2119); the runner refuses a value within 4 GiB of the job limit')
+    parser.add_argument('--before-verify-resident-bytes', type=int,
+                        help='with --checkpoint-probe: the worker private commit THIS hour is declared to hold when its restore verify starts (the previous hour result '
+                             'job_memory_phase_private_bytes.before_verify); the probe it consumes must have held at least this at its own verify (#2119)')
+    parser.add_argument('--probe-verify-resident-bytes', type=int,
+                        help='with --probe: the worker private commit the hour holds when its restore verify starts (the previous hour result job_memory_phase_private_bytes.before_verify); the probe holds it too')
     parser.add_argument('--execution-mode', choices=('resident-segmented-capture', 'resident-dynamic-capture'))
     parser.add_argument('--arm', required=True, choices=('control', 'treatment'))
     parser.add_argument('--probe', action='store_true')
@@ -431,6 +438,10 @@ def main():
     digest = runner.file_sha256
     if args.probe and args.learning:
         raise ValueError('a checkpoint probe is not a learning comparison')
+    if args.probe != (args.probe_verify_resident_bytes is not None):
+        raise ValueError('--probe-verify-resident-bytes is required with --probe and refused without it (#2119)')
+    if (args.checkpoint_probe is not None) != (args.before_verify_resident_bytes is not None):
+        raise ValueError('--before-verify-resident-bytes is required with --checkpoint-probe and refused without it (#2119)')
     selector = dict(hour=dict(schema='checkpoint-probe-v1' if args.probe else 'learning-comparison-v1' if args.learning
                               else 'governed-hour-v1', arm=args.arm,
         minimum_wall_seconds=0 if args.probe or args.learning else 3600,
@@ -592,7 +603,10 @@ def main():
         raise ValueError('expected duration must be positive')
     prediction = dict(schema='ember-cia-step-prediction-v1', identity=identity,
         expected_step_seconds=args.expected_step_seconds,
-        expected_positions_per_second=count / args.expected_step_seconds, basis=args.basis)
+        expected_positions_per_second=count / args.expected_step_seconds, basis=args.basis,
+        predicted_peak_job_memory_bytes=args.predicted_peak_job_memory_bytes,
+        **({'probe_verify_resident_bytes': args.probe_verify_resident_bytes} if args.probe else {}),
+        **({'before_verify_resident_bytes': args.before_verify_resident_bytes} if args.checkpoint_probe is not None else {}))
     runner.validate_prediction(prediction, expected_identity=identity, positions_per_step=count)
     runner.prepare_execution(prediction)
     prediction_bytes = canonical(prediction)

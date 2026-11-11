@@ -54,7 +54,8 @@ class ContinuationModeTests(unittest.TestCase):
             geometry=dict(sequence_length=1024, documents_per_step=4, warm_steps=1, measured_steps=1024))
         identity['resources'] = runner.resource_limits(identity)
         prediction = dict(schema='ember-cia-step-prediction-v1', identity=identity,
-            expected_step_seconds=1.5, expected_positions_per_second=4096/1.5, basis='single reproduced update')
+            expected_step_seconds=1.5, expected_positions_per_second=4096/1.5, basis='single reproduced update',
+            predicted_peak_job_memory_bytes=35 * 1024 ** 3)
         runner.validate_prediction(prediction, expected_identity=identity, positions_per_step=4096)
         self.assertEqual(identity['hour']['minimum_measured_steps'], 1024)
         prediction.update(expected_step_seconds=900, expected_positions_per_second=4096/900)

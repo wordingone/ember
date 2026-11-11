@@ -165,8 +165,29 @@ def validate_probe_inputs(runner, prior, identity):
         raise ValueError('checkpoint probe execution mode differs from the hour')
 
 
-def validate_checkpoint_probe(runner, identity):
-    """Require a completed same-source probe and reopen its real admitted child."""
+PROBE_HOLD_FIELDS = ('declared_bytes', 'process_private_bytes_before_hold', 'ballast_bytes', 'process_private_bytes_after_hold')
+
+
+def require_probe_held(record, level):
+    """The probe is a dry run of the end of the hour only if it HELD the resident set the hour holds at its restore verify. `record` is the
+    probe's `probe_verify_resident` block of its hour result, `level` the consuming hour's declared `before_verify_resident_bytes`. The
+    probe's own process private commit, read after the hold, must be at least that level; the requested ballast is never taken for the
+    hold (a probe that was told to hold one byte holds one byte and satisfies nothing; #2119, review r1 item 2)."""
+    if type(level) is not int or level <= 0:
+        raise ValueError('the hour declares no positive before_verify_resident_bytes to hold a probe to')
+    if type(record) is not dict or set(record) != set(PROBE_HOLD_FIELDS) or any(
+            type(record[name]) is not int or record[name] < 0 for name in PROBE_HOLD_FIELDS):
+        raise ValueError('checkpoint probe result lacks the resident set it held (probe_verify_resident): a probe that did not record its hold cannot stand for the hour')
+    if record['process_private_bytes_after_hold'] < level:
+        raise ValueError('checkpoint probe held %d bytes at its restore verify, below the %d bytes the hour holds: the probe is not a dry run of the hour'
+                         % (record['process_private_bytes_after_hold'], level))
+    if record['declared_bytes'] < level:
+        raise ValueError('checkpoint probe declared %d bytes to hold, below the %d bytes the hour holds' % (record['declared_bytes'], level))
+
+
+def validate_checkpoint_probe(runner, identity, *, required_hold_bytes=None):
+    """Require a completed same-source probe and reopen its real admitted child. `required_hold_bytes` (the consuming hour's declared
+    before_verify_resident_bytes, always passed by `prepare_execution`) is the level the probe must have held at its own restore verify."""
     selection = identity['hour']
     if selection['schema'] in ('checkpoint-probe-v1', 'learning-comparison-v1'):
         if 'checkpoint_probe' in identity:
@@ -206,6 +227,8 @@ def validate_checkpoint_probe(runner, identity):
     if (result.get('source_commit') != identity['source_commit']
             or runner.file_sha256(root/'rows.jsonl') != result['rows_sha256']):
         raise ValueError('checkpoint probe result source or rows differ')
+    if required_hold_bytes is not None:
+        require_probe_held(result.get('probe_verify_resident'), required_hold_bytes)
     child = root/'trained-child'
     receipt = bound_json(runner, child/'checkpoint-manifest.json', result['child_manifest_sha256'])
     receipt['checkpoint_manifest_sha256'] = result['child_manifest_sha256']
@@ -541,6 +564,42 @@ def file_contention_attribution(runner, custody, started, rows):
         print('CONTENTION_ATTRIBUTION_DEGRADED %s: %s' % (type(error).__name__, error), file=sys.stderr, flush=True)
 
 
+# The bound on the independent counter the checkpoint publisher runs before it publishes. The streaming counter measured about 335 s standalone at low
+# priority on the real 5.3 GiB child, so 240 s refuses a correct counter after an hour of training (review r1 note 12). The NUMBER is set from the
+# measured wall of the real verify tail, twice that wall, in the change that moves the cap; the mechanism is fixed here: the wait is bounded by this
+# one name, every wall is recorded (PRE_PUBLISH_COUNTER_WALLS, carried by the hour result), and an expired bound is named as a time-out, never as a
+# counter refusal, so a slow-but-correct counter is never mistaken for a wrong one.
+PRE_PUBLISH_COUNTER_TIMEOUT_SECONDS = 240
+PRE_PUBLISH_COUNTER_WALLS = []
+PRE_PUBLISH_COUNTER_IO = []           # the counter subprocess's own account of how it read the components (its COUNTER_IO stderr line), one per run
+
+
+def counter_io_from_stderr(raw):
+    """The last `COUNTER_IO {json}` line of the counter subprocess's stderr, parsed; None when it printed none (a counter that cannot say how it read)."""
+    for line in reversed(raw.decode('utf-8', errors='replace').splitlines()):
+        if line.startswith('COUNTER_IO '):
+            try:
+                return json.loads(line[len('COUNTER_IO '):])
+            except ValueError:
+                return None
+    return None
+
+
+def run_pre_publish_counter(command, *, timeout=None, run=subprocess.run, **kwargs):
+    """Run the independent checkpoint counter and record its wall. `timeout` defaults to PRE_PUBLISH_COUNTER_TIMEOUT_SECONDS."""
+    bound = PRE_PUBLISH_COUNTER_TIMEOUT_SECONDS if timeout is None else timeout
+    started = time.perf_counter()
+    try:
+        result = run(command, stdin=subprocess.DEVNULL, capture_output=True, timeout=bound, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        PRE_PUBLISH_COUNTER_WALLS.append(dict(outcome='timeout', wall_seconds=time.perf_counter() - started, bound_seconds=bound))
+        raise ValueError('independent checkpoint counter was still running at its %s s bound (a time-out, not a counter refusal: no result was read)'
+                         % (bound,)) from error
+    PRE_PUBLISH_COUNTER_WALLS.append(dict(outcome='returned', returncode=result.returncode, wall_seconds=time.perf_counter() - started,
+                                          bound_seconds=bound))
+    return result
+
+
 def checkpoint_cap(runner, optimizer):
     """Serialize and restore byte cap: 10 GiB for the native bf16 state, 16 GiB when the optimizer carries the fp32 master
     treatment (fp32 moments plus masters, about 5.7 GB more than bf16 moments; lead ruling 82435)."""
@@ -561,8 +620,8 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
             str(runner.ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py'),
             '--model-config', runner.ROOT / runner.CONFIG,
             '--checkpoint-manifest', candidate / 'checkpoint-manifest.json', '--active-expert', 'all']
-        result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True,
-            timeout=240, **runner.hidden_kwargs())
+        result = run_pre_publish_counter(command, **runner.hidden_kwargs())
+        PRE_PUBLISH_COUNTER_IO.append(counter_io_from_stderr(result.stderr))
         if result.returncode:
             raise ValueError('independent checkpoint counter refused: ' + result.stderr.decode('utf-8', errors='replace')[-2048:])
         measured = json.loads(result.stdout)
@@ -600,9 +659,92 @@ def checkpoint_publisher(runner, model, optimizer, inventory, identity, binding,
     return publish, owner_update_counts
 
 
+class JobMemoryLedger:
+    """Peak job memory at the end of each phase of the worker, read from the job object (#2119).
+
+    PeakJobMemoryUsed only rises, so the reading taken at the end of a phase is the highest commit any phase up to it reached; the
+    difference between two readings bounds what the phase in between added. The worker's own private commit at each mark is the current
+    level (what the hour holds at that instant), which is the number a probe's declared resident set is taken from. The last peak is the
+    hour's peak; the hour result and the verify-tail result carry it with the declared prediction it is compared against. A reading that
+    cannot be taken refuses: an hour that cannot say what it used is not governed."""
+    def __init__(self, runner, identity):
+        self.runner, self.identity = runner, identity
+        self.phases, self.private, self.host_memory_bytes = {}, {}, None
+        self.failed = {}
+
+    def mark(self, phase):
+        reading = self.runner.job_memory(self.identity)
+        self.host_memory_bytes = reading['host_memory_bytes']
+        self.phases[phase] = reading['peak_job_memory_used_bytes']
+        self.private[phase] = reading['process_private_bytes']
+        return reading
+
+    def mark_deferred(self, phase):
+        """`mark` for the readings between the end of training and the terminal witness. A reading that cannot be taken there must not lose the
+        trained hour or leave a published child without its witness (H35), so the failure is recorded and returned as None; `fields` refuses
+        when the hour result is written, which is where an unreadable ledger must stop the hour (review r1 item 3)."""
+        try:
+            return self.mark(phase)
+        except Exception as error:   # any failure of the job query: recorded, refused later at the hour result
+            self.failed[phase] = '%s: %s' % (type(error).__name__, error)
+            return None
+
+    def fields(self, prediction):
+        if self.failed:
+            raise ValueError('job memory readings could not be taken at %s: %s' % (', '.join(self.failed), '; '.join(self.failed.values())))
+        peak = max(self.phases.values())
+        return dict(peak_job_memory_used_bytes=peak, host_memory_bytes=self.host_memory_bytes,
+                    peak_headroom_bytes=self.host_memory_bytes - peak,
+                    job_memory_phase_peaks_bytes=dict(self.phases), job_memory_phase_private_bytes=dict(self.private),
+                    predicted_peak_job_memory_bytes=prediction['predicted_peak_job_memory_bytes'],
+                    peak_within_predicted=peak <= prediction['predicted_peak_job_memory_bytes'],
+                    pre_publish_counter_walls=[dict(wall) for wall in PRE_PUBLISH_COUNTER_WALLS],
+                    pre_publish_counter_io=list(PRE_PUBLISH_COUNTER_IO),
+                    counter_io=counter_io_report())
+
+
+def counter_io_report():
+    """`counter_io_mechanism: streaming`, this counter's digest, and the digests of the kept counters it was bound onto in this process."""
+    import parameter_counter as counter
+    return counter.counter_io_report()
+
+
+def hold_resident_set(holder, declared_bytes, private_bytes):
+    """The checkpoint probe's end-of-hour dry run (#2119, H50): the probe trains two updates, so at its restore verify it holds less than the
+    hour does (the hour's resident set had grown by thousands of updates, and the probe never ran the continuation). That is how a probe
+    that passed could precede an hour whose verify died at the job limit. This commits (does not touch) the missing bytes so the probe's
+    verify starts from the commit level the hour declared: the verify then runs against the same headroom, and the job limit itself refuses
+    it exactly where it would refuse the hour. Returns the ballast (kept alive until the verify is done) or None when the probe already
+    holds the declared level."""
+    if type(declared_bytes) is not int or declared_bytes <= 0 or type(private_bytes) is not int or private_bytes < 0:
+        raise ValueError('resident set sizes must be integers in bytes')
+    shortfall = declared_bytes - private_bytes
+    return holder.CommittedBallast(shortfall) if shortfall > 0 else None
+
+
+def release_training_buffers():
+    """Hand back what the training loop no longer needs, before the end-of-hour verification (#2119, H50: the published child was
+    verified at 39-43 GiB of job commit because the whole training footprint was still charged).
+
+    What the verification needs LIVE: the model, the optimizer and its inventory (the restore overwrites them in place), the identity, the
+    custody and child receipts, and the terminal-state facts. Nothing else is read after the child is published: the training capture
+    and its static buffers, the last step's row and pack, and the staged next pack are dead. Cyclic garbage is collected here (the timed
+    loop runs with the collector gated), and where torch has initialised CUDA the caching allocator and the pinned host cache are
+    emptied. This never allocates and never touches a live tensor, so it cannot change a result bit."""
+    gc.collect()
+    import torch
+    if torch.cuda.is_available() and torch.cuda.is_initialized():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        empty_host = getattr(torch._C, '_host_emptyCache', None)
+        if empty_host is not None:
+            empty_host()
+
+
 def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, *, before=None, normalize=None):
     import checkpoint_artifacts as artifacts
     import parameter_counter as counter
+    release_training_buffers()
     cap = checkpoint_cap(runner, optimizer)
     expected = {}
     counter._cia_realization_receipt(custody / 'trained-child', child,
@@ -624,6 +766,7 @@ def verify_checkpoint_restore(runner, model, optimizer, inventory, identity, cus
     # the existing lineage fact consumer after the codec restore transaction.
     native = artifacts.capture_cia_placed_optimizer_state(model, optimizer, max_state_bytes=cap)
     facts = artifacts._cia_lineage_facts(inventory, native['state'], native.get('master_weights'))
+    del native
     if facts != expected:
         raise ValueError('restored model or optimizer differs from independently reopened checkpoint bytes')
 
@@ -763,8 +906,12 @@ def run_verify_tail(*, runner, config, prepared, prediction, binding, custody, d
     """Same signature as run_hour. `custody` is the TAIL's own custody (the lost hour's is the digest-pinned read-only input named by
     `identity['verify_tail']`). Returns the result record; the worker writes it after its worker-terminal (`write_verify_tail_result`)."""
     identity = prediction['identity']
+    memory = JobMemoryLedger(runner, identity)
     model, inventory, optimizer = build_hour_model(runner=runner, config=config, prepared=prepared, identity=identity, device=device)
-    return verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
+    memory.mark('built')
+    result = verify_tail(runner, model, optimizer, inventory, identity, identity['verify_tail']['lost_custody'])
+    memory.mark('verified')
+    return dict(result, **memory.fields(prediction))
 
 
 def continuation_state(runner, model, optimizer, cursor, device):
@@ -999,7 +1146,10 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
         return built
     inventory, optimizer = runner.prepare_model(model, identity, lengths, device,
         mode=runner.execution_mode(identity), optimizer_factory=optimizer_factory)
+    memory = JobMemoryLedger(runner, identity)
+    memory.mark('built')
     verify_checkpoint_restore(runner, model, optimizer, inventory, identity, source['root'], source['child'])
+    memory.mark('verified')
     before = continuation_state(runner, model, optimizer, source['child']['data_cursor'], device)
     expected = source['reference']['before']
     if before != expected:
@@ -1013,6 +1163,8 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
         source_hour_result_sha256=identity['continuation']['source_hour_result_sha256'],
         c_compiler=compiler, prediction_sha256=binding['launch']['prediction_sha256'],
         claim='Observed next update from a separate owned worker; independent comparison remains required.')
+    memory.mark('reproduced')
+    reproduced.update(job_memory=memory.fields(prediction))
     if any(runner.file_sha256(runner.ROOT/name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('source changed during continuation reproduction')
     if runner.file_sha256(source['root']/'trained-child/checkpoint-manifest.json') != source['child']['checkpoint_manifest_sha256']:
@@ -1021,8 +1173,9 @@ def run_continuation(*, runner, config, prepared, prediction, binding, custody, 
 
 
 def next_update_reference(runner, model, optimizer, inventory, identity, pack, child,
-                          terminal_state, device, applied):
-    """Execute one uncredited auxiliary update from the published terminal state."""
+                          terminal_state, device, applied, mark=None):
+    """Execute one uncredited auxiliary update from the published terminal state. `mark` (the hour's ledger) is read once the capture is bound,
+    before the update runs, so the capture bind and the update are attributed separately (review r1 item 4)."""
     cursor = child['data_cursor']
     if pack['cursor_before'] != dict(shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
         raise ValueError('continuation pack does not start at the published cursor')
@@ -1035,6 +1188,8 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
         raise ValueError('continuation starting state differs from the verified terminal state')
     lengths = runner.document_lengths(tuple(pack['document_starts']), positions)
     capture, buffers = bind_hour_capture(runner, model, identity, lengths, device)
+    if mark is not None:
+        mark('capture_bound')
     path = dict(mode=runner.execution_mode(identity), local_routing_mode=runner.local_routing_mode(identity),
                 training_head=identity.get('training_head', 'native'),
                 capture_phase='fresh-record' if capture is not None else 'eager',
@@ -1071,7 +1226,11 @@ def next_update_reference(runner, model, optimizer, inventory, identity, pack, c
 
 
 def publish_continuation_reference(runner, model, optimizer, inventory, identity, custody, child,
-                                   terminal_state, prepared, device, applied, governed_wall, energy_binding):
+                                   terminal_state, prepared, device, applied, governed_wall, energy_binding, memory=None):
+    """The uncredited S+1 update and the restore of S. `memory` is the hour's JobMemoryLedger: 'reference_update' is read when the update
+    has returned (the level the second verify starts from, and the peak the update itself reached), 'restored' when that verify is done.
+    H50 died in this second verify, not in the first one."""
+    mark = memory.mark if memory is not None else (lambda phase: None)
     positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
     total_steps, positions = child['data_cursor']['global_step'], child['data_cursor']['tokens_seen']
     checkpoint_identity = dict(manifest_sha256=child['checkpoint_manifest_sha256'],
@@ -1092,11 +1251,13 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
         next_pack = prepared['packs'].next_pack()
         runner._write_new(custody / 'continuation-next-pack.json', next_pack)
         reference = next_update_reference(runner, model, optimizer, inventory, identity, next_pack,
-                                          child, terminal_state, device, applied)
+                                          child, terminal_state, device, applied, mark=mark)
+        mark('reference_update')
     finally:
         # S+1 is never published. Restore S even when the reference step refuses.
         try:
             verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child)
+            mark('restored')
         finally:
             prepared['packs'].cursor, prepared['packs'].index = saved_cursor, saved_index
         if continuation_state(runner, model, optimizer, child['data_cursor'], device) != terminal_state:
@@ -1116,11 +1277,29 @@ def publish_continuation_reference(runner, model, optimizer, inventory, identity
     return continuation
 
 
+def publish_child_with_witness(runner, memory, custody, *, publish, terminal_state, witness):
+    """The end of training: publish the child, read its terminal state, persist the terminal witness, in that order.
+
+    The job-memory readings taken here are DEFERRED (`JobMemoryLedger.mark_deferred`): one that cannot be taken is recorded and refuses where the hour
+    result is written, never here. A raise before the witness would lose the trained hour (at 'training') or leave a published child with no witness
+    (at 'published' and 'terminal_state'), the H35 failure. Returns (child, the instant the publication finished, the terminal state)."""
+    memory.mark_deferred('training')
+    runner.tail_stamp(custody, 'child_publish_start')
+    child = publish()
+    checkpoint_finished = time.perf_counter()
+    memory.mark_deferred('published')
+    state = terminal_state(child)
+    memory.mark_deferred('terminal_state')
+    witness(child, state, checkpoint_finished)
+    return child, checkpoint_finished, state
+
+
 def run_hour(*, runner, config, prepared, prediction, binding, custody, device, compiler, applied):
     """One complete-model worker shared by the explicit probe and both hour arms."""
     import torch
     from ember.model.ember_v0_decoder import CIADecoder
     identity = prediction['identity']
+    memory = JobMemoryLedger(runner, identity)
     positions_per_update = identity['geometry']['sequence_length'] * identity['geometry']['documents_per_step']
     import cia_hour_energy
     energy = cia_hour_energy.load(runner=runner, identity=identity, custody=custody, device=device)
@@ -1180,6 +1359,7 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
                 shard_index=int(cursor['shard']), token_offset=cursor['record_index']):
             raise ValueError('chained hour data cursor differs from its parent checkpoint cursor')
         base_steps, base_tokens = cursor['global_step'], cursor['tokens_seen']
+    memory.mark('startup')
     check_image_start(prepared['binding'], base_steps)
     # Declared fp32 master hour (#2119, lead rulings 82495 / 82501): the hour must PROVE the path ran and show the effective step size.
     # The first row is read here, after the parent restored and before any update; the result is refused at its end without the block.
@@ -1335,35 +1515,56 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         capture.invalidate()
     optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize(device)
-    runner.tail_stamp(custody, 'child_publish_start')
-    child = publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
-                    cursor=pack['cursor_after'], parent=parent_root)
-    checkpoint_finished = time.perf_counter()
-    terminal_state = continuation_state(runner, model, optimizer, child['data_cursor'], device)
     # H35: the terminal state lived only in memory when the verification refused, so the published child could never be re-verified. Persist it first.
     p10_at_publish = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)] if step_rates else None
-    write_terminal_witness(runner, custody, child, terminal_state, dict(
-        hour=hour, measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
-        pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=checkpoint_finished - started - elapsed_before_checkpoint,
-        complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
-        parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id']))
-    verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
+    child, checkpoint_finished, terminal_state = publish_child_with_witness(
+        runner, memory, custody,
+        publish=lambda: publish('trained-child', steps=base_steps + total_steps, tokens=base_tokens + positions,
+                                cursor=pack['cursor_after'], parent=parent_root),
+        terminal_state=lambda published: continuation_state(runner, model, optimizer, published['data_cursor'], device),
+        witness=lambda published, state, finished: write_terminal_witness(runner, custody, published, state, dict(
+            hour=hour, measured_updates=measured, measured_positions=measured * positions_per_update, applied_positions=positions,
+            pre_checkpoint_wall_seconds=elapsed_before_checkpoint, checkpoint_write_seconds=finished - started - elapsed_before_checkpoint,
+            complete_step_p10_positions_per_second=p10_at_publish, quantile='nearest-rank-p10',
+            parent_manifest_sha256=parent['checkpoint_manifest_sha256'], run_id=identity['run_id'])))
+    # Nothing below reads the training capture, its static buffers, the last pack or the staged next pack: drop them before the verify.
+    capture = buffers = upcoming = pack = row = contention = None
+    release_training_buffers()
+    at_verify = memory.mark('before_verify')
+    held, probe_hold = None, None
+    if probe:
+        declared = prediction['probe_verify_resident_bytes']
+        held = hold_resident_set(runner, declared, at_verify['process_private_bytes'])
+        probe_hold = dict(declared_bytes=declared, process_private_bytes_before_hold=at_verify['process_private_bytes'],
+                          ballast_bytes=held.nbytes if held is not None else 0,
+                          process_private_bytes_after_hold=runner.process_private_bytes())
+    try:
+        if probe:
+            require_probe_held(probe_hold, declared)       # what the process really holds now, not what was asked for
+        verify_checkpoint_restore(runner, model, optimizer, inventory, identity, custody, child, before=terminal_state)
+    finally:
+        if held is not None:
+            held.release()
     restore_finished = time.perf_counter()
+    memory.mark('verified')
     if any(runner.file_sha256(runner.ROOT / name) != digest for name, digest in identity['source_sha256'].items()):
         raise ValueError('hour source changed during execution')
     governed_wall = time.perf_counter() - started
     energy_binding = energy.end()
+    memory.mark('energy_end')
     # The fp32 master receipt block is read from the hour's TERMINAL optimizer state, before the continuation's extra update moves it,
     # and an hour that declared the treatment is refused here without a complete block (lead ruling 82501: required, not optional).
     fp32_block = None
     if fp32_declared:
         fp32_block = cia_fp32_evidence.require(fp32_evidence.finish(
             total_steps, child_optimizer_state_path=custody / 'trained-child' / 'optimizer-state.pt'), declared=True, probe=probe)
+    memory.mark('fp32_evidence')
     # These endpoints are immutable before auxiliary work. The additional update
     # belongs only to the resource ledger and the continuation comparison.
     continuation = None if probe or learning else publish_continuation_reference(
         runner, model, optimizer, inventory, identity, custody, child, terminal_state, prepared,
-        device, applied, governed_wall, energy_binding)
+        device, applied, governed_wall, energy_binding, memory=memory)
+    memory.mark('continuation')
     # Nearest-rank p10 is named so the statistic can be independently recomputed.
     p10 = sorted(step_rates)[max(0, math.ceil(.1 * len(step_rates)) - 1)]
     runner._write_new(custody / 'hour-result.json', dict(schema='ember-cia-hour-result-v1', hour=hour,
@@ -1384,6 +1585,8 @@ def run_hour(*, runner, config, prepared, prediction, binding, custody, device, 
         prediction_sha256=binding['launch']['prediction_sha256'],
         energy=energy_binding,
         continuation=continuation,
+        **memory.fields(prediction),
+        **({'probe_verify_resident': probe_hold} if probe else {}),
         **({'fp32_master': fp32_block} if fp32_declared else {}),
         production_mixture_validation=prepared['mixture_validation'],
         learning_snapshots=snapshots if learning else None,

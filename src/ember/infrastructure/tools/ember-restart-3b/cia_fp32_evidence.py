@@ -186,8 +186,7 @@ class Evidence:
                 if key in state:
                     dtypes[key].add(str(state[key].dtype))
         if schema is None and child_optimizer_state_path is not None:
-            payload = torch.load(child_optimizer_state_path, map_location='cpu', weights_only=True, mmap=True)
-            schema = payload.get('schema_version')
+            schema = read_optimizer_schema_version(child_optimizer_state_path)
         changed = self.changed_fraction()
         self.seconds += time.perf_counter() - started
         return dict(schema=SCHEMA, every_updates=self.every, sample_per_owner=SAMPLE, optimizer_schema=schema,
@@ -196,6 +195,18 @@ class Evidence:
                     changed=changed, trace=self.rows, evidence_seconds=self.seconds,
                     note='step size is read from the optimizer moments (weight decay excluded); the changed fraction and every trace value '
                          'are estimates over a fixed strided sample of each owner, not a gradient or full-tensor measurement')
+
+
+def read_optimizer_schema_version(path):
+    """The `schema_version` of a child optimizer-state.pt, read from its small `data.pkl` member alone: the file is never mapped and no tensor is
+    read. It was `torch.load(..., mmap=True)` of the whole 5.3 GiB file for this one string; the job's commit rose by about the size of that file
+    between the first restore verify and the S+1 update (39.12 against 34.25 GiB), and the mapped view is the suspect (#2119, review r1 item 4).
+    The metadata unpickler is the counter's own: it admits shapes, storage references and plain values only."""
+    import zipfile
+    import parameter_counter
+    with zipfile.ZipFile(path) as archive:
+        payload = parameter_counter._load_checkpoint_metadata(archive)
+    return payload.get('schema_version') if isinstance(payload, dict) else None
 
 
 def _finite(value):

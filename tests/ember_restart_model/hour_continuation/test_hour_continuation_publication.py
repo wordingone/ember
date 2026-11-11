@@ -102,6 +102,42 @@ class PublicationTests(NextUpdateTests):
         self.assertEqual(self.packs.index, 2)
         self.assertFalse((self.custody/'continuation-reference.json').exists())
 
+    def reading_order(self, verify, update=None):
+        """The job ledger's reads (#2119) in the order they happen around the S+1 update and the verify that restores S; the capture bind is read first (review r1 item 4)."""
+        order = []
+        memory = SimpleNamespace(mark=lambda phase: order.append(phase))
+
+        def restore(*args):
+            order.append('verify')
+            verify()
+        patches = [patch.object(cia_hour, 'verify_checkpoint_restore', side_effect=restore),
+                   patch.object(cia_hour, 'bind_hour_capture', return_value=(self.capture, None))]
+        if update is not None:
+            patches.append(patch.object(cia_hour, 'next_update_reference', side_effect=update))
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+        try:
+            cia_hour.publish_continuation_reference(self.runner, self.model, self.optimizer, self.inventory, self.identity,
+                self.custody, self.child, self.terminal, self.prepared, self.device, self.applied, 3601.0, {'joules': 123.0},
+                memory=memory)
+        except ValueError:
+            pass
+        return order
+
+    def test_the_ledger_is_read_after_the_update_and_after_the_second_verify(self):
+        self.assertEqual(self.reading_order(lambda: self.optimizer.state.clear()), ['capture_bound', 'reference_update', 'verify', 'restored'])
+
+    def test_a_refused_update_is_not_read_as_an_update_but_the_restore_is_still_read(self):
+        def refuse(*args, **kwargs):
+            raise ValueError('fixture update refusal')
+        self.assertEqual(self.reading_order(lambda: None, update=refuse), ['verify', 'restored'])
+
+    def test_a_refused_second_verify_is_never_read_as_restored(self):
+        def refuse():
+            raise ValueError('fixture restore failure')
+        self.assertEqual(self.reading_order(refuse), ['capture_bound', 'reference_update', 'verify'])
+
     def test_rehashed_reference_or_terminal_attention_change_refuses(self):
         descriptor = self.publish()
         ref_path, terminal_path = (self.custody/name for name in
