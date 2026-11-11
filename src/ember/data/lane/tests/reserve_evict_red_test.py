@@ -22,11 +22,15 @@ def path_under(marker):
     return L + marker.rstrip("/") + "/m/trained-child/objects/a.pt" if marker.endswith("/") else L + marker
 
 # 1. every declared marker (shared + reserve) is refused, whatever the hour: the test follows the file
-check("declared set is non-empty (shared %d, reserve %d)" % (len(D["markers"]), len(D["reserve_markers"])), len(D["markers"]) > 0 and len(D["reserve_markers"]) > 0)
+check("declared set is non-empty (shared %d, reserve %d)" % (len(D["markers"]), len(D["reserve_markers"])), len(D["markers"]) > 0)      # reserve_markers may legally be [] (issue 2450 N4)
+def cov(fn_result, path, markers):
+    """fn_result must be SOME declared marker contained in the path; which of two nested markers answers first is order-dependent and is not pinned (issue 2450 N4)."""
+    p = path.replace("\\", "/"); p = p if p.endswith("/") else p + "/"
+    return fn_result is not None and fn_result in markers and fn_result in p
 for m in D["markers"] + D["reserve_markers"]:
     check("RED declared marker refused: " + m[-48:], R.refuse_reason(path_under(m)) == "under a KEEP path")
 for m in D["markers"]:
-    check("RED shared marker also refused by evict_ckpt_list: " + m[-48:], EK.kept(path_under(m)) == m and EK.refuse_reason(path_under(m)) is not None)
+    check("RED shared marker also refused by evict_ckpt_list: " + m[-48:], cov(EK.kept(path_under(m)), path_under(m), D["markers"]) and EK.refuse_reason(path_under(m)) is not None)
 check("RED a probe optimizer-state under a declared hour dir is refused", R.refuse_reason(L + D["markers"][-1].rstrip("/") + "/m/trained-child/optimizer-state.pt") == "under a KEEP path")
 check("RED catalog-train-cache refused", R.refuse_reason((M_ROOT + "/ember-data/catalog-train-cache/2c557e7f/2720f6d1/x.pt")) == ("outside " + M_ROOT + "/ember-live-receipts"))
 check("RED selected head json refused", R.refuse_reason(L + "selected-continuation-head.json") == "under a KEEP path")
@@ -116,6 +120,19 @@ sys.argv = ["x", m]
 try: R.main(); check("RED missing --ack refused", False)
 except R.Refused: check("RED missing --ack refused", True)
 rd = R.reserve_decl(T + "/nope.json"); check("missing reserve declaration is recorded as missing, not invented", rd.get("missing") is True)
+for _label, _txt in (("{}", "{}"), ("null", "null"), ("[]", "[]"), ("a number", "7"), ("malformed JSON", "{not json")):
+    open(T + "/res-bad.json", "w").write(_txt); rd = R.reserve_decl(T + "/res-bad.json")
+    check("RED reserve declaration that names no reserve is recorded as missing (issue 2450 N5): " + _label, rd.get("missing") is True and "declaration" not in rd)
+RF0 = R.RESERVE_FILE
+import subprocess as _sp
+_env = dict(os.environ, RESERVE_FILE=T + "/elsewhere.json")
+_out = _sp.run([sys.executable, "-c", ("import sys; sys.path.insert(0, '" + LANE_ROOT + "/scripts'); import reserve_evict as R; print(R.RESERVE_FILE)")], capture_output=True, text=True, env=_env).stdout.strip().replace("\\", "/")
+check("RED no environment override: RESERVE_FILE in the environment does not change the declaration path read (issue 2450 N5)", _out == RF0.replace("\\", "/") and "elsewhere" not in _out)
+# N6: _keep normalises backslashes like refuse_reason does
+_psx = dict(markers=("cia-hour-keep-aa/",), reserve_markers=("cia-probe-keep-bb/",))
+check("RED _keep() catches a raw backslash path under a shared marker (issue 2450 N6)", R._keep((M_ROOT + "\\ember-live-receipts\\cia-hour-keep-aa\\m\\trained-child\\objects\\a.pt"), _psx) == "cia-hour-keep-aa/")
+check("RED _keep() catches a raw backslash path under a reserve marker (issue 2450 N6)", R._keep((M_ROOT + "\\ember-live-receipts\\cia-probe-keep-bb\\m\\a.pt"), _psx) == "cia-probe-keep-bb/")
+check("GREEN _keep() with a backslash path under no marker is None", R._keep((M_ROOT + "\\ember-live-receipts\\cia-hour-old-cc\\m\\a.pt"), _psx) is None)
 open(T + "/res.json", "w").write('{"chain_start_floor_gib": 305}'); rd = R.reserve_decl(T + "/res.json")
 check("reserve declaration is recorded with its sha256", rd["declaration"]["chain_start_floor_gib"] == 305 and rd["sha256"] == hashlib.sha256(open(T + "/res.json", "rb").read()).hexdigest())
 
@@ -176,6 +193,10 @@ check("RED ... nothing removed, no receipt row", nrem == 0 and rows == [] and al
 S, files, pd = sandbox("b-no-reserve-dry", reserve=False, dry=True)
 exc, nrem, rows, summ = run()
 check("GREEN a --dry run without the reserve declaration completes, removes nothing and writes no run rows", exc is None and nrem == 0 and rows == [] and all(os.path.exists(f) for f in files) and summ and summ["dry"] and summ["removed"] == 2)
+
+S, files, pd = sandbox("b-empty-reserve"); open(S + "/reserve.json", "w").write("{}")
+exc, nrem, rows, summ = run()
+check("RED non-dry main() with loops/reserve.json = {} raises Refused before any I/O (issue 2450 N5)", isinstance(exc, R.Refused) and "reserve declaration" in str(exc) and nrem == 0 and rows == [] and all(os.path.exists(f) for f in files))
 
 # 5c. a normal run: run-start before the first removal, a per-file row before each os.remove, run-end last
 S, files, pd = sandbox("c-normal")
