@@ -15,6 +15,7 @@ OUT = (LANE_ROOT + "/logs/th-scan")
 
 
 def signature(local):
+    """sha1 over the sorted (relative path, byte size) of every file under `local`: path + byte size only, NOT content (a same-size rewrite of a file keeps the signature)."""
     rows = sorted((os.path.relpath(os.path.join(dp, f), local).replace("\\", "/"), os.path.getsize(os.path.join(dp, f))) for dp, _, fs in os.walk(local) for f in fs)
     return hashlib.sha1(json.dumps(rows).encode()).hexdigest()
 
