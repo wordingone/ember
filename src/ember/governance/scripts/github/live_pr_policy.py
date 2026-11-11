@@ -134,6 +134,35 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CLOSING_KEYWORD_LINE_RE = re.compile(
     r"(?im)^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s*#(\d+)\s*$"
 )
+# A claude.ai session link never goes into PR text: a "Claude-Session:" trailer line or a
+# https://claude.ai/code/session_ URL. The same pattern refuses it in a commit
+# message (.githooks/commit-msg at commit time; tools/repo-guard.sh over a commit range).
+# Prose that only mentions claude.ai is not matched.
+SESSION_LINK_RE = re.compile(
+    r"(?im)(?:^[ \t]*Claude-Session[ \t]*:|https?://claude\.ai/code/session_)"
+)
+# Grandfathered: only a PR created at or after this instant (UTC) is checked, so a
+# PR body opened earlier that already carries a link is not broken. The creation
+# time comes from the live pull-request payload's `created_at` (it is not a
+# snapshot field); a missing or unreadable `created_at` is checked, never exempted.
+SESSION_LINK_ENFORCED_FROM = "2026-11-11T00:00:00+00:00"
+
+
+def _session_link_applies(created_at: Any) -> bool:
+    from datetime import datetime
+
+    if not isinstance(created_at, str):
+        return True
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        cutoff = datetime.fromisoformat(SESSION_LINK_ENFORCED_FROM)
+    except ValueError:
+        return True
+    if created.tzinfo is None:
+        return True
+    return created >= cutoff
+
+
 DEPENDABOT_TITLE_RE = re.compile(
     r"^(?:(?:build|chore)\(deps(?:-dev)?\): bump|Bump) [^\r\n]{3,120}$"
 )
@@ -402,6 +431,7 @@ def validate_live_pull_request(
     ),
     base_root: Path | None = None,
     subject_root: Path | None = None,
+    created_at: str | None = None,
 ) -> list[str]:
     errors = _validate_common(snapshot)
     if errors:
@@ -430,6 +460,8 @@ def validate_live_pull_request(
     body = str(snapshot["body"])
     if not re.search(r"<!--\s*ember-template:\s*pr/[a-z-]+@v1\s*-->", body):
         errors.append("body:template-marker-missing")
+    if _session_link_applies(created_at) and SESSION_LINK_RE.search(body):
+        errors.append("body:session-link")
     goal, outcome, workstreams = authority
     errors.extend(f"authority:{error}" for error in validate_pr_body(
         body, goal, outcome, workstreams
@@ -552,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         errors = validate_live_pull_request(
             snapshot,
             authority=authority,
+            created_at=pr.get("created_at"),
             **policy_roots,
         )
         if args.snapshot_output:

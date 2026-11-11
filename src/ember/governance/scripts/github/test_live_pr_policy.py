@@ -182,6 +182,107 @@ class LivePullRequestPolicyTests(unittest.TestCase):
         value["milestone"] = "EMBER-03"
         self.assertIn("milestone:body-live-mismatch", validate_live_pull_request(value))
 
+    def test_human_pr_body_refuses_a_claude_session_link(self) -> None:
+        # Assembled so this file does not itself carry the pattern it tests.
+        url = "https://claude.ai/code/" + "session_01FIXTUREFIXTUREFIXTURE"
+        trailer = "Claude-" + "Session: " + url
+        for label, footer in (
+            ("bare session URL line", f"\n{url}\n"),
+            ("trailer line", f"\n{trailer}\n"),
+            ("lower-case trailer", "\n" + ("claude-" + "session : abc") + "\n"),
+            ("URL inside prose", f"\nSee {url} for context.\n"),
+            ("http scheme", "\n" + "http://claude.ai/code/" + "session_01X\n"),
+        ):
+            value = human_pr()
+            value["body"] = human_body() + footer
+            with self.subTest(label=label):
+                self.assertIn("body:session-link", validate_live_pull_request(value))
+        for label, footer in (
+            ("attribution line only", "\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"),
+            ("prose naming claude.ai", "\nThe claude.ai site is a web app; see https://claude.ai/settings.\n"),
+            ("prose naming the header", "\nThe Claude-" + "Session header is not written into commits.\n"),
+        ):
+            value = human_pr()
+            value["body"] = human_body() + footer
+            with self.subTest(label=label):
+                self.assertNotIn("body:session-link", validate_live_pull_request(value))
+
+    def test_session_link_check_is_grandfathered_by_pr_creation_time(self) -> None:
+        # Open PRs created before the cutoff whose body already carries a link are not
+        # broken; a PR created at or after it, or one with no readable creation time, is.
+        url = "https://claude.ai/code/" + "session_01FIXTUREFIXTUREFIXTURE"
+        value = human_pr()
+        value["body"] = human_body() + f"\n{url}\n"
+        for label, created_at, refused in (
+            ("one second before the cutoff", "2026-11-10T23:59:59Z", False),
+            ("an earlier day", "2026-10-02T08:00:00Z", False),
+            ("offset that is still before the cutoff in UTC", "2026-11-11T08:00:00+09:00", False),
+            ("exactly the cutoff", "2026-11-11T00:00:00Z", True),
+            ("after the cutoff", "2026-11-11T09:30:00Z", True),
+            ("offset that is on the cutoff in UTC", "2026-11-11T09:00:00+09:00", True),
+            ("no created_at", None, True),
+            ("not a string", 20261110, True),
+            ("unparseable string", "yesterday", True),
+            ("no time zone", "2026-11-10T08:00:00", True),
+        ):
+            with self.subTest(label=label):
+                errors = validate_live_pull_request(value, created_at=created_at)
+                self.assertEqual(refused, "body:session-link" in errors, errors)
+        # The grandfathering exempts only this one check: another defect still fails.
+        broken = copy.deepcopy(value)
+        broken["title"] = "not a conventional title"
+        self.assertIn(
+            "title:grammar-invalid",
+            validate_live_pull_request(broken, created_at="2026-10-02T08:00:00Z"),
+        )
+
+    def test_main_passes_the_live_payload_created_at_to_the_validator(self) -> None:
+        import contextlib
+        import io
+        import json
+        from unittest import mock
+
+        from src.ember.governance.scripts.github import live_pr_policy as lpp
+
+        pr = {
+            "user": {"login": "someone"},
+            "title": "fix(ci): a title long enough",
+            "body": "body",
+            "base": {"sha": BASE},
+            "head": {"sha": HEAD},
+            "draft": False,
+            "labels": [],
+            "milestone": None,
+            "created_at": "2026-11-10T08:00:00Z",
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            (root / "pr.json").write_text(json.dumps(pr), encoding="utf-8")
+            (root / "files.json").write_text(json.dumps([[{"filename": "a.py"}]]), encoding="utf-8")
+            (root / "closing.json").write_text("[]", encoding="utf-8")
+            argv = [
+                "--root", str(root),
+                "--pr-json", str(root / "pr.json"),
+                "--files-json", str(root / "files.json"),
+                "--event-base-sha", BASE,
+                "--event-head-sha", HEAD,
+                "--closing-issues-json", str(root / "closing.json"),
+            ]
+            with mock.patch.object(
+                lpp, "load_goal_binding", return_value=("EMBER-02", "outcome", ("EMBER-02A",))
+            ), mock.patch.object(lpp, "validate_live_pull_request", return_value=[]) as validator:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, lpp.main(argv))
+            self.assertEqual("2026-11-10T08:00:00Z", validator.call_args.kwargs["created_at"])
+            pr.pop("created_at")
+            (root / "pr.json").write_text(json.dumps(pr), encoding="utf-8")
+            with mock.patch.object(
+                lpp, "load_goal_binding", return_value=("EMBER-02", "outcome", ("EMBER-02A",))
+            ), mock.patch.object(lpp, "validate_live_pull_request", return_value=[]) as validator:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, lpp.main(argv))
+            self.assertIsNone(validator.call_args.kwargs["created_at"])
+
     def test_dependabot_has_closed_narrow_schema(self) -> None:
         value = {
             "actor_login": "dependabot[bot]",

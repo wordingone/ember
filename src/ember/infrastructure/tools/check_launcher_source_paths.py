@@ -17,6 +17,14 @@ Usage: check_launcher_source_paths.py [--staged] [ROOT]  scan tracked code under
 --staged reads the git INDEX bytes (what a commit lands), as repo-guard's REPO_GUARD_SCOPE=staged
 requires; otherwise the working-tree bytes of the tracked files. Every git child is created with
 no console window and its exit status and streams are checked.
+
+Path scope under --staged: the verdict for a file is a function of that file's bytes alone, so a
+commit can change it only for the paths it stages. --staged therefore scans exactly the staged
+code files (`git diff --cached --diff-filter=ACMRT`) on their index bytes, with the same name
+exclusions as the tree-wide scan. It widens to every tracked code file (index bytes) when a staged
+copy of this script changes the rule, or when git cannot list the staged paths; the widening is
+announced on stderr and never narrows the check. The tree-wide form (no --staged) is unchanged and
+is what CI (job `guard` in .github/workflows/repo-policy-gate.yml) and the pre-push hook run.
 Exit 0 = clean, 1 = stale path found, 2 = usage/IO error.
 """
 from __future__ import annotations
@@ -97,17 +105,37 @@ def _git(root: Path, args: list[str], stdin: bytes | None = None) -> bytes:
     return out.stdout
 
 
+def _scanned(rel: str) -> bool:
+    """Whether a repository path is code this check judges."""
+    if not rel or Path(rel).suffix.lower() not in CODE_SUFFIXES:
+        return False
+    name = Path(rel).name
+    # Tests may name old paths to prove they are refused; this file names them as rules.
+    return not (".test." in name or name.startswith("test_") or name == Path(__file__).name)
+
+
 def tracked_code(root: Path) -> list[str]:
-    files = []
-    for rel in _git(root, ["ls-files", "-z"]).decode("utf-8").split("\0"):
-        if not rel or Path(rel).suffix.lower() not in CODE_SUFFIXES:
-            continue
-        name = Path(rel).name
-        # Tests may name old paths to prove they are refused; this file names them as rules.
-        if ".test." in name or name.startswith("test_") or name == Path(__file__).name:
-            continue
-        files.append(rel)
-    return files
+    return [rel for rel in _git(root, ["ls-files", "-z"]).decode("utf-8").split("\0") if _scanned(rel)]
+
+
+def staged_code(root: Path) -> list[str] | None:
+    """Staged code files the index adds, copies, modifies, renames (new name) or retypes against
+    HEAD, or None when the scan must cover every tracked file: git could not list the staged paths,
+    or a staged copy of this script changes the rule for files that are not staged."""
+    try:
+        raw = _git(root, ["diff", "--cached", "--name-only", "--no-renames", "--diff-filter=ACMRT", "-z"])
+        changed = [rel for rel in raw.decode("utf-8").split("\0") if rel]
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"note [launcher-paths] staged scope widened to the whole tree: git could not list the staged paths ({exc})",
+              file=sys.stderr)
+        return None
+    own = Path(__file__).name.lower()
+    for rel in changed:
+        if rel.rsplit("/", 1)[-1].lower() == own:
+            print(f"note [launcher-paths] staged scope widened to the whole tree: {rel} is staged (it decides the rule)",
+                  file=sys.stderr)
+            return None
+    return [rel for rel in changed if _scanned(rel)]
 
 
 def staged_bytes(root: Path, rels: list[str]) -> dict[str, bytes]:
@@ -128,6 +156,7 @@ def staged_bytes(root: Path, rels: list[str]) -> dict[str, bytes]:
 
 
 def main(argv: list[str]) -> int:
+    narrowed = False
     try:
         if argv[:1] == ["--text"]:
             if len(argv) < 2:
@@ -141,7 +170,10 @@ def main(argv: list[str]) -> int:
                 print("usage: [--staged] [ROOT]", file=sys.stderr)
                 return 2
             root = Path(rest[0] if rest else ".").resolve()
-            rels = tracked_code(root)
+            rels = staged_code(root) if staged else None
+            narrowed = rels is not None
+            if rels is None:
+                rels = tracked_code(root)
             if staged:
                 texts = {rel: data.decode("utf-8", errors="replace") for rel, data in staged_bytes(root, rels).items()}
             else:
@@ -157,7 +189,7 @@ def main(argv: list[str]) -> int:
         print(f"LAUNCHER_SOURCE_PATHS_STALE {len(hits)}")
         print("\n".join(hits))
         return 1
-    print(f"LAUNCHER_SOURCE_PATHS_OK files={len(paths)}")
+    print(f"LAUNCHER_SOURCE_PATHS_OK files={len(paths)}" + (" scope=staged-paths" if narrowed else ""))
     return 0
 
 
