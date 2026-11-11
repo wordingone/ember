@@ -463,6 +463,11 @@ def upload():
                 try:
                     sys.path.insert(0, ROOT + "/scripts"); import drop_uploaded
                     _r, _m = drop_uploaded.run(it["local"], it["repo"], it["path"], go=True); acts.append("DROPPED " + _m); it["dropped"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    try:      # Hub binding (queue item, caselaw-00003-00004 lost PASS 11-11 03:18..05:44): the Hub-listing signature of the pack just dropped is written by code, never by hand
+                        import hub_binding as _hb; _hbr = _hb.refresh_one(it["path"].split("/")[1])
+                        acts.append("hub binding " + (("refreshed" + ("" if _hbr.get("row_sig_eq_hub") else " (scan row signature differs from the Hub listing: the listing will say NOT RUN)")) if _hbr["ok"] else "NOT refreshed: " + _hbr["why"]))
+                        if not _hbr["ok"]: bad.append(f"{it['name']}: hub binding not refreshed ({_hbr['why']})")
+                    except Exception as _e: bad.append(f"{it['name']}: hub binding refresh failed {type(_e).__name__}")
                     import mb_send; mb_send.send(SEAT_LEAD, f"SET UPLOADED + DROPPED: {it['name']} ({_r['dropped_bytes']/2**30:.2f} GiB freed)", _m + ("; kept: " + "; ".join(f"{os.path.basename(p)} ({w})" for p, w in _r['kept'][:5]) if _r["kept"] else ""))
                 except Exception as e: bad.append(f"{it['name']}: verified but drop failed {type(e).__name__} {str(e)[:120]}")
     json.dump(items, open(ap, "w"), indent=1)
