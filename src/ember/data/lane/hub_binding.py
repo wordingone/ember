@@ -11,7 +11,7 @@ Returns dicts with ok/why; never raises into the tick. Counts and names only. Us
 import os, sys, json, time, hashlib
 from lane_config import LANE_ROOT, HF_TRAIN_REPO
 
-ROOT = os.environ.get("HB_ROOT", LANE_ROOT)
+ROOT = LANE_ROOT
 BINDING = os.environ.get("HB_BINDING", ROOT + "/loops/scan-hub-binding.json")
 SCAN_ROWS = os.environ.get("HB_SCAN_DIR", ROOT + "/logs/th-scan")
 REPO = os.environ.get("HB_REPO", HF_TRAIN_REPO)
