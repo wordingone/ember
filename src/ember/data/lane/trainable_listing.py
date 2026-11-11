@@ -16,7 +16,7 @@ Never prints secret values (it only reads counts)."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT
-import os, sys, json, glob, argparse, collections
+import os, sys, json, glob, argparse, collections, re
 pass
 from th_pack_scan import signature
 from pack_scan_status import record_clean      # the ONE clean/hits/error rule for a scan record (the upload tick uses the same function)
@@ -70,10 +70,30 @@ def scan_state(pack_dir, name):
     return "REFUSED", ("scanner error: %s" % row["error"]) if row.get("error") else "%d hits in %d objects" % (hits, len(row.get("hit_files") or {}))
 
 
-def select_ok(name, packed=None):
-    """The hour-declaration gate: True only for scan == PASS on the pack as it is now."""
+def superseded_by(name, packed=None):
+    """-> the name of the newest revision when `name` is an older member of a base/-r1/-r2 group among the packs with an intake.json in `packed`, else None (lead 83208)."""
+    root = packed or PACKED
+    try: names = [n for n in os.listdir(root) if os.path.isfile(os.path.join(root, n, "intake.json"))]
+    except Exception: return None
+    rows = [dict(pack=n) for n in names]
+    if name not in names: rows.append(dict(pack=name))
+    mark_superseded(rows)
+    return next((r["superseded_by"] for r in rows if r["pack"] == name), None)
+
+
+def select_refusal(name, packed=None):
+    """None when the pack may be selected for an hour, else the reason string. A superseded pack is refused whatever its scan state: 'superseded by <newest>'."""
     d = os.path.join(packed or PACKED, name)
-    return os.path.isdir(d) and scan_state(d, name)[0] == "PASS"
+    if not os.path.isdir(d): return "no such packed pack"
+    nw = superseded_by(name, packed)
+    if nw: return "superseded by %s" % nw
+    st = scan_state(d, name)[0]
+    return None if st == "PASS" else "scan %s" % st
+
+
+def select_ok(name, packed=None):
+    """The hour-declaration gate: True only for scan == PASS on the pack as it is now AND the pack is not superseded by a newer -rN revision."""
+    return select_refusal(name, packed) is None
 
 
 def trained_set(path, end):
@@ -102,6 +122,23 @@ def _row_for(d, name, it, sets):
     return row
 
 
+_REV = re.compile(r"^(.*?)(?:-r(\d+))?$")
+
+
+def mark_superseded(rows):
+    """lead 83018: a pack and its -r1/-r2 repacks are ONE pack. Group rows by base name (name minus a trailing -r<N>; no suffix = rank 0); the highest rank is kept,
+    every older member gets row['superseded_by'] = <newest name> (None on the kept row). Mutates the rows; returns the number superseded. Pure on names."""
+    groups = collections.defaultdict(list)
+    for r in rows:
+        m = _REV.match(r["pack"]); groups[m.group(1)].append((int(m.group(2) or 0), r))
+    n = 0
+    for g in groups.values():
+        g.sort(key=lambda x: x[0]); newest = g[-1][1]["pack"]
+        for _, r in g[:-1]: r["superseded_by"] = newest; n += 1
+        g[-1][1]["superseded_by"] = None
+    return n
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--trained", action="append", default=[]); ap.add_argument("--out", default=OUT)
     a = ap.parse_args(argv)
@@ -124,15 +161,18 @@ def main(argv=None):
         if isinstance(ct, bool) or not isinstance(ct, int): skipped.append(dict(pack=name, reason="missing_content_tokens")); continue
         try: rows.append(_row_for(d, name, it, sets))
         except Exception as ex: rows.append(dict(pack=name, tokens=ct, scan="NOT RUN", scan_detail="row failed", selectable=False, error="%s: %s" % (type(ex).__name__, str(ex)[:100])))
-    tot = collections.OrderedDict()
+    mark_superseded(rows)
+    tot = collections.OrderedDict(); sup = dict(packs=0, tokens=0)
     for r in rows:
+        if r.get("superseded_by"): r["selectable"] = False; r["scan_detail"] += "; superseded by %s" % r["superseded_by"]; sup["packs"] += 1; sup["tokens"] += r["tokens"]; continue      # superseded rows are listed, never counted in the totals
         k = r["scan"]; tot.setdefault(k, dict(packs=0, tokens=0, never_trained_min=0))
         tot[k]["packs"] += 1; tot[k]["tokens"] += r["tokens"]; tot[k]["never_trained_min"] += r.get("never_trained_min", 0)
     residual = dict(dirs_seen=seen, dirs_classified=len(rows), dirs_skipped=skipped)
-    out = dict(rows=rows, totals=tot, trained_sets=[n for n, _ in sets], trained_errors=trained_errors, residual=residual)
+    out = dict(rows=rows, totals=tot, superseded_not_counted=sup, trained_sets=[n for n, _ in sets], trained_errors=trained_errors, residual=residual)
     tmp = a.out + ".part"; json.dump(out, open(tmp, "w"), indent=1); os.replace(tmp, a.out)
     for r in rows: print("%-30s %-8s tokens %14d%s  %s%s" % (r["pack"], r["scan"], r["tokens"], ("  never %14d" % r["never_trained_min"]) if "never_trained_min" in r else "", r["scan_detail"], ("  ERROR " + r["error"]) if r.get("error") else ""))
     for k, v in tot.items(): print("TOTAL %-8s packs %3d tokens %14d%s" % (k, v["packs"], v["tokens"], ("  never-trained(min) %14d" % v["never_trained_min"]) if sets else ""))
+    print("SUPERSEDED (listed, not in any TOTAL) packs %d tokens %d" % (sup["packs"], sup["tokens"]))
     print("RESIDUAL dirs seen %d = classified %d + skipped %d%s" % (seen, len(rows), len(skipped), "".join("  [%s: %s]" % (x["pack"], x["reason"]) for x in skipped)))
     for x in trained_errors: print("TRAINED LEDGER NOT READ: %s (%s)" % (x["trained"], x["reason"]))
     return 0

@@ -10,6 +10,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import HF_RAW_REPO, LANE_ROOT
 import sys, os, io, re, json, gzip, time, glob, subprocess, hashlib
 LANE = sys.argv[1]; from lane_config import LANE_ROOT as ROOT
+POST = LANE.endswith("_post"); BASE = LANE[:-5] if POST else LANE   # <lane>_post (lead 83085): same source, inverted wall: ONLY docs dated after the wall are written
 sys.argv = ["bulk_lane.py", LANE]
 pass
 import bulk_lane as B
@@ -141,7 +142,28 @@ SPEC = {
  "arxiv_papers": dict(repo="common-pile/arxiv_papers_filtered", pref="", suffix=".json.gz", rows=rows_json, prep=prep_arxiv_papers, rawdir="text/arxiv_papers", rawup=False, domain="science"),
  "uspto": dict(repo="common-pile/uspto_filtered", pref="", suffix=".json.gz", rows=rows_json, prep=prep_uspto, rawdir="text/uspto", rawup=False, domain="patents", uspto_cap=0.10),
  "pre1929": dict(repo="common-pile/pre_1929_books_filtered", pref="", suffix=".json.gz", rows=rows_json, prep=prep_pre1929, rawdir="text/pre1929", rawup=False, domain="books"),
-}[LANE]
+}[BASE]
+
+def _tail_date(r):
+    m = re.search(r"(\d{4}-\d{2}-\d{2})$", str(r.get("id"))); return m.group(1) if m else None
+_POST_DATE = {   # the date the wall rule uses per lane; for the lift only docs with a date AFTER the wall are kept
+ "usgpo": lambda r: norm_date(r.get("date")), "hansard": _tail_date,
+ "uspto": lambda r: max(norm_date(r.get("created")), norm_date((r.get("metadata") or {}).get("publication_date"))),
+}
+def _post_prep(base_prep, datef):
+    """Inverted wall (lead 83085): undated docs and docs dated on/before the wall are skipped (the existing packs carry the latter); the rest go through the lane's own licence/quality prep with the date test passed."""
+    def prep(r, st):
+        global WALL
+        d = datef(r)
+        if not d: st["undated"] = st.get("undated", 0) + 1; return None
+        if d <= WALL: st["pre_wall_skip"] = st.get("pre_wall_skip", 0) + 1; return None
+        save = WALL; WALL = "9999-12-31"
+        try: rec = base_prep(r, st)
+        finally: WALL = save
+        if rec: rec["wall_class"] = "post-wall lift (lead 83085): dated after 2022-10-31; licence/quality gates as the lane"; rec["issued"] = d
+        return rec
+    return prep
+if POST: SPEC = dict(SPEC, prep=_post_prep(SPEC["prep"], _POST_DATE.get(BASE) or (lambda r: norm_date(r.get("created")))))
 
 def run(cmd, log):
     if not B.reserve_plan.write_gate(f"text_lane {LANE} start {os.path.basename(cmd[1]) if len(cmd) > 1 else cmd}", 1 << 30, B.log):   # lead 82509: new pack/dedup/scrub STARTS wait at the floor (in-flight steps finish)
@@ -203,7 +225,7 @@ def one(path, size, idx):
     rev = B.api.dataset_info(SPEC["repo"]).sha
     loc = B.retry(lambda: throttled_get(SPEC["repo"], path, rev, d, size), what=path)
     rawsha = B.sha256f(loc)
-    st = dict(docs_in=0, post_wall=0, bad_licence=0, quality=0, gate_dup=0, kept=0)
+    st = dict(docs_in=0, post_wall=0, bad_licence=0, quality=0, gate_dup=0, kept=0, pre_wall_skip=0, undated=0)
     n = f"{idx:05d}"; prepf = f"{W}/prep-{n}.jsonl.zst"; cctx = zstandard.ZstdCompressor(level=6); batch = []
     import overlap_gate as G
     def flush(w):
@@ -246,8 +268,8 @@ def maybe_pack(force=False):
                 for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
                     r = json.loads(line); pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"))) + "\n")
     run([sys.executable, ROOT + "/scripts/pack.py", ROOT + "/packed", name] + [fin[k]["path"] for k in todo], f"{ROOT}/logs/pack-{name}.log")
-    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), WALL, "text"], f"{ROOT}/logs/srcman-{name}.log")
-    json.dump(dict(domain=SPEC.get("domain", "mixed"), wall=WALL, source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{ROOT}/packed/{name}/domain.json", "w"))   # lead 81977: domain tag per pack so training can weight the mix
+    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), (time.strftime("%Y-%m-%d") if POST else WALL), "text"], f"{ROOT}/logs/srcman-{name}.log")
+    json.dump(dict(domain=SPEC.get("domain", "mixed"), wall=WALL, wall_class=("post-wall lift (lead 83085)" if POST else "pre-wall"), source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{ROOT}/packed/{name}/domain.json", "w"))   # lead 81977: domain tag per pack so training can weight the mix
     for k in todo: fin[k]["packed"] = name
     import overlap_gate as G; G.build_docs([name])   # later shards must not duplicate this pack
     B.save(); B.log("PACKED", name, f"{len(todo)} finals")

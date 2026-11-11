@@ -104,6 +104,32 @@ def heal_worker(qf, now, log=ROOT + "/logs/backlog-upload-worker.log", state=Q +
     r = subprocess.run(["powershell", "-NoProfile", "-File", ROOT + "/scripts/kill_lane.ps1", "-Reason", why, "-Only", "upload_worker.py"], capture_output=True, text=True, timeout=120)
     return "worker-healed: " + str([x.strip() for x in r.stdout.splitlines() if "STOPPED" in x][:3])
 
+PUSH_FLAT_S = float(os.environ.get("STALL_PUSH_FLAT_S", "1800"))
+def push_flat(procs, state, now, thresh=None):
+    """Per-process stall (class fix, queue item custody_other_opt_upload): an `hf upload` outside the queue hung 70 min at 05:40 while OTHER uploads moved the global byte sum, so the global alarm stayed quiet.
+    procs = [(key, sig)] for every live push process (key = pid:create_time, sig = its read_bytes + its CLI log progress). state = {key: {sig, since}} (mutated: dead keys pruned, moved keys reset).
+    -> [(key, flat_seconds)] for processes whose sig has not changed for >= thresh seconds. Keys starting with _ are bookkeeping and ignored."""
+    thresh = PUSH_FLAT_S if thresh is None else thresh; live = {k for k, _ in procs}
+    for k in list(state):
+        if not k.startswith("_") and k not in live: state.pop(k)
+    out = []
+    for k, sig in procs:
+        h = state.get(k)
+        if h is None or h.get("sig") != sig: state[k] = {"sig": sig, "since": now}; continue
+        if now - h["since"] >= thresh: out.append((k, now - h["since"]))
+    return out
+
+def _push_sigs(ps, plog):
+    out = []
+    for p in ps:
+        try:
+            j = " ".join(p.info["cmdline"] or []); sig = str(p.io_counters().read_bytes)
+            for lf, ls in plog.items():
+                if os.path.basename(lf)[len("hf-upload-"):-4].replace("train-", "") in j: sig += "|" + ls
+            out.append(("%d:%d" % (p.pid, int(p.create_time())), sig))
+        except Exception: pass
+    return out
+
 def _run_stall():
     try: st = json.load(open(Q + "/stats.json"))
     except Exception: st = {}
@@ -128,6 +154,15 @@ def _run_stall():
             plog[lf] = sig
         except Exception: pass
     prog = st.get("uploaded_bytes", 0) + rb
+    try:      # per-process flatness: one hung push is not hidden by the global sum moving
+        pf = json.load(open(Q + "/push-flat-state.json")) if os.path.exists(Q + "/push-flat-state.json") else {}
+        pa = pf.pop("_alerted", 0); flat_pushes = push_flat(_push_sigs(ps, plog), pf, now0)
+        if flat_pushes and now0 - pa >= REPEAT and not held_state():
+            sys.path.insert(0, ROOT + "/scripts"); import mb_send
+            mb_send.send(SEAT_LEAD, "STALL ALARM: %d hf push process(es) flat >= %d min" % (len(flat_pushes), PUSH_FLAT_S // 60), "Per-process stall (the counters of the other pushes may still move): " + "; ".join("pid %s flat %.0f min" % (k.split(":")[0], f / 60) for k, f in flat_pushes) + ". Auto-mail from scripts/stall_alarm.py push_flat. Fix path: stop the verified pid tree with the receipted stop tool; the owner script or the tick relaunches (resumable).")
+            pa = now0
+        pf["_alerted"] = pa; json.dump(pf, open(Q + "/push-flat-state.json", "w"))
+    except Exception as _e: print("push_flat error", type(_e).__name__, str(_e)[:100], file=sys.stderr)
     try: healed = heal(ps, plog, now0)
     except Exception as e: healed = [f"heal error {type(e).__name__} {str(e)[:80]}"]
     if healed: json.dump(dict(ts=now0, acts=healed), open(Q + "/last-heal.json", "w"))

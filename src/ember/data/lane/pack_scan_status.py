@@ -39,6 +39,14 @@ def record_verdict(rec):
 def record_clean(rec):
     return record_verdict(rec) == "clean"
 
+TOP_HIT_TYPES = 5
+
+def hit_summary(hits, n_files, row_path):
+    """Capped hit text for mails and tick lines (lead 83120): the TOTAL plus the top TOP_HIT_TYPES detector types by count, the number of further types, the hit-file count and the PATH of the scan row that holds the full table. Counts only, never values."""
+    items = sorted(((k, int(v)) for k, v in hits.items()), key=lambda kv: (-kv[1], kv[0]))
+    top = ", ".join("%s %d" % kv for kv in items[:TOP_HIT_TYPES]); more = len(items) - TOP_HIT_TYPES
+    return "%d hits in %d types (top %d: %s%s), hit files %d, full table in %s" % (sum(v for _, v in items), len(items), min(TOP_HIT_TYPES, len(items)), top, (", +%d more types" % more) if more > 0 else "", n_files, row_path.replace("\\", "/"))
+
 def pack_scan_status(name, local, rec_dir, signature_fn, pids_fn):
     """-> (state, detail). state in running|clean|refused_hits|error|unknown. detail is a short string with no secret values (detector COUNTS only)."""
     rec, unreadable = _read(os.path.join(rec_dir, name + ".json"))
@@ -56,7 +64,7 @@ def pack_scan_status(name, local, rec_dir, signature_fn, pids_fn):
             return "clean", "record clean for the current file set (scan start %s)" % rec.get("ts")
         if v == "refused_hits":
             n_files = len(rec.get("hit_files") or [])
-            return "refused_hits", "hits %s, hit files %d" % (json.dumps(rec.get("hits") or {}, sort_keys=True), n_files)
+            return "refused_hits", hit_summary(rec.get("hits") or {}, n_files, os.path.join(rec_dir, name + ".json"))
     # not a final verdict for the current file set (error record, unreadable record, stale or missing record): a live scan process still decides
     try:
         pids = list(pids_fn(name) or [])

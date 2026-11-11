@@ -51,6 +51,11 @@ jobs:
       - name: Lint lane write gates and execute the gated writers against a stub gate (#2449)
         # AST lint (every bulk writer is behind an enforced reserve_plan.write_gate or listed in TINY_OK / GATE_DEBT) plus executed refusal cases; needs no lane environment.
         run: python -B src/ember/data/lane/tests/write_gate_lint_red_test.py
+      - name: Degenerate-object scan red test, plus the same test against a stub scan that must fail (#2465 N2)
+        # numpy and CPU only; the stub run proves the assertions bite (a scan that never refuses must FAIL the test).
+        run: |
+          python -B src/ember/data/lane/tests/degenerate_scan_red_test.py
+          if DEGEN_SCAN_STUB=1 python -B src/ember/data/lane/tests/degenerate_scan_red_test.py > /dev/null; then echo "stub scan passed the red: it does not bite"; exit 1; fi
       - name: Bootstrap exact-head live PR policy (read-only)
         if: github.event_name == 'pull_request'
         env:
