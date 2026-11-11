@@ -20,7 +20,8 @@ def check(label, cond, detail=""):
 
 VERIFIED = ["ckpt_lineage_delete", "drop_execute", "delete_approved_dirs", "_pg_obj_del", "_wiki_del", "_ws_del", "raw_roll", "free_b", "ckpt_backup"]
 OWN_PROOF = {"drop_uploaded.py": "st_nlink==1 + server size + LFS sha256 == recomputed sha, receipt before remove (tests/drop_uploaded_red_test.py)",
-             "verified_remove.py": "the helper itself (tests/verified_remove_red_test.py)"}
+             "verified_remove.py": "the helper itself (tests/verified_remove_red_test.py)",
+             "gh_snapshot_fetch.py": "removes only its own per-repo staging clone: realpath strictly inside the staging tree (StagingEscape otherwise), receipt row fsynced before the remove, repo refetchable from the catalogue commit (tests/gh_snapshot_fetch_red_test.py h1-h7)"}
 UNREVIEWED = ['_alarm_redtest.py', '_cap_redtest.py', '_pack_del.py', 'a_relocate.py', 'audit_job.py', 'audit_probe_atrain2.py', 'audit_secrets.py', 'bulk_lane.py', 'caselaw_lane_handoff.py', 'ccby_pack.py', 'ckpt_bound.py',
               'ckpt_restore.py', 'clear_uploaded_shards.py', 'evict_ckpt_list.py', 'fetch_open_model.py', 'fill_nh.py', 'hold_flag.py', 'mls_pack.py', 'net_cap.py', 'pack.py', 'pg_verify_delete.py', 'redact_r1.py',
               'rehydrate_shards.py', 'remedy_hheldout2.py', 'remedy_move.py', 'repack_r1.py', 'repack_r1_all.py', 'reserve_evict.py', 'restore_finish.py', 'scratch_dir.py', 'se_drive.py', 'se_prep.py', 'se_sample.py',
