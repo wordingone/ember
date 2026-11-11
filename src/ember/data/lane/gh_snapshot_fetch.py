@@ -1,23 +1,30 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Pre-wall code snapshot fetch (D3, lead 82956): each clean-signal MIT repo of the catalogue taken AS OF its last commit before the 2022-11-01T00:00:00Z wall, kept only when the repo is MIT at that commit,
+"""Pre-wall code snapshot fetch (D3, lead 82956): each clean-signal MIT repo of the catalogue taken AS OF its last commit before the 2022-11-01T00:00:00Z wall, kept only when every root licence file at that commit is MIT,
 with a per-file licence step on the content, written as the source class "code, pre-wall snapshot".
 
 Usage: python gh_snapshot_fetch.py run [--limit N] [--workers 4] [--ignore-stop]   |   python gh_snapshot_fetch.py status
 Exit codes: 0 finished (or --limit reached), 1 finished but some repos errored (no ledger row; see loops/code-snapshot-errors.jsonl; rerun redoes them), 2 B: below the reserve floor (resumable), 3 timing stop rule fired (STOP file written) or a STOP file exists, 4 wall violation (a wall commit at or after the wall: nothing is written for it).
 
-Per repo, in order (catalogue row = licence MIT and has_tests_root, has_ci, recent_commit_365d, not_fork, not_archived, not awesome_or_dump_flag):
-  1. blobless clone (no checkout); wall commit = `git rev-list -1 --before=<2022-10-31T23:59:59Z> <catalogue commit>` (committer time, strictly before the wall); HARD CHECK committer time < 1667260800 or WallViolation is raised.
+What the code establishes, and no more: the wall is a committer-time AND author-time wall over the WHOLE ancestry of the wall commit (every commit reachable from it is stamped strictly before 1667260800), and every file comes from that commit's tree by blob sha.
+It does not establish that a file's content was written before the wall in any other sense (a pre-wall stamp can be forged; the check closes the honest back-dated / clock-reset cases).
+Per repo (catalogue row = licence MIT and has_tests_root, has_ci, recent_commit_365d, not_fork, not_archived, not awesome_or_dump_flag; size_kb present):
+  1. blobless clone (no checkout); wall commit = `git rev-list -1 --before=<2022-10-31T23:59:59Z> <catalogue commit>`. HARD CHECK its committer time < 1667260800 or WallViolation is raised (the run aborts, durable row kind wall_violation).
      No commit before the wall: skipped, reason no_pre_wall_history.
-  2. tree at the wall commit from the GitHub git-trees API (blobs only); truncated: skipped, reason tree_truncated.
-  3. licence at the wall commit: the root LICENSE / LICENCE / COPYING / UNLICENSE blob(s) read through the blobs API. None: no_licence_file_at_wall_commit. No MIT text: licence_not_mit_at_wall_commit.
-  4. eligible files = the measure_sample filters (TEXT_EXT, SKIP_DIR, SKIP_FILE, 1 byte .. MAX_FILE) applied to that tree.
-  5. content is read BY BLOB SHA out of that tree (batch `git fetch --stdin` of the wanted blobs into the promisor clone, then `git cat-file --batch`, each blob's git hash re-computed): no post-wall content can enter.
-  6. per-file licence step: .ipynb, subtrees holding a non-MIT LICENSE/COPYING, binary, other-licence header, generated, over-long line. Each drop has a reason; counts go in the ledger row.
-  7. output under <lane>/code-snapshot/docs/<owner>__<name>@<wall12>.jsonl.zst (one shard per repo, tmp + replace) and one terminal ledger row per repo in <lane>/loops/code-snapshot-ledger.jsonl.
-Resumable: a repo with a ledger row is never fetched again; a crashed repo (no row) is redone from scratch. All git / gh calls go through one injectable Runner. Staging (<lane>/code-snapshot/staging/w<k>/) is capped at 5 GiB resident
-across workers (predicted need = size_kb x 1024 x 0.25 + 64 MiB reserved per repo), each repo's dir is removed right after its ledger row, inside the staging tree only, with a receipt row (loops/code-snapshot-removes.jsonl).
+  2. ancestry: one `git log --format='%ct %at' <wall commit>`; any ancestor (the wall commit included) with committer OR author time >= the wall: skipped, reason history_dates_not_monotone (a row, not an abort). Both times of the wall commit go in the ledger.
+  3. file list = `git ls-tree -r -z <wall commit>` in the clone (path, mode, type, sha). No GitHub API call anywhere. `ls-tree -l` is NOT used: in a blobless clone it fetches every blob of the tree (measured), so sizes are judged on the fetched bytes.
+  4. licence: every root LICENSE / LICENCE / COPYING / UNLICENSE (optionally with extension) blob is read from the clone and must be the MIT text (case, whitespace, quotes normalised; only the title and copyright lines are free).
+     None: no_licence_file_at_wall_commit. None MIT: licence_not_mit_at_wall_commit. Some MIT, some not: licence_mixed_at_wall_commit.
+  5. every tree entry is accounted for: ineligible{submodule, symlink, non_blob, skip_dir, skip_file, extension, empty, too_large} + dropped{...} + kept == tree_entries (asserted), using the measure_sample filters (TEXT_EXT, SKIP_DIR, SKIP_FILE, 1 byte .. MAX_FILE).
+  6. content is read BY BLOB SHA (batch `git fetch --stdin` of the wanted blobs into the promisor clone, then `git cat-file --batch`, each blob's git hash re-computed). A wanted blob that cannot be read is an error row (kind blob_unavailable), never a finished row.
+  7. per-file licence step: .ipynb, subtrees holding a non-MIT LICENSE/COPYING, binary, invalid UTF-8, other-licence header, generated, over-long line. Each drop has a reason; counts go in the ledger row.
+  8. output under <lane>/code-snapshot/docs/<owner>__<name>@<wall12>.jsonl.zst (one shard per repo, tmp + replace) and one terminal ledger row per repo in <lane>/loops/code-snapshot-ledger.jsonl, carrying source_class, rules_version and scan_state NOT_SCANNED.
+SECRET SCAN: config files (.json .yaml .toml .ini .cfg .sh ...) are eligible, so the code-snapshot/docs shards must pass the pre-upload secret scan (th_gate, the scan queue) BEFORE any selection or packing; scan_state NOT_SCANNED means they have not.
+Resumable: the key is (repo, catalogue commit, rules version): a ledger row with that key is never fetched again; a crashed repo (no row) is redone from scratch. All git calls go through one injectable Runner (lazy fetch is disabled for every call except clone and the explicit blob fetch).
+Staging (<lane>/code-snapshot/staging/w<k>/) is capped at 5 GiB resident across workers. A repo reserves size_kb x 1024 x 0.25 + 64 MiB before it starts (missing size_kb or a need above the cap: a deferred row in loops/code-snapshot-deferred.jsonl, no clone),
+the write gate is asked for budget in use + need, the dir is MEASURED after the clone and after every fetch chunk and the reservation is raised to what is on disk (+ one chunk) or the repo ends as an error row staging_over_budget.
+Each repo's dir is removed right after its ledger row, inside the staging tree only, receipt row first (loops/code-snapshot-removes.jsonl).
 Timing stop rule: after the first 50 repos of a run finish, predicted hours = mean total_s x repos remaining / workers / 3600; above 8.0 -> loops/code-snapshot-STOP.json and exit 3.
 Packing into tokenized shards is a later step; this script never touches pack.py. No model anywhere."""
 import os as _os, sys as _sys
@@ -30,13 +37,16 @@ import reserve_plan
 WALL_TS = 1667260800                       # 2022-11-01T00:00:00Z: a commit is inside the wall only when its committer time is STRICTLY before this
 BEFORE_ISO = "2022-10-31T23:59:59Z"        # rev-list --before is inclusive; one second earlier keeps `<= BEFORE` identical to `< WALL_TS`
 AUTHORITY = "lead 82956"
+RULES_VERSION = "d3-r2"                    # part of the resume key: a change of rule is a new version, old rows do not count as done
+SOURCE_CLASS = "code, pre-wall snapshot"
+EMPTY_BLOB = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"      # the empty file: its sha says it is empty, nothing to fetch
 BUDGET_CAP = 5 << 30                       # resident staging bytes across all workers
 NEED_FRACTION = 0.25
 NEED_BASE = 64 << 20
 STOP_AFTER = 50
 STOP_HOURS = 8.0
 CHUNK_BYTES = 64 << 20                     # blob bytes read per fetch + cat-file round
-CHUNK_N = 1500
+CHUNK_N = 200
 LICENCE_READ_MAX = 200000
 MAX_LINE = 20000
 
@@ -45,7 +55,6 @@ TEXT_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".c", ".h", ".cc"
 SKIP_DIR = re.compile(r"(^|/)(node_modules|vendor|third_party|dist|build|\.git|__pycache__|site-packages|\.venv|venv)(/|$)")
 SKIP_FILE = re.compile(r"(\.min\.(js|css)|\.lock|package-lock\.json|yarn\.lock|poetry\.lock|\.map|\.svg)$", re.I)
 MAX_FILE = 1 << 20
-MIT_TEXT = re.compile(r"Permission is hereby granted, free of charge|MIT License", re.I)
 OTHER_LIC = re.compile(r"Apache License|GNU (Lesser |Affero )?General Public|Mozilla Public License|SPDX-License-Identifier:\s*(?!MIT)[A-Za-z]|BSD [23]-Clause|All rights reserved\.\s*(?!.*MIT)", re.I)
 GENERATED = re.compile(r"DO NOT EDIT|Code generated|@generated")
 LIC_ROOT = re.compile(r"^(licen[sc]e|copying|unlicense)(\.[a-z]+)?$", re.I)
@@ -59,14 +68,30 @@ def _log(*a):
 
 class WallViolation(Exception):
     """A wall commit whose committer time is not strictly before the wall. Never continued with."""
+    kind = "wall_violation"
 
 
 class DiskFloor(Exception):
     """write_gate gave up: B: stayed below the reserve floor. Nothing was written; resumable."""
+    kind = "disk_floor_stop"
 
 
 class StagingEscape(Exception):
     """A removal target outside the staging tree (or the tree itself)."""
+
+
+class StagingOverBudget(RuntimeError):
+    """The measured staging size does not fit under the 5 GiB cap (or the wait for room ran out)."""
+    kind = "staging_over_budget"
+
+
+class BlobUnavailable(RuntimeError):
+    """A blob wanted from the wall-commit tree could not be read: the repo is NOT finished (retried on resume)."""
+    kind = "blob_unavailable"
+
+
+class Stopped(Exception):
+    """The run was told to stop while a repo waited for staging room."""
 
 
 class RunnerError(Exception):
@@ -74,26 +99,22 @@ class RunnerError(Exception):
 
 
 class Runner:
-    """Every git and gh subprocess of this script. Tests inject a fake with the same two methods."""
+    """Every git subprocess of this script (there is no gh / GitHub API call). Tests inject a fake with the same method."""
 
-    def __init__(self, git_timeout=1800, gh_timeout=300):
-        self.git_timeout, self.gh_timeout = git_timeout, gh_timeout
+    def __init__(self, git_timeout=1800):
+        self.git_timeout = git_timeout
 
     def git(self, args, cwd=None, input=None):
-        """-> stdout bytes; RunnerError (with stderr) on a non-zero exit."""
+        """-> stdout bytes; RunnerError (with stderr) on a non-zero exit. Lazy promisor fetch is OFF for everything except clone and the explicit blob fetch: a missing object is then an error, never a silent per-object download."""
         cmd = ["git", "-c", "core.quotepath=false"] + (["-C", cwd] if cwd else []) + list(args)
         env = dict(os.environ); env["GIT_TERMINAL_PROMPT"] = "0"
+        words = [a for a in args if not a.startswith("-") and "=" not in a]
+        if not words or words[0] not in ("clone", "fetch"):
+            env["GIT_NO_LAZY_FETCH"] = "1"
         p = subprocess.run(cmd, input=input, capture_output=True, timeout=self.git_timeout, env=env)
         if p.returncode != 0:
             raise RunnerError("git %s: %s" % (" ".join(map(str, args[:3])), p.stderr.decode("utf-8", "replace")[-300:]))
         return p.stdout
-
-    def gh_api(self, path):
-        """-> parsed json of `gh api <path>` (auth is the gh CLI's own keyring)."""
-        p = subprocess.run(["gh", "api", path], capture_output=True, timeout=self.gh_timeout)
-        if p.returncode != 0:
-            raise RunnerError("gh api %s: %s" % (path.split("?")[0], p.stderr.decode("utf-8", "replace")[-300:]))
-        return json.loads(p.stdout)
 
 
 # ------------------------------------------------------------------ paths and files
@@ -108,6 +129,7 @@ class Paths:
         self.removes = self.lane + "/loops/code-snapshot-removes.jsonl"
         self.stop = self.lane + "/loops/code-snapshot-STOP.json"
         self.errors = self.lane + "/loops/code-snapshot-errors.jsonl"
+        self.deferred = self.lane + "/loops/code-snapshot-deferred.jsonl"
 
 
 _IO = threading.Lock()
@@ -159,6 +181,14 @@ def predicted_need(row):
     return int((row.get("size_kb") or 0) * 1024 * NEED_FRACTION) + NEED_BASE
 
 
+def row_key(repo, catalog_sha, rules=None):
+    return (repo, catalog_sha, RULES_VERSION if rules is None else rules)
+
+
+def done_keys(ledger_path):
+    return {row_key(r["repo"], r.get("catalog_commit_sha"), r.get("rules_version")) for r in read_rows(ledger_path) if r.get("repo")}
+
+
 def dir_bytes(p):
     t = 0
     for dp, dn, fn in os.walk(p):
@@ -171,7 +201,7 @@ def dir_bytes(p):
 
 
 def remove_staging(path, stage, removes_path, repo="", authority=AUTHORITY):
-    """Remove one repo's staging dir. The target must resolve strictly inside the staging tree (StagingEscape otherwise); the receipt row is written before the remove. -> bytes removed (0 when absent)."""
+    """Remove one repo's staging dir. The target must resolve strictly inside the staging tree (StagingEscape otherwise); the receipt row is written (fsynced) before the remove. -> bytes removed (0 when absent)."""
     rp = os.path.normcase(os.path.realpath(path)); rs = os.path.normcase(os.path.realpath(stage))
     if not rp.startswith(rs + os.sep) or rp == rs:
         raise StagingEscape("%s is not strictly inside the staging tree %s" % (path, stage))
@@ -186,6 +216,37 @@ def remove_staging(path, stage, removes_path, repo="", authority=AUTHORITY):
     return n
 
 
+# ------------------------------------------------------------------ licence text
+_QUOTES = re.compile("[“”‘’\"'`]")
+_MIT_A = ('Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, '
+          'including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, '
+          'subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. '
+          'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. '
+          'IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH '
+          'THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.')
+
+
+def _norm(t):
+    return " ".join(_QUOTES.sub("", t.lower()).split())
+
+
+MIT_BODIES = {_norm(_MIT_A), _norm(_MIT_A.replace("THE AUTHORS OR COPYRIGHT HOLDERS", "THE COPYRIGHT HOLDERS"))}
+_PREFIX_OK = re.compile(r"^(?:(?:the\s+)?(?:mit|expat)(?:\s+licen[sc]e)?(?:\s*\(mit\))?|licen[sc]e|copyright\b.*|\(c\)\s.*|©.*|spdx-license-identifier:\s*mit|all rights reserved\.?)$", re.I)
+
+
+def is_mit(text):
+    """The standard MIT permission text. Only a title line and copyright lines may come before it; the normalised body (case, whitespace, quote marks) must EQUAL the standard body, so an added clause, a different licence or a mere mention of 'MIT License' is not MIT."""
+    t = text.lstrip("﻿")
+    m = re.search(r"permission\s+is\s+hereby\s+granted", t, re.I)
+    if not m:
+        return False
+    for line in t[:m.start()].splitlines():
+        l = re.sub(r"^[#/*>\s]+", "", line.strip()).strip("*/ ")
+        if l.strip("=-_ ") and not _PREFIX_OK.match(l):
+            return False
+    return _norm(t[m.start():]) in MIT_BODIES
+
+
 # ------------------------------------------------------------------ git steps
 def select_wall_commit(runner, clone, catalog_sha):
     """-> (wall sha, committer time) or None when the repo has no commit before the wall. WallViolation when the chosen commit is not strictly before it."""
@@ -198,10 +259,40 @@ def select_wall_commit(runner, clone, catalog_sha):
     return sha, ts
 
 
-def eligible(path, size):
-    if SKIP_DIR.search(path) or SKIP_FILE.search(path) or size < 1 or size > MAX_FILE:
-        return False
-    return os.path.splitext(path)[1].lower() in TEXT_EXT
+def history_times(runner, clone, wall_sha):
+    """[(committer time, author time)] of the wall commit (first) and every commit reachable from it: one `git log` over the blobless clone."""
+    out = runner.git(["log", "--format=%ct %at", wall_sha], clone).decode()
+    return [tuple(int(x) for x in ln.split()) for ln in out.splitlines() if ln.strip()]
+
+
+def list_tree(runner, clone, wall_sha):
+    """The wall commit's tree from the clone: [{path, mode, type, sha}] (no sizes: `ls-tree -l` would fetch every blob)."""
+    ents = []
+    for rec in runner.git(["ls-tree", "-r", "-z", wall_sha], clone).split(b"\x00"):
+        if not rec:
+            continue
+        meta, path = rec.split(b"\t", 1); mode, typ, sha = meta.decode("ascii").split()
+        ents.append(dict(path=path.decode("utf-8", "replace"), mode=mode, type=typ, sha=sha))
+    return ents
+
+
+def ineligible_class(e):
+    """Why a tree entry is not a candidate file (None = candidate). Sizes are judged later on the fetched bytes (too_large)."""
+    if e["type"] == "commit" or e["mode"] == "160000":
+        return "submodule"
+    if e["mode"] == "120000":
+        return "symlink"
+    if e["type"] != "blob":
+        return "non_blob"
+    if SKIP_DIR.search(e["path"]):
+        return "skip_dir"
+    if SKIP_FILE.search(e["path"]):
+        return "skip_file"
+    if os.path.splitext(e["path"])[1].lower() not in TEXT_EXT:
+        return "extension"
+    if e["sha"] == EMPTY_BLOB:
+        return "empty"
+    return None
 
 
 def classify(path, data):
@@ -211,7 +302,7 @@ def classify(path, data):
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        return "binary", None
+        return "invalid_utf8", None
     head = data[:2048].decode("utf-8", "replace")
     if OTHER_LIC.search(head):
         return "other_licence_header", None
@@ -238,34 +329,22 @@ def parse_batch(raw, wanted):
     return out
 
 
-def fetch_and_read(runner, clone, items):
-    """items [(sha, size)] -> {sha: bytes}: the wanted blobs are fetched into the promisor clone in one batch per chunk, then read locally."""
-    got, chunk, nb = {}, [], 0
-    uniq = list(dict(items).items())
-
-    def flush(ch):
-        shas = [s for s, _ in ch]
-        stdin = ("\n".join(shas) + "\n").encode()
+def fetch_and_read(runner, clone, shas, after_chunk=None):
+    """shas -> {sha: bytes}: the wanted blobs are fetched into the promisor clone CHUNK_N at a time, then read locally. after_chunk() runs after each chunk (the staging measurement)."""
+    got, uniq = {}, list(dict.fromkeys(shas))
+    for i in range(0, len(uniq), CHUNK_N):
+        ch = uniq[i:i + CHUNK_N]; stdin = ("\n".join(ch) + "\n").encode()
         # the same options git's own lazy promisor fetch uses: without negotiation=noop GitHub answers 'did not send all necessary objects' for an explicit blob want
         runner.git(["-c", "fetch.negotiationAlgorithm=noop", "fetch", "origin", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--filter=blob:none", "--stdin"], clone, input=stdin)
-        got.update(parse_batch(runner.git(["cat-file", "--batch"], clone, input=stdin), shas))
-    for s, n in uniq:
-        if chunk and (nb + n > CHUNK_BYTES or len(chunk) >= CHUNK_N):
-            flush(chunk); chunk, nb = [], 0
-        chunk.append((s, n)); nb += n
-    if chunk:
-        flush(chunk)
+        got.update(parse_batch(runner.git(["cat-file", "--batch"], clone, input=stdin), ch))
+        if after_chunk:
+            after_chunk()
     return got
-
-
-def blob_api(runner, repo, sha):
-    j = runner.gh_api("repos/%s/git/blobs/%s" % (repo, sha))
-    return base64.b64decode(j.get("content", "")) if j.get("encoding", "base64") == "base64" else j.get("content", "").encode("utf-8")
 
 
 # ------------------------------------------------------------------ output shard
 class Shard:
-    """One repo's docs shard: <name>.jsonl.zst.part, replaced into place on close."""
+    """One repo's docs shard: <name>.jsonl.zst.part, replaced into place on close (abort leaves only the .part, which the next attempt overwrites)."""
 
     def __init__(self, path, need_bytes, log=_log):
         self.path, self.part, self.need, self.log, self.w, self.fo = path, path + ".part", need_bytes, log, None, None
@@ -285,61 +364,100 @@ class Shard:
         self.w.close(); self.fo.flush(); os.fsync(self.fo.fileno()); self.fo.close()
         os.replace(self.part, self.path)
 
+    def abort(self):
+        try:
+            self.w.close(); self.fo.close()
+        except Exception:
+            pass
+
 
 # ------------------------------------------------------------------ engine
-class Budget:
-    """Shared resident-bytes budget: a repo reserves its predicted need before it starts and waits while that would pass the cap (a lone repo always runs: its need is <= cap by construction)."""
+class Reservation:
+    def __init__(self, n):
+        self.n, self.peak_dir = n, 0
 
-    def __init__(self, cap):
-        self.cap, self.used, self.cv = cap, 0, threading.Condition()
+
+class Budget:
+    """Shared resident-bytes budget. A repo reserves its predicted need before it starts and waits while that would pass the cap (a lone repo always runs: its need is <= cap by construction);
+    grow() raises one repo's reservation to what was MEASURED on disk, waiting for room, or raises StagingOverBudget."""
+
+    def __init__(self, cap, wait_s=900):
+        self.cap, self.wait_s, self.used, self.peak, self.cv = cap, wait_s, 0, 0, threading.Condition()
 
     def acquire(self, n, stop):
         with self.cv:
             while self.used and self.used + n > self.cap:
                 if stop.is_set():
-                    return False
+                    return None
                 self.cv.wait(timeout=1.0)
             if stop.is_set():
-                return False
-            self.used += n
-            return True
+                return None
+            self.used += n; self.peak = max(self.peak, self.used)
+            return Reservation(n)
 
-    def release(self, n):
+    def grow(self, res, want, stop):
         with self.cv:
-            self.used -= n; self.cv.notify_all()
+            if want > self.cap:
+                raise StagingOverBudget("measured %d B (+ one chunk) does not fit under the %d B staging cap" % (want, self.cap))
+            t0 = time.time()
+            while self.used - res.n + want > self.cap:
+                if stop.is_set() or time.time() - t0 > self.wait_s:
+                    raise StagingOverBudget("no room to raise a reservation to %d B under the %d B cap (in use %d)" % (want, self.cap, self.used))
+                self.cv.wait(timeout=1.0)
+            self.used += want - res.n; res.n = want; self.peak = max(self.peak, self.used)
+
+    def release(self, res):
+        with self.cv:
+            self.used -= res.n if isinstance(res, Reservation) else res; self.cv.notify_all()
+
+
+def measure_staging(eng, res, clone):
+    """The staging bound is MEASURED: dir size of the clone now; the reservation is raised to it plus one chunk of headroom when it is below that."""
+    n = dir_bytes(clone); res.peak_dir = max(res.peak_dir, n)
+    if n + CHUNK_BYTES > res.n:
+        eng.budget.grow(res, n + CHUNK_BYTES, eng.stop)
+    return n
 
 
 class Engine:
-    def __init__(self, lane, runner=None, workers=4, clock=time.time, budget_cap=None, log=_log, stop_after=None, stop_hours=None):
+    def __init__(self, lane, runner=None, workers=4, clock=time.time, budget_cap=None, log=_log, stop_after=None, stop_hours=None, grow_wait_s=900):
         self.p = Paths(lane); self.runner = runner or Runner(); self.workers = workers; self.clock = clock; self.log = log
-        self.budget = Budget(BUDGET_CAP if budget_cap is None else budget_cap); self.stop = threading.Event(); self.lock = threading.Lock()
+        self.budget = Budget(BUDGET_CAP if budget_cap is None else budget_cap, grow_wait_s); self.stop = threading.Event(); self.lock = threading.Lock()
         self.stop_after, self.stop_hours = (STOP_AFTER if stop_after is None else stop_after), (STOP_HOURS if stop_hours is None else stop_hours)
         self.totals, self.finished, self.pending_total, self.errors, self.deferred = [], 0, 0, 0, 0
         self.fatal, self.floor_hit, self.stop_rule = None, False, None
 
     # ---- one repo
     def process_repo(self, row, wid=0):
-        """Everything for one repo: clone, wall commit, licence, files, shard, ledger row, then the staging dir is removed. -> the ledger row. Raises WallViolation (nothing written for the repo) or DiskFloor / RunnerError (no row: redone next run)."""
-        t0 = self.clock(); repo = row["full_name"]
-        if not reserve_plan.write_gate("gh_snapshot_fetch clone " + repo, predicted_need(row), log=self.log, cap_s=3600, floor_fn=reserve_plan.floor_gib):
-            raise DiskFloor("write_gate refused: B: below the reserve floor for the whole gate cap; %s not cloned" % repo)
+        """Everything for one repo: reserve staging, clone, wall commit, ancestry, licence, files, shard, ledger row, then the staging dir is removed. -> the ledger row.
+        Raises WallViolation (nothing written for the repo), DiskFloor, StagingOverBudget, BlobUnavailable or RunnerError (no row: redone next run)."""
+        t0 = self.clock(); repo = row["full_name"]; need = predicted_need(row)
+        res = self.budget.acquire(need, self.stop)
+        if res is None:
+            raise Stopped()
         clone = "%s/w%d/%s-%s" % (self.p.stage, wid, repo.replace("/", "__"), row["commit_sha"][:12])
         try:
+            if not reserve_plan.write_gate("gh_snapshot_fetch clone " + repo, max(self.budget.used, need), log=self.log, cap_s=3600, floor_fn=reserve_plan.floor_gib):
+                raise DiskFloor("write_gate refused: B: below the reserve floor for the whole gate cap; %s not cloned" % repo)
             remove_staging(clone, self.p.stage, self.p.removes, repo)            # a crashed earlier attempt left its dir: redo from scratch
-            led = self._snapshot(row, clone)
-            led["total_s"] = round(self.clock() - t0, 3); led["ts"] = now_z()
+            led = self._snapshot(row, clone, res)
+            led.update(total_s=round(self.clock() - t0, 3), ts=now_z(), staging_peak_bytes=res.peak_dir, rules_version=RULES_VERSION, source_class=SOURCE_CLASS, scan_state="NOT_SCANNED")
             append_row(self.p.ledger, led, sync=True)
         finally:
-            remove_staging(clone, self.p.stage, self.p.removes, repo)
+            try:
+                remove_staging(clone, self.p.stage, self.p.removes, repo)
+            finally:
+                self.budget.release(res)
         return led
 
     def _skip(self, led, reason):
         led["skipped_reason"] = reason
         return led
 
-    def _snapshot(self, row, clone):
+    def _snapshot(self, row, clone, res):
         repo, csha, r = row["full_name"], row["commit_sha"], self.runner
-        led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, licence_file_sha=None, bytes_kept=0, files_kept=0, files_dropped={}, skipped_reason=None, fetch_s=0.0, shard=None)
+        led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, wall_commit_author_ts=None, history_commits=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
+                   files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None)
         os.makedirs(os.path.dirname(clone), exist_ok=True)
         try:
             r.git(["clone", "--quiet", "--filter=blob:none", "--no-checkout", row["url"], clone])
@@ -347,6 +465,7 @@ class Engine:
             if GONE.search(str(e)):
                 return self._skip(led, "repo_unavailable")
             raise
+        measure_staging(self, res, clone)
         try:
             r.git(["cat-file", "-e", csha + "^{commit}"], clone)
         except RunnerError:
@@ -355,66 +474,78 @@ class Engine:
         if wall is None:
             return self._skip(led, "no_pre_wall_history")
         wsha, wts = wall; led["wall_commit"], led["wall_commit_ts"] = wsha, wts
-        tree = r.gh_api("repos/%s/git/trees/%s?recursive=1" % (repo, wsha))
-        if tree.get("truncated"):
-            return self._skip(led, "tree_truncated")
-        ents = [e for e in tree.get("tree", []) if e.get("type") == "blob" and e.get("mode") != "120000" and e.get("path")]
-        root_lic = sorted((e for e in ents if "/" not in e["path"] and LIC_ROOT.match(e["path"])), key=lambda e: e["path"])
+        hist = history_times(r, clone, wsha)
+        led["wall_commit_author_ts"], led["history_commits"] = hist[0][1], len(hist)
+        if any(ct >= WALL_TS or at >= WALL_TS for ct, at in hist):
+            return self._skip(led, "history_dates_not_monotone")
+        ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
+        # licence: EVERY root licence file must be the MIT text
+        root_lic = sorted((e for e in ents if e["type"] == "blob" and e["mode"] != "120000" and "/" not in e["path"] and LIC_ROOT.match(e["path"])), key=lambda e: e["path"])
         if not root_lic:
             return self._skip(led, "no_licence_file_at_wall_commit")
         led["licence_file_sha"] = root_lic[0]["sha"]
-        mit = None
-        for e in root_lic[:4]:
-            if MIT_TEXT.search(blob_api(r, repo, e["sha"]).decode("utf-8", "replace")):
-                mit = e["sha"]; break
-        if mit is None:
-            return self._skip(led, "licence_not_mit_at_wall_commit")
-        led["licence_file_sha"] = mit
-        drops = collections.Counter(); t = self.clock()
-        # non-root licence files: a subtree holding a non-MIT one is dropped whole
-        sub = [e for e in ents if "/" in e["path"] and LIC_ANY.search(e["path"])]
-        small = [(e["sha"], e.get("size", 0)) for e in sub if e.get("size", 0) <= LICENCE_READ_MAX]
-        lic = fetch_and_read(r, clone, small) if small else {}
-        bad = sorted({e["path"].rsplit("/", 1)[0] for e in sub if e["sha"] not in lic or not MIT_TEXT.search(lic[e["sha"]].decode("utf-8", "replace"))})
+        sub = [e for e in ents if e["type"] == "blob" and e["mode"] != "120000" and "/" in e["path"] and LIC_ANY.search(e["path"])]
+        t = self.clock()
+        lic = fetch_and_read(r, clone, [e["sha"] for e in root_lic + sub], after_chunk=lambda: measure_staging(self, res, clone))
         led["fetch_s"] += self.clock() - t
-        cand = []
+        miss = [e["path"] for e in root_lic + sub if e["sha"] not in lic]
+        if miss:
+            raise BlobUnavailable("licence blob(s) unreadable: %s" % ", ".join(miss[:5]))
+        verdict = [len(lic[e["sha"]]) <= LICENCE_READ_MAX and is_mit(lic[e["sha"]].decode("utf-8", "replace")) for e in root_lic]
+        if not any(verdict):
+            return self._skip(led, "licence_not_mit_at_wall_commit")
+        if not all(verdict):
+            return self._skip(led, "licence_mixed_at_wall_commit")
+        # a subtree holding a non-MIT licence file is dropped whole
+        bad = sorted({e["path"].rsplit("/", 1)[0] for e in sub if not (len(lic[e["sha"]]) <= LICENCE_READ_MAX and is_mit(lic[e["sha"]].decode("utf-8", "replace")))})
+        inel, drops, cand = collections.Counter(), collections.Counter(), []
         for e in ents:
-            if not eligible(e["path"], e.get("size", 0)):
-                continue
-            if os.path.splitext(e["path"])[1].lower() == ".ipynb":
+            why = ineligible_class(e)
+            if why:
+                inel[why] += 1
+            elif os.path.splitext(e["path"])[1].lower() == ".ipynb":
                 drops["ipynb"] += 1
             elif any(e["path"].startswith(d + "/") for d in bad):
                 drops["subtree_non_mit_licence"] += 1
             else:
                 cand.append(e)
-        shard, w12 = None, wsha[:12]
+        shard, w12, kept, unavail = None, wsha[:12], 0, 0
         spath = "%s/%s@%s.jsonl.zst" % (self.p.docs, repo.replace("/", "__"), w12)
-        pos = 0
-        while pos < len(cand):
-            part, nb = [], 0
-            while pos < len(cand) and len(part) < CHUNK_N and (not part or nb + cand[pos].get("size", 0) <= CHUNK_BYTES):
-                part.append(cand[pos]); nb += cand[pos].get("size", 0); pos += 1
-            t = self.clock()
-            data = fetch_and_read(r, clone, [(e["sha"], e.get("size", 0)) for e in part])
-            led["fetch_s"] += self.clock() - t
-            rows = []
-            for e in part:
-                b = data.get(e["sha"])
-                if b is None:
-                    drops["blob_unavailable"] += 1; continue
-                why, text = classify(e["path"], b)
-                if why:
-                    drops[why] += 1; continue
-                rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, spdx="MIT"))
-                led["bytes_kept"] += len(b); led["files_kept"] += 1
-            if rows:
-                if shard is None:
-                    shard = Shard(spath, predicted_need(row), log=self.log).open()
-                shard.write(rows)
-        if shard is not None:
-            shard.close(); led["shard"] = os.path.basename(spath)
-        led["files_dropped"] = dict(drops); led["fetch_s"] = round(led["fetch_s"], 3)
-        if not led["files_kept"]:
+        try:
+            for i in range(0, len(cand), CHUNK_N):
+                part = cand[i:i + CHUNK_N]; t = self.clock()
+                data = fetch_and_read(r, clone, [e["sha"] for e in part], after_chunk=lambda: measure_staging(self, res, clone))
+                led["fetch_s"] += self.clock() - t
+                rows = []
+                for e in part:
+                    b = data.get(e["sha"])
+                    if b is None:
+                        unavail += 1; continue
+                    if len(b) > MAX_FILE:
+                        inel["too_large"] += 1; continue
+                    if len(b) == 0:
+                        inel["empty"] += 1; continue
+                    why, text = classify(e["path"], b)
+                    if why:
+                        drops[why] += 1; continue
+                    rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, spdx="MIT", source_class=SOURCE_CLASS))
+                    led["bytes_kept"] += len(b); kept += 1
+                if rows:
+                    if shard is None:
+                        shard = Shard(spath, predicted_need(row), log=self.log).open()
+                    shard.write(rows)
+            if unavail:
+                raise BlobUnavailable("%d wanted blob(s) of %s could not be read from the clone" % (unavail, repo))
+            if kept + sum(drops.values()) + sum(inel.values()) != len(ents):
+                raise RuntimeError("accounting: kept %d + dropped %d + ineligible %d != tree entries %d" % (kept, sum(drops.values()), sum(inel.values()), len(ents)))
+            if shard is not None:
+                shard.close(); led["shard"] = os.path.basename(spath)
+        except BaseException:
+            if shard is not None:
+                shard.abort()
+            raise
+        led["files_kept"], led["files_dropped"], led["ineligible"], led["fetch_s"] = kept, dict(drops), dict(inel), round(led["fetch_s"], 3)
+        if not kept:
             led["skipped_reason"] = "no_eligible_files"
         return led
 
@@ -436,43 +567,48 @@ class Engine:
                 else:
                     self.stop_rule["fired"] = False
 
+    def _durable(self, kind, row, e):
+        append_row(self.p.errors, dict(ts=now_z(), kind=kind, repo=row["full_name"], catalog_commit_sha=row["commit_sha"], error="%s: %s" % (type(e).__name__, str(e)[:300])), sync=True)
+
     def _work(self, wid, it):
         while not self.stop.is_set():
             with self.lock:
                 row = next(it, None)
             if row is None:
                 return
-            need = predicted_need(row)
-            if not self.budget.acquire(need, self.stop):
-                return
             try:
                 led = self.process_repo(row, wid)
                 self.log("done %s %s kept=%d/%dB wall=%s" % (row["full_name"], led["skipped_reason"] or "kept", led["files_kept"], led["bytes_kept"], (led["wall_commit"] or "-")[:12]))
                 self._finish(led["total_s"])
+            except Stopped:
+                return
             except WallViolation as e:
-                self.fatal = e; self.stop.set(); self.log("WALL VIOLATION", row["full_name"], e)
+                self.fatal = e; self.stop.set(); self._durable("wall_violation", row, e); self.log("WALL VIOLATION", row["full_name"], e)
             except DiskFloor as e:
-                self.floor_hit = True; self.stop.set(); self.log(str(e))
+                self.floor_hit = True; self.stop.set(); self._durable("disk_floor_stop", row, e); self.log(str(e))
             except Exception as e:
                 with self.lock:
                     self.errors += 1
-                append_row(self.p.errors, dict(ts=now_z(), repo=row["full_name"], error="%s: %s" % (type(e).__name__, str(e)[:300])))
+                self._durable(getattr(e, "kind", "error"), row, e)
                 self.log("ERROR %s %s: %s (no ledger row; redone next run)" % (row["full_name"], type(e).__name__, str(e)[:200]))
-            finally:
-                self.budget.release(need)
 
     def run(self, limit=0, ignore_stop=False):
         if os.path.exists(self.p.stop) and not ignore_stop:
             self.log("STOP file exists (%s): the timing stop rule fired earlier; read it, then rerun with --ignore-stop" % self.p.stop)
             return 3
-        done = {r["repo"] for r in read_rows(self.p.ledger) if r.get("repo")}
-        sel = select_repos(self.p.catalog)
-        fits = [r for r in sel if predicted_need(r) <= self.budget.cap]
-        self.deferred = len(sel) - len(fits)
-        todo = [r for r in fits if r["full_name"] not in done]
-        self.pending_total = len(todo)
-        self.log("selected %d, already in ledger %d, deferred (need > staging cap) %d, to do %d, workers %d" % (len(sel), len(done & {r["full_name"] for r in sel}), self.deferred, len(todo), self.workers))
-        it = iter(todo[:limit] if limit else todo)
+        done = done_keys(self.p.ledger)
+        sel = [r for r in select_repos(self.p.catalog) if row_key(r["full_name"], r["commit_sha"]) not in done]
+        fits, self.deferred = [], 0
+        for r in sel:
+            why = "size_kb_missing" if not isinstance(r.get("size_kb"), (int, float)) else ("need_over_staging_cap" if predicted_need(r) > self.budget.cap else None)
+            if why:
+                self.deferred += 1
+                append_row(self.p.deferred, dict(ts=now_z(), repo=r["full_name"], catalog_commit_sha=r["commit_sha"], reason=why, size_kb=r.get("size_kb"), need=predicted_need(r), cap=self.budget.cap), sync=True)
+            else:
+                fits.append(r)
+        self.pending_total = len(fits)
+        self.log("to do %d, deferred %d (size_kb missing or need > staging cap), already done %d, workers %d" % (len(fits), self.deferred, len(done), self.workers))
+        it = iter(fits[:limit] if limit else fits)
         threads = [threading.Thread(target=self._work, args=(k, it), daemon=True) for k in range(self.workers)]
         for t in threads:
             t.start()
@@ -489,14 +625,14 @@ class Engine:
 
 
 def status(lane):
-    p = Paths(lane); sel = select_repos(p.catalog); led = {r["repo"]: r for r in read_rows(p.ledger) if r.get("repo")}
-    mine = [led[r["full_name"]] for r in sel if r["full_name"] in led]
-    reasons = collections.Counter(r["skipped_reason"] or "kept" for r in mine); dropped = collections.Counter()
+    p = Paths(lane); sel = select_repos(p.catalog); led = {row_key(r["repo"], r.get("catalog_commit_sha"), r.get("rules_version")): r for r in read_rows(p.ledger) if r.get("repo")}
+    mine = [led[row_key(r["full_name"], r["commit_sha"])] for r in sel if row_key(r["full_name"], r["commit_sha"]) in led]
+    reasons = collections.Counter(r["skipped_reason"] or "kept" for r in mine); dropped, inel = collections.Counter(), collections.Counter()
     for r in mine:
-        dropped.update(r.get("files_dropped") or {})
+        dropped.update(r.get("files_dropped") or {}); inel.update(r.get("ineligible") or {})
     stage = sum(dir_bytes(os.path.join(p.stage, d)) for d in os.listdir(p.stage)) if os.path.isdir(p.stage) else 0
-    out = dict(selected=len(sel), in_ledger=len(mine), remaining=len(sel) - len(mine), terminal_states=dict(reasons), files_kept=sum(r["files_kept"] for r in mine), bytes_kept=sum(r["bytes_kept"] for r in mine),
-               files_dropped=dict(dropped), mean_total_s=round(sum(r["total_s"] for r in mine) / len(mine), 2) if mine else None, mean_fetch_s=round(sum(r["fetch_s"] for r in mine) / len(mine), 2) if mine else None,
+    out = dict(rules_version=RULES_VERSION, selected=len(sel), in_ledger=len(mine), remaining=len(sel) - len(mine), terminal_states=dict(reasons), files_kept=sum(r["files_kept"] for r in mine), bytes_kept=sum(r["bytes_kept"] for r in mine),
+               files_dropped=dict(dropped), ineligible=dict(inel), mean_total_s=round(sum(r["total_s"] for r in mine) / len(mine), 2) if mine else None, mean_fetch_s=round(sum(r["fetch_s"] for r in mine) / len(mine), 2) if mine else None,
                staging_resident_bytes=stage, stop_file=os.path.exists(p.stop))
     print(json.dumps(out, indent=1)); return 0
 
