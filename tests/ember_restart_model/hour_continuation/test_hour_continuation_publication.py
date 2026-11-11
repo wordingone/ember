@@ -103,7 +103,7 @@ class PublicationTests(NextUpdateTests):
         self.assertFalse((self.custody/'continuation-reference.json').exists())
 
     def reading_order(self, verify, update=None):
-        """The job ledger's reads (#2119) in the order they happen around the S+1 update and the verify that restores S."""
+        """The job ledger's reads (#2119) in the order they happen around the S+1 update and the verify that restores S; the capture bind is read first (review r1 item 4)."""
         order = []
         memory = SimpleNamespace(mark=lambda phase: order.append(phase))
 
@@ -126,7 +126,7 @@ class PublicationTests(NextUpdateTests):
         return order
 
     def test_the_ledger_is_read_after_the_update_and_after_the_second_verify(self):
-        self.assertEqual(self.reading_order(lambda: self.optimizer.state.clear()), ['reference_update', 'verify', 'restored'])
+        self.assertEqual(self.reading_order(lambda: self.optimizer.state.clear()), ['capture_bound', 'reference_update', 'verify', 'restored'])
 
     def test_a_refused_update_is_not_read_as_an_update_but_the_restore_is_still_read(self):
         def refuse(*args, **kwargs):
@@ -136,7 +136,7 @@ class PublicationTests(NextUpdateTests):
     def test_a_refused_second_verify_is_never_read_as_restored(self):
         def refuse():
             raise ValueError('fixture restore failure')
-        self.assertEqual(self.reading_order(refuse), ['reference_update', 'verify'])
+        self.assertEqual(self.reading_order(refuse), ['capture_bound', 'reference_update', 'verify'])
 
     def test_rehashed_reference_or_terminal_attention_change_refuses(self):
         descriptor = self.publish()

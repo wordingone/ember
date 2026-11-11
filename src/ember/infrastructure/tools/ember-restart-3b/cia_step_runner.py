@@ -462,18 +462,32 @@ def measurement_summary(rates):
 PEAK_JOB_MEMORY_MARGIN_BYTES = 4 * GIB
 
 
-def check_predicted_peak_job_memory(predicted, limit):
-    """The hour's declared peak job memory, in bytes, must leave at least PEAK_JOB_MEMORY_MARGIN_BYTES under the job memory limit.
-    A missing, non-integer or non-positive prediction refuses: an hour with no stated memory peak is not governed."""
+def check_predicted_peak_job_memory(predicted, limit, *, training=True):
+    """The hour's declared peak job memory, in bytes. A missing, non-integer or non-positive prediction refuses: an hour with no stated memory
+    peak is not governed. A declared peak above the job memory limit refuses in every mode.
+
+    A TRAINING hour must also leave at least PEAK_JOB_MEMORY_MARGIN_BYTES under the limit: its peak is measured plus a margin. A no-training
+    mode (the verify-only tail, the checkpoint probe, the continuation worker) declares the level it really reaches (the probe's peak is its hold plus the
+    restore by construction, the tail's is the restore level) and is admitted when that level is at most the limit: the margin would refuse every
+    honest declaration there (an honest probe reaches 43.6 GiB, an honest tail 36.1 to 36.4 GiB against a 40 GiB limit; lead ruling 82978)."""
     if type(predicted) is not int or predicted <= 0:
         raise ValueError('prediction predicted_peak_job_memory_bytes must be a positive integer number of bytes')
     if type(limit) is not int or limit <= 0:
         raise ValueError('job memory limit must be a positive integer number of bytes')
-    if limit - predicted < PEAK_JOB_MEMORY_MARGIN_BYTES:
+    if predicted > limit:
+        raise ValueError('predicted peak job memory %d bytes is above the job memory limit %d bytes: the job would be killed at the limit' % (predicted, limit))
+    if training and limit - predicted < PEAK_JOB_MEMORY_MARGIN_BYTES:
         raise ValueError(
             'predicted peak job memory %d bytes is within %d bytes of the job memory limit %d (headroom %d): '
             'the hour would run too close to the limit that killed H50; reduce the peak or declare a larger limit with its commit gate'
             % (predicted, PEAK_JOB_MEMORY_MARGIN_BYTES, limit, limit - predicted))
+
+
+def no_training_mode(identity):
+    """True for the modes that train nothing the hour credits and declare the job memory level they really reach: the checkpoint probe, the
+    verify-only tail and the continuation worker. Training hours (the governed hour and the learning comparison) are not."""
+    hour = identity.get('hour')
+    return (isinstance(hour, dict) and hour.get('schema') == 'checkpoint-probe-v1') or 'verify_tail' in identity or 'continuation' in identity
 
 
 def _owned_job_limits(run_id, namespace):
@@ -589,12 +603,19 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     if isinstance(prediction, dict) and 'predicted_peak_job_memory_bytes' not in prediction:
         raise ValueError('prediction requires predicted_peak_job_memory_bytes (the declared peak job memory of the hour, #2119)')
     probe = (isinstance(expected_identity.get('hour'), dict) and expected_identity['hour'].get('schema') == 'checkpoint-probe-v1')
+    # a governed hour that consumes a checkpoint probe states the resident set it holds when its own restore verify starts: the probe must have held it
+    consumer = 'checkpoint_probe' in expected_identity
+    no_training = no_training_mode(expected_identity)
     if probe and isinstance(prediction, dict) and 'probe_verify_resident_bytes' not in prediction:
         raise ValueError('a checkpoint probe prediction requires probe_verify_resident_bytes (the resident set the hour holds at its '
                          'restore verify, which the probe must hold too, #2119)')
+    if consumer and isinstance(prediction, dict) and 'before_verify_resident_bytes' not in prediction:
+        raise ValueError('an hour that consumes a checkpoint probe requires before_verify_resident_bytes (the resident set it holds when its '
+                         'restore verify starts, which the probe it consumes must have held, #2119)')
     if (not isinstance(prediction, dict) or set(prediction) != {
             'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis',
             'predicted_peak_job_memory_bytes'} | ({'probe_verify_resident_bytes'} if probe else set())
+            | ({'before_verify_resident_bytes'} if consumer else set())
             or prediction['schema'] != 'ember-cia-step-prediction-v1'):
         raise ValueError('prediction fields or schema differ')
     if not isinstance(prediction['basis'], str) or not prediction['basis'].strip():
@@ -603,11 +624,16 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
         raise ValueError('prediction identity differs from opened inputs and execution')
     if canonical(expected_identity.get('resources')) != canonical(resource_limits(expected_identity)):
         raise ValueError('prediction resource envelope differs')
-    check_predicted_peak_job_memory(prediction['predicted_peak_job_memory_bytes'], resource_limits(expected_identity)['host_memory_bytes'])
+    check_predicted_peak_job_memory(prediction['predicted_peak_job_memory_bytes'], resource_limits(expected_identity)['host_memory_bytes'],
+                                    training=not no_training)
     if probe:
         held = prediction['probe_verify_resident_bytes']
         if type(held) is not int or held <= 0 or held >= prediction['predicted_peak_job_memory_bytes']:
             raise ValueError('probe_verify_resident_bytes must be a positive integer below predicted_peak_job_memory_bytes')
+    if consumer:
+        level = prediction['before_verify_resident_bytes']
+        if type(level) is not int or level <= 0 or level >= prediction['predicted_peak_job_memory_bytes']:
+            raise ValueError('before_verify_resident_bytes must be a positive integer below predicted_peak_job_memory_bytes')
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
         raise ValueError('prediction timing and rate must be finite positive numbers')
@@ -1566,7 +1592,8 @@ def prepare_execution(prediction):
     validate_trajectory_resources(identity)
     if hour and not tail:
         # ruling 67506: only a tail that verify_tail_mode has passed (zero steps, no data segment, no probe) skips the training hour's probe and mixture checks.
-        load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
+        load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity,
+            required_hold_bytes=prediction.get('before_verify_resident_bytes') if isinstance(prediction, dict) else None)
         mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
     sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
                                                 measurement=measurement)

@@ -569,7 +569,7 @@ class TailPrepareScopeTests(unittest.TestCase):
         """Run prepare_execution up to the first geometry read; return what the hour module was asked."""
         import cia_step_runner as runner
         calls = []
-        hour_module = types.SimpleNamespace(validate_checkpoint_probe=lambda *a: calls.append('probe'),
+        hour_module = types.SimpleNamespace(validate_checkpoint_probe=lambda *a, **k: calls.append('probe'),
                                             validate_identity=lambda **k: calls.append('mixture') or {})
 
         def reached(*args, **kwargs):

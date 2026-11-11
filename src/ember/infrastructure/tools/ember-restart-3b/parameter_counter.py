@@ -1552,15 +1552,22 @@ _CIA_READ_CHUNK = 8 * 1024 * 1024    # a component is hashed, and then served to
 _CIA_MATH_WINDOW = 1024 * 1024       # the fp32 digests and the bf16 narrowing run on windows of this size (a multiple of 4)
 
 
+# What the component reader actually did in this process: read back by counter_io_report(), never declared. A digest pass and every chunk
+# the ZIP reader was served are counted with the largest single read; a counter that read a component whole would show a read above one chunk.
+_CIA_READER_STATS = dict(digest_passes=0, digest_pass_max_read_bytes=0, chunk_reads=0, chunk_read_max_bytes=0)
+
+
 def _cia_counter_digest_pass(path, size):
     """One bounded streaming pass over a component file: (sha256 hex of its bytes, the sha256 digest of each _CIA_READ_CHUNK chunk,
     whether the file is exactly `size` bytes). It reads at most size + 1 bytes, so a file longer than its record is refused
     without being read whole (digest None). A shorter file returns ok False with the digest of what it holds."""
     whole, table, total = hashlib.sha256(), [], 0
+    _CIA_READER_STATS['digest_passes'] += 1
     with path.open('rb') as handle:
         while total <= size:
             block = handle.read(min(_CIA_READ_CHUNK, size + 1 - total))
             if not block: break
+            _CIA_READER_STATS['digest_pass_max_read_bytes'] = max(_CIA_READER_STATS['digest_pass_max_read_bytes'], len(block))
             total += len(block)
             if total > size: return None, table, False
             whole.update(block)
@@ -1601,6 +1608,8 @@ class _CIAVerifiedFile(io.RawIOBase):
             with self._path.open('rb') as handle:
                 handle.seek(start)
                 block = handle.read(want)
+            _CIA_READER_STATS['chunk_reads'] += 1
+            _CIA_READER_STATS['chunk_read_max_bytes'] = max(_CIA_READER_STATS['chunk_read_max_bytes'], len(block))
             if len(block) != want or hashlib.sha256(block).digest() != self._table[index]:
                 self._index, self._block = -1, b''
                 raise ValueError('CIA checkpoint component changed after its digest was verified')
@@ -1907,7 +1916,7 @@ def _counter_for(digest):
         # A historic counter keeps its own derive logic and its own tensor classes, but never its whole-file read of a component:
         # its component reader is replaced by the bounded, chunk-verified one (same contract: root, relative, record ->
         # (archive, payload), payload decoded by THAT module's own metadata loader), and its fp32 helpers, where it has them, by
-        # the windowed ones (pure functions with byte-identical results, proven against every kept counter in the tests).
+        # the windowed ones (pure functions with byte-identical results; the tests run the differential on the kept counter b8704a16 only, and a real-bytes check on c5d46687 was run outside this change).
         module._cia_counter_component = _historic_component(module)
         for helper in ('_cia_f32_facts_from_raw', '_cia_f32_rne_bf16'):
             if hasattr(module, helper): setattr(module, helper, globals()[helper])
@@ -1923,7 +1932,12 @@ def counter_io_report():
     """How this process read components, for the hour result: this counter reads them by the chunk-verified streaming reader, and every
     kept (historic) counter loaded through _counter_for in this process has that same reader bound onto it, named here by its source digest.
     The receipt is never told: it must stay bit-identical to what the whole-file counter wrote (the differential red compares bytes)."""
-    return dict(counter_io_mechanism='streaming', counter_sha256=_SELF_SOURCE_SHA256, history_bound_sha256=sorted(_COUNTERS))
+    stats = dict(_CIA_READER_STATS)
+    largest = max(stats['digest_pass_max_read_bytes'], stats['chunk_read_max_bytes'])
+    # read back from the reader: streaming only if a digest pass ran and no single read of a component exceeded one chunk
+    mechanism = 'streaming' if stats['digest_passes'] > 0 and largest <= _CIA_READ_CHUNK else 'unobserved'
+    return dict(counter_io_mechanism=mechanism, counter_sha256=_SELF_SOURCE_SHA256, history_bound_sha256=sorted(_COUNTERS),
+                reader_observed=dict(stats, read_chunk_bytes=_CIA_READ_CHUNK))
 
 
 import contextvars
@@ -2630,6 +2644,7 @@ def main(argv: list[str] | None = None) -> int:
                 expert_genesis_authority_sha256=args.expert_genesis_authority_sha256,
             )
         print(json.dumps(execute_counter(**counter_kwargs), sort_keys=True))
+        print('COUNTER_IO ' + json.dumps(counter_io_report(), sort_keys=True), file=sys.stderr)   # the reader's own account, for the process that ran this one
     except Exception as error:
         print(f"parameter realization failed: {error}", file=sys.stderr)
         return 2
