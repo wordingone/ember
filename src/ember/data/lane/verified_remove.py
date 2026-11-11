@@ -49,6 +49,26 @@ def _is_link(p):
     return stat.S_ISLNK(st.st_mode) or bool(getattr(st, "st_file_attributes", 0) & REPARSE)
 
 
+def _protected_markers():
+    """The declared protected set (#2450), re-read on every call; ProtectedSetError (missing, unreadable, empty) propagates to protected_hit, which refuses."""
+    import protected_set as _PS
+    return _PS.markers()
+
+
+def protected_hit(path):
+    """-> (marker, why) when `path` is under a marker of the declared protected set (F8, lead 82906: the hour 49 control child stays out of every removal list), else (None, "").
+    A path is under a marker when the marker text occurs in the normalised path (a directory is matched with a trailing slash). An unreadable or invalid protected set REFUSES every path (fail closed)."""
+    try:
+        marks = _protected_markers()
+    except Exception as e:
+        return "?", "protected set unreadable, every removal refused (%s)" % type(e).__name__
+    n = _norm(path).lower() + "/"
+    for m in marks:
+        if m.lower().rstrip("/") + "/" in n or m.lower() in n:
+            return m, "under a protected-set marker (" + m + ")"
+    return None, ""
+
+
 def contained(path, roots):
     """-> (root or None, why). The path is inside one of `roots` both as written and after resolving links, and no component from that root down to the file is a link or junction."""
     n = _norm(path); r = _real(path)
@@ -63,6 +83,9 @@ def contained(path, roots):
             cur = os.path.join(cur, part)
             if _is_link(cur):
                 return None, "a link or junction on the path (" + part + ")"
+        hit, why = protected_hit(path)
+        if hit is not None:
+            return None, why
         return root, ""
     return None, "outside every allowed root"
 
