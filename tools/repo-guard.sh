@@ -792,13 +792,22 @@ if [ -n "$RANGE" ]; then
   else
     ok "goal/evidence" "no goal+evidence co-commits in $RANGE"
   fi
-  # No commit of the range carries a claude.ai session link in its message
+  # No NEW commit of the range carries a claude.ai session link in its message
   # ("Claude-Session:" trailer or a claude.ai/code/session_ URL). Same pattern
   # as .githooks/commit-msg (the commit-time form); a selftest red pins the two
   # copies equal. Prose that only mentions claude.ai is not matched.
+  # Grandfathered: only commits whose COMMITTER date is on or after
+  # 2026-11-11T00:00:00Z (epoch 1794355200) are checked, and merge commits are
+  # never checked, so open branches whose earlier messages already carry the
+  # line are not broken (squash at merge); every new message is covered at
+  # commit time by .githooks/commit-msg. A commit whose date cannot be read is checked.
   SESSION_LINK_RE='(^[[:space:]]*Claude-Session[[:space:]]*:|https?://claude\.ai/code/session_)'
+  SESSION_LINK_FROM_EPOCH=1794355200
   BAD=""
-  for c in $(git rev-list "$RANGE" 2>/dev/null); do
+  for c in $(git rev-list --no-merges "$RANGE" 2>/dev/null); do
+    ct="$(git show -s --format=%ct "$c" 2>/dev/null)"
+    case "$ct" in ''|*[!0-9]*) ct="$SESSION_LINK_FROM_EPOCH" ;; esac
+    [ "$ct" -ge "$SESSION_LINK_FROM_EPOCH" ] || continue
     if git show -s --format=%B "$c" 2>/dev/null | grep -qiE "$SESSION_LINK_RE"; then
       BAD="$BAD $(git rev-parse --short=12 "$c")"
     fi
@@ -806,7 +815,7 @@ if [ -n "$RANGE" ]; then
   if [ -n "$BAD" ]; then
     fail "commit-session-link" "commit message(s) carry a claude.ai session link (a Claude-Session: line or a claude.ai/code/session_ URL); reword them:$BAD"
   else
-    ok "commit-session-link" "no claude.ai session link in a commit message of $RANGE"
+    ok "commit-session-link" "no claude.ai session link in a commit message of $RANGE committed on or after 2026-11-11T00:00:00Z"
   fi
 fi
 

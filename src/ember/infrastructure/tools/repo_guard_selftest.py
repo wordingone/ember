@@ -2272,11 +2272,24 @@ def test_red_git_commit_is_refused_end_to_end_by_commit_msg_hook():
         cleanup(hooks)
 
 
-def _commit_message(tmp: Path, subject: str, body: str = "") -> str:
+# The range check only looks at commits whose COMMITTER date is on or after this instant
+# (tools/repo-guard.sh SESSION_LINK_FROM_EPOCH); these two dates sit one second either side.
+_SESSION_LINK_NEW = "2026-11-11 00:00:00 +0000"
+_SESSION_LINK_OLD = "2026-11-10 23:59:59 +0000"
+
+
+def _commit_message(tmp: Path, subject: str, body: str = "", date: str = _SESSION_LINK_NEW) -> str:
+    import os
+
     args = ["commit", "-q", "--allow-empty", "-m", subject]
     if body:
         args += ["-m", body]
-    _git_quiet(tmp, *args)
+    subprocess.run(
+        ["git", "-C", str(tmp), "-c", "user.email=selftest@example.invalid",
+         "-c", "user.name=selftest", *args],
+        capture_output=True, check=True,
+        env={**os.environ, "GIT_COMMITTER_DATE": date, "GIT_AUTHOR_DATE": date},
+    )
     return _git_quiet(tmp, "rev-parse", "--short=12", "HEAD").decode("ascii").strip()
 
 
@@ -2312,6 +2325,49 @@ def test_green_range_form_accepts_clean_commit_messages_through_guard():
         rc, out = run_guard(tmp, args=("--base", base))
         assert "FAIL [commit-session-link]" not in out, out
         assert re.search(r"ok   \[commit-session-link\] no claude\.ai session link in a commit message of ", out), out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_range_form_grandfathers_old_commits_and_ignores_merges_through_guard():
+    """The range check is dated: a commit committed before 2026-11-11T00:00:00Z that carries the
+    trailer passes (open branches are not broken), the same message one second later is refused and
+    named alone, and a merge commit is never checked."""
+    import os
+
+    tmp = make_fixture("fix/selftest-range-session-link-dated")
+    try:
+        commit_fixture(tmp)
+        base = _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip()
+        old_bad = _commit_message(tmp, "feat: old commit carrying the trailer", f"{_CO_AUTHOR}\n{_SESSION_TRAILER}", date=_SESSION_LINK_OLD)
+        old_url = _commit_message(tmp, "feat: old commit carrying a bare url", f"see {_SESSION_URL}", date=_SESSION_LINK_OLD)
+        clean_new = _commit_message(tmp, "feat: new clean commit", _CO_AUTHOR)
+        # A real merge commit (new date) whose message carries the trailer: never checked.
+        _git_quiet(tmp, "checkout", "-q", "-b", "side")
+        _commit_message(tmp, "feat: side branch commit", _CO_AUTHOR)
+        _git_quiet(tmp, "checkout", "-q", "fix/selftest-range-session-link-dated")
+        subprocess.run(
+            ["git", "-C", str(tmp), "-c", "user.email=selftest@example.invalid", "-c", "user.name=selftest",
+             "merge", "--no-ff", "-q", "-m", "Merge side into the branch", "-m", _SESSION_TRAILER, "side"],
+            capture_output=True, check=True,
+            env={**os.environ, "GIT_COMMITTER_DATE": _SESSION_LINK_NEW, "GIT_AUTHOR_DATE": _SESSION_LINK_NEW},
+        )
+        merge = _git_quiet(tmp, "rev-parse", "--short=12", "HEAD").decode("ascii").strip()
+        assert len(_git_quiet(tmp, "rev-list", "--min-parents=2", f"{base}..HEAD").split()) == 1, "fixture has no merge commit"
+        for form in (("--base", base), ("--range", f"{base}..HEAD")):
+            rc, out = run_guard(tmp, args=form)
+            assert "FAIL [commit-session-link]" not in out, f"{form}: old commits or the merge commit were refused\n{out}"
+            assert re.search(r"ok   \[commit-session-link\] no claude\.ai session link in a commit message of .* committed on or after 2026-11-11T00:00:00Z", out), out
+        # One second later the same trailer is refused, and only that commit is named.
+        new_bad = _commit_message(tmp, "feat: new commit carrying the trailer", f"{_CO_AUTHOR}\n{_SESSION_TRAILER}", date=_SESSION_LINK_NEW)
+        for form in (("--base", base), ("--range", f"{base}..HEAD")):
+            rc, out = run_guard(tmp, args=form)
+            assert rc != 0, f"{form}: expected nonzero exit\n{out}"
+            line = [ln for ln in out.splitlines() if ln.startswith("FAIL [commit-session-link]")]
+            assert len(line) == 1, f"{form}: expected one FAIL [commit-session-link] line\n{out}"
+            assert new_bad in line[0], f"{form}: the new commit is not named: {line[0]}"
+            for other in (old_bad, old_url, clean_new, merge):
+                assert other not in line[0], f"{form}: {other} was named: {line[0]}"
     finally:
         cleanup(tmp)
 
@@ -2391,6 +2447,7 @@ ALL_TESTS = [
     test_red_git_commit_is_refused_end_to_end_by_commit_msg_hook,
     test_red_range_form_refuses_session_link_in_a_commit_message_through_guard,
     test_green_range_form_accepts_clean_commit_messages_through_guard,
+    test_red_range_form_grandfathers_old_commits_and_ignores_merges_through_guard,
     test_session_link_pattern_is_the_same_in_hook_and_guard,
     test_red_powershell_launcher_shape,
     test_red_powershell_launcher_shape_preceding_assignment,
