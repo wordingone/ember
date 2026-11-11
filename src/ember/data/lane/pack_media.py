@@ -9,6 +9,9 @@ IMAGE spec v1: decode with PIL, convert RGB, resize so SHORT side = 256 (BICUBIC
 AUDIO spec v1: decode with PyAV, libswresample to mono s16 16000 Hz (deterministic, no model), trim to a multiple of 320 samples (20 ms frames).
 Shards: img-v1-{idx:05d}-{sha12}.bin / aud-v1-...bin, <=256 MiB each, objects never split. index.jsonl: one row per kept object. receipt.json: counts + failures.
 Failures (decode errors, too small, too short) are dropped and listed in receipt.json, never silently."""
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from lane_config import M_ROOT
 import sys, os, io, json, hashlib, struct
 import numpy as np
 MODE, OUT, NAME, MAN = sys.argv[1:5]
@@ -51,8 +54,44 @@ def enc_audio(p):
     if n < 320: raise ValueError("too short")
     return pcm[:n].tobytes(), dict(src_sr=sr, samples=n, n_units=n // 320, unit_bytes=640, seconds=round(n / 16000, 3))
 
-enc = enc_image if MODE == "image" else enc_audio
-pref = "img-v1" if MODE == "image" else "aud-v1"
+SPEC = os.environ.get("PACK_MEDIA_SPEC", "v1")
+TOKP = (M_ROOT + "/custody-tokenizer-2c557/tokenizer-2c557.json")
+def enc_image_v2(p):
+    """SPEC v2 (A24, matches ember-restart-3b/batch.py decode_owned_batch): short side 192 BICUBIC, long side center-cropped to a multiple of 48 (max 288), 48x48x3 u8 patches row-major."""
+    from PIL import Image
+    im = Image.open(p); im.load(); src = im.size
+    im = im.convert("RGB"); w, h = im.size
+    if min(w, h) < 48: raise ValueError("too small")
+    s = 192 / min(w, h); nw, nh = max(192, round(w * s)), max(192, round(h * s))
+    im = im.resize((nw, nh), Image.BICUBIC, reducing_gap=None)
+    cw, ch = min(nw - nw % 48, 288), min(nh - nh % 48, 288)
+    l, t = (nw - cw) // 2, (nh - ch) // 2
+    a = np.asarray(im.crop((l, t, l + cw, t + ch)), dtype=np.uint8)
+    hp, wp = ch // 48, cw // 48
+    patches = a.reshape(hp, 48, wp, 48, 3).transpose(0, 2, 1, 3, 4).reshape(hp * wp, 48 * 48 * 3)
+    return patches.tobytes(), dict(src_w=src[0], src_h=src[1], h_patches=hp, w_patches=wp, n_units=hp * wp, unit_bytes=6912, topology="g%dx%d" % (hp, wp))
+
+def enc_audio_v2(p):
+    """SPEC v2: mono s16 16 kHz, trimmed to whole 640-sample frames (40 ms, the RawAudioProjector input), topology key = frame count."""
+    import av
+    c = av.open(p); st = c.streams.audio[0]; sr = st.rate
+    rs = av.AudioResampler(format="s16", layout="mono", rate=16000); chunks = []
+    for fr in c.decode(st):
+        for o in rs.resample(fr): chunks.append(o.to_ndarray().reshape(-1))
+    for o in rs.resample(None): chunks.append(o.to_ndarray().reshape(-1))
+    c.close()
+    if not chunks: raise ValueError("empty")
+    pcm = np.concatenate(chunks).astype("<i2")
+    n = (len(pcm) // 640) * 640
+    if n < 640: raise ValueError("too short")
+    return pcm[:n].tobytes(), dict(src_sr=sr, samples=n, samples_trimmed=len(pcm) - n, n_units=n // 640, unit_bytes=1280, seconds=round(n / 16000, 3), topology="f%d" % (n // 640))   # samples_trimmed < 640 (< 40 ms) is recorded, never silent
+
+if SPEC == "v2": enc = enc_image_v2 if MODE == "image" else enc_audio_v2
+else: enc = enc_image if MODE == "image" else enc_audio
+pref = ("img-" if MODE == "image" else "aud-") + SPEC
+if SPEC == "v2":
+    from tokenizers import Tokenizer
+    _tk = Tokenizer.from_file(TOKP); _tksha = hashlib.sha256(open(TOKP, "rb").read()).hexdigest()
 rows = [json.loads(l) for l in open(MAN, encoding="utf-8")]
 idx = []; fails = []; shard_i = 0; cur = bytearray(); cur_rows = []; seen = set(); shards = []
 def flush():
@@ -75,12 +114,15 @@ for r in rows:
     if cur and len(cur) + len(raw) > SHARD_BYTES: flush()
     row = {k: v for k, v in r.items() if k != "path"}
     row.setdefault("content_date_max", META.get("content_date_max")); row["modality"] = MODE
+    if SPEC == "v2":      # caption / transcript tokenised with the custody tokenizer, tied to its sha (the record's text part; markers are added by the loader)
+        row["text_token_ids"] = _tk.encode((r.get("caption") or r.get("transcript") or "").strip(), add_special_tokens=False).ids; row["tokenizer_sha256"] = _tksha
     row.update(meta); row.update(object_sha256=osha, src_path=p, offset_bytes=len(cur), length_bytes=len(raw), dataset_id=META.get("dataset_id"))
     cur += raw; cur_rows.append(row)
 flush()
 with open(os.path.join(D, "index.jsonl"), "w", encoding="utf-8") as f:
     for r in idx: f.write(json.dumps(r, ensure_ascii=False) + "\n")
-rec = dict(mode=MODE, spec="v1", name=NAME, objects_in=len(rows), objects_kept=len(idx), failures=fails, shards=shards,
+import collections
+rec = dict(mode=MODE, spec=SPEC, name=NAME, topology_counts=dict(collections.Counter(r.get("topology") for r in idx)) if SPEC == "v2" else None, objects_in=len(rows), objects_kept=len(idx), failures=fails, shards=shards,
            units_total=sum(r["n_units"] for r in idx), index_sha256=sha256_file(os.path.join(D, "index.jsonl")))
 json.dump(rec, open(os.path.join(D, "receipt.json"), "w"), indent=1)
 print(json.dumps({k: v for k, v in rec.items() if k != "failures"}), "failures:", len(fails))

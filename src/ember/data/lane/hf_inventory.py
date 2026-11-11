@@ -107,6 +107,26 @@ def uniq_stats(rows):
             "overlap_bytes": sum(sz for _, sz, _ in rows) - sum(uniq.values()), "granularity": "file-level LFS sha256, across all 3 repos (byte-identical); doc/image/audio-level index = overlap_gate.py",
             "nolfs_items": sum(1 for s, _, _ in rows if s.startswith("nolfs:"))}
 
+def reconcile_totals(res):
+    """Lead 83196: totals sum EVERY repo's stage fields, but the H19 fields exist only on the train repo, so after > before when another repo
+    (the public ember-corpus lane-285 shards) holds train-ready text. Fix: the 'before' figure counts the same set as 'tokens' (train + other repos'
+    train-ready tokens), the set is named in sets_counted, and after == before - excluded is enforced (SystemExit if not). Idempotent."""
+    t = res.get("totals", {}).get("train_ready/text")
+    if not t or "h19_excluded_tokens" not in t:
+        return
+    extra_t = extra_f = extra_s = 0; sets = {}
+    for k, r in res["repos"].items():
+        c = r["stages"].get("train_ready", {}).get("text")
+        if not c: continue
+        sets[k] = dict(tokens=c.get("tokens", 0), files=c.get("files", 0), shards_in_manifests=c.get("shards_in_manifests", 0), docs=c.get("docs"), h19_aware="tokens_before_h19_exclusion" in c)
+        if "tokens_before_h19_exclusion" not in c: extra_t += c.get("tokens", 0)
+    t["tokens_before_h19_exclusion"] = sum(v["tokens"] for v in sets.values() if v["h19_aware"]) + t["h19_excluded_tokens"] + extra_t
+    t["sets_counted"] = sets
+    t["docs_note"] = "docs counts the train repo only; the other repo's shards carry no doc count (tokens counted, docs not)"
+    if t["tokens"] != t["tokens_before_h19_exclusion"] - t["h19_excluded_tokens"] or t["tokens"] > t["tokens_before_h19_exclusion"]:
+        raise SystemExit("CENSUS INVARIANT FAILED: train_ready/text tokens %d != before %d - excluded %d" % (t["tokens"], t["tokens_before_h19_exclusion"], t["h19_excluded_tokens"]))
+
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default=(LANE_ROOT + "/census/census-latest.json")); ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -196,6 +216,7 @@ def main():
                 for k, v in r["stages"].get(stage, {}).get(mod, {}).items(): tot[k] += v
             if tot: res["totals"][f"{stage}/{mod}"] = dict(tot)
     res["totals"].setdefault("raw/video", {"videos": 0}); res["totals"].setdefault("train_ready/video", {"videos": 0})
+    reconcile_totals(res)
     res["notes"] = ["audio hours for mp3 are bytes*8/64kbps estimates (LibriVox CBR) until a duration manifest is uploaded; LibriSpeech hours are the official corpus durations",
                     "raw and train_ready stages are reported separately and are not unique against each other by design (train_ready is derived from raw)",
                     "unique/overlap here is byte-identical file content; same-document-different-bytes overlap (e.g. PG text in two repos) is measured by the zero-overlap gate",
