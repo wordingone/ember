@@ -6,6 +6,7 @@ The full index covers D-heldout-2, E-heldout-*, I-heldout-1 only. This builds th
 A-heldout-2, B-heldout-1, F-heldout-1 and H-heldout-1 (C-heldout-1 and J-heldout-1 hold one binary each: listed, not text-indexed here).
 Skips metadata only: _manifests/, manifest.jsonl, .gitattributes. Text rule for loose and tarred files: not larger than 8 MiB and no NUL byte in the first 8 KiB; decoded utf-8 with errors ignored. JSON/JSONL contribute every string value; parquet every string column.
 Out: heldout-index-full/addon/heldout-sent-xxh64-full-addon-ABFH.npy (sorted unique uint64), heldout-index-full/addon/addon-counts.json (per set: files read, files skipped as binary or too large, hashes), parts/ kept for audit.
+An absent set root (or H-heldout-1 with no tar.gz) stops the build with a non-zero exit before anything is written (it would index as nothing). The index and addon-counts.json are written temp + os.replace; only THIS run's parts are folded in.
 Every set in SETS gets a row in addon-counts.json, a set with no files as a zero row (files: 0). A write-gate refusal inside a pool worker raises WriteGateRefused (never sys.exit in a worker: that kills the worker and hangs the pool); the parent stops the pool and exits non-zero.
 Read-only on the corpus. CPU only: 4 worker processes. Usage: python scripts/build_heldout_index_addon.py"""
 import os as _os, sys as _sys
@@ -20,6 +21,8 @@ from common import gram_hashes
 C = (M_ROOT + "/data/corpus"); OUT = (LANE_ROOT + "/heldout-index-full/addon"); PARTS = OUT + "/parts"
 MAXB = 8 << 20; SKIP_DIRS = {"_manifests"}; SKIP_FILES = {"manifest.jsonl", ".gitattributes"}
 SETS = ["A-heldout-2", "B-heldout-1", "F-heldout-1", "H-heldout-1"]
+class SetRootMissing(RuntimeError):
+    """A held-out set root is absent (renamed, not rehydrated), or H-heldout-1 holds no tar.gz: indexing it as nothing would make every pack sweep clean against it."""
 class WriteGateRefused(RuntimeError):
     """B: is below the reserve floor for the whole gate cap; raised in a worker, handled in the parent."""
 
@@ -85,8 +88,11 @@ def units():
     u = []
     for s in SETS:
         root = C + "/" + s
+        if not os.path.isdir(root): raise SetRootMissing("held-out set root absent: " + root)
         if s == "H-heldout-1":
-            u += [(s, "tar", p) for p in sorted(glob.glob(root + "/*.tar.gz"))]
+            tg = sorted(glob.glob(root + "/*.tar.gz"))
+            if not tg: raise SetRootMissing("H-heldout-1 holds no tar.gz under " + root)
+            u += [(s, "tar", p) for p in tg]
             continue
         fl = []
         for dp, dn, fn in os.walk(root):
@@ -96,23 +102,28 @@ def units():
         for i in range(0, len(fl), 200): u.append((s, "files", fl[i:i + 200]))
     return u
 def main():
-    os.makedirs(PARTS, exist_ok=True); us = units(); print(len(us), "units", flush=True); t0 = time.time()
+    os.makedirs(PARTS, exist_ok=True)
+    try: us = units()
+    except SetRootMissing as e: sys.exit("REFUSED, index not built: " + str(e))
+    print(len(us), "units", flush=True); t0 = time.time(); tags = []
     stats = {s: dict(files=0, files_read=0, files_skipped_binary_or_large=0, part_hashes=0) for s in SETS}      # a set with no files stays a zero row (files: 0), never a missing row
     try:
         with Pool(4) as pool:
             for i, (s, tag, read, skipped, n) in enumerate(pool.imap_unordered(work, us)):
-                st = stats[s]; st["files"] += read + skipped; st["files_read"] += read; st["files_skipped_binary_or_large"] += skipped; st["part_hashes"] += n
+                tags.append(tag); st = stats[s]; st["files"] += read + skipped; st["files_read"] += read; st["files_skipped_binary_or_large"] += skipped; st["part_hashes"] += n
                 if i % 20 == 0: print(i + 1, "/", len(us), tag, read, skipped, n, round(time.time() - t0), "s", flush=True)
     except WriteGateRefused as e:      # raised in a worker, re-raised here by the pool; leaving the `with` terminated the pool
         sys.exit(str(e))
-    fs = [os.path.join(PARTS, f) for f in os.listdir(PARTS) if f.endswith(".npy") and ".tmp" not in f]
+    fs = [os.path.join(PARTS, tg + ".npy") for tg in sorted(set(tags))]      # THIS run's parts only: parts/ left by an earlier run are never folded in
     big = np.concatenate([np.load(f) for f in fs]) if fs else np.empty(0, np.uint64); big.sort()
     idx = big[np.concatenate([[True], big[1:] != big[:-1]])] if big.size else big
     dst = OUT + "/heldout-sent-xxh64-full-addon-ABFH.npy"
     import reserve_plan
     if not reserve_plan.write_gate("build_heldout_index_addon.py index", int(idx.nbytes) + (64 << 20)): sys.exit("write_gate refused: B: below the reserve floor for the whole gate cap: build_heldout_index_addon.py index not writing")      # lead 82324 / 82669
-    with open(dst, "wb") as _pf: np.lib.format.write_array(_pf, idx)      # same bytes as np.save, in a form the write-gate lint can see
-    json.dump(dict(sets=stats, unique_hashes=int(idx.size), not_text_indexed=["C-heldout-1 (one binary)", "J-heldout-1 (one binary)"], hash="common.gram_hashes, HS_SAMP=1", max_file_bytes=MAXB), open(OUT + "/addon-counts.json", "w"), indent=1)
+    with open(dst + ".tmp", "wb") as _pf: np.lib.format.write_array(_pf, idx)      # same bytes as np.save, in a form the write-gate lint can see
+    os.replace(dst + ".tmp", dst)      # temp + replace: a crash never leaves a half-written index
+    json.dump(dict(sets=stats, unique_hashes=int(idx.size), not_text_indexed=["C-heldout-1 (one binary)", "J-heldout-1 (one binary)"], hash="common.gram_hashes, HS_SAMP=1", max_file_bytes=MAXB), open(OUT + "/addon-counts.json.tmp", "w"), indent=1)
+    os.replace(OUT + "/addon-counts.json.tmp", OUT + "/addon-counts.json")
     print("DONE", idx.size, stats, round(time.time() - t0), "s", flush=True)
 
 

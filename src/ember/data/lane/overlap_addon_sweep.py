@@ -45,6 +45,10 @@ def one(d):
         n += 1; o = overlap(idx, gram_hashes(r["text"]))
         if o: hh += 1; hits.append((G.ns_key(name, r["id"]), int(o)))
     return name, dict(files=len(glob.glob(d + "/objects/*.jsonl.zst")), docs_total=total, docs_checked=n, stride=stride, exhaustive=exhaustive, docs_heldout_hit=hh, hits=sorted(hits, key=lambda x: -x[1])[:20], secs=round(time.time() - t0))
+def write_receipt(res):
+    """temp + os.replace: a crash never leaves a half-written receipt (a torn file would restart the whole sweep)."""
+    with open(OUT + ".tmp", "w") as f: json.dump(res, f, indent=1)
+    os.replace(OUT + ".tmp", OUT)
 def main():
     only = sys.argv[sys.argv.index("--only") + 1:] if "--only" in sys.argv else None
     idx_id = index_identity()
@@ -53,10 +57,10 @@ def main():
     dirs = [d.replace(chr(92), "/").rstrip("/") for d in sorted(glob.glob((LANE_ROOT + "/packed/*/")))]
     packs, zero = plan(dirs, res, only, idx_id); res.update(zero)
     print(len(packs), "packs to sweep;", len(zero), "zero rows (no object files);", len(stale), "stale rows dropped (index changed)", flush=True)
-    if zero or stale: json.dump(res, open(OUT, "w"), indent=1)
+    if zero or stale: write_receipt(res)
     with Pool(4) as pool:
         for name, r in pool.imap_unordered(one, packs):
-            r["index_id"] = idx_id; res[name] = r; json.dump(res, open(OUT, "w"), indent=1); print(name, r["docs_total"], r["docs_checked"], r["docs_heldout_hit"], r["secs"], "s", flush=True)
+            r["index_id"] = idx_id; res[name] = r; write_receipt(res); print(name, r["docs_total"], r["docs_checked"], r["docs_heldout_hit"], r["secs"], "s", flush=True)
     print("SWEEP DONE", len(res), "packs; heldout-hit docs", sum(v["docs_heldout_hit"] for v in res.values()), flush=True)
 
 

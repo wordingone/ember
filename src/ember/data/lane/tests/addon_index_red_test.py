@@ -29,10 +29,14 @@ SENT = "the quick brown fox jumps over the lazy dog while the cat watches quietl
 
 
 def corpus(sets_with_files):
+    import gc; gc.collect()      # a refused work() keeps its traceback (and the open tar handle) alive until collected; Windows cannot remove an open file
     c = TMP + "/m/data/corpus"
     for s in bia.SETS:
         shutil.rmtree(c + "/" + s, ignore_errors=True); os.makedirs(c + "/" + s)
     for s in sets_with_files: open(c + "/%s/doc.txt" % s, "w").write(SENT * 3)
+    import tarfile      # H-heldout-1 is read from tar.gz: it always holds one (a set with no tar.gz is refused, check 5)
+    with tarfile.open(c + "/H-heldout-1/h.tar.gz", "w:gz") as tf:
+        open(TMP + "/h.txt", "w").write(SENT * 2); tf.add(TMP + "/h.txt", arcname="h.txt")
     shutil.rmtree(bia.OUT, ignore_errors=True); os.makedirs(bia.PARTS)
 
 
@@ -58,6 +62,7 @@ try:
     try: bia.work(unit); exc = None
     except BaseException as e: exc = e
     chk("1) work() on a write-gate refusal raises an ordinary Exception (%s), not SystemExit" % (type(exc).__name__,), isinstance(exc, Exception) and type(exc).__name__ == "WriteGateRefused" if hasattr(bia, "WriteGateRefused") else False)
+    exc = None; unit = None; gc_ = __import__("gc"); gc_.collect()
     fin, code = run_main()
     chk("1) main() returns in bounded time on a worker refusal (no hang)", fin)
     chk("1) main() exits non-zero with the refusal text (%r)" % (str(code)[:60],), fin and isinstance(code, str) and "write_gate refused" in code)
@@ -69,8 +74,21 @@ try:
     sets = json.load(open(cf))["sets"] if os.path.isfile(cf) else {}
     chk("2) main() finished OK (code %r)" % (code,), fin and code == 0)
     chk("2) every set has a row (%s)" % sorted(sets), sorted(sets) == sorted(bia.SETS))
-    chk("2) a set with no files is a zero row: files 0, files_read 0", all(sets.get(s, {}).get("files") == 0 and sets[s]["files_read"] == 0 for s in ("B-heldout-1", "F-heldout-1", "H-heldout-1") if s in sets) and "B-heldout-1" in sets)
+    chk("2) a set with no files is a zero row: files 0, files_read 0", all(sets.get(s, {}).get("files") == 0 and sets[s]["files_read"] == 0 for s in ("B-heldout-1", "F-heldout-1") if s in sets) and "B-heldout-1" in sets)
     chk("2) the set with a file counts it (files 1)", sets.get("A-heldout-2", {}).get("files") == 1)
+    # 5) an absent set root (or H-heldout-1 with no tar.gz) stops the build, non-zero, before anything is written; a missing set is never indexed as nothing
+    for why, brk in (("B-heldout-1 root absent", lambda: shutil.rmtree(bia.C + "/B-heldout-1")), ("H-heldout-1 holds no tar.gz", lambda: os.remove(bia.C + "/H-heldout-1/h.tar.gz"))):
+        corpus(["A-heldout-2"]); brk(); shutil.rmtree(bia.OUT + "/addon-counts.json", ignore_errors=True)
+        fin, code = run_main()
+        chk("5) %s: main() stops non-zero with REFUSED (%r)" % (why, str(code)[:50]), fin and isinstance(code, str) and "REFUSED" in code)
+        chk("5) %s: no index and no counts file were written" % why, not os.path.exists(bia.OUT + "/heldout-sent-xxh64-full-addon-ABFH.npy") and not os.path.exists(bia.OUT + "/addon-counts.json"))
+    # 6) parts/ left by an earlier run are not folded into the new index; the writes leave no temp file behind
+    corpus(["A-heldout-2"]); np.save(bia.PARTS + "/stale-from-earlier-run.npy", np.array([7, 8, 9], dtype=np.uint64))
+    fin, code = run_main()
+    idx = np.load(bia.OUT + "/heldout-sent-xxh64-full-addon-ABFH.npy") if os.path.isfile(bia.OUT + "/heldout-sent-xxh64-full-addon-ABFH.npy") else np.empty(0, np.uint64)
+    cnt = json.load(open(bia.OUT + "/addon-counts.json")) if os.path.isfile(bia.OUT + "/addon-counts.json") else {}
+    chk("6) a stale part from an earlier run is not in the index", fin and code == 0 and not set(idx.tolist()) & {7, 8, 9} and int(idx.size) == cnt.get("unique_hashes"))
+    chk("6) index and counts are written temp + os.replace: no .tmp file is left", not [f for f in os.listdir(bia.OUT) if f.endswith(".tmp")])
     reserve_plan.write_gate = real_gate
 
     # 3) resume key = pack name + index identity
@@ -98,6 +116,11 @@ try:
     chk("4) packs that already have a row for this index are not redone", todo2 == [] and zero2 == {})
     todo3, zero3 = sw.plan(dirs, {}, ["with_objs"], id3)
     chk("4) --only limits both the sweep and the zero rows", [os.path.basename(d) for d in todo3] == ["with_objs"] and zero3 == {})
+    # 7) the sweep receipt is written temp + os.replace
+    sw.OUT = TMP + "/lane/logs/sweep-red.json"; sw.write_receipt({"p": {"files": 0}})
+    chk("7) sweep receipt written, no .tmp left", json.load(open(sw.OUT)) == {"p": {"files": 0}} and not os.path.exists(sw.OUT + ".tmp"))
+except BaseException:      # an exception must FAIL the red (the finally below exits through os._exit and would otherwise report ALL PASS)
+    import traceback; traceback.print_exc(); ok = False; nfail += 1
 finally:
     print("ALL PASS" if ok else "FAILED (%d checks failed)" % nfail)
     sys.stdout.flush()
