@@ -177,7 +177,8 @@ class PredictionTests(unittest.TestCase):
         self.prediction = {'schema': 'ember-cia-step-prediction-v1',
                            'identity': copy.deepcopy(self.identity),
                            'expected_step_seconds': 2.0, 'expected_positions_per_second': 2.0,
-                           'basis': 'CPU software fixture; no measured CIA-3B timing'}
+                           'basis': 'CPU software fixture; no measured CIA-3B timing',
+                           'predicted_peak_job_memory_bytes': 35 * 1024 ** 3}
 
     def test_positive_consistent_prediction_is_accepted(self):
         subject.validate_prediction(self.prediction, expected_identity=self.identity, positions_per_step=4)

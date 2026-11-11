@@ -456,9 +456,166 @@ def measurement_summary(rates):
                                      'max': ordered[-1], 'mean': sum(ordered) / len(ordered)}}
 
 
+# A predicted peak within this many bytes of the Job Object memory limit refuses at preflight (#2119): the H50 hour published its child and
+# then died in the verify that restores its terminal state: the job peak at the refusal was 43,271,577,600 B (40.30 GiB) against the
+# 40 GiB limit, and its predicted peak had never been stated.
+PEAK_JOB_MEMORY_MARGIN_BYTES = 4 * GIB
+
+
+def check_predicted_peak_job_memory(predicted, limit, *, training=True):
+    """The hour's declared peak job memory, in bytes. A missing, non-integer or non-positive prediction refuses: an hour with no stated memory
+    peak is not governed. A declared peak above the job memory limit refuses in every mode.
+
+    A TRAINING hour must also leave at least PEAK_JOB_MEMORY_MARGIN_BYTES under the limit: its peak is measured plus a margin. A no-training
+    mode (the verify-only tail, the checkpoint probe, the continuation worker) declares the level it really reaches (the probe's peak is its hold plus the
+    restore by construction, the tail's is the restore level) and is admitted when that level is at most the limit: the margin would refuse every
+    honest declaration there (an honest probe reaches 43.6 GiB, an honest tail 36.1 to 36.4 GiB against a 40 GiB limit; lead ruling 82978)."""
+    if type(predicted) is not int or predicted <= 0:
+        raise ValueError('prediction predicted_peak_job_memory_bytes must be a positive integer number of bytes')
+    if type(limit) is not int or limit <= 0:
+        raise ValueError('job memory limit must be a positive integer number of bytes')
+    if predicted > limit:
+        raise ValueError('predicted peak job memory %d bytes is above the job memory limit %d bytes: the job would be killed at the limit' % (predicted, limit))
+    if training and limit - predicted < PEAK_JOB_MEMORY_MARGIN_BYTES:
+        raise ValueError(
+            'predicted peak job memory %d bytes is within %d bytes of the job memory limit %d (headroom %d): '
+            'the hour would run too close to the limit that killed H50; reduce the peak or declare a larger limit with its commit gate'
+            % (predicted, PEAK_JOB_MEMORY_MARGIN_BYTES, limit, limit - predicted))
+
+
+def no_training_mode(identity):
+    """True for the modes that train nothing the hour credits and declare the job memory level they really reach: the checkpoint probe, the
+    verify-only tail and the continuation worker. Training hours (the governed hour and the learning comparison) are not."""
+    hour = identity.get('hour')
+    return (isinstance(hour, dict) and hour.get('schema') == 'checkpoint-probe-v1') or 'verify_tail' in identity or 'continuation' in identity
+
+
+def _owned_job_limits(run_id, namespace):
+    """Open the run's named job, prove this process is a member of it, and return its JOBOBJECT_EXTENDED_LIMIT_INFORMATION and the
+    limit flags a bound job must carry.
+
+    The same open and membership proof as `cia_conformance_resources.require_owned_job`, which the worker has already passed at its start;
+    this keeps the job object's own limit and peak, which that function does not return."""
+    from ctypes import wintypes
+    from ember.governance.scripts import cia_conformance_resources as resources, owned_process
+    kernel = owned_process._kernel32
+    kernel.OpenJobObjectW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+    kernel.OpenJobObjectW.restype = wintypes.HANDLE
+    kernel.IsProcessInJob.argtypes = [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)]
+    kernel.IsProcessInJob.restype = wintypes.BOOL
+    kernel.QueryInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p]
+    kernel.QueryInformationJobObject.restype = wintypes.BOOL
+    handle = kernel.OpenJobObjectW(4, False, resources.job_name(run_id, namespace=namespace))
+    if not handle:
+        raise ValueError('owned numerical job is missing')
+    try:
+        member = wintypes.BOOL()
+        if not kernel.IsProcessInJob(wintypes.HANDLE(-1), handle, ctypes.byref(member)) or not member.value:
+            raise ValueError('consumer is not in the bound owned job')
+        info = owned_process._JobExtendedLimitInformation()
+        if not kernel.QueryInformationJobObject(handle, 9, ctypes.byref(info), ctypes.sizeof(info), None):
+            raise ValueError('cannot query owned numerical job')
+        return info, owned_process._JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | 0x200
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def process_private_bytes():
+    """This process's private committed bytes right now (PROCESS_MEMORY_COUNTERS_EX.PrivateUsage): the part of the job's commit charge
+    this process owns. The job's PeakJobMemoryUsed is a high-water mark; this is the current level."""
+    if os.name != 'nt':
+        raise ValueError('this numerical resource envelope requires Windows')
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', wintypes.DWORD), ('PageFaultCount', wintypes.DWORD), ('PeakWorkingSetSize', ctypes.c_size_t),
+                    ('WorkingSetSize', ctypes.c_size_t), ('QuotaPeakPagedPoolUsage', ctypes.c_size_t),
+                    ('QuotaPagedPoolUsage', ctypes.c_size_t), ('QuotaPeakNonPagedPoolUsage', ctypes.c_size_t),
+                    ('QuotaNonPagedPoolUsage', ctypes.c_size_t), ('PagefileUsage', ctypes.c_size_t),
+                    ('PeakPagefileUsage', ctypes.c_size_t), ('PrivateUsage', ctypes.c_size_t)]
+    psapi = ctypes.WinDLL('psapi', use_last_error=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise ValueError('cannot read this process memory counters')
+    return int(counters.PrivateUsage)
+
+
+def owned_job_memory(run_id, *, namespace, host_memory_bytes):
+    """The memory ledger of the actual containing job, read from the kernel (#2119, the H50 hour).
+
+    Same open and membership proof as require_owned_job, and the same refusal when the limit differs from the bound envelope. Returns the
+    job's JobMemoryLimit and its PeakJobMemoryUsed, the high-water mark of the job's committed memory: the number the limit is enforced
+    against (a charge that would cross the limit is counted in the peak even though it is refused, so a peak above the limit means a
+    process in the job was refused memory), and this process's own private commit now. The peak only rises, so a reading at the end of a
+    phase is the highest commit any phase up to it reached."""
+    if os.name != 'nt':
+        raise ValueError('this numerical resource envelope requires Windows')
+    if type(host_memory_bytes) is not int or host_memory_bytes <= 0:
+        raise ValueError('host memory ceiling must be a positive integer')
+    info, required = _owned_job_limits(run_id, namespace)
+    if info.JobMemoryLimit != host_memory_bytes or info.BasicLimitInformation.LimitFlags & required != required:
+        raise ValueError('owned job resource limits differ from the bound envelope')
+    return {'host_memory_bytes': int(info.JobMemoryLimit), 'peak_job_memory_used_bytes': int(info.PeakJobMemoryUsed),
+            'process_private_bytes': process_private_bytes()}
+
+
+class CommittedBallast:
+    """Committed, untouched virtual memory (VirtualAlloc MEM_COMMIT): charged against the job's commit limit like any private allocation,
+    holds no physical page until it is touched. The probe uses it to stand in for the part of the hour's resident set the probe does not
+    itself hold (#2119)."""
+    def __init__(self, nbytes):
+        if os.name != 'nt':
+            raise ValueError('committed ballast requires Windows')
+        if type(nbytes) is not int or nbytes <= 0:
+            raise ValueError('ballast size must be a positive integer')
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.VirtualAlloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong]
+        kernel.VirtualAlloc.restype = ctypes.c_void_p
+        kernel.VirtualFree.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong]
+        kernel.VirtualFree.restype = ctypes.c_int
+        self._kernel = kernel
+        self.nbytes = nbytes
+        self.address = kernel.VirtualAlloc(None, nbytes, 0x3000, 0x04)   # MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE
+        if not self.address:
+            raise MemoryError('the committed ballast was refused (job or system commit limit)')
+
+    def release(self):
+        if self.address:
+            self._kernel.VirtualFree(self.address, 0, 0x8000)   # MEM_RELEASE
+            self.address = None
+
+
+def job_memory(identity):
+    """The hour's measured job memory ledger, read from the kernel: {'host_memory_bytes', 'peak_job_memory_used_bytes',
+    'process_private_bytes'} (#2119).
+
+    The worker has already proved at its start that it is a member of the run's own job (`require_owned_job`); this reads the same job's
+    PeakJobMemoryUsed, the high-water mark of committed memory that the job limit is enforced against."""
+    return owned_job_memory(identity['run_id'], namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+
+
 def validate_prediction(prediction, *, expected_identity, positions_per_step):
+    if isinstance(prediction, dict) and 'predicted_peak_job_memory_bytes' not in prediction:
+        raise ValueError('prediction requires predicted_peak_job_memory_bytes (the declared peak job memory of the hour, #2119)')
+    probe = (isinstance(expected_identity.get('hour'), dict) and expected_identity['hour'].get('schema') == 'checkpoint-probe-v1')
+    # a governed hour that consumes a checkpoint probe states the resident set it holds when its own restore verify starts: the probe must have held it
+    consumer = 'checkpoint_probe' in expected_identity
+    no_training = no_training_mode(expected_identity)
+    if probe and isinstance(prediction, dict) and 'probe_verify_resident_bytes' not in prediction:
+        raise ValueError('a checkpoint probe prediction requires probe_verify_resident_bytes (the resident set the hour holds at its '
+                         'restore verify, which the probe must hold too, #2119)')
+    if consumer and isinstance(prediction, dict) and 'before_verify_resident_bytes' not in prediction:
+        raise ValueError('an hour that consumes a checkpoint probe requires before_verify_resident_bytes (the resident set it holds when its '
+                         'restore verify starts, which the probe it consumes must have held, #2119)')
     if (not isinstance(prediction, dict) or set(prediction) != {
-            'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis'}
+            'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis',
+            'predicted_peak_job_memory_bytes'} | ({'probe_verify_resident_bytes'} if probe else set())
+            | ({'before_verify_resident_bytes'} if consumer else set())
             or prediction['schema'] != 'ember-cia-step-prediction-v1'):
         raise ValueError('prediction fields or schema differ')
     if not isinstance(prediction['basis'], str) or not prediction['basis'].strip():
@@ -467,6 +624,16 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
         raise ValueError('prediction identity differs from opened inputs and execution')
     if canonical(expected_identity.get('resources')) != canonical(resource_limits(expected_identity)):
         raise ValueError('prediction resource envelope differs')
+    check_predicted_peak_job_memory(prediction['predicted_peak_job_memory_bytes'], resource_limits(expected_identity)['host_memory_bytes'],
+                                    training=not no_training)
+    if probe:
+        held = prediction['probe_verify_resident_bytes']
+        if type(held) is not int or held <= 0 or held >= prediction['predicted_peak_job_memory_bytes']:
+            raise ValueError('probe_verify_resident_bytes must be a positive integer below predicted_peak_job_memory_bytes')
+    if consumer:
+        level = prediction['before_verify_resident_bytes']
+        if type(level) is not int or level <= 0 or level >= prediction['predicted_peak_job_memory_bytes']:
+            raise ValueError('before_verify_resident_bytes must be a positive integer below predicted_peak_job_memory_bytes')
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
         raise ValueError('prediction timing and rate must be finite positive numbers')
@@ -1425,7 +1592,8 @@ def prepare_execution(prediction):
     validate_trajectory_resources(identity)
     if hour and not tail:
         # ruling 67506: only a tail that verify_tail_mode has passed (zero steps, no data segment, no probe) skips the training hour's probe and mixture checks.
-        load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity)
+        load_hour_module().validate_checkpoint_probe(sys.modules[__name__], identity,
+            required_hold_bytes=prediction.get('before_verify_resident_bytes') if isinstance(prediction, dict) else None)
         mixture_validation = load_hour_module().validate_identity(runner=sys.modules[__name__], identity=identity)
     sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory, hour=hour,
                                                 measurement=measurement)
