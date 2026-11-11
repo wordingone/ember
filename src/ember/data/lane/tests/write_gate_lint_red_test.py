@@ -34,6 +34,7 @@ TINY_OK = {
     "commons_pilot2.py": "pilot: a few dozen Commons images (KB each), one-shot",
     "mls_manifest.py": "manifest builder: sampled audio rows only (KB each, sample-capped)",
     "secret_scan.py": "self-test fixtures: tiny bytes written under a tempfile dir",
+    "th_gate_ref.py": "reference copy of the previous per-part gate; only th_batch_red_test imports it (equivalence red), the lane never runs it",
     "th_gate.py": "scratch expansion is gated by its own write_gate call in scan_files (see write_gate_red_test.py); the writes in this file's self-test are tiny fixtures",
     "ledger_add_model.py": "copies one model LICENSE + README (KB) into the evidence dir",
     "rescrub_r2.py": "copies a single .prov.jsonl (KB-MB provenance table), not a shard",
