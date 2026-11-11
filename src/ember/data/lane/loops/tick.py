@@ -224,6 +224,16 @@ def backlog_state(start_missing=True):
         if start_missing and spawn(it["start"], ROOT + f"/logs/backlog-{it['id']}.log"): started.append(it["id"]); live.append(it["id"] + " (started)")
     return live, pend, started, held
 
+def refresh_listing():
+    """lead 83208: loops/trainable-listing.json is rewritten by every intake and upload tick (after the scans it reads), so a read of it is never older than one tick. A failed refresh keeps the old file, says so in the
+    receipt line and never fails the tick. Returns the text appended to the receipt note."""
+    try:
+        r = subprocess.run([sys.executable, ROOT + "/scripts/trainable_listing.py"], capture_output=True, text=True, timeout=180, cwd=ROOT)
+        if r.returncode != 0: return f" | trainable_listing refresh FAILED rc={r.returncode} (old file kept)"
+        j = json.load(open(ROOT + "/loops/trainable-listing.json", encoding="utf-8"))
+        return " | listing refreshed " + time.strftime("%H:%M") + ": " + ", ".join("%s %d packs %d tok" % (k, v.get("packs", 0), v.get("tokens", 0)) for k, v in sorted(j.get("totals", {}).items()) if isinstance(v, dict))
+    except Exception as _e: return f" | trainable_listing refresh FAILED {type(_e).__name__} (old file kept)"
+
 def done(status, note):
     if DRIFT_NOTE: note += ' | ' + DRIFT_NOTE      # an acknowledged drift is always visible in the receipt
     try:
@@ -252,7 +262,11 @@ def done(status, note):
     json.dump(st, open(STATE, "w"))
     row = dict(ts=time.strftime("%Y-%m-%dT%H:%M:%S%z"), loop=LOOP, status=status, note=note)
     with open(L + "/receipts.jsonl", "a", encoding="utf-8") as f: f.write(json.dumps(row) + "\n")
-    print(f"[{LOOP}] {status}: {note}" + (" ESCALATE (blocked 3 ticks)" if blocked >= 3 else ""))
+    try:      # lead 83155: ESCALATE only on a change; the same known item twice is one escalation, the repeat goes to loops/escalate-repeats.jsonl
+        sys.path.insert(0, L); import escalate_dedup
+        _pn, _sfx = escalate_dedup.apply(note, blocked, L + "/escalate-seen-" + LOOP + ".json", L + "/escalate-repeats.jsonl")
+    except Exception: _pn, _sfx = note, blocked >= 3      # the dedup can never hide an escalation: on any failure the old line prints
+    print(f"[{LOOP}] {status}: {_pn}" + (" ESCALATE (blocked 3 ticks)" if _sfx else ""))
     sys.exit(0)
 
 def sha256f(p):
@@ -368,7 +382,7 @@ def intake():
             except Exception: pass
         _pgs += f" | probe_scan {len(glob.glob(ROOT + '/logs/probe-scan-*.json'))}/{len(_packs)} packs" + (" PROBE_HIT " + ",".join(sorted(_hits)) if _hits else ", 0 hits")
     except Exception as _e: _pgs += f" | probe_scan error {type(_e).__name__}: {_e}"
-    done("worked" if new else "idle", (("NEW_PACKED " + " NEW_PACKED ".join(new)) if new else "no new packed datasets") + _pgs)
+    done("worked" if new else "idle", (("NEW_PACKED " + " NEW_PACKED ".join(new)) if new else "no new packed datasets") + _pgs + refresh_listing())
 
 def upload():
     ap = L + "/approved-uploads.json"
@@ -405,8 +419,18 @@ def upload():
     try: from huggingface_hub import HfApi
     except Exception as e: done("blocked", "huggingface_hub import failed")
     api = HfApi()
+    def _other_push_alive(me):      # owner load cut (lead 83126): ONE hf upload at a time on this desktop; the pack pushes of the tick are resumable, so a waiting item loses nothing
+        try:
+            import psutil
+            for _p in psutil.process_iter(["cmdline"]):
+                _c = " ".join(_p.info["cmdline"] or [])
+                if "hf.exe upload" in _c and me not in _c: return True
+        except Exception: return False
+        return False
     for it in todo:
+        if it.get("hold"): acts.append(f"{it['name']}: HELD ({str(it['hold'])[:80]})"); continue      # per-item hold written by the lane (a rebuilt pack replaces it); never pushed while set
         if alive(f"hf upload {it['repo']} {it['local']} {it['path']}") or alive(f"hf.exe upload {it['repo']} {it['local']} {it['path']}"): acts.append(f"{it['name']}: upload in progress"); continue
+        if _other_push_alive(it["local"]): acts.append(f"{it['name']}: waits (one upload at a time, lead 83126)"); continue
         try: tree = {t.path: t for t in api.list_repo_tree(it["repo"], repo_type="dataset", path_in_repo=it["path"], recursive=True) if hasattr(t, "size")}
         except Exception as e:
             if "404" in str(e) or "Not Found" in str(e): tree = {}
@@ -448,6 +472,9 @@ def upload():
                         except Exception as _e: bad.append(f"{it['name']}: scan-stuck mail failed {type(_e).__name__}")
                 else: skipped.append(_pss.status_line(it["name"], _st, _sd))      # wait / skip
                 continue
+            sys.path.insert(0, ROOT + "/scripts"); import defender_guard as _dg      # lead 83073 interim: a clean verdict counts only with no Defender detection on scan scratch in its window (TruffleHog rc 0 on a vanished part); cannot check = no push
+            _gok, _gwhy = _dg.check(ROOT + "/logs/th-scan/" + it["name"] + ".json")
+            if not _gok: bad.append(f"{it['name']}: NOT PUSHED, {_gwhy}"); continue
             it.pop("scan_tries", None); it.pop("scan_escalated", None)
             it["scan_pass"] = time.strftime("%Y-%m-%dT%H:%M:%S")      # a clean verdict for the current file set was seen for this item
             mb = sum(os.path.getsize(f) for f in loc if (it["path"].rstrip("/") + "/" + os.path.relpath(f, it["local"]).replace(chr(92), "/")) in miss)
@@ -472,8 +499,9 @@ def upload():
                 except Exception as e: bad.append(f"{it['name']}: verified but drop failed {type(e).__name__} {str(e)[:120]}")
     json.dump(items, open(ap, "w"), indent=1)
     _sk = (" | skipped by scan state (no push attempted, no mail): " + "; ".join(skipped)) if skipped else ""
-    if bad and not acts: done("blocked", "; ".join(bad) + _sk)
-    done("worked" if (acts or bad) else "idle", ("; ".join(acts + bad) or "nothing to push") + _sk)
+    _rl = refresh_listing()
+    if bad and not acts: done("blocked", "; ".join(bad) + _sk + _rl)
+    done("worked" if (acts or bad) else "idle", ("; ".join(acts + bad) or "nothing to push") + _sk + _rl)
 
 def census():
     tot = dict(text_content_tokens=0, datasets=[]);

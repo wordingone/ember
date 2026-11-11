@@ -34,7 +34,7 @@ with open(man, "w", encoding="utf-8") as mo:
         if os.path.exists(pm): mo.write(open(pm, encoding="utf-8").read())
 meta = W + "/meta.json"; json.dump({"dataset_id": "media:" + NAME, "content_date_max": "2022-10-31"}, open(meta, "w"))
 outd = "A:/ember-stage/media-packed" if shutil.disk_usage("A:/").free > 30 * 2**30 else ROOT + "/media-packed"
-r = subprocess.run([sys.executable, ROOT + "/scripts/pack_media.py", "image", outd, NAME, man, meta], capture_output=True, text=True); log(r.stdout[-400:], r.stderr[-300:])
+r = subprocess.run([sys.executable, ROOT + "/scripts/pack_media.py", "image", outd, NAME, man, meta], capture_output=True, text=True, env=dict(os.environ, PACK_MEDIA_SPEC="v2")); log(r.stdout[-400:], r.stderr[-300:])
 if r.returncode: sys.exit(3)
 shutil.rmtree(W + "/parts", ignore_errors=True)       # staged images are now inside the packed shards
 open(W + "/ALL.done", "w").write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())); log("DONE", outd + "/" + NAME)

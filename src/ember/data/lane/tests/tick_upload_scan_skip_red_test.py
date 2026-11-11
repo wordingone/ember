@@ -63,6 +63,9 @@ def make_lane(rec="none", scan_pass=False, started=False, tries=None, escalated=
     elif rec != "none": json.dump(dict(rec, signature=rec_sig), open(rp, "w"))
     return dict(root=root, loops=loops, spawns=[], mails=[], caps=[])
 
+DG = {"ok": True}      # verdict of the stub defender_guard.check (lead 83073 interim guard in tick upload)
+
+
 
 def go(lane, running=False, listing_raises=False, sig_raises=False, src=None, decision=REAL):
     """One upload() tick on the lane. -> (done, item_after). Spawns, mails and cap calls accumulate in the lane dict."""
@@ -85,17 +88,19 @@ def go(lane, running=False, listing_raises=False, sig_raises=False, src=None, de
         return "SIG"
     stub_th.signature = _sig
     stub_mb = types.ModuleType("mb_send"); stub_mb.send = lambda *a, **k: mails.append(a)
+    stub_dg = types.ModuleType("defender_guard"); stub_dg.check = lambda *a, **k: (DG["ok"], "" if DG["ok"] else "defender guard: 1 detection on a scan scratch path inside the scan window")
     class _Api:
         def list_repo_tree(self, *a, **k): return iter([])      # nothing on the Hub: every local file is missing
     stub_hf = types.ModuleType("huggingface_hub"); stub_hf.HfApi = _Api
     pss = real_pss
     if decision is not REAL:
         pss = types.ModuleType("pack_scan_status"); pss.__dict__.update({k: v for k, v in real_pss.__dict__.items() if not k.startswith("__")}); pss.push_decision = lambda *a, **k: decision
-    names = ("upload_refuse", "hf_cap", "th_pack_scan", "mb_send", "huggingface_hub", "pack_scan_status")
+    names = ("upload_refuse", "hf_cap", "th_pack_scan", "mb_send", "huggingface_hub", "pack_scan_status", "defender_guard")
     old = {k: sys.modules.get(k) for k in names}
-    sys.modules.update(upload_refuse=stub_ur, hf_cap=stub_cap, th_pack_scan=stub_th, mb_send=stub_mb, huggingface_hub=stub_hf, pack_scan_status=pss)
+    sys.modules.update(upload_refuse=stub_ur, hf_cap=stub_cap, th_pack_scan=stub_th, mb_send=stub_mb, huggingface_hub=stub_hf, pack_scan_status=pss, defender_guard=stub_dg)
     d = None
     try:
+        ns.setdefault("refresh_listing", lambda: "")      # the listing refresh has its own red (tick_listing_refresh_red_test.py); this test is about the push decision
         exec(src or UPLOAD_SRC, ns)
         try: ns["upload"]()
         except Done as e: d = (e.status, e.note)
@@ -169,6 +174,10 @@ def t_e():
     chk("e) clean: scan_pass recorded on the item", bool(it.get("scan_pass")))
     chk("e) clean: no scan spawned, retry state cleared", not scans(L) and "scan_tries" not in it and "scan_escalated" not in it)
     chk("e) clean: cap checked for the private repo", len(L["caps"]) == 1)
+    DG["ok"] = False
+    try: L = make_lane(dict(clean=True, hits={}, hit_files={}), tries=0); d, it = go(L)
+    finally: DG["ok"] = True
+    chk("e) clean scan but Defender guard NOT ok: no push, no cap check, reported as NOT PUSHED", not pushes(L) and not L["caps"] and d and any("NOT PUSHED" in str(x) for x in (d[1],)))
     L = make_lane(dict(clean=True, hits={"AWS": 1}, hit_files={"a": {"AWS": 1}})); d, it = go(L)
     chk("e) clean=true carrying hits is REFUSED: no push, no cap, no spawn, skipped", not pushes(L) and not L["caps"] and not scans(L) and d and not blocked(d))
     L = make_lane(dict(clean=True, hits={"AWS": 1}, hit_files={}), started=True); d, it = go(L)

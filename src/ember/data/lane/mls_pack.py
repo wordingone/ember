@@ -31,7 +31,7 @@ for gi, grp in enumerate(groups):
     shutil.rmtree(W + f"/dl{gi}", ignore_errors=True)
     meta = out + "/meta.json"; json.dump({"dataset_id": "media:" + name, "content_date_max": "2020-12-31"}, open(meta, "w"))
     outd = "A:/ember-stage/media-packed" if shutil.disk_usage("A:/").free > 40 * 2**30 else ROOT + "/media-packed"
-    r = subprocess.run([sys.executable, ROOT + "/scripts/pack_media.py", "audio", outd, name, out + "/manifest.jsonl", meta], capture_output=True, text=True); log(r.stdout[-300:], r.stderr[-200:])
+    r = subprocess.run([sys.executable, ROOT + "/scripts/pack_media.py", "audio", outd, name, out + "/manifest.jsonl", meta], capture_output=True, text=True, env=dict(os.environ, PACK_MEDIA_SPEC="v2")); log(r.stdout[-300:], r.stderr[-200:])
     if r.returncode: sys.exit(3)
     hrs = json.load(open(out + "/stats.json")).get("seconds", 0) / 3600; shutil.rmtree(out, ignore_errors=True); state["done"][name] = dict(files=[p for p, _ in grp], ts=time.time(), hours=hrs); json.dump(state, open(ST, "w")); log("packed", name, "->", outd)
 open(W + "/ALL.done", "w").write(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())); log("DONE")

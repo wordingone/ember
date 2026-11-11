@@ -12,7 +12,9 @@ one shard at a time). A run that straddles a shard boundary is found through a c
 
 Edges are trimmed to the first/last streak of 32 consecutive matches, so run_tokens (the trimmed matching span) can sit a few dozen tokens below RUN_MIN while the RUN_MIN window still met MIN_MATCH.
 Output: one line per refused object (object sha256, shard, offsets, period, run length) and a summary line; never token text. Exit 0 clean, 1 refused objects named (also when errors exist), 2 cannot scan
-(missing shard / inconsistent ledger / bad arguments).
+(missing shard / inconsistent ledger / bad arguments), 3 PARTIAL: nothing refused but shards were missing under --allow-missing (the summary prints missing=N; a caller must never record exit 3 as a clean scan, review N1 of #2465).
+The summary also prints short_objects / short_tokens: objects shorter than RUN_MIN cannot be refused by construction, so the unscanned share is a number (review N3).
+period = the SMALLEST k that flags a run (a period-4 run is also period 8, 12, 16); two adjacent runs of different true periods merge into one record under the smaller period (review N4).
 
 --json OUT writes the records; OUT must not sit inside the pack and must sit under <repo>/scratch/ or a root listed in DEGEN_SCAN_OUT_ROOT (os.pathsep-separated).
 Defaults: DEGEN_RUN_MIN=4096, DEGEN_MAX_PERIOD=16, DEGEN_MIN_MATCH=99. Numpy only; CPU only, at most 4 threads. No model anywhere."""
@@ -61,7 +63,7 @@ def _merge(runs):
     for k, s, e in runs:
         if merged and s <= merged[-1][2]:
             pk, ps, pe = merged[-1]
-            merged[-1] = (min(pk, k), ps, max(pe, e))
+            merged[-1] = (min(pk, k), ps, max(pe, e))            # smallest period wins (N4): a period-4 run is also period 8/12/16; adjacent runs of different true periods are reported as one
         else:
             merged.append((k, s, e))
     return merged
@@ -85,6 +87,7 @@ def scan(pack_dir, ledger_path=None, shards_dir=None, run_min=RUN_MIN, max_perio
     raw = []                                                     # (sha, src_start, src_end, k, start_shard, start_off, end_shard, end_off)
     errors, missing = [], []
     stats = dict(shards=0, shards_missing=0, objects=set(), tokens=0)
+    obj_len = {}                                                 # sha -> total tokens of the object over all its spans (review N3)
     carry = None                                                 # (sha, token_end, tail array, shard name, shard n_tokens)
     for row in rows:
         name, n = row["name"], int(row["n_tokens"])
@@ -106,7 +109,7 @@ def scan(pack_dir, ledger_path=None, shards_dir=None, run_min=RUN_MIN, max_perio
         rel = 0
         for si, sp in enumerate(spans):
             ln = int(sp["token_end"]) - int(sp["token_start"]); sha = sp["sha256"]
-            stats["objects"].add(sha)
+            stats["objects"].add(sha); obj_len[sha] = obj_len.get(sha, 0) + ln
             seg = np.asarray(arr[rel:rel + ln])
             pre = None
             if si == 0 and carry and carry[0] == sha and carry[1] == int(sp["token_start"]):
@@ -144,6 +147,7 @@ def scan(pack_dir, ledger_path=None, shards_dir=None, run_min=RUN_MIN, max_perio
         c["run_tokens"] = c["source_end"] - c["source_start"]
     recs.sort(key=lambda c: (c["source_start"], c["object_sha256"]))
     stats["objects"] = len(stats["objects"])
+    stats["short_objects"] = sum(1 for v in obj_len.values() if v < run_min); stats["short_tokens"] = sum(v for v in obj_len.values() if v < run_min)
     return recs, stats, errors
 
 
@@ -178,15 +182,15 @@ def main(argv=None):
         end = "" if c["end_shard"] == c["shard"] else " ..%s" % c["end_shard"]
         print("REFUSED object=%s shard=%s offsets=%d..%d%s source=%d..%d period=%d run_tokens=%d" % (
             c["object_sha256"], c["shard"], c["shard_start"], c["shard_end"], end, c["source_start"], c["source_end"], c["period"], c["run_tokens"]))
-    print("degenerate_scan: shards=%d missing=%d objects=%d tokens=%d refused_runs=%d refused_objects=%d run_min=%d max_period=%d min_match=%d secs=%.1f" % (
-        st["shards"], st["shards_missing"], st["objects"], st["tokens"], len(recs), len({c["object_sha256"] for c in recs}), a.run_min, a.max_period, a.min_match, time.time() - t0))
+    print("degenerate_scan: shards=%d missing=%d objects=%d tokens=%d short_objects=%d short_tokens=%d refused_runs=%d refused_objects=%d run_min=%d max_period=%d min_match=%d secs=%.1f" % (
+        st["shards"], st["shards_missing"], st["objects"], st["tokens"], st["short_objects"], st["short_tokens"], len(recs), len({c["object_sha256"] for c in recs}), a.run_min, a.max_period, a.min_match, time.time() - t0))
     for e in errs:
         print("ERROR " + e, file=sys.stderr)
     if a.json:
         os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
         with open(a.json, "w", encoding="utf-8") as f:
             json.dump(dict(pack=os.path.basename(os.path.normpath(a.pack_dir)), stats=st, errors=errs, refused=recs), f, indent=1)
-    return 1 if recs else (2 if errs else 0)
+    return 1 if recs else (2 if errs else (3 if st["shards_missing"] else 0))
 
 
 if __name__ == "__main__":
