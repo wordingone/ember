@@ -172,7 +172,7 @@ def main():
     freed = shutil.disk_usage("B:/").free - free0
     print(("DRY " if dry else "") + f"names removed {st['deleted']} (logical {st['bytes']/2**30:.2f} GiB; of which nlink>1: {st['shared']}); PHYSICAL freed by receipts {st['phys']/2**30:.2f} GiB; MEASURED B: free change {freed/2**30:+.2f} GiB (other writers included); skipped {len(st['skipped'])}; B free {shutil.disk_usage('B:/').free/2**30:.1f} GiB", flush=True)
     for p, why in st["skipped"][:50]: print("SKIP", why, p, flush=True)
-    json.dump(dict(skipped=st["skipped"], deleted=st["deleted"], bytes=st["bytes"], physical_bytes=st["phys"], measured_free_delta=freed, dry=dry), open((LANE_ROOT + "/logs/evict-ckpt-20261109.summary.json"), "w"), indent=1)
+    json.dump(dict(skipped=st["skipped"], deleted=st["deleted"], bytes=st["bytes"], physical_bytes=st["phys"], measured_free_delta=freed, dry=dry), open(os.path.join(os.path.dirname(RC), "evict-ckpt-20261109.summary.json"), "w"), indent=1)      # next to the receipt (a sandboxed run, issue 2450 N3, must not overwrite the real summary)
 
 
 if __name__ == "__main__":

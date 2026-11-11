@@ -21,7 +21,7 @@ pass
 import evict_ckpt_list as E
 RC = (LANE_ROOT + "/logs/reserve-evict-receipts.jsonl"); BASE = (M_ROOT + "/ember-live-receipts/")
 import protected_set as PS
-RESERVE_FILE = os.environ.get("RESERVE_FILE", (LANE_ROOT + "/loops/reserve.json"))
+RESERVE_FILE = (LANE_ROOT + "/loops/reserve.json")      # fixed path, no environment override (issue 2450 N5); a test assigns R.RESERVE_FILE directly
 class Refused(RuntimeError): pass
 def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 def _row(**kw):
@@ -30,12 +30,15 @@ def reserve_decl(path=None):
     """The reserve declaration this run serves (loops/reserve.json), with its sha256, for the run receipt (issue 2450). Unreadable -> missing=True."""
     p = path or RESERVE_FILE
     try:
-        raw = open(p, "rb").read(); return dict(file=p, sha256=hashlib.sha256(raw).hexdigest(), declaration=json.loads(raw.decode("utf-8")))
+        raw = open(p, "rb").read(); decl = json.loads(raw.decode("utf-8"))
+        if not isinstance(decl, dict) or not decl: raise ValueError("reserve declaration must be a non-empty JSON object")      # issue 2450 N5: {} / null / [] name no reserve
+        return dict(file=p, sha256=hashlib.sha256(raw).hexdigest(), declaration=decl)
     except Exception as e:
         return dict(file=p, missing=True, error=type(e).__name__)
 def _keep(path, ps=None):
     """The marker of the declared protected set (shared + reserve) that covers path, else None. ps = an already loaded set, else the file is read now (ProtectedSetError propagates = nothing is removed)."""
     ps = ps or PS.load()
+    path = path.replace("\\", "/")      # issue 2450 N6: same normalisation as refuse_reason, so a raw backslash path cannot slip past a marker
     return next((k for k in ps["markers"] + ps["reserve_markers"] if k in path), None)
 def refuse_reason(path):
     p = path.replace("\\", "/")

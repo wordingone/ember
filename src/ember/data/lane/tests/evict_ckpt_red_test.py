@@ -15,14 +15,35 @@ def check(l, c):
 R = (M_ROOT + "/ember-live-receipts/")
 import protected_set as PS
 D = PS.load()      # the hour paths below come FROM loops/protected-set.json: a re-declaration can never leave this test pinned to old hours (issue 2450)
+def cov(path, markers=None):
+    """kept(path) must be SOME declared marker that is contained in the path; which one (first match) is order-dependent, so the test does not pin it (issue 2450 N4)."""
+    k = E.kept(path); p = path.replace("\\", "/"); p = p if p.endswith("/") else p + "/"
+    return k is not None and k in (D["markers"] if markers is None else markers) and k in p
 def under(marker, tail="/m/trained-child/objects/ab.pt"):
     return R + marker.rstrip("/") + tail if marker.endswith("/") else R + marker
 check("declared shared set is non-empty (%d markers)" % len(D["markers"]), len(D["markers"]) > 0)
 for _m in D["markers"]:
-    check("RED shared marker object refused: " + _m[-48:], E.refuse_reason(under(_m)) and E.kept(under(_m)) == _m)
-    check("RED shared marker: optimizer / replay state under it is KEEP: " + _m[-48:], E.kept(under(_m, "/m/trained-child/optimizer-state.pt")) == _m and E.kept(under(_m, "/m/trained-child/replay-state.pt")) == _m)
-    check("RED kept() covers a bare directory path under the marker (no trailing slash): " + _m[-48:], E.kept(under(_m, "/measurement-x/trained-child")) == _m)
+    check("RED shared marker object refused: " + _m[-48:], E.refuse_reason(under(_m)) and cov(under(_m)))
+    check("RED shared marker: optimizer / replay state under it is KEEP: " + _m[-48:], cov(under(_m, "/m/trained-child/optimizer-state.pt")) and cov(under(_m, "/m/trained-child/replay-state.pt")))
+    check("RED kept() covers a bare directory path under the marker (no trailing slash): " + _m[-48:], cov(under(_m, "/measurement-x/trained-child")))
 _m0 = D["markers"][0]
+
+# issue 2450 N4: a legal declaration with a nested pair, broad marker first: kept() answers with a declared marker that covers the path (the first one); the old "== the marker under test" shape fails on it
+T0 = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch")).replace("\\", "/")
+try:
+    import json as _j
+    _nest = ["cia-hour-nest-aa/", "cia-hour-nest-aa/m/trained-child/"]
+    open(T0 + "/nest.json", "w").write(_j.dumps({"markers": [{"marker": m} for m in _nest], "reserve_markers": []}))
+    _p0 = PS.PATH
+    try:
+        PS.PATH = T0 + "/nest.json"
+        _pn = R + "cia-hour-nest-aa/m/trained-child/objects/ab.pt"
+        check("GREEN nested pair declared broad-first: kept() names a declared marker that covers the path", cov(_pn, _nest) and E.kept(_pn) == _nest[0] and E.refuse_reason(_pn))
+        check("GREEN ... a path under neither is not kept", E.kept(R + "cia-hour-other-zz/m/trained-child/objects/ab.pt") is None)
+    finally:
+        PS.PATH = _p0
+finally:
+    shutil.rmtree(T0, ignore_errors=True)
 check("RED manifest / receipt (not objects/*.pt) under a marker refused", E.refuse_reason(under(_m0, "/measurement-9/trained-child/checkpoint-manifest.json")))
 check("GREEN a hour dir that is not declared is not a KEEP node (an old ancestor)", E.refuse_reason(R + "cia-hour-a1-five-attn-stage-d4-20260927T080708Z/measurement-d6/trained-child/objects/ab.pt") is None and not E.kept(R + "cia-hour-a1-five-attn-stage-d4-20260927T080708Z/measurement-d6/trained-child"))
 check("GREEN an undeclared marker-lookalike (same hour name, one character off) is not a KEEP node", not E.kept(under(_m0.rstrip("/") + "0/")))
@@ -102,5 +123,67 @@ try:
     check("GREEN a dir without hour-result.json is not a scored child: rule not applicable", E.child_gaps(ch, [ch + "/objects/" + A + ".pt"], none) == [])
 finally:
     shutil.rmtree(T3, ignore_errors=True)
+# issue 2450 N3: the per-file path of evict_ckpt_list.main() EXECUTED against a sandbox (stub HfApi, sandbox declaration, receipt and list; os.remove spied): it re-reads the declaration before each remove,
+# skips a file that became KEEP, and records the protected-set sha256 + path in each row
+import types, hashlib, json as _J
+real_remove = os.remove; calls = []
+def _spy(p, *a, **k): calls.append(str(p).replace("\\", "/")); return real_remove(p, *a, **k)
+class _Srv: on_call = None; sha = {}; size = {}
+class RepoFile:
+    def __init__(self, path, sha, size): self.path = path; self.lfs = {"sha256": sha}; self.size = size
+class _Api:
+    def __init__(self, *a, **k): pass
+    def list_repo_tree(self, *a, **k): return [RepoFile("checkpoints/" + s + ".pt", s, _Srv.size[s]) for s in _Srv.sha.values()]
+    def get_paths_info(self, repo, paths, expand=True, repo_type="dataset"):
+        s = os.path.basename(paths[0])[:-3]
+        if _Srv.on_call: _Srv.on_call(s)
+        return [types.SimpleNamespace(lfs={"sha256": s}, size=_Srv.size[s])]
+_fake = types.ModuleType("huggingface_hub"); _fake.HfApi = _Api
+BASE_DOC = {"declared_by": "red test", "declared_at": "2099-01-01T00:00:00Z", "markers": [{"marker": "cia-hour-keep-aa/"}], "reserve_markers": []}
+def _write(path, doc): _J.dump(doc, open(path, "w", encoding="utf-8"))
+SANDBOXES = []
+def sandbox_main(name, n=2):
+    S = tempfile.mkdtemp(dir=(LANE_ROOT + "/scratch")).replace("\\", "/"); SANDBOXES.append(S); d = S + "/live/cia-hour-old-cc/m/trained-child/objects"; os.makedirs(d)
+    pd = S + "/protected-set.json"; _write(pd, BASE_DOC); files = []; shas = []; lines = []
+    _Srv.on_call = None; _Srv.sha = {}; _Srv.size = {}
+    for i in range(n):
+        data = ("payload-%s-%d" % (name, i)).encode() * 50; s = hashlib.sha256(data).hexdigest(); p = "%s/%s.pt" % (d, s)
+        open(p, "wb").write(data); files.append(p); shas.append(s); _Srv.sha[i] = s; _Srv.size[s] = len(data); lines.append("0\t%d\t%s" % (len(data), p))
+    open(S + "/l.tsv", "w").write("\n".join(lines) + "\n"); _J.dump({}, open(S + "/walk.json", "w"))
+    return S, files, shas, pd
+def run_main(S, pd):
+    orig_load = E.load_list; saved = (E.WALK, E.RC, PS.PATH)
+    E.load_list = lambda: orig_load(S + "/l.tsv", None); E.WALK = S + "/walk.json"; E.RC = S + "/rc.jsonl"; PS.PATH = pd
+    del calls[:]; os.remove = _spy; prev = sys.modules.get("huggingface_hub"); sys.modules["huggingface_hub"] = _fake; sys.argv = ["x", "--workers", "1"]; exc = None
+    try: E.main()
+    except BaseException as e: exc = e
+    finally:
+        os.remove = real_remove; E.load_list = orig_load; E.WALK, E.RC, PS.PATH = saved
+        if prev is None: sys.modules.pop("huggingface_hub", None)
+        else: sys.modules["huggingface_hub"] = prev
+    rows = [_J.loads(l) for l in open(S + "/rc.jsonl", encoding="utf-8")] if os.path.exists(S + "/rc.jsonl") else []
+    sp = S + "/evict-ckpt-20261109.summary.json"; summ = _J.load(open(sp)) if os.path.exists(sp) else None
+    return exc, len(calls), rows, summ
+_real_summary = (LANE_ROOT + "/logs/evict-ckpt-20261109.summary.json"); _before = os.path.getmtime(_real_summary) if os.path.exists(_real_summary) else None
+S, files, shas, pd = sandbox_main("normal")
+psha = hashlib.sha256(open(pd, "rb").read()).hexdigest()
+exc, nrem, rows, summ = run_main(S, pd)
+check("GREEN main() sandbox run: both files removed, one receipt row each carrying the protected-set sha256 + path read before the remove", exc is None and nrem == 2 and not any(os.path.exists(f) for f in files) and len(rows) == 2 and all(r["protected_set_sha256"] == psha and r["protected_set_path"] == pd for r in rows))
+check("GREEN the summary lands next to the sandbox receipt; the real summary file is untouched", summ and summ["deleted"] == 2 and (os.path.getmtime(_real_summary) if os.path.exists(_real_summary) else None) == _before)
+S, files, shas, pd = sandbox_main("redeclared")
+def _redeclare(s):
+    if s == shas[0]: _write(pd, dict(BASE_DOC, declared_by="red test redeclared", markers=BASE_DOC["markers"] + [{"marker": "cia-hour-old-cc/"}]))
+_Srv.on_call = _redeclare
+exc, nrem, rows, summ = run_main(S, pd)
+check("RED a marker declared during the server-read window is honoured: nothing removed, no per-file row", exc is None and nrem == 0 and all(os.path.exists(f) for f in files) and rows == [] and summ and summ["deleted"] == 0)
+check("RED ... the file in the window is skipped as re-declared during the run, the other is refused up front", summ and any("re-declared during the run" in s[1] for s in summ["skipped"]) and any(s[1].startswith("under a KEEP node") and "re-declared" not in s[1] for s in summ["skipped"]))
+S, files, shas, pd = sandbox_main("between")
+sha_before = hashlib.sha256(open(pd, "rb").read()).hexdigest()
+def _change(s):
+    if s == shas[1]: _write(pd, dict(BASE_DOC, declared_by="red test v2", markers=BASE_DOC["markers"] + [{"marker": "cia-hour-unrelated-zz/"}]))
+_Srv.on_call = _change
+exc, nrem, rows, summ = run_main(S, pd); sha_after = hashlib.sha256(open(pd, "rb").read()).hexdigest()
+check("GREEN the declaration changing between two files: row 1 records the old set's sha256, row 2 the new set's", exc is None and len(rows) == 2 and rows[0]["protected_set_sha256"] == sha_before and rows[1]["protected_set_sha256"] == sha_after and sha_before != sha_after)
+for _s in SANDBOXES: shutil.rmtree(_s, ignore_errors=True)
 check("main refuses partial links unless --allow-partial-links", "--allow-partial-links" in src and "raise EvictRefused(f\"{len(partial)} inodes have links outside" in src)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
