@@ -123,7 +123,19 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
+# Checks 1b, 1c and 1e judge each file on its own bytes (plus its text attribute), so a
+# commit can change their verdict only for the paths it stages. Under
+# REPO_GUARD_SCOPE=staged (what .githooks/pre-commit sets) they get --staged: the staged
+# paths only, on their INDEX bytes; each widens itself back to the whole tree when a
+# staged .gitattributes or a staged copy of the check could change the answer for a path
+# that is not staged. Without REPO_GUARD_SCOPE (CI job `guard` in
+# .github/workflows/repo-policy-gate.yml, and .githooks/pre-push) they check the whole
+# tracked tree exactly as before, so a violating file that is not staged is still refused
+# there. Measured: these three checks cost 241 s of a 451 s hook run when each parsed
+# the whole tree for a commit that staged nothing near them.
+STAGED_CHECK_SCOPE=()
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then STAGED_CHECK_SCOPE=(--staged); fi
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_line_endings.py" "$SUBJECT_ROOT" "${STAGED_CHECK_SCOPE[@]}"; then
   :
 else
   FAIL=1
@@ -133,7 +145,7 @@ fi
 # Use trusted kernel bytes against the subject checkout. Git's -I heuristic
 # skips NUL-heavy content, so every Git text-attributed subject blob must pass
 # this explicit byte-level check before the names/path scans below.
-if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_text_encoding.py" "$SUBJECT_ROOT" "${STAGED_CHECK_SCOPE[@]}"; then
   :
 else
   FAIL=1
@@ -151,7 +163,7 @@ fi
 # Frozen receipts/prose may truthfully mention placeholders. The trusted
 # checker rejects only the runtime-crashing boundary: a redacted token used as
 # a percent-format or str.format operand (issue #502).
-if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT" "${STAGED_CHECK_SCOPE[@]}"; then
   :
 else
   FAIL=1
@@ -476,6 +488,10 @@ fi
 # (tools/ember-cli/state/) are not flagged.
 # The checker is trusted kernel code; the bytes it judges are the SUBJECT tree, and under
 # REPO_GUARD_SCOPE=staged the subject INDEX (what lands), like the governed-entry check.
+# Like checks 1b/1c/1e it judges each file on its own bytes, so under --staged it scans only the
+# staged code files (widening to every tracked code file when a staged copy of the checker could
+# change the rule); the tree-wide form runs in CI job `guard` and in pre-push. Measured 25 s of the
+# 451 s hook run.
 LAUNCHER_PATHS_SCOPE=()
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then LAUNCHER_PATHS_SCOPE=(--staged); fi
 LAUNCHER_PATHS_OUT="$(bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_launcher_source_paths.py" "${LAUNCHER_PATHS_SCOPE[@]}" "$SUBJECT_ROOT" 2>&1)"
@@ -775,6 +791,22 @@ if [ -n "$RANGE" ]; then
     fail "goal/evidence" "commit(s) edit a canonical GOAL.md and receipts/ in one change:$BAD"
   else
     ok "goal/evidence" "no goal+evidence co-commits in $RANGE"
+  fi
+  # No commit of the range carries a claude.ai session link in its message
+  # ("Claude-Session:" trailer or a claude.ai/code/session_ URL). Same pattern
+  # as .githooks/commit-msg (the commit-time form); a selftest red pins the two
+  # copies equal. Prose that only mentions claude.ai is not matched.
+  SESSION_LINK_RE='(^[[:space:]]*Claude-Session[[:space:]]*:|https?://claude\.ai/code/session_)'
+  BAD=""
+  for c in $(git rev-list "$RANGE" 2>/dev/null); do
+    if git show -s --format=%B "$c" 2>/dev/null | grep -qiE "$SESSION_LINK_RE"; then
+      BAD="$BAD $(git rev-parse --short=12 "$c")"
+    fi
+  done
+  if [ -n "$BAD" ]; then
+    fail "commit-session-link" "commit message(s) carry a claude.ai session link (a Claude-Session: line or a claude.ai/code/session_ URL); reword them:$BAD"
+  else
+    ok "commit-session-link" "no claude.ai session link in a commit message of $RANGE"
   fi
 fi
 

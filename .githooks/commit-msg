@@ -1,10 +1,28 @@
 #!/usr/bin/env bash
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # commit-msg ring: a commit message records what a change DOES, not a status
 # board. Enforces a concise subject and rejects status-board / progress-ledger
 # phrasing (that belongs in STATE.md and receipts/, per GOVERNANCE.md).
 msg_file="$1"
 subject="$(sed -n '1p' "$msg_file")"
 fail=0
+
+# A commit message never carries a claude.ai session link: a "Claude-Session:"
+# trailer line or a https://claude.ai/code/session_ URL. The whole file is
+# scanned (git does not strip '#' lines for every cleanup mode) and this runs
+# before the merge/revert/fixup exemption below, so no subject skips it.
+# tools/repo-guard.sh section 8 scans every commit of a range with the SAME
+# pattern (a selftest red pins the two copies equal); a message that merely
+# mentions claude.ai in prose is not matched.
+SESSION_LINK_RE='(^[[:space:]]*Claude-Session[[:space:]]*:|https?://claude\.ai/code/session_)'
+if grep -qiE "$SESSION_LINK_RE" "$msg_file"; then
+  echo "commit-msg: the message contains a claude.ai session link (a 'Claude-Session:' line or a claude.ai/code/session_ URL)."
+  echo "  Remove that line from the commit message; commits carry the Co-Authored-By trailer only."
+  echo "  (override with --no-verify only for a genuine exception)"
+  exit 1
+fi
 
 # allow merge/revert/fixup commits through untouched
 case "$subject" in

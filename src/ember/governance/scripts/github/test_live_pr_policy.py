@@ -182,6 +182,31 @@ class LivePullRequestPolicyTests(unittest.TestCase):
         value["milestone"] = "EMBER-03"
         self.assertIn("milestone:body-live-mismatch", validate_live_pull_request(value))
 
+    def test_human_pr_body_refuses_a_claude_session_link(self) -> None:
+        # Assembled so this file does not itself carry the pattern it tests.
+        url = "https://claude.ai/code/" + "session_01FIXTUREFIXTUREFIXTURE"
+        trailer = "Claude-" + "Session: " + url
+        for label, footer in (
+            ("bare session URL line", f"\n{url}\n"),
+            ("trailer line", f"\n{trailer}\n"),
+            ("lower-case trailer", "\n" + ("claude-" + "session : abc") + "\n"),
+            ("URL inside prose", f"\nSee {url} for context.\n"),
+            ("http scheme", "\n" + "http://claude.ai/code/" + "session_01X\n"),
+        ):
+            value = human_pr()
+            value["body"] = human_body() + footer
+            with self.subTest(label=label):
+                self.assertIn("body:session-link", validate_live_pull_request(value))
+        for label, footer in (
+            ("attribution line only", "\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"),
+            ("prose naming claude.ai", "\nThe claude.ai site is a web app; see https://claude.ai/settings.\n"),
+            ("prose naming the header", "\nThe Claude-" + "Session header is not written into commits.\n"),
+        ):
+            value = human_pr()
+            value["body"] = human_body() + footer
+            with self.subTest(label=label):
+                self.assertNotIn("body:session-link", validate_live_pull_request(value))
+
     def test_dependabot_has_closed_narrow_schema(self) -> None:
         value = {
             "actor_login": "dependabot[bot]",

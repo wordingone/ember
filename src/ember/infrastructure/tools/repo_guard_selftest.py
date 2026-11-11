@@ -227,6 +227,7 @@ def run_guard(
     env.pop("CI", None)
     env.pop("GITHUB_ACTIONS", None)
     env.pop("REPO_GUARD_NAMES", None)
+    env.pop("REPO_GUARD_SCOPE", None)
     if extra_env:
         env.update(extra_env)
     proc = subprocess.run(
@@ -1858,6 +1859,474 @@ def test_red_powershell_malformed_source_refuses_even_when_not_named_launcher():
         cleanup(tmp)
 
 
+# ---------------------------------------------------------------------------
+# STAGED-SCOPE reds: the line-endings, text-encoding, executable-redaction and
+# launcher-paths checks judge each file on its own bytes, so the commit hook
+# (REPO_GUARD_SCOPE=staged) checks only the staged paths on their INDEX bytes,
+# while the tree-wide form (CI job `guard` in repo-policy-gate.yml, and pre-push)
+# still checks every tracked file. Each `_direct` test runs one check script on a
+# tiny repo; the `through_guard` tests run the real tools/repo-guard.sh in hook
+# form and CI form.
+# ---------------------------------------------------------------------------
+_STAGED_CHECKS = {
+    "line-endings": "src/ember/infrastructure/tools/check_line_endings.py",
+    "encoding": "src/ember/infrastructure/tools/check_text_encoding.py",
+    "executable-redaction": "src/ember/infrastructure/tools/check_executable_redaction_placeholders.py",
+    "launcher-paths": "src/ember/infrastructure/tools/check_launcher_source_paths.py",
+}
+# The first three also take REPO_GUARD_SCOPE=staged from the environment; the launcher
+# check takes --staged only as its first argument (repo-guard.sh passes it).
+_ENV_SCOPED = ("line-endings", "encoding", "executable-redaction")
+# What each check prints when it refuses, and when it checked only the staged paths.
+_REFUSAL_MARK = {"launcher-paths": "LAUNCHER_SOURCE_PATHS_STALE"}
+_NARROWED_MARK = {"launcher-paths": "scope=staged-paths"}
+# The stale source-path join is assembled so this file does not match the rule it tests.
+_LAUNCHER_STALE = 'export const p = join(root, "tools", "ember' + '-cli", "src");\n'
+# One violating blob per check; each violates exactly one check (valid UTF-8 and LF
+# for the others) so a failure names which check refused it.
+_STAGED_VIOLATORS = {
+    "line-endings": ("docs/crlf_note.md", b"line one\r\nline two\r\n"),
+    "encoding": ("docs/bad_utf8_note.md", b"invalid byte: \x97\n"),
+    "executable-redaction": ("scripts/placeholder_probe.py", b'value = "%<REDACTED>" % 1\n'),
+    "launcher-paths": ("scripts/launcher_probe.ts", _LAUNCHER_STALE.encode("ascii")),
+}
+# The same paths with clean bytes (what a working-tree copy holds after a "fix").
+_STAGED_CLEAN = {
+    "docs/crlf_note.md": b"line one\nline two\n",
+    "docs/bad_utf8_note.md": b"ordinary prose\n",
+    "scripts/placeholder_probe.py": b"value = 1\n",
+    "scripts/launcher_probe.ts": b"export const p = 1;\n",
+}
+
+
+def _refusal_mark(tag: str) -> str:
+    return _REFUSAL_MARK.get(tag, f"FAIL [{tag}]")
+
+
+def _narrowed_mark(tag: str) -> str:
+    return _NARROWED_MARK.get(tag, "staged scope")
+
+
+def _forms(tag: str) -> list:
+    """The ways the commit hook can ask a check for staged scope: --staged for every
+    check, and REPO_GUARD_SCOPE=staged for the three that read it themselves."""
+    forms = [(("--staged",), None)]
+    if tag in _ENV_SCOPED:
+        forms.append(((), "staged"))
+    return forms
+
+
+def _git_quiet(tmp: Path, *args: str, data: bytes | None = None) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(tmp), "-c", "user.email=selftest@example.invalid",
+         "-c", "user.name=selftest", *args],
+        input=data, capture_output=True, check=True,
+    ).stdout
+
+
+def _stage_raw(tmp: Path, rel: str, data: bytes) -> None:
+    """Put `data` in the index at `rel` byte-for-byte. A normal `git add` runs the
+    eol=lf clean filter and would turn a CRLF fixture into LF, so write the blob."""
+    blob = _git_quiet(tmp, "hash-object", "-w", "--stdin", data=data).decode("ascii").strip()
+    _git_quiet(tmp, "update-index", "--add", "--cacheinfo", f"100644,{blob},{rel}")
+
+
+def _write_worktree(tmp: Path, files: dict[str, bytes]) -> None:
+    for rel, data in files.items():
+        target = tmp / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
+def _make_check_repo() -> Path:
+    """A tiny committed repo with the real attribute shape (`* text=auto eol=lf`,
+    `-text` pins) for running one check script directly."""
+    tmp = Path(tempfile.mkdtemp(prefix="repo_guard_staged_scope_"))
+    subprocess.run(["git", "init", "-q", "-b", "fix/selftest", str(tmp)], check=True)
+    _write_worktree(tmp, {".gitattributes": b"* text=auto eol=lf\n*.bin -text\n", "README.md": b"ordinary\n"})
+    commit_fixture(tmp)
+    return tmp
+
+
+def _commit_violators(tmp: Path) -> None:
+    """Commit one violating blob per check (as HEAD content, not staged) and leave
+    the same bytes on disk, so the tree-wide form sees them in the working tree."""
+    for rel, data in _STAGED_VIOLATORS.values():
+        _stage_raw(tmp, rel, data)
+    _git_quiet(tmp, "commit", "-q", "-m", "violators already in the tree")
+    _write_worktree(tmp, {rel: data for rel, data in _STAGED_VIOLATORS.values()})
+
+
+def _run_check(tmp: Path, tag: str, *flags: str, scope_env: str | None = None) -> tuple[int, str]:
+    import os
+    env = dict(os.environ)
+    env.pop("REPO_GUARD_SCOPE", None)
+    if scope_env:
+        env["REPO_GUARD_SCOPE"] = scope_env
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / _STAGED_CHECKS[tag]), *flags, str(tmp)],
+        env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def test_green_staged_scope_ignores_unstaged_violators_direct():
+    """The speed cut: a violating file that is already in the tree and NOT staged is
+    not this commit's business. Fails on the old code, whose hook form parsed or read
+    every tracked file and refused the commit."""
+    tmp = _make_check_repo()
+    try:
+        _commit_violators(tmp)
+        _stage_raw(tmp, "docs/clean_note.md", b"ordinary LF-only prose\n")
+        _stage_raw(tmp, "scripts/clean_probe.py", b"value = 1\n")
+        for tag in _STAGED_CHECKS:
+            for flags, scope_env in _forms(tag):
+                rc, out = _run_check(tmp, tag, *flags, scope_env=scope_env)
+                assert rc == 0, f"[{tag}] flags={flags} env={scope_env}: expected rc 0, got {rc}\n{out}"
+                assert _refusal_mark(tag) not in out and "FAIL [" not in out, f"[{tag}] {out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_red_tree_wide_form_refuses_unstaged_violators_direct():
+    """CI keeps the tree-wide form: with no --staged and no REPO_GUARD_SCOPE every
+    check refuses its violator even though a clean file is staged (a form that narrowed
+    to the index whenever something is staged would pass this commit and fail here)."""
+    tmp = _make_check_repo()
+    try:
+        _commit_violators(tmp)
+        _stage_raw(tmp, "docs/clean_note.md", b"ordinary LF-only prose\n")
+        for tag, (rel, _data) in _STAGED_VIOLATORS.items():
+            rc, out = _run_check(tmp, tag)
+            assert rc == 1, f"[{tag}] expected rc 1 from the tree-wide form, got {rc}\n{out}"
+            assert _refusal_mark(tag) in out, f"[{tag}] {out}"
+            assert rel in out, f"[{tag}] the violator {rel} is not named\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_red_staged_scope_refuses_staged_blob_over_clean_worktree_direct():
+    """The bytes that will be committed are what is judged: a violating blob in the
+    index is refused even when the working copy was restored to clean bytes."""
+    tmp = _make_check_repo()
+    try:
+        for rel, data in _STAGED_VIOLATORS.values():
+            _stage_raw(tmp, rel, data)
+        _write_worktree(tmp, _STAGED_CLEAN)
+        for tag, (rel, _data) in _STAGED_VIOLATORS.items():
+            for flags, scope_env in _forms(tag):
+                rc, out = _run_check(tmp, tag, *flags, scope_env=scope_env)
+                assert rc == 1, f"[{tag}] flags={flags} env={scope_env}: expected rc 1, got {rc}\n{out}"
+                assert _refusal_mark(tag) in out and rel in out, f"[{tag}] {out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_green_staged_scope_reads_index_not_worktree_direct():
+    """The inverse: a clean blob is staged, a stale violating working copy is left
+    behind. The commit that lands is clean, so the hook form must not refuse it."""
+    tmp = _make_check_repo()
+    try:
+        for rel, data in _STAGED_CLEAN.items():
+            _stage_raw(tmp, rel, data)
+        _write_worktree(tmp, {rel: data for rel, data in _STAGED_VIOLATORS.values()})
+        for tag in _STAGED_CHECKS:
+            rc, out = _run_check(tmp, tag, "--staged")
+            assert rc == 0, f"[{tag}] expected rc 0 (clean index), got {rc}\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_staged_scope_with_nothing_staged_checks_nothing_direct():
+    tmp = _make_check_repo()
+    try:
+        _commit_violators(tmp)
+        for tag in _STAGED_CHECKS:
+            rc, out = _run_check(tmp, tag, "--staged")
+            assert rc == 0, f"[{tag}] nothing staged: expected rc 0, got {rc}\n{out}"
+            assert _narrowed_mark(tag) in out, f"[{tag}] {out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_red_staged_scope_widens_when_gitattributes_is_staged_direct():
+    """A staged .gitattributes decides which paths are text for every file, so the
+    two attribute-driven checks fall back to the whole tree and refuse the violator
+    that is not staged."""
+    tmp = _make_check_repo()
+    try:
+        _commit_violators(tmp)
+        _stage_raw(tmp, ".gitattributes", b"* text=auto eol=lf\n*.bin -text\n# touched\n")
+        for tag in ("line-endings", "encoding"):
+            rel = _STAGED_VIOLATORS[tag][0]
+            rc, out = _run_check(tmp, tag, "--staged")
+            assert rc == 1, f"[{tag}] expected the widened whole-tree refusal, got {rc}\n{out}"
+            assert "widened to the whole tree" in out, f"[{tag}] {out}"
+            assert rel in out, f"[{tag}] the unstaged violator {rel} is not named\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_red_staged_scope_widens_when_the_check_itself_is_staged_direct():
+    """A staged copy of a check changes the rule for every file, so staged scope
+    must not trust its own narrowing."""
+    tmp = _make_check_repo()
+    try:
+        _commit_violators(tmp)
+        for tag, script_rel in _STAGED_CHECKS.items():
+            _stage_raw(tmp, "scripts/" + Path(script_rel).name, b"value = 1\n")
+        for tag, (rel, _data) in _STAGED_VIOLATORS.items():
+            rc, out = _run_check(tmp, tag, "--staged")
+            assert rc == 1, f"[{tag}] expected the widened whole-tree refusal, got {rc}\n{out}"
+            assert "widened" in out, f"[{tag}] {out}"
+            assert rel in out, f"[{tag}] the unstaged violator {rel} is not named\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_green_staged_scope_skips_paths_attributed_unset_text_direct():
+    """The text population is unchanged: a staged `-text` byte-pinned file may hold
+    CRLF or non-UTF-8 bytes, exactly as in the tree-wide form."""
+    tmp = _make_check_repo()
+    try:
+        _stage_raw(tmp, "payload.bin", b"crlf\r\nand a bad byte \x97\n")
+        for tag in ("line-endings", "encoding"):
+            rc, out = _run_check(tmp, tag, "--staged")
+            assert rc == 0, f"[{tag}] -text path must be skipped, got {rc}\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_green_hook_form_scopes_four_checks_to_staged_paths_through_guard():
+    """Through tools/repo-guard.sh in hook form (REPO_GUARD_SCOPE=staged): with violators
+    already in the tree and only clean files staged, none of the four checks refuses."""
+    tmp = make_fixture("fix/selftest-green-hook-scope")
+    try:
+        commit_fixture(tmp)
+        _commit_violators(tmp)
+        _stage_raw(tmp, "docs/clean_note.md", b"ordinary LF-only prose\n")
+        _stage_raw(tmp, "scripts/clean_probe.ts", b"export const p = 1;\n")
+        rc_hook, out_hook = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        for tag in _STAGED_CHECKS:
+            assert f"FAIL [{tag}]" not in out_hook, f"hook form refused [{tag}]\n{out_hook}"
+        assert "staged scope" in out_hook, out_hook
+        assert re.search(r"ok   \[launcher-paths\] LAUNCHER_SOURCE_PATHS_OK files=1 scope=staged-paths", out_hook), out_hook
+    finally:
+        cleanup(tmp)
+
+
+def test_red_ci_form_runs_tree_wide_when_scope_is_unset_through_guard():
+    """The same tree through the CI invocation (no REPO_GUARD_SCOPE; both the bare form and
+    `--base <sha>`, which is what job `guard` and pre-push run): every one of the four checks
+    refuses its violator that is not staged. Fails if repo-guard.sh narrows without the env."""
+    tmp = make_fixture("fix/selftest-red-ci-form-tree-wide")
+    try:
+        commit_fixture(tmp)
+        base = _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip()
+        _commit_violators(tmp)
+        _stage_raw(tmp, "docs/clean_note.md", b"ordinary LF-only prose\n")
+        for args in ((), ("--base", base)):
+            rc, out = run_guard(tmp, args=args)
+            assert rc != 0, f"CI form {args} must refuse the tree\n{out}"
+            for tag, (rel, _data) in _STAGED_VIOLATORS.items():
+                assert f"FAIL [{tag}]" in out, f"CI (tree-wide) form {args} did not refuse [{tag}]\n{out}"
+                assert rel in out, f"CI form {args} did not name {rel}\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_red_hook_form_refuses_staged_violators_through_guard():
+    tmp = make_fixture("fix/selftest-red-hook-staged-violators")
+    try:
+        commit_fixture(tmp)
+        for rel, data in _STAGED_VIOLATORS.values():
+            _stage_raw(tmp, rel, data)
+        _write_worktree(tmp, _STAGED_CLEAN)
+        rc, out = run_guard(tmp, extra_env={"REPO_GUARD_SCOPE": "staged"})
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        for tag, (rel, _data) in _STAGED_VIOLATORS.items():
+            assert f"FAIL [{tag}]" in out, f"hook form did not refuse the staged [{tag}] blob\n{out}"
+            assert rel in out, f"hook form did not name {rel}\n{out}"
+    finally:
+        cleanup(tmp)
+
+
+def test_hook_passes_staged_scope_and_ci_runs_tree_wide():
+    """Wiring pins: repo-guard.sh hands --staged to all four checks under
+    REPO_GUARD_SCOPE=staged; CI's `guard` job and pre-push never set that scope, so
+    both keep running the tree-wide form."""
+    guard = (REPO_ROOT / "tools" / "repo-guard.sh").read_text(encoding="utf-8")
+    assert 'if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then STAGED_CHECK_SCOPE=(--staged); fi' in guard
+    for tag in _ENV_SCOPED:
+        name = Path(_STAGED_CHECKS[tag]).name
+        lines = [ln for ln in guard.splitlines() if ln.startswith("if bash") and name in ln]
+        assert len(lines) == 1, f"expected one call line for {name}, found {len(lines)}"
+        assert '"${STAGED_CHECK_SCOPE[@]}"' in lines[0], f"{name} is not given the staged scope: {lines[0]}"
+    assert 'if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then LAUNCHER_PATHS_SCOPE=(--staged); fi' in guard
+    launcher = [ln for ln in guard.splitlines() if "check_launcher_source_paths.py" in ln and ln.startswith("LAUNCHER_PATHS_OUT=")]
+    assert len(launcher) == 1 and '"${LAUNCHER_PATHS_SCOPE[@]}" "$SUBJECT_ROOT"' in launcher[0], launcher
+    workflow = (REPO_ROOT / ".github" / "workflows" / "repo-policy-gate.yml").read_text(encoding="utf-8")
+    assert "REPO_GUARD_SCOPE" not in workflow, "CI guard job must run the tree-wide form"
+    assert 'bash "${kernel}/tools/repo-guard.sh" --base' in workflow
+    pre_push = (REPO_ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
+    assert "REPO_GUARD_SCOPE" not in pre_push, "pre-push must run the tree-wide form"
+    pre_commit = (REPO_ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+    assert "REPO_GUARD_SCOPE=staged" in pre_commit
+
+
+# ---------------------------------------------------------------------------
+# SESSION-LINK reds: a commit message never carries a claude.ai session link.
+# `.githooks/commit-msg` refuses it at commit time; tools/repo-guard.sh section 8 refuses it
+# for every commit of the range CI (`--base`) and pre-push check. Strings are assembled so
+# this file does not itself carry the pattern.
+# ---------------------------------------------------------------------------
+_SESSION_URL = "https://claude.ai/code/" + "session_01FIXTUREFIXTUREFIXTURE"
+_SESSION_TRAILER = "Claude-" + "Session: " + _SESSION_URL
+_CO_AUTHOR = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+
+
+def _run_commit_msg_hook(message: str) -> tuple[int, str]:
+    """Run the real .githooks/commit-msg on a message file, as git does."""
+    tmp = Path(tempfile.mkdtemp(prefix="repo_guard_commit_msg_"))
+    try:
+        msg = tmp / "COMMIT_EDITMSG"
+        msg.write_bytes(message.encode("utf-8"))
+        proc = subprocess.run(
+            [GIT_BASH, str(REPO_ROOT / ".githooks" / "commit-msg"), str(msg)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+    finally:
+        cleanup(tmp)
+
+
+def test_red_commit_msg_refuses_session_trailer_and_url():
+    cases = {
+        "trailer line after Co-Authored-By": f"feat: add a thing\n\nbody text\n\n{_CO_AUTHOR}\n{_SESSION_TRAILER}\n",
+        "trailer line without a URL": "feat: add a thing\n\nbody\n\n" + "Claude-" + "Session: abc123\n",
+        "trailer in lower case with a space before the colon": "feat: add a thing\n\n" + "claude-" + "session : abc\n",
+        "indented trailer line": "feat: add a thing\n\n   " + "Claude-" + "Session: abc\n",
+        "bare session URL in prose": f"feat: add a thing\n\nsee {_SESSION_URL} for context\n",
+        "http scheme": "feat: add a thing\n\nsee " + "http://claude.ai/code/" + "session_01XYZ\n",
+        "URL on a '#' line": f"feat: add a thing\n\n# {_SESSION_URL}\n",
+        "merge subject does not exempt it": f"Merge branch 'fix/x'\n\n{_SESSION_TRAILER}\n",
+        "revert subject does not exempt it": f"Revert \"feat: x\"\n\n{_SESSION_TRAILER}\n",
+        "fixup subject does not exempt it": f"fixup! feat: x\n\n{_SESSION_TRAILER}\n",
+    }
+    for label, message in cases.items():
+        rc, out = _run_commit_msg_hook(message)
+        assert rc == 1, f"[{label}] expected the commit-msg hook to refuse (rc 1), got {rc}\n{out}"
+        assert "session link" in out, f"[{label}] refusal does not name the session link\n{out}"
+
+
+def test_green_commit_msg_accepts_co_author_only_and_claude_prose():
+    cases = {
+        "Co-Authored-By only": f"feat: add a thing\n\nbody text\n\n{_CO_AUTHOR}\n",
+        "subject only": "feat: add a thing\n",
+        "prose naming claude.ai without a session path": "docs: explain the web app\n\nThe claude.ai site hosts the web app; see https://claude.ai/settings for options.\n",
+        "prose naming the trailer mid-line": "docs: explain trailers\n\nThe Claude-" + "Session header is no longer written into commits.\n",
+        "prose naming code/session in other words": "docs: explain\n\nclaude.ai/code is the web client and a session is one conversation.\n",
+        "merge subject, clean": "Merge branch 'fix/x'\n",
+    }
+    for label, message in cases.items():
+        rc, out = _run_commit_msg_hook(message)
+        assert rc == 0, f"[{label}] expected the commit-msg hook to accept (rc 0), got {rc}\n{out}"
+
+
+def test_commit_msg_keeps_its_existing_checks():
+    """The new refusal sits ahead of the old checks and leaves them in force."""
+    rc, out = _run_commit_msg_hook("feat: " + "x" * 80 + "\n")
+    assert rc == 1 and "subject is" in out, (rc, out)
+    rc, out = _run_commit_msg_hook("status: finished the thing\n")
+    assert rc == 1 and "status board" in out, (rc, out)
+
+
+def test_red_git_commit_is_refused_end_to_end_by_commit_msg_hook():
+    """git itself runs the hook: a commit whose message carries the trailer is refused and
+    creates no commit; the same commit with only Co-Authored-By lands."""
+    tmp = _make_check_repo()
+    hooks = Path(tempfile.mkdtemp(prefix="repo_guard_hooks_only_commit_msg_"))
+    try:
+        shutil.copyfile(REPO_ROOT / ".githooks" / "commit-msg", hooks / "commit-msg")
+        before = _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip()
+        (tmp / "note.md").write_bytes(b"a note\n")
+        _git_quiet(tmp, "add", "note.md")
+        refused = subprocess.run(
+            ["git", "-C", str(tmp), "-c", f"core.hooksPath={hooks.as_posix()}",
+             "-c", "user.email=selftest@example.invalid", "-c", "user.name=selftest",
+             "commit", "-q", "-m", "feat: add a note", "-m", f"{_CO_AUTHOR}\n{_SESSION_TRAILER}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert refused.returncode != 0, f"git committed a message carrying the session trailer\n{refused.stdout}{refused.stderr}"
+        assert "session link" in refused.stdout + refused.stderr, refused.stdout + refused.stderr
+        assert _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip() == before, "a refused commit moved HEAD"
+        landed = subprocess.run(
+            ["git", "-C", str(tmp), "-c", f"core.hooksPath={hooks.as_posix()}",
+             "-c", "user.email=selftest@example.invalid", "-c", "user.name=selftest",
+             "commit", "-q", "-m", "feat: add a note", "-m", _CO_AUTHOR],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert landed.returncode == 0, f"a clean message was refused\n{landed.stdout}{landed.stderr}"
+    finally:
+        cleanup(tmp)
+        cleanup(hooks)
+
+
+def _commit_message(tmp: Path, subject: str, body: str = "") -> str:
+    args = ["commit", "-q", "--allow-empty", "-m", subject]
+    if body:
+        args += ["-m", body]
+    _git_quiet(tmp, *args)
+    return _git_quiet(tmp, "rev-parse", "--short=12", "HEAD").decode("ascii").strip()
+
+
+def test_red_range_form_refuses_session_link_in_a_commit_message_through_guard():
+    """Through tools/repo-guard.sh `--base` (the form CI job `guard` and pre-push run): the commit whose
+    message carries the trailer is named and refused; the clean commits of the range are not."""
+    tmp = make_fixture("fix/selftest-red-range-session-link")
+    try:
+        commit_fixture(tmp)
+        base = _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip()
+        clean_one = _commit_message(tmp, "feat: first clean commit", _CO_AUTHOR)
+        bad = _commit_message(tmp, "feat: commit carrying the trailer", f"{_CO_AUTHOR}\n{_SESSION_TRAILER}")
+        bare_url = _commit_message(tmp, "feat: commit carrying a bare url", f"see {_SESSION_URL}")
+        clean_two = _commit_message(tmp, "docs: prose naming claude.ai", "The claude.ai site is a web app.")
+        for form in (("--base", base), ("--range", f"{base}..HEAD")):
+            rc, out = run_guard(tmp, args=form)
+            assert rc != 0, f"expected nonzero exit for {form}, got {rc}\n{out}"
+            line = [ln for ln in out.splitlines() if ln.startswith("FAIL [commit-session-link]")]
+            assert len(line) == 1, f"{form}: expected one FAIL [commit-session-link] line\n{out}"
+            assert bad in line[0] and bare_url in line[0], f"{form}: the refused commits are not named: {line[0]}"
+            assert clean_one not in line[0] and clean_two not in line[0], f"{form}: a clean commit was named: {line[0]}"
+    finally:
+        cleanup(tmp)
+
+
+def test_green_range_form_accepts_clean_commit_messages_through_guard():
+    tmp = make_fixture("fix/selftest-green-range-session-link")
+    try:
+        commit_fixture(tmp)
+        base = _git_quiet(tmp, "rev-parse", "HEAD").decode("ascii").strip()
+        _commit_message(tmp, "feat: first clean commit", _CO_AUTHOR)
+        _commit_message(tmp, "docs: prose naming claude.ai", "The claude.ai site is a web app; Claude-" + "Session is not written here.")
+        rc, out = run_guard(tmp, args=("--base", base))
+        assert "FAIL [commit-session-link]" not in out, out
+        assert re.search(r"ok   \[commit-session-link\] no claude\.ai session link in a commit message of ", out), out
+    finally:
+        cleanup(tmp)
+
+
+def test_session_link_pattern_is_the_same_in_hook_and_guard():
+    """The commit-time form and the range form hold the same pattern, so a message
+    refused by one is refused by the other."""
+    found = {}
+    for label, path in (("commit-msg", REPO_ROOT / ".githooks" / "commit-msg"), ("repo-guard", REPO_ROOT / "tools" / "repo-guard.sh")):
+        rows = re.findall(r"^\s*SESSION_LINK_RE='([^']+)'\s*$", path.read_text(encoding="utf-8"), re.MULTILINE)
+        assert len(rows) == 1, f"{label}: expected exactly one SESSION_LINK_RE assignment, found {len(rows)}"
+        found[label] = rows[0]
+    assert found["commit-msg"] == found["repo-guard"], found
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -1904,6 +2373,25 @@ ALL_TESTS = [
     test_green_pr_merge_excludes_live_base_squash_commit,
     test_red_pr_merge_still_rejects_branch_goal_evidence_commit,
     test_red_line_endings_staged_bypass_worktree_restore,
+    test_green_staged_scope_ignores_unstaged_violators_direct,
+    test_red_tree_wide_form_refuses_unstaged_violators_direct,
+    test_red_staged_scope_refuses_staged_blob_over_clean_worktree_direct,
+    test_green_staged_scope_reads_index_not_worktree_direct,
+    test_staged_scope_with_nothing_staged_checks_nothing_direct,
+    test_red_staged_scope_widens_when_gitattributes_is_staged_direct,
+    test_red_staged_scope_widens_when_the_check_itself_is_staged_direct,
+    test_green_staged_scope_skips_paths_attributed_unset_text_direct,
+    test_green_hook_form_scopes_four_checks_to_staged_paths_through_guard,
+    test_red_ci_form_runs_tree_wide_when_scope_is_unset_through_guard,
+    test_red_hook_form_refuses_staged_violators_through_guard,
+    test_hook_passes_staged_scope_and_ci_runs_tree_wide,
+    test_red_commit_msg_refuses_session_trailer_and_url,
+    test_green_commit_msg_accepts_co_author_only_and_claude_prose,
+    test_commit_msg_keeps_its_existing_checks,
+    test_red_git_commit_is_refused_end_to_end_by_commit_msg_hook,
+    test_red_range_form_refuses_session_link_in_a_commit_message_through_guard,
+    test_green_range_form_accepts_clean_commit_messages_through_guard,
+    test_session_link_pattern_is_the_same_in_hook_and_guard,
     test_red_powershell_launcher_shape,
     test_red_powershell_launcher_shape_preceding_assignment,
     test_red_powershell_named_launcher_shape,
