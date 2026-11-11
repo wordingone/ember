@@ -9,7 +9,7 @@ Mutants at the end re-run the scenarios against a deliberately broken module and
 Run: python tests/gh_head_fetch_red_test.py   (exit 0 = ALL PASS; HEAD_NO_MUTANTS=1 skips the mutants)"""
 import os, sys, re, io, json, time, calendar, tempfile, threading, subprocess, pathlib, collections, contextlib
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, HERE); sys.path.insert(0, HERE + "/tests")
+sys.path.insert(0, HERE)      # the tests dir is already sys.path[0] when this file runs as a script
 import gh_snapshot_fetch_red_test as S                    # synthetic-git helpers + the write_gate stub + the forced temp lane root
 import gh_snapshot_fetch as G
 
