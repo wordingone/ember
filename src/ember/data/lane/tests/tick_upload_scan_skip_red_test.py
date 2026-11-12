@@ -88,6 +88,7 @@ def go(lane, running=False, listing_raises=False, sig_raises=False, src=None, de
         return "SIG"
     stub_th.signature = _sig
     stub_mb = types.ModuleType("mb_send"); stub_mb.send = lambda *a, **k: mails.append(a)
+    stub_pg = types.ModuleType("pack_gates"); stub_pg.status = lambda *a, **k: ("pass", "stub: the pack-gates gate has its own red (pack_gates_red_test.py); this red is about the scan gate")      # fixture packs sit under packed/ and the pack gate applies by location
     stub_dg = types.ModuleType("defender_guard"); stub_dg.check = lambda *a, **k: (DG["ok"], "" if DG["ok"] else "defender guard: 1 detection on a scan scratch path inside the scan window")
     class _Api:
         def list_repo_tree(self, *a, **k): return iter([])      # nothing on the Hub: every local file is missing
@@ -95,9 +96,9 @@ def go(lane, running=False, listing_raises=False, sig_raises=False, src=None, de
     pss = real_pss
     if decision is not REAL:
         pss = types.ModuleType("pack_scan_status"); pss.__dict__.update({k: v for k, v in real_pss.__dict__.items() if not k.startswith("__")}); pss.push_decision = lambda *a, **k: decision
-    names = ("upload_refuse", "hf_cap", "th_pack_scan", "mb_send", "huggingface_hub", "pack_scan_status", "defender_guard")
+    names = ("upload_refuse", "hf_cap", "th_pack_scan", "mb_send", "huggingface_hub", "pack_scan_status", "defender_guard", "pack_gates")
     old = {k: sys.modules.get(k) for k in names}
-    sys.modules.update(upload_refuse=stub_ur, hf_cap=stub_cap, th_pack_scan=stub_th, mb_send=stub_mb, huggingface_hub=stub_hf, pack_scan_status=pss, defender_guard=stub_dg)
+    sys.modules.update(upload_refuse=stub_ur, hf_cap=stub_cap, th_pack_scan=stub_th, mb_send=stub_mb, huggingface_hub=stub_hf, pack_scan_status=pss, defender_guard=stub_dg, pack_gates=stub_pg)
     d = None
     try:
         ns.setdefault("refresh_listing", lambda: "")      # the listing refresh has its own red (tick_listing_refresh_red_test.py); this test is about the push decision

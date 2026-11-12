@@ -11,6 +11,8 @@ of loops/tick.py run against a temp lane (stubbed spawn, Hub, mail). Cases:
  e) intake(): pack without rows -> no intake.json, no NEW_PACKED, GATES_PENDING named, one pack_gates run spawned; refused rows -> no intake.json, GATE_REFUSED; PASS rows -> intake.json + NEW_PACKED
  f) upload(): text pack without rows -> not pushed (Hub never listed), pack_gates run spawned; refused -> blocked line; PASS -> the upload gets past the gate (Hub listed)
  g) mutants: status() that always says pass makes e) and f) FAIL (the assertions bite); a runner that treats exit 2 as pass makes d) FAIL
+ h) #2478 review: a pack with zero documents exits 2 in the real held-out check (pending, never pass); a backslash EMBER_LANE_ROOT does not skip the upload gate; a text pack under packed/ with NO ledger is not pushed (pending, no run spawned);
+    run() strips HC_INDEX/HC_PACK_ROOT from the inherited environment; mutants: un-normalised ROOT, or gating only when a ledger exists, make the h) upload assertions FAIL
 Needs numpy, zstandard, xxhash (as the lane). No network, no live lane files; writes only under a temp dir."""
 import os, sys, json, glob, time, types, hashlib, tempfile, shutil, subprocess
 import numpy as np
@@ -119,8 +121,9 @@ def tick_intake(root, spawns):
     except Done as e: return e.status, e.note
 
 
-def tick_upload(root, spawns, listed):
+def tick_upload(root, spawns, listed, bs=False, src=None):
     ns = lane_ns(root, spawns); bad = []
+    if bs: ns["ROOT"] = root.replace("/", chr(92))      # EMBER_LANE_ROOT written with backslashes; items keep their forward-slash local path
     loc = root + "/packed/pk"
     json.dump([dict(name="train-pk", repo="acct/x-private", path="text/pk", local=loc, approved_by="test")], open(root + "/loops/approved-uploads.json", "w"))
     class Api:
@@ -130,7 +133,7 @@ def tick_upload(root, spawns, listed):
     old = {k: sys.modules.get(k) for k in mods}; sys.modules.update(mods)
     ns["sha256f"] = PG._sha256f
     try:
-        exec(UPLOAD_SRC, ns)
+        exec(src or UPLOAD_SRC, ns)
         try: ns["upload"]()
         except Done as e: return e.status, e.note
     finally:
@@ -150,10 +153,10 @@ def e_cases(tag):
     r = fresh_root("e0" + tag); make_pack(r, "pk", CLEAN); sp = []
     out["none"] = (tick_intake(r, sp), sp, os.path.exists(r + "/packed/pk/intake.json"))
     # refused rows
-    clear_rows(); r = fresh_root("e1" + tag); d = make_pack(r, "pk", CLEAN, period2=True); sp = []; PG.run("pk", d, out=OUT, env=ENV)
+    clear_rows(); r = fresh_root("e1" + tag); d = make_pack(r, "pk", CLEAN, period2=True); sp = []; PG.run("pk", d, out=OUT, env=dict(ENV, HC_PACK_ROOT=r + "/packed"))
     out["refused"] = (tick_intake(r, sp), sp, os.path.exists(r + "/packed/pk/intake.json"))
     # pass rows
-    clear_rows(); r = fresh_root("e2" + tag); d = make_pack(r, "pk", CLEAN); sp = []; PG.run("pk", d, out=OUT, env=ENV)
+    clear_rows(); r = fresh_root("e2" + tag); d = make_pack(r, "pk", CLEAN); sp = []; PG.run("pk", d, out=OUT, env=dict(ENV, HC_PACK_ROOT=r + "/packed"))
     out["pass"] = (tick_intake(r, sp), sp, os.path.exists(r + "/packed/pk/intake.json"))
     return out
 
@@ -172,7 +175,7 @@ def run_wiring(tag):
     for label, mk, run_first in (("none", dict(), False), ("refused", dict(period2=True), True), ("pass", dict(), True)):
         r = fresh_root("f" + label + tag); d = make_pack(r, "pk", CLEAN, **mk)
         open(d + "/intake.json", "w").write("{}")
-        if run_first: PG.run("pk", d, out=OUT, env=ENV)
+        if run_first: PG.run("pk", d, out=OUT, env=dict(ENV, HC_PACK_ROOT=r + "/packed"))
         sp = []; listed = []; res_[label] = (tick_upload(r, sp, listed), sp, listed)
         clear_rows()
     (dn, spn, ln), (dr, spr, lr), (dp, spp, lp) = res_["none"], res_["refused"], res_["pass"]
@@ -182,6 +185,37 @@ def run_wiring(tag):
 
 
 run_wiring("")
+# h) review fixes
+d = make_pack(TMP, "zerodocs", [])
+p0 = subprocess.run([sys.executable, LANE + "/heldout_check_pack.py", "zerodocs"], capture_output=True, text=True, env=dict(os.environ, **ENV))
+chk("h) real held-out check on a pack with zero documents exits 2 (error)", p0.returncode == 2 and "no documents" in p0.stdout)
+st, det = real_run("zerodocs", d)
+chk("h) a zero-document pack is pending, never pass", st == "pending")
+seen = []
+os.environ["HC_INDEX"] = "X:/leak.npy"; os.environ["HC_PACK_ROOT"] = "X:/leak"
+try:
+    d = make_pack(TMP, "envpack", CLEAN); PG.run("envpack", d, out=OUT, runner=lambda cmd, e: (seen.append(dict(e)) or (0, "ok")))
+finally: os.environ.pop("HC_INDEX", None); os.environ.pop("HC_PACK_ROOT", None)
+chk("h) run() drops HC_INDEX/HC_PACK_ROOT from the inherited environment", seen and all("HC_INDEX" not in e and "HC_PACK_ROOT" not in e for e in seen))
+
+
+def upload_case(label, mk_ledger=True, bs=False, src=None):
+    clear_rows(); r = fresh_root("h" + label); d = make_pack(r, "pk", CLEAN)
+    if not mk_ledger: os.remove(d + "/ledger.jsonl")
+    open(d + "/intake.json", "w").write("{}"); sp = []; listed = []
+    return tick_upload(r, sp, listed, bs=bs, src=src), sp, listed
+
+
+(dbs, spbs, lbs) = upload_case("bs", bs=True)
+chk("h) backslash ROOT, no rows: Hub never listed (gate not skipped), pack_gates run spawned", not lbs and dbs and "pack gates pending" in dbs[1] and any("pack_gates.py run pk" in s for s in spbs))
+(dnl, spnl, lnl) = upload_case("nl", mk_ledger=False)
+chk("h) no ledger.jsonl: not pushed (Hub never listed), named pending, no run spawned", not lnl and dnl and "pack gates pending" in dnl[1] and not spnl)
+M1 = UPLOAD_SRC.replace('_rootn = ROOT.replace(chr(92), "/").rstrip("/")', '_rootn = ROOT'); assert M1 != UPLOAD_SRC
+(_, _, lm1) = upload_case("m1", bs=True, src=M1)
+chk("h) MUTANT un-normalised ROOT: the backslash assertion can FAIL (Hub listed = fail-open)", bool(lm1))
+M2 = UPLOAD_SRC.replace('if _lp.lower().startswith(_rootn.lower() + "/packed/"):', 'if _lp.lower().startswith(_rootn.lower() + "/packed/") and os.path.exists(_lp + "/ledger.jsonl"):'); assert M2 != UPLOAD_SRC
+(_, _, lm2) = upload_case("m2", mk_ledger=False, src=M2)
+chk("h) MUTANT gate only with a ledger: the no-ledger assertion can FAIL (Hub listed = fail-open)", bool(lm2))
 # g) mutants
 real_status = PG.status
 PG.status = lambda name, pack_dir, out=None: ("pass", "MUTANT")

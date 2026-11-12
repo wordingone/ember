@@ -57,8 +57,11 @@ def status(name, pack_dir, out=None):
 def run(name, pack_dir, out=None, runner=None, env=None):
     """Run each gate that has no current PASS row and write its row. runner(cmd, env) -> (rc, text) lets a red inject outcomes. Returns the status after the run."""
     out = out or OUT; os.makedirs(out, exist_ok=True); pack_dir = pack_dir.rstrip("/\\")
-    cur = _sha256f(pack_dir + "/ledger.jsonl")
-    e = dict(os.environ); e.update(env or {})
+    try: cur = _sha256f(pack_dir + "/ledger.jsonl")
+    except Exception: return status(name, pack_dir, out)      # no readable ledger: nothing to bind a row to, pending
+    e = dict(os.environ)
+    for k in ("HC_INDEX", "HC_PACK_ROOT"): e.pop(k, None)      # test-only overrides of heldout_check_pack.py never leak in from the inherited environment (only an explicit env= passes them)
+    e.update(env or {})
     for g in GATES:
         r = read_row(name, g, out)
         if isinstance(r, dict) and r.get("ledger_sha256") == cur and r.get("verdict") in ("pass", "refused"): continue
@@ -72,7 +75,9 @@ def run(name, pack_dir, out=None, runner=None, env=None):
         if os.path.exists(rp):
             try: os.replace(rp, rp + ".prev")
             except Exception: pass
-        tmp = rp + ".tmp"; json.dump(row, open(tmp, "w", encoding="utf-8"), indent=1); os.replace(tmp, rp)
+        tmp = rp + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh: json.dump(row, fh, indent=1)
+        os.replace(tmp, rp)
         if row["verdict"] == "refused": break      # one refusal is enough; the second gate is not worth the CPU
     return status(name, pack_dir, out)
 

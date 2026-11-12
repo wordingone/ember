@@ -17,4 +17,4 @@ for r in G.iter_objects(os.environ.get("HC_PACK_ROOT", (LANE_ROOT + "/packed")) 
     n += 1; h = gram_hashes(r["text"]); o = sum(overlap(i, h) for i in IDX)
     if o: hd += 1; hs += o
     if n >= mx: break
-print(name, "docs", n, "hit_docs", hd, "hit_sentences", hs, "PASS" if hd == 0 else "FAIL"); sys.exit(0 if hd == 0 else 1)
+print(name, "docs", n, "hit_docs", hd, "hit_sentences", hs, "ERROR(no documents)" if n == 0 else ("PASS" if hd == 0 else "FAIL")); sys.exit(2 if n == 0 else (0 if hd == 0 else 1))      # a pack with no documents proves nothing: exit 2 (error, never a pass); #2478 review

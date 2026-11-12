@@ -452,14 +452,15 @@ def upload():
     for it in todo:
         if it.get("hold"): acts.append(f"{it['name']}: HELD ({str(it['hold'])[:80]})"); continue      # per-item hold written by the lane (a rebuilt pack replaces it); never pushed while set
         _lp = it["local"].replace(chr(92), "/").rstrip("/")
-        if _lp.startswith(ROOT + "/packed/") and os.path.exists(_lp + "/ledger.jsonl"):      # #2449 item 2: the upload gate refuses a text pack without a current degenerate+held-out PASS (media packs have their own gates)
+        _rootn = ROOT.replace(chr(92), "/").rstrip("/")      # both sides normalised (#2478 review): a backslash EMBER_LANE_ROOT must not skip the gate
+        if _lp.lower().startswith(_rootn.lower() + "/packed/"):      # #2449 item 2: gate on LOCATION, not on a ledger being present: the upload gate refuses a text pack without a current degenerate+held-out PASS (media packs live under media-packed/ and have their own gates)
             try: sys.path.insert(0, ROOT + "/scripts"); import pack_gates; _gs, _gd = pack_gates.status(os.path.basename(_lp), _lp)
             except Exception as _e: _gs, _gd = "pending", "pack_gates error " + type(_e).__name__
             if _gs != "pass":
                 if _gs == "refused": bad.append(f"{it['name']}: NOT PUSHED, pack gate {_gd} (ESCALATE)")
                 else:
                     acts.append(f"{it['name']}: NOT PUSHED, pack gates pending ({_gd})")
-                    if not alive("pack_gates.py run"): spawn(f"python scripts/pack_gates.py run {os.path.basename(_lp)}", ROOT + f"/logs/pack-gates-{os.path.basename(_lp)}.log")
+                    if os.path.exists(_lp + "/ledger.jsonl") and not alive("pack_gates.py run"): spawn(f"python scripts/pack_gates.py run {os.path.basename(_lp)}", ROOT + f"/logs/pack-gates-{os.path.basename(_lp)}.log")      # no ledger = nothing to run yet: pending
                 continue
         if alive(f"hf upload {it['repo']} {it['local']} {it['path']}") or alive(f"hf.exe upload {it['repo']} {it['local']} {it['path']}"): acts.append(f"{it['name']}: upload in progress"); continue
         if _other_push_alive(it["local"]): acts.append(f"{it['name']}: waits (one upload at a time, lead 83126)"); continue
