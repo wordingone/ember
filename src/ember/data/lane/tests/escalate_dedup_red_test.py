@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Red for loops/escalate_dedup.py (lead 83155): the same known escalation twice gives one ESCALATE; a change escalates again."""
-import os, sys, json, shutil, tempfile
+import os, sys, json, shutil, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "loops"))
 import escalate_dedup as E
@@ -34,6 +34,13 @@ try:
     json.dump({"items": ["pack-z: stuck (was pass earlier: escalate)"], "head": None, "ts": "2026-01-01T00:00:00"}, open(st, "w"))
     n, sfx = E.apply("pack-z: stuck (was PASS earlier: ESCALATE)", 0, st, lg)
     chk("f3) an old-format state file (items only, last tick) is read as seen at its ts; an old ts is stale so it escalates", "ESCALATE" in n)
+    PN = "pack-p: persistent (was PASS earlier: ESCALATE)"; first = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 23 * 3600))
+    json.dump({"items": [], "seen": {E.sig(PN): first}, "head": None, "ts": first}, open(st, "w"))
+    n, sfx = E.apply(PN, 0, st, lg); n, sfx = E.apply(PN, 0, st, lg)
+    chk("n) a persistent item first escalated 23 h ago is a known repeat and its first-escalated stamp is NOT refreshed by later ticks (lead 83381)", "ESCALATE" not in n and json.load(open(st))["seen"][E.sig(PN)] == first)
+    old = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 25 * 3600)); json.dump({"items": [], "seen": {E.sig(PN): old}, "head": None, "ts": old}, open(st, "w"))
+    n, sfx = E.apply(PN, 0, st, lg)
+    chk("n2) the same persistent item first escalated 25 h ago escalates again, with a fresh first-escalated stamp", "ESCALATE" in n and json.load(open(st))["seen"][E.sig(PN)] > old)
     n, sfx = E.apply("pack-d: STUCK x; y", 3, st, lg)
     chk("g) blocked-3-ticks suffix shown the first time", sfx is True)
     n, sfx = E.apply("pack-d: STUCK x; y", 4, st, lg)

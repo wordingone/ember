@@ -5,9 +5,10 @@
 
 A tick note is split into items on "; ". An item is escalating when it carries the word ESCALATE. Its signature is the item text with digits, times and
 whitespace normalised away, so a counter or a clock moving does not make it new, while a different pack name or a different state does.
-The state file remembers each escalating signature with the time it was last seen (lead 83299: the old previous-tick-only memory re-escalated an item that
-dropped out of one tick and came back): an item seen within SEEN_TTL_H hours is a known repeat (its ESCALATE word is replaced by "known repeat"); a signature
-never seen, or not seen for SEEN_TTL_H hours, escalates. A changed state or pack name is a different signature, so it still escalates at once.
+The state file remembers each escalating signature with the time it FIRST escalated (lead 83299: the old previous-tick-only memory re-escalated an item that
+dropped out of one tick and came back; lead 83381: refreshing the time on every tick silenced a persistent item forever): an item first escalated within SEEN_TTL_H
+hours is a known repeat (its ESCALATE word is replaced by "known repeat"), and its stamp is NOT refreshed, so an item that never clears escalates again every
+SEEN_TTL_H hours; a signature never seen, or first escalated more than SEEN_TTL_H hours ago, escalates. A changed state or pack name is a different signature, so it still escalates at once.
 The "blocked 3 ticks" suffix follows the same rule on the note head (the part before " | ").
 """
 import json, os, re, time
@@ -57,7 +58,8 @@ def apply(note, blocked, state_path, log_path):
     try:
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
         tmp = state_path + ".tmp"
-        new_seen = {k: v for k, v in prev_seen.items() if _fresh(v, now)}; new_seen.update({k: stamp for k in cur})
+        new_seen = {k: v for k, v in prev_seen.items() if _fresh(v, now)}
+        new_seen.update({k: (prev_seen[k] if k in prev_items else stamp) for k in cur})      # first-escalated time: a known repeat keeps its stamp, so a persistent item re-escalates every SEEN_TTL_H (lead 83381)
         json.dump({"items": sorted(cur), "seen": new_seen, "head": head, "ts": stamp}, open(tmp, "w", encoding="utf-8")); os.replace(tmp, state_path)
         if repeats:
             with open(log_path, "a", encoding="utf-8") as f: f.write(json.dumps(dict(ts=time.strftime("%Y-%m-%dT%H:%M:%S%z"), repeats=repeats)) + "\n")
