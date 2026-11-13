@@ -88,5 +88,16 @@ try:
     b = PS.bound_paths(); check("real gate receipts parse (%d receipts, %d bound paths)" % (b["receipts"], len(b["paths"])), b["receipts"] > 0 and len(b["paths"]) > 0)
 except Exception as e:
     check("real gate receipts parse: " + repr(e), False)
+# real live-receipts root (read only): the cross-reference scan parses it and binds at least one root; the #2116 image-n256 root (the case #2486 is about) must read as bound if it still exists
+REAL_LIVE = (M_ROOT + "/ember-live-receipts")
+try:
+    rr = PS._live_roots(REAL_LIVE); first = list(rr.items())[:3]
+    check("real live-receipts root scans without error and binds at least one root (%d roots bound)" % len(rr), len(rr) > 0)
+    for k, v in first: print("   bound:", k.split("/")[-1][:60], "|", v[:110])
+    R2116 = REAL_LIVE + "/issue2116-image-n256-lineage-b185faf1-20260905T2119Z"
+    if os.path.isdir(R2116): check("the #2116 image-n256 root reads as bound", PS._norm(R2116) in rr)
+    else: print("NOTE the #2116 image-n256 root no longer exists on disk (removed by the 2026-10-07 reclaim), so its bound state cannot be exercised")
+except Exception as e:
+    check("real live-receipts root scan: " + repr(e), False)
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)

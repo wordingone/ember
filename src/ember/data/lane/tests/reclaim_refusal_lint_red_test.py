@@ -47,7 +47,7 @@ w("e_reclaim_readonly.py", "print('census only')\n")
 w("f_other_bad.py", "import shutil\nshutil.rmtree(p)\n")
 check("an unguarded reclaim script is flagged, and only it (RETIRED, bound_hit, verified_remove, read-only and non-reclaim names pass)", offenders(T) == ["a_reclaim_bad.py"])
 real = offenders; offenders = lambda d: []
-check("MUTANT (lint off) flags nothing, so the red above is real", offenders(T) == [])
+check("MUTANT (lint off) no longer yields the flagged-only-the-bad-script result, so the first check discriminates", offenders(T) != ["a_reclaim_bad.py"])
 offenders = real
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
