@@ -24,7 +24,7 @@ T = tempfile.mkdtemp(dir=SCR, prefix="gb-test-").replace("\\", "/"); G = T + "/g
 LED = S + "/h-ratio-k3/h-ledger-v1.jsonl"; open(LED, "w").write("x"); open(S + "/other-dir/f.bin", "w").write("y"); open(S + "/h-extra/z.bin", "w").write("z")
 PSF = T + "/protected-set.json"
 json.dump({"markers": [{"marker": "keep-this-hour-zz-20991231T000000Z/"}], "reserve_markers": []}, open(PSF, "w"))
-PS.PATH = PSF; PS.GATE_DIR = G
+PS.PATH = PSF; PS.GATE_RECEIPTS = G
 rcp = lambda name, inputs: json.dump({"inputs": inputs, "verdict": "PASS"}, open(G + "/" + name, "w"))
 rcp("c1c2-pack-a.json", {"trained": LED, "trained_sha256": "00", "candidate": T + "/packed/pack-a/ledger.jsonl", "trained_end": 5})
 hit = lambda p: V.protected_hit(p)[0] is not None
@@ -64,7 +64,7 @@ check("MUTANT (bound check off) lets the ledger dir through, so the red above is
 PS.bound_hit = orig
 check("restored: refused again", hit(S + "/h-ratio-k3"))
 # real receipts: the live set parses (read only)
-PS.GATE_DIR = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state"); PS.PATH = (LANE_ROOT + "/loops/protected-set.json")
+PS.GATE_RECEIPTS = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state"); PS.PATH = (LANE_ROOT + "/loops/protected-set.json")
 try:
     b = PS.bound_paths(); check("real gate receipts parse (%d receipts, %d bound paths)" % (b["receipts"], len(b["paths"])), b["receipts"] > 0 and len(b["paths"]) > 0)
 except Exception as e:

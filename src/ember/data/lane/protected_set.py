@@ -14,7 +14,7 @@ from lane_config import LANE_ROOT, M_ROOT, SEAT_TRAIN
 import os, re, json, glob, hashlib
 
 PATH = (LANE_ROOT + "/loops/protected-set.json")
-GATE_DIR = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state")          # gate receipts (c1c2-*.json, c1c2-*/**/*.json): every path in a receipt's `inputs` is bound (lead 83469; 2026-11-13 the C2 trained ledger was deleted as "regenerable")
+GATE_RECEIPTS = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state")          # gate receipts (c1c2-*.json, c1c2-*/**/*.json): every path in a receipt's `inputs` is bound (lead 83469; 2026-11-13 the C2 trained ledger was deleted as "regenerable")
 _HERE = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/").rstrip("/")
 _BROAD = {"", "b:", "b:/m", _HERE.lower(), os.path.dirname(_HERE).lower(), "ember-live-receipts", "b:/m/ember-live-receipts"}
 
@@ -85,7 +85,7 @@ def _receipt_files(gate_dir):
 
 def bound_paths(gate_dir=None, ps_path=None):
     """-> dict(paths=frozenset of normalised lower-case bound paths, receipts=int, source=dict path -> first receipt naming it). Raises ProtectedSetError (fail closed)."""
-    gd = gate_dir or GATE_DIR; files = _receipt_files(gd)
+    gd = gate_dir or GATE_RECEIPTS; files = _receipt_files(gd)
     if not files: raise ProtectedSetError("gate-bound paths: no c1c2 receipts under %s (cannot know what is bound): deleters refuse" % gd)
     sig = tuple((f, os.stat(f).st_mtime_ns, os.stat(f).st_size) for f in files)
     got = _cache.get(sig)
