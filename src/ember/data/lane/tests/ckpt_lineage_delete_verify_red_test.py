@@ -20,6 +20,8 @@ def check(label, cond):
 
 
 SCR = (LANE_ROOT + "/scratch"); os.makedirs(SCR, exist_ok=True)
+_REAL = [LANE_ROOT + "/logs/manifests-20261108/" + n for n in ("ckpt-lineage-delete-manifest.jsonl", "ckpt-lineage-delete-receipts.jsonl", "ckpt-lineage-delete-decisions.jsonl")]
+_REAL0 = [(os.path.getsize(f), os.path.getmtime(f)) if os.path.exists(f) else None for f in _REAL]      # no-leak guard: this red must never write the real manifest, receipts or decisions file (the DEC leak of 2026-11-13 put cld-test rows there)
 T = tempfile.mkdtemp(dir=SCR, prefix="cld-test-"); MB = 1 << 20
 sha = lambda b: hashlib.sha256(b).hexdigest()
 old = time.time() - 7200
@@ -39,7 +41,7 @@ for m in (G, E, B): sys.modules[m.__name__] = m
 def load(argv):
     sys.argv = ["ckpt_lineage_delete.py"] + argv
     spec = importlib.util.spec_from_file_location("cld_" + str(time.time_ns()), SC + "/ckpt_lineage_delete.py"); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-    m.CHK = T + "/chk.json"; m.PASS = T + "/PASS"; m.MAN = T + "/man/manifest.jsonl"; m.RCPT = T + "/man/receipts.jsonl"; m.BK_LOGS = (T + "/bk.log",); m.OLD = T + "/old.json"; m.PROBES = T + "/probes.json"
+    m.CHK = T + "/chk.json"; m.PASS = T + "/PASS"; m.MAN = T + "/man/manifest.jsonl"; m.RCPT = T + "/man/receipts.jsonl"; m.DEC = T + "/man/decisions.jsonl"; m.BK_LOGS = (T + "/bk.log",); m.OLD = T + "/old.json"; m.PROBES = T + "/probes.json"
     m.FREEZE = T + "/NO-FREEZE.flag"; os.makedirs(T + "/man", exist_ok=True); open(m.PASS, "w").write("ok")
     return m
 
@@ -196,5 +198,6 @@ m = load(["--apply", "--only-probes", "--expect-dirs", T + "/expect2.json", "--r
 check("GREEN F-A probe branch: both names of the inode are removed (nlink 2 then 1), exit 0, nothing kept", rc == 0 and os.listdir(P2) == [] and "deleted 2 names" in out and "KEPT" not in out)
 src = open(SC + "/ckpt_lineage_delete.py", encoding="utf-8").read()
 check("source: no bare os.remove in the script, every delete goes through verified_remove", "os.remove(" not in src and "VR.remove_verified(" in src and "VR.remove_ruled(" in src)
+check("no leak: the real manifest, receipts and decisions files are untouched by this red", [(os.path.getsize(f), os.path.getmtime(f)) if os.path.exists(f) else None for f in _REAL] == _REAL0)
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)

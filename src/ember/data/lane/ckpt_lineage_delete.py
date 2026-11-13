@@ -51,10 +51,10 @@ def sha256(p):
 DEC = os.path.dirname(MAN) + "/ckpt-lineage-delete-decisions.jsonl"      # issue 2481: one row per file saying what this run DECIDED, fsynced BEFORE the removal is attempted (the manifest is the plan, the receipts are the outcome)
 
 
-def _dec(r, cur, decision, marker=None):
-    """Append and fsync the decision row for file r under the protected set `cur` re-read for THIS file. decision = "remove" (admitted for removal now) or "kept" (with the marker that kept it)."""
+def _dec(r, cur, decision, marker=None, reason=None, outcome_of=None):
+    """Append and fsync the decision row for file r under the protected set `cur` re-read for THIS file. decision = "remove" (admitted for removal now) or "kept" (with the marker that kept it, or, when the removal call refused the file after its `remove` row, with `reason` = the refusal text and `outcome_of` = "remove"; lead 83411)."""
     row = dict(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), child=r["child"], path=r["path"], size=r["size"], decision=decision, marker=marker, protected_set_sha256=cur["sha256"], protected_set_path=cur["path"],
-               planned_under_sha256=r.get("protected_set_sha256_at_plan"))
+               planned_under_sha256=r.get("protected_set_sha256_at_plan"), reason=reason, outcome_of=outcome_of)
     with open(DEC, "a", encoding="utf-8") as df:
         df.write(json.dumps(row) + chr(10)); df.flush(); os.fsync(df.fileno())
 
@@ -171,6 +171,7 @@ def main():
             res = VR.remove_verified(r["path"], r["hf_repo"], r["hf_path"], roots=roots, receipt=RCPT, authority=r["authority"], reader=reader, require_nlink=req, extra=dict(child=r["child"], via=r["verified_via"], protected_set_sha256=cur["sha256"], protected_set_path=cur["path"]))   # nlink as planned: a name added after the plan refuses (#2459 F5)
         else:
             res = VR.remove_ruled(r, roots=roots, receipt=RCPT, require_nlink=req)
+        if not res["ok"]: _dec(r, cur, "kept", reason=res["why"], outcome_of="remove")      # follow-up to 2481 (lead 83411): a file refused INSIDE remove_verified/remove_ruled keeps its `remove` row, so a second row says it was kept and why
         if res["ok"]: n_ok += 1; nl_left[r["ino"]] = req - 1
         elif res["why"].startswith("remove failed: PermissionError"): failed.append(r["path"])          # file held open by another process: left in place, retried on the next run
         else: kept.append((r["path"], res["why"]))
