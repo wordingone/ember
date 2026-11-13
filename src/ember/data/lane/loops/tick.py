@@ -226,13 +226,24 @@ def backlog_state(start_missing=True):
 
 def refresh_listing():
     """lead 83208: loops/trainable-listing.json is rewritten by every intake and upload tick (after the scans it reads), so a read of it is never older than one tick. A failed refresh keeps the old file, says so in the
-    receipt line and never fails the tick. Returns the text appended to the receipt note."""
+    receipt line and never fails the tick. Returns the text appended to the receipt note.
+    lead 83284: the never-trained columns need the ledgers of the hours already trained: loops/trained-ledgers.json {"ledgers": [path, ...]} (h42 and h49 seeded) is passed as --trained, and the run time of
+    the refresh is in the receipt note (it shares the core budget of the tick). No list file = the columns stay empty AND the note says so."""
+    t0 = time.time(); led = []; nt = ""
     try:
-        r = subprocess.run([sys.executable, ROOT + "/scripts/trainable_listing.py"], capture_output=True, text=True, timeout=180, cwd=ROOT)
-        if r.returncode != 0: return f" | trainable_listing refresh FAILED rc={r.returncode} (old file kept)"
+        led = [x for x in json.load(open(ROOT + "/loops/trained-ledgers.json", encoding="utf-8")).get("ledgers", []) if isinstance(x, str) and x.strip()]
+    except Exception as _e: nt = f"; never-trained NOT computed (no readable loops/trained-ledgers.json: {type(_e).__name__})"
+    args = [sys.executable, ROOT + "/scripts/trainable_listing.py"]
+    for x in led: args += ["--trained", x]
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=180, cwd=ROOT)
+        took = " in %.0f s" % (time.time() - t0)
+        if r.returncode != 0: return f" | trainable_listing refresh FAILED rc={r.returncode}{took} (old file kept)"
         j = json.load(open(ROOT + "/loops/trainable-listing.json", encoding="utf-8"))
-        return " | listing refreshed " + time.strftime("%H:%M") + ": " + ", ".join("%s %d packs %d tok" % (k, v.get("packs", 0), v.get("tokens", 0)) for k, v in sorted(j.get("totals", {}).items()) if isinstance(v, dict))
-    except Exception as _e: return f" | trainable_listing refresh FAILED {type(_e).__name__} (old file kept)"
+        if led and j.get("trained_errors"): nt = "; TRAINED LEDGER NOT READ: " + ", ".join(os.path.basename(str(x.get("trained", ""))) for x in j["trained_errors"])
+        elif led: nt = "; never-trained from %d ledger(s)" % len(j.get("trained_sets", []))
+        return " | listing refreshed " + time.strftime("%H:%M") + took + nt + ": " + ", ".join("%s %d packs %d tok" % (k, v.get("packs", 0), v.get("tokens", 0)) + (" (never-trained min %d)" % v["never_trained_min"] if led and "never_trained_min" in v else "") for k, v in sorted(j.get("totals", {}).items()) if isinstance(v, dict))
+    except Exception as _e: return f" | trainable_listing refresh FAILED {type(_e).__name__} in {time.time() - t0:.0f} s (old file kept)"
 
 def done(status, note):
     if DRIFT_NOTE: note += ' | ' + DRIFT_NOTE      # an acknowledged drift is always visible in the receipt
@@ -354,11 +365,20 @@ def prep():
     done("worked" if any(a.startswith(("started", "packing")) for a in acts) else "idle", "; ".join(acts) or "nothing landed to prep")
 
 def intake():
-    new = []
+    new = []; gate_pending = []; gate_refused = []; _gspawn = False
     for p in sorted(glob.glob(ROOT + "/packed/*/")):
         p = p.rstrip("/\\"); name = os.path.basename(p)
         rp = p + "/receipt.json"; sm = p + "/source-manifest.jsonl"
         if not (os.path.exists(rp) and os.path.exists(sm)) or os.path.exists(p + "/intake.json"): continue
+        try:      # #2449 item 2 / lead 83284: no intake.json (= not announced, not uploadable) until the degenerate scan and the held-out overlap hold a PASS row on the CURRENT ledger sha
+            sys.path.insert(0, ROOT + "/scripts"); import pack_gates; _gs, _gd = pack_gates.status(name, p)
+        except Exception as _e: _gs, _gd = "pending", "pack_gates error " + type(_e).__name__
+        if _gs != "pass":
+            if _gs == "refused": gate_refused.append(name + " (" + _gd + ")")
+            else:
+                gate_pending.append(name + " (" + _gd + ")")
+                if not _gspawn and not alive("pack_gates.py run"): _gspawn = spawn(f"python scripts/pack_gates.py run {name}", ROOT + f"/logs/pack-gates-{name}.log")      # one pack at a time (CPU only)
+            continue
         r = json.load(open(rp)); rows = [json.loads(l) for l in open(sm, encoding="utf-8")]
         if any("content_date_max" not in x or "modality" not in x for x in rows): continue
         form = dict(name=name, dataset_id=r["dataset_id"], docs=r["docs"], content_tokens=r["content_tokens"], shards=r["shards"], objects=len(r["objects"]),
@@ -372,6 +392,8 @@ def intake():
     try:
         sys.path.insert(0, ROOT + "/scripts"); import pack_gate; _pg = pack_gate.sweep(); _pgs = " | " + pack_gate.summary(_pg)      # lead 82278: packed = all artifacts present, else in progress or an orphan (moved, receipted)
     except Exception as _e: _pgs = f" | pack_gate error {type(_e).__name__}: {_e}"
+    if gate_pending: _pgs += " | GATES_PENDING (not announced, not uploadable): " + "; ".join(gate_pending)
+    if gate_refused: _pgs += " | GATE_REFUSED (no intake, never uploaded; rebuild, ESCALATE): " + "; ".join(gate_refused)
     try:   # skill-probe contamination scan (lead 82428): every local text pack is scanned once against the frozen test split; a hit is PROBE_HIT <pack> in this line -> mail lead
         _packs = [os.path.basename(os.path.dirname(x)) for x in glob.glob(ROOT + "/packed/*/objects") if glob.glob(x + "/*.jsonl.zst")]
         if any(not os.path.exists(ROOT + f"/logs/probe-scan-{n}.json") for n in _packs) and not alive("probe_scan_all.py"): spawn("python scripts/probe_scan_all.py", ROOT + "/logs/probe-scan-all.out")
@@ -429,6 +451,17 @@ def upload():
         return False
     for it in todo:
         if it.get("hold"): acts.append(f"{it['name']}: HELD ({str(it['hold'])[:80]})"); continue      # per-item hold written by the lane (a rebuilt pack replaces it); never pushed while set
+        _lp = it["local"].replace(chr(92), "/").rstrip("/")
+        _rootn = ROOT.replace(chr(92), "/").rstrip("/")      # both sides normalised (#2478 review): a backslash EMBER_LANE_ROOT must not skip the gate
+        if _lp.lower().startswith(_rootn.lower() + "/packed/"):      # #2449 item 2: gate on LOCATION, not on a ledger being present: the upload gate refuses a text pack without a current degenerate+held-out PASS (media packs live under media-packed/ and have their own gates)
+            try: sys.path.insert(0, ROOT + "/scripts"); import pack_gates; _gs, _gd = pack_gates.status(os.path.basename(_lp), _lp)
+            except Exception as _e: _gs, _gd = "pending", "pack_gates error " + type(_e).__name__
+            if _gs != "pass":
+                if _gs == "refused": bad.append(f"{it['name']}: NOT PUSHED, pack gate {_gd} (ESCALATE)")
+                else:
+                    acts.append(f"{it['name']}: NOT PUSHED, pack gates pending ({_gd})")
+                    if os.path.exists(_lp + "/ledger.jsonl") and not alive("pack_gates.py run"): spawn(f"python scripts/pack_gates.py run {os.path.basename(_lp)}", ROOT + f"/logs/pack-gates-{os.path.basename(_lp)}.log")      # no ledger = nothing to run yet: pending
+                continue
         if alive(f"hf upload {it['repo']} {it['local']} {it['path']}") or alive(f"hf.exe upload {it['repo']} {it['local']} {it['path']}"): acts.append(f"{it['name']}: upload in progress"); continue
         if _other_push_alive(it["local"]): acts.append(f"{it['name']}: waits (one upload at a time, lead 83126)"); continue
         try: tree = {t.path: t for t in api.list_repo_tree(it["repo"], repo_type="dataset", path_in_repo=it["path"], recursive=True) if hasattr(t, "size")}

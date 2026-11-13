@@ -10,10 +10,11 @@ pass
 import numpy as np, overlap_gate as G
 from common import gram_hashes, overlap
 name = sys.argv[1]; mx = int(sys.argv[2]) if len(sys.argv) > 2 else 10**9
-IDX = [np.load(p, mmap_mode="r") for p in ((LANE_ROOT + "/heldout-index-full/heldout-sent-xxh64-full.npy"), (LANE_ROOT + "/heldout-index/wiki-heldout-2M.npy"), (LANE_ROOT + "/arxiv/heldout-pdf-sent-hashes.npy"))]
+_P = os.environ["HC_INDEX"].split(os.pathsep) if os.environ.get("HC_INDEX") else [(LANE_ROOT + "/heldout-index-full/heldout-sent-xxh64-full.npy"), (LANE_ROOT + "/heldout-index/wiki-heldout-2M.npy"), (LANE_ROOT + "/arxiv/heldout-pdf-sent-hashes.npy")]      # HC_INDEX / HC_PACK_ROOT: test overrides only (pack_gates red); production uses the defaults
+IDX = [np.load(p, mmap_mode="r") for p in _P]
 n = hd = hs = 0
-for r in G.iter_objects((LANE_ROOT + "/packed/") + name):
+for r in G.iter_objects(os.environ.get("HC_PACK_ROOT", (LANE_ROOT + "/packed")) + "/" + name):
     n += 1; h = gram_hashes(r["text"]); o = sum(overlap(i, h) for i in IDX)
     if o: hd += 1; hs += o
     if n >= mx: break
-print(name, "docs", n, "hit_docs", hd, "hit_sentences", hs, "PASS" if hd == 0 else "FAIL"); sys.exit(0 if hd == 0 else 1)
+print(name, "docs", n, "hit_docs", hd, "hit_sentences", hs, "ERROR(no documents)" if n == 0 else ("PASS" if hd == 0 else "FAIL")); sys.exit(2 if n == 0 else (0 if hd == 0 else 1))      # a pack with no documents proves nothing: exit 2 (error, never a pass); #2478 review
