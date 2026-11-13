@@ -66,6 +66,13 @@ def protected_hit(path):
     for m in marks:
         if m.lower().rstrip("/") + "/" in n or m.lower() in n:
             return m, "under a protected-set marker (" + m + ")"
+    try:                                  # lead 83469: a path bound by any gate receipt (or the declared bound_paths) is never removed, nor a directory holding one
+        import protected_set as _PS
+        q, why = _PS.bound_hit(path)
+    except Exception as e:
+        return "?", "gate-bound paths unreadable, every removal refused (%s)" % type(e).__name__
+    if q is not None:
+        return q, why
     return None, ""
 
 
