@@ -78,12 +78,64 @@ def _norm(p):
     return p.replace("\\", "/").rstrip("/").lower()
 
 
+def _walk_strings(v, key):
+    """Every string leaf of a nested dict/list with its dotted key (gap 1 of #2486: path lists nested inside `inputs`)."""
+    if isinstance(v, str): yield key, v
+    elif isinstance(v, dict):
+        for k, x in v.items(): yield from _walk_strings(x, (key + "." if key else "") + str(k))
+    elif isinstance(v, list):
+        for i, x in enumerate(v): yield from _walk_strings(x, "%s[%d]" % (key, i))
+
+
+# ---- lineage roots named by a live receipt (gap 1 of #2486) --------------------------------------------------------------------------------------------------------------------------
+# A live-receipts dir (a lineage root, e.g. the #2116 image-n256 root) that ANOTHER live receipt or issue contract names by absolute path is bound: the roots a parent/child/contract still points at are the ones that must not be reclaimed.
+# Self-references do not bind (otherwise every dir would be bound). Text scan of every *.json (depth <= 3, `objects` payload dirs pruned, first 8 MB of a file), so an unparseable file still counts. Cached by (path, mtime, size) of every scanned file.
+LIVE_RECEIPTS = (M_ROOT + "/ember-live-receipts")
+_LIVE_MAX_DEPTH, _LIVE_MAX_BYTES = 3, 8 << 20
+_live_cache = {}
+# Hour/probe/learning dirs are NOT bound by being named: later hours name their parents in routine metadata (67 of 98 hour dirs), and reclaiming old hour payloads is the reserve planner's job under the checkpoint-lineage
+# ancestry markers (ckpt_bound / protected-set.json). The cross-reference binds the custody and lineage roots (issue*, h*-mixed, ...) that only a receipt or contract still points at.
+_LIVE_HOUR = re.compile(r"^cia-(hour|probe|learning)-", re.IGNORECASE)
+
+
+def _live_files(root):
+    out = []
+    for dp, dn, fn in os.walk(root):
+        depth = dp[len(root):].replace("\\", "/").count("/")
+        dn[:] = [d for d in dn if d != "objects"] if depth < _LIVE_MAX_DEPTH else []
+        out.extend(os.path.join(dp, f).replace("\\", "/") for f in fn if f.endswith(".json"))
+    return sorted(out)
+
+
+def _live_roots(root):
+    """-> {normalised bound root dir: 'live-receipt <file> names <dir>'} for every top-level dir under `root` named by a JSON file of a DIFFERENT top-level dir (or by a loose top-level file)."""
+    root = root.replace("\\", "/").rstrip("/")
+    if not os.path.isdir(root): raise ProtectedSetError("live receipts root %s is missing (cannot know which lineage roots are named): deleters refuse" % root)
+    files = _live_files(root)
+    sig = (root, tuple((f, os.stat(f).st_mtime_ns, os.stat(f).st_size) for f in files))
+    got = _live_cache.get(sig)
+    if got is not None: return dict(got)
+    parts = [re.escape(x) for x in root.split("/")[1:] if x]          # root minus the drive letter
+    sep = r"[/\\]+"
+    pat = re.compile(r"[A-Za-z]:" + sep + sep.join(parts) + sep + r"([^/\\\"\s,\]\}]+)", re.IGNORECASE)
+    named = {}
+    for f in files:
+        rel = f[len(root) + 1:]; own = rel.split("/")[0] if "/" in rel else None
+        try: raw = open(f, "rb").read(_LIVE_MAX_BYTES).decode("utf-8", "replace")
+        except OSError as e: raise ProtectedSetError("live receipt %s unreadable (%s): deleters refuse" % (rel, type(e).__name__))
+        for m in pat.finditer(raw):
+            d = m.group(1)
+            if d.lower() != (own or "").lower() and os.path.isdir(root + "/" + d) and not _LIVE_HOUR.match(d): named.setdefault(_norm(root + "/" + d), "live receipt %s names %s" % (rel, d))
+    _live_cache.clear(); _live_cache[sig] = named
+    return dict(named)
+
+
 def _receipt_files(gate_dir):
     d = gate_dir.rstrip("/")
     return sorted(set(glob.glob(d + "/c1c2-*.json") + glob.glob(d + "/c1c2-*/**/*.json", recursive=True)))
 
 
-def bound_paths(gate_dir=None, ps_path=None):
+def bound_paths(gate_dir=None, ps_path=None, live_dir=None):
     """-> dict(paths=frozenset of normalised lower-case bound paths, receipts=int, source=dict path -> first receipt naming it). Raises ProtectedSetError (fail closed)."""
     gd = gate_dir or GATE_RECEIPTS; files = _receipt_files(gd)
     if not files: raise ProtectedSetError("gate-bound paths: no c1c2 receipts under %s (cannot know what is bound): deleters refuse" % gd)
@@ -97,11 +149,12 @@ def bound_paths(gate_dir=None, ps_path=None):
             inp = doc.get("inputs") if isinstance(doc, dict) else None
             if not isinstance(inp, dict): continue
             n += 1
-            for k, v in inp.items():
-                if isinstance(v, str) and _DRIVE.match(v): paths.setdefault(_norm(v), os.path.basename(f) + ":" + k)
+            for k, v in _walk_strings(inp, ""):
+                if _DRIVE.match(v): paths.setdefault(_norm(v), os.path.basename(f) + ":" + k)
         if not n: raise ProtectedSetError("gate-bound paths: no receipt under %s has an `inputs` object: deleters refuse" % gd)
         got = _cache[sig] = (paths, n)
     paths, n = got; paths = dict(paths)
+    for q, why in _live_roots(live_dir or LIVE_RECEIPTS).items(): paths.setdefault(q, why)
     try: doc = json.loads(open(ps_path or PATH, "rb").read().decode("utf-8"))
     except Exception as e: raise ProtectedSetError("protected set unreadable for bound_paths (%s): deleters refuse" % type(e).__name__)
     extra = doc.get("bound_paths", [])
@@ -113,10 +166,10 @@ def bound_paths(gate_dir=None, ps_path=None):
     return dict(paths=frozenset(paths), receipts=n, source=paths)
 
 
-def bound_hit(path, gate_dir=None, ps_path=None):
+def bound_hit(path, gate_dir=None, ps_path=None, live_dir=None):
     """-> (bound path, why) when `path` is a gate-bound path, inside one, or a directory that contains one; else (None, ''). ProtectedSetError propagates (the caller refuses)."""
-    b = bound_paths(gate_dir, ps_path); n = _norm(path)
+    b = bound_paths(gate_dir, ps_path, live_dir); n = _norm(path)
     for q in b["paths"]:
         if n == q or n.startswith(q + "/") or q.startswith(n + "/"):
-            return q, "gate-bound path (%s names %s)" % (b["source"][q], q)
+            return q, "gate-bound path (%s; %s)" % (b["source"][q], q)
     return None, ""
