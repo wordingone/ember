@@ -44,6 +44,7 @@ def refuse_reason(path):
     p = path.replace("\\", "/")
     if not p.startswith(BASE): return ("outside " + M_ROOT + "/ember-live-receipts")
     if _keep(p): return "under a KEEP path"      # fail closed: ProtectedSetError propagates and nothing is removed
+    if PS.bound_hit(p)[0]: return "gate-bound path"      # lead 83469; ProtectedSetError propagates, nothing is removed
     if not p.endswith(".pt"): return "not a .pt file"
     return None
 def sha_of(p):
