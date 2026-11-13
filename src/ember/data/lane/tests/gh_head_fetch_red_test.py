@@ -152,6 +152,8 @@ def scenario_main(res):
         and all(r["head_commit"] == tip("h/postwall") and r["id"] == "h/postwall@%s:%s" % (tip("h/postwall")[:12], r["path"]) and r["spdx"] == "MIT" for r in rows_pw))
     rec("p2", "p) the head ledger row carries form head, head_commit_ts = the catalogue commit's committer time, the catalogue sha, rules version d3h-r1 and scan_state NOT_SCANNED (breaks if the head row is not labelled)",
         pw.get("form") == "head" and pw.get("head_commit_ts") == epoch(D2) and pw.get("catalog_commit_sha") == tip("h/postwall") and pw.get("rules_version") == RULES and pw.get("scan_state") == "NOT_SCANNED" and pw.get("source_class") == SOURCE_CLASS)
+    rec("p9", "p) NO DATE WALL (lead 83389): the head ledger row and every head shard row record content_date_max = the day of the head commit's committer time (breaks if the date is not recorded as metadata)",
+        pw.get("content_date_max") == time.strftime("%Y-%m-%d", time.gmtime(epoch(D2))) and all(r.get("content_date_max") == pw.get("content_date_max") for r in rows_pw) and rows_pw != [])
     rec("p3", "p) no `rev-list`, no `--before`, no `%ct %at` ancestry log in ANY call; the file list is `ls-tree -r -z <catalogue sha>` of every repo; no gh_api (breaks if a wall commit or the ancestry check is used)",
         not any(re.search(r"rev-list|--before|%ct %at", c) for c in run_r.calls) and all(("ls-tree -r -z %s" % tip(n)) in "\n".join(run_r.calls) for n in MAIN) and run_r.gh_calls == [])
     rec("p4", "p) no ledger row has a pre-wall-form skip (no_pre_wall_history, history_dates_not_monotone, catalog_commit_missing) (breaks if the snapshot skips fire in head form)",
