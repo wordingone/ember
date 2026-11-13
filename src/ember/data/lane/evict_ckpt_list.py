@@ -161,6 +161,8 @@ def main():
             cur = _PS.load()      # re-read immediately before the remove (the hash above can take minutes): a re-declaration in that window is honoured and recorded
             k = kept(p, cur["markers"])
             if k: st["skipped"].append((p, "under a KEEP node (re-declared during the run): " + k)); return
+            bq, bwhy = _PS.bound_hit(p)           # #2488: a gate-bound or live-lineage-root path is never removed here (ProtectedSetError propagates, nothing removed)
+            if bq: st["skipped"].append((p, bwhy)); return
             with open(RC, "a", encoding="utf-8") as f:
                 f.write(json.dumps(dict(st_nlink=nlink, physical_bytes_freed=phys, inode=f"{stt.st_dev}:{stt.st_ino}", ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), path=p, size=sz, sha256=s, hf_path=f"{REPO}:{hit[0]}", verified="local sha256 recomputed == name == server LFS sha256, size equal, server re-read just before delete",
                                         walk_receipt=WALK, list_sha256=LIST_SHA, authority="lead 82130 / training 82141", protected_set_sha256=cur["sha256"], protected_set_path=cur["path"])) + "\n")

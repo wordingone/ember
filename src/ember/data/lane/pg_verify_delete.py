@@ -8,6 +8,8 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import HF_RAW_REPO, LANE_ROOT
 import os, glob, json, hashlib, time, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import protected_set as _PS
 from huggingface_hub import HfApi
 REPO = ("wordingone/" + HF_RAW_REPO); DEST = "text/pg-raw"; SRC = (LANE_ROOT + "/pg")
 RECEIPT = (LANE_ROOT + "/logs/pg-delete-receipts.jsonl")
@@ -23,6 +25,8 @@ freed = 0; kept = []; deleted = 0
 for f in files:
     rp = f"{DEST}/{os.path.basename(f)}"; t = info.get(rp)
     sz = os.path.getsize(f)
+    bq, bwhy = _PS.bound_hit(f)       # #2488: a gate-bound or live-lineage-root path is kept, never removed
+    if bq: kept.append((f, bwhy)); continue
     if t is None or getattr(t, "lfs", None) is None:
         kept.append((f, "missing on HF or no LFS sha")); continue
     h = hashlib.sha256()
