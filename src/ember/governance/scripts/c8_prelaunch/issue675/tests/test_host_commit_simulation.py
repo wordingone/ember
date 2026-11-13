@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "q2_host_commit_simulation.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+MODULE_PATH = TRANCHE_DIR / "q2_host_commit_simulation.py"
 
 
 def _load():

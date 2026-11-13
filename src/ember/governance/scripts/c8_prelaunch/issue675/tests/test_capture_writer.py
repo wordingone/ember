@@ -12,9 +12,9 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-WRITER_PATH = ROOT / "q2_capture_writer.py"
-LOADER_PATH = ROOT / "q2_capture_loader.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+WRITER_PATH = TRANCHE_DIR / "q2_capture_writer.py"
+LOADER_PATH = TRANCHE_DIR / "q2_capture_loader.py"
 
 
 def _load(path: Path, name: str):
