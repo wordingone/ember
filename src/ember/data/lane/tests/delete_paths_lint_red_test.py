@@ -24,7 +24,10 @@ OWN_PROOF = {"drop_uploaded.py": "st_nlink==1 + server size + LFS sha256 == reco
              "th_pack_scan.py": "removes only its own pid-stamped scan lock and takeover guard, never another process' lock (tests/th_batch_red_test.py g, th_pack_scan.py selftest)",
              "th_stub.py": "offline test stub for TruffleHog: removes only its own per-invocation log files in a temp dir (tests/th_batch_red_test.py)",
              "th_gate_ref.py": "frozen byte copy of the pre-batch th_gate, kept only as the reference for the equivalence red; removes only its own stamped scratch dir (tests/th_batch_red_test.py h2)",
-             "gh_snapshot_fetch.py": "removes only its own per-repo staging clone: realpath strictly inside the staging tree (StagingEscape otherwise), receipt row fsynced before the remove, repo refetchable from the catalogue commit (tests/gh_snapshot_fetch_red_test.py h1-h7)"}
+             "gh_snapshot_fetch.py": "removes only its own per-repo staging clone: realpath strictly inside the staging tree (StagingEscape otherwise), receipt row fsynced before the remove, repo refetchable from the catalogue commit (tests/gh_snapshot_fetch_red_test.py h1-h7)",
+             "defender_guard.py": "the only delete is in its own selftest: removes the one temp row file and temp dir that selftest created (os.remove(p); os.rmdir(d)); never touches a lane file; read-only against Defender otherwise (python defender_guard.py selftest)",
+             "defender_watch.py": "removes only its own advisory flag loops/DEFENDER-UNDER-1CORE.flag (fixed literal path) when the 10-sample window is not clear; read-only sampler of other processes. No dedicated red: the flag rule is a single comparison, evidenced by logs/defender-watch.jsonl rows (under_1core_5min)",
+             "hub_binding.py": "removes only its own lock file self.p (release, or a lock older than LOCK_STALE_S); the Hub is read-only (refresh_one/refresh_all list, never write) (tests/hub_binding_red_test.py)"}
 UNREVIEWED = ['_alarm_redtest.py', '_cap_redtest.py', '_pack_del.py', 'a_relocate.py', 'audit_job.py', 'audit_probe_atrain2.py', 'audit_secrets.py', 'bulk_lane.py', 'caselaw_lane_handoff.py', 'ccby_pack.py', 'ckpt_bound.py',
               'ckpt_restore.py', 'clear_uploaded_shards.py', 'evict_ckpt_list.py', 'fetch_open_model.py', 'fill_nh.py', 'hold_flag.py', 'mls_pack.py', 'net_cap.py', 'pack.py', 'pg_verify_delete.py', 'redact_r1.py',
               'rehydrate_shards.py', 'remedy_hheldout2.py', 'remedy_move.py', 'repack_r1.py', 'repack_r1_all.py', 'reserve_evict.py', 'restore_finish.py', 'scratch_dir.py', 'se_drive.py', 'se_prep.py', 'se_sample.py',
@@ -45,7 +48,8 @@ new = sorted(f for f, (t, d) in scan.items() if d and f not in classified)
 check("no unclassified deleter: every script that can delete a file is verified, has its own proof, or is on the frozen unreviewed list", not new, ("new deleters: " + str(new)) if new else "")
 stale = sorted(f for f in UNREVIEWED if f in scan and not scan[f][1])
 check("no stale entry on the unreviewed list (a script there that no longer deletes should be removed from it)", not stale, str(stale) if stale else "")
-missing = sorted(f for f in UNREVIEWED if f not in scan)
+NOT_EXPORTED = {"caselaw_lane_handoff.py"}      # live-only: excluded from the tree by lane-export.json, so the tree copy of this test cannot see it
+missing = sorted(f for f in UNREVIEWED if f not in scan and f not in NOT_EXPORTED)
 check("every unreviewed entry still exists as a script (or the list is updated)", not missing, str(missing) if missing else "")
 for v in VERIFIED:
     f = v + ".py"
