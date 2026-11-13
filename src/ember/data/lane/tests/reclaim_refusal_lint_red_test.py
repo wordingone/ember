@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Lint for gap 2 of #2486: a seat reclaim script (<seat scripts>/*reclaim*.py) that can remove a file or directory must either be RETIRED (SystemExit at the top) or call the lane refusal
+"""Lint for gap 2 of #2486: a seat reclaim script (<seat scripts>/reclaim/janitor/clean/prune/retire/delete/evict/purge/reap-named *.py) that can remove a file or directory must either be RETIRED (SystemExit at the top) or call the lane refusal
 (`protected_set.bound_hit` or `verified_remove`) before it removes anything. 2026-10-07 training's reclaim_payload.py removed the whole #2116 lineage root (254 files) with no such call.
 Selftest (always run): a tmp dir with an unguarded script (must be flagged), a RETIRED one, a bound_hit one and a verified_remove one (must pass), plus a mutant lint that flags nothing (proves the red discriminates).
 Real run: `python tests/reclaim_refusal_lint_red_test.py --seat` (or `--dir <seat scripts dir>`) lists every offender and exits 1 when there is one (the seat fixes its script; the lane never edits it)."""
@@ -10,16 +10,21 @@ _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)
 from lane_config import M_ROOT, SEAT_TRAIN
 import os, re, sys, glob, shutil, tempfile
 REMOVERS = re.compile(r"os\.remove\(|os\.unlink\(|shutil\.rmtree\(|\.unlink\(|\.rmdir\(|os\.rmdir\(")
+NAMES = ("reclaim", "janitor", "clean", "prune", "retire", "delete", "evict", "purge", "reap")      # #2488: widened from *reclaim* only (the 2026-11-13 C2 removal was a janitor-class script)
 RETIRED = re.compile(r"^\s*raise\s+SystemExit\(\s*[\"']RETIRED", re.M)
+SHELL_REMOVERS = re.compile(r"(^|[\s;&|(])rm\s+-|Remove-Item|(^|[\s;&|(])rmdir")      # .sh / .ps1 wrappers (#2488)
 GUARDED = re.compile(r"bound_hit\s*\(|verified_remove|reclaim-lint: allow \S")   # the pragma `# reclaim-lint: allow <reason>` is for a script that removes only its own lease/output file
 
 
 def offenders(d):
     out = []
-    for f in sorted(glob.glob(d.rstrip("/\\") + "/*reclaim*.py")):
-        if os.path.basename(f).startswith("test_"): continue
+    for f in sorted(x for x in glob.glob(d.rstrip("/\\") + "/*.py") if any(n in os.path.basename(x).lower() for n in NAMES)):
+        if os.path.basename(f).startswith("test_") or "_red_test" in os.path.basename(f): continue
         t = open(f, encoding="utf-8", errors="replace").read()
         if REMOVERS.search(t) and not RETIRED.search(t) and not GUARDED.search(t): out.append(os.path.basename(f))
+    for f in sorted(x for x in glob.glob(d.rstrip("/\\") + "/*.sh") + glob.glob(d.rstrip("/\\") + "/*.ps1") if any(n in os.path.basename(x).lower() for n in NAMES)):
+        t = open(f, encoding="utf-8", errors="replace").read()
+        if SHELL_REMOVERS.search(t) and "RETIRED" not in t and not GUARDED.search(t): out.append(os.path.basename(f))
     return out
 
 
@@ -43,11 +48,18 @@ w("c_reclaim_guarded.py", "import protected_set as PS, shutil\nif PS.bound_hit(p
 w("d_reclaim_vr.py", "import verified_remove\nverified_remove.remove(p)\nos.remove(x)\n")
 w("g_reclaim_allow.py", "# reclaim-lint: allow removes only its own lease file" + chr(10) + "os.remove(LEASE)" + chr(10))
 w("test_reclaim_x.py", "shutil.rmtree(p)" + chr(10))
+w("h_janitor_bad.py", "import os" + chr(10) + "os.remove(p)" + chr(10))
+w("i_prune_guarded.py", "import protected_set as PS, os" + chr(10) + "PS.bound_hit(p)" + chr(10) + "os.remove(p)" + chr(10))
+w("j_delete_allow.py", "# reclaim-lint: allow own lease file only" + chr(10) + "os.remove(L)" + chr(10))
+w("k_evict_bad.py", "import shutil" + chr(10) + "shutil.rmtree(p)" + chr(10))
+w("l_clean_bad.sh", "rm -rf $X" + chr(10))
+w("m_prune_ok.ps1", "# reclaim-lint: allow own temp file" + chr(10) + "Remove-Item $T" + chr(10))
+w("n_clean_retired.sh", "echo RETIRED; exit 1" + chr(10) + "rm -rf $X" + chr(10))
 w("e_reclaim_readonly.py", "print('census only')\n")
 w("f_other_bad.py", "import shutil\nshutil.rmtree(p)\n")
-check("an unguarded reclaim script is flagged, and only it (RETIRED, bound_hit, verified_remove, read-only and non-reclaim names pass)", offenders(T) == ["a_reclaim_bad.py"])
+check("an unguarded reclaim script is flagged, and only it (RETIRED, bound_hit, verified_remove, read-only and non-reclaim names pass)", offenders(T) == ["a_reclaim_bad.py", "h_janitor_bad.py", "k_evict_bad.py", "l_clean_bad.sh"])
 real = offenders; offenders = lambda d: []
-check("MUTANT (lint off) no longer yields the flagged-only-the-bad-script result, so the first check discriminates", offenders(T) != ["a_reclaim_bad.py"])
+check("MUTANT (lint off) no longer yields the flagged-only-the-bad-script result, so the first check discriminates", offenders(T) != ["a_reclaim_bad.py", "h_janitor_bad.py", "k_evict_bad.py", "l_clean_bad.sh"])
 offenders = real
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
