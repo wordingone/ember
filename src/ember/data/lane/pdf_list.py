@@ -22,20 +22,16 @@ for r in bases:
             key = aid.replace("_", "/") if re.match(r"^[a-z\-]+(\.[A-Z]{2})?_\d{7}$", aid) else aid
             seen.setdefault((key, v), os.path.join(dp, f))
 ok = []
-stats = dict(total_pdf_files=tot, no_id=noid, unique_id_ver=len(seen), no_meta=0, pre_all=0, pre_v1_only=0, post=0)
+stats = dict(total_pdf_files=tot, no_id=noid, unique_id_ver=len(seen), no_meta=0, listed=0, updated_le_split=0, later_versions_listed=0)   # no date wall (lead 83389): every version with OAI metadata is listed; content_date_max = created for v1, updated (an upper bound) for later versions, derived from the (created, updated) pair by arxiv_manifest (oai_created / oai_updated)
 for (aid, v), p in seen.items():
     d = dates.get(aid)
     if d is None:
         stats["no_meta"] += 1
         continue
     created, updated = d
-    if updated <= "2022-10-31":
-        stats["pre_all"] += 1
-        ok.append((aid, v, p, created, updated))
-    elif v == 1 and created <= "2022-10-31":
-        stats["pre_v1_only"] += 1
-        ok.append((aid, v, p, created, updated))
-    else:
-        stats["post"] += 1
+    stats["listed"] += 1
+    if updated <= "2022-10-31": stats["updated_le_split"] += 1      # informational split only (the old pre-wall packs hold these), never an exclusion
+    elif v != 1: stats["later_versions_listed"] += 1
+    ok.append((aid, v, p, created, updated))
 json.dump(ok, open((LANE_ROOT + "/audit/pdf-prewall-list.json"), "w"))
 print(stats)

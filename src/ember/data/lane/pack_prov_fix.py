@@ -17,15 +17,16 @@ BASE = T.ROOT; B = T.B; SPEC = T.SPEC
 rec = json.load(open(f"{BASE}/packed/{NAME}/receipt.json"))
 fin = B.state["finals"]; by_path = {v["path"].replace("\\", "/"): v for v in fin.values()}
 prov = f"{BASE}/packed/{NAME}.prov.jsonl"
-rows = 0
+rows = 0; cdm = ""      # pack-level content_date_max = latest per-doc content_date_max (metadata only; owner 2026-11-11)
 with open(prov, "w", encoding="utf-8") as pf:
     for ip in rec["inputs"]:
         v = by_path[ip.replace("\\", "/")]
         with open(v["path"], "rb") as f:
             for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
-                r = json.loads(line)
-                pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"))) + "\n"); rows += 1
+                r = json.loads(line); cdm = max(cdm, r.get("content_date_max") or "")
+                pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"), content_date_max=r.get("content_date_max"))) + "\n"); rows += 1
+cdm = cdm or "undated"
 print("prov rows", rows, "pack docs", rec["docs"], flush=True)
-T.run([sys.executable, BASE + "/scripts/source_manifest.py", f"{BASE}/packed/{NAME}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), T.WALL, "text"], f"{BASE}/logs/srcman-{NAME}.log")
-json.dump(dict(domain=SPEC.get("domain", "mixed"), wall=T.WALL, source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{BASE}/packed/{NAME}/domain.json", "w"))
+T.run([sys.executable, BASE + "/scripts/source_manifest.py", f"{BASE}/packed/{NAME}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), cdm, "text"], f"{BASE}/logs/srcman-{NAME}.log")
+json.dump(dict(domain=SPEC.get("domain", "mixed"), content_date_max=cdm, source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{BASE}/packed/{NAME}/domain.json", "w"))
 print("DONE", NAME, sorted(os.listdir(f"{BASE}/packed/{NAME}")), flush=True)

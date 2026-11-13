@@ -3,14 +3,13 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Build the pack_media manifest for commoncatalog-cc-by (Flickr/YFCC CC-BY photos; HUMAN text only: title + description; BLIP-2 captions are dropped per lead).
 Usage: ccby_manifest.py IN1.parquet [IN2 ...] --out OUTDIR      -> OUTDIR/images/<sha256>.jpg + OUTDIR/manifest.jsonl + OUTDIR/stats.json
-Rules: licence url must be creativecommons.org/licenses/by/ (plain CC-BY; no -nc/-nd/-sa); dateuploaded (epoch) <= 2022-10-31; human text (title+description, HTML stripped, url-decoded) >= 8 words;
+Rules: licence url must be creativecommons.org/licenses/by/ (plain CC-BY; no -nc/-nd/-sa); dateuploaded (epoch) is recorded as content_date_max (no date wall since 2026-11-11, lead 83389; undated rows are kept with content_date_max null); human text (title+description, HTML stripped, url-decoded) >= 8 words;
 caption sentences (>=8 words) hitting the heldout indexes are dropped (rule 4); duplicate image sha256 dropped. Nothing model-made. Selftest: ccby_manifest.py selftest"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT
 import sys, os, re, io, json, time, html, collections, urllib.parse
 import numpy as np, xxhash
-WALL_EPOCH = 1667174400   # 2022-11-01T00:00:00Z exclusive
 IDXP = ((LANE_ROOT + "/heldout-index-full/heldout-sent-xxh64-full.npy"), (LANE_ROOT + "/heldout-index/wiki-heldout-2M.npy"), (LANE_ROOT + "/arxiv/heldout-pdf-sent-hashes.npy"))
 SPLIT = re.compile(r"((?<=[.!?])\s+|\n+)"); WS = re.compile(r"\s+"); TAG = re.compile(r"<[^>]+>")
 _IDX = None
@@ -35,7 +34,7 @@ def row_ok(r, st):
     if not re.search(r"creativecommons\.org/licenses/by/", r.get("licenseurl") or ""): st["licence"] += 1; return None
     try: up = int(r.get("dateuploaded") or 0)
     except ValueError: up = 0
-    if not up or up >= WALL_EPOCH: st["post_wall_or_undated"] += 1; return None
+    if not up: st["undated"] += 1      # kept: content_date_max is recorded as null, never an exclusion
     txt = human_text(r)
     if len(txt.split()) < 8: st["short_text"] += 1; return None
     if hit(txt): st["heldout_hit"] += 1; return None
@@ -56,7 +55,7 @@ def main(files, out):
                     if not jb: st["no_image"] += 1; continue
                     p = f"{out}/images/{sha}.jpg"; open(p, "wb").write(jb)
                     mf.write(json.dumps(dict(path=p, caption=ok[0], licence="CC-BY (Flickr per-photo licence)", licence_url=r["licenseurl"], origin=r.get("pageurl"), author=r.get("unickname"), fetch_date=today,
-                        content_date_max=time.strftime("%Y-%m-%d", time.gmtime(ok[1])), modality="image-text", caption_author="human (Flickr uploader title/description)", sha256=sha), ensure_ascii=False) + "\n"); st["kept"] += 1
+                        content_date_max=(time.strftime("%Y-%m-%d", time.gmtime(ok[1])) if ok[1] else None), modality="image-text", caption_author="human (Flickr uploader title/description)", sha256=sha), ensure_ascii=False) + "\n"); st["kept"] += 1
     json.dump(dict(st), open(out + "/stats.json", "w")); print(dict(st))
 def selftest():
     ok = True
@@ -65,7 +64,8 @@ def selftest():
     st = collections.Counter(); base = dict(licenseurl="http://creativecommons.org/licenses/by/2.0/", dateuploaded="1143398479", title="Lake+Erie+Gulls+and+Freighter", description="Gulls+fill+the+skies+over+the+stern+of+the+massive+freighter+on+a+cold+morning")
     chk("plain CC-BY pre-wall kept", row_ok(base, st) is not None)
     chk("by-nc refused", row_ok(dict(base, licenseurl="http://creativecommons.org/licenses/by-nc/2.0/"), st) is None and st["licence"] == 1)
-    chk("post-wall upload refused", row_ok(dict(base, dateuploaded="1700000000"), st) is None and st["post_wall_or_undated"] == 1)
+    r2 = row_ok(dict(base, dateuploaded="1700000000"), st); chk("post-2022 upload KEPT, upload epoch carried for content_date_max (no wall)", r2 is not None and r2[1] == 1700000000)
+    r3 = row_ok(dict(base, dateuploaded=""), st); chk("undated row KEPT with epoch 0 (content_date_max null), counted undated", r3 is not None and r3[1] == 0 and st["undated"] == 1)
     chk("short text refused", row_ok(dict(base, title="a+b", description=""), st) is None and st["short_text"] == 1)
     print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
 if __name__ == "__main__":

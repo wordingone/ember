@@ -3,8 +3,8 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """LibriVox pilot (lead 81169/81222): ~1,000 sections, chapter-level audio<->Project-Gutenberg text pairs, all human, no model timestamps.
 Usage: librivox_pilot.py OUTDIR [N_PROJECTS=70] [SECTIONS_PER_PROJECT=15] [TARGET_SECTIONS=1000]
-Stages (resumable; every stage skips finished work): 1) PG id index of shards 0..6, 2) post-wall catalog exclusion (API since=2022-11-01), 3) pick projects (English, PG-linked,
-PG text present, spread over the id range = years), 4) per project: audiotracks API, archive.org item metadata (publicdate <= wall, per-file sha1), mp3 download + sha1 verify,
+Stages (resumable; every stage skips finished work): 1) PG id index of shards 0..6, 2) (removed: no date wall since 2026-11-11, lead 83389; the archive.org publicdate is recorded as content_date_max), 3) pick projects (English, PG-linked,
+PG text present, spread over the id range = years), 4) per project: audiotracks API, archive.org item metadata (publicdate recorded as content_date_max, per-file sha1), mp3 download + sha1 verify,
 5) pair section <-> PG text span by heading rule (number/roman/title), accept if words per audio-second in [1.5, 4.0]. Drop reasons are counted.
 Outputs: pairs.jsonl (manifest for pack_media audio: path, transcript_ref, ...), text/<section>.txt, pilot-stats.json."""
 import os as _os, sys as _sys
@@ -12,7 +12,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT
 import sys, os, re, io, json, gzip, time, subprocess, hashlib, random, urllib.parse
 OUT = sys.argv[1]; NP = int(sys.argv[2]) if len(sys.argv) > 2 else 70; SPP = int(sys.argv[3]) if len(sys.argv) > 3 else 15; TARGET = int(sys.argv[4]) if len(sys.argv) > 4 else 1000
-WALL = "2022-10-31"; UA = "ember-data-pilot/1.0 (research dataset pilot; read-only)"; from lane_config import LANE_ROOT as ROOT
+UA = "ember-data-pilot/1.0 (research dataset pilot; read-only)"; from lane_config import LANE_ROOT as ROOT
 for d in ("audio", "text", "pgtext"): os.makedirs(f"{OUT}/{d}", exist_ok=True)
 def curl_json(url):
     for t in range(4):
@@ -35,24 +35,12 @@ else:
             for l in f: pgids[json.loads(l)["id"]] = s
     json.dump(pgids, open(ip, "w"))
 print("pg ids", len(pgids), flush=True)
-# 2) post-wall projects
-pw = OUT + "/postwall.json"
-if os.path.exists(pw): post = set(json.load(open(pw)))
-else:
-    post = set(); off = 0; since = int(time.mktime((2022, 11, 1, 0, 0, 0, 0, 0, 0)))
-    while True:
-        d = curl_json(f"https://librivox.org/api/feed/audiobooks?since={since}&format=json&limit=500&offset={off}&fields=%7Bid%7D")
-        b = (d or {}).get("books") or []
-        post |= {x["id"] for x in b}
-        if len(b) < 500: break
-        off += 500; time.sleep(1)
-    json.dump(sorted(post), open(pw, "w"))
-print("post-wall projects", len(post), flush=True)
+# 2) (no post-wall catalog exclusion any more: owner 2026-11-11, lead 83389)
 # 3) pick projects
 cat = [json.loads(l) for l in open(f"{ROOT}/scoping/lv_all.jsonl", encoding="utf-8")]
 def gid(u):
     m = re.search(r"(?:etext|ebooks)/(\d+)", u or ""); return m.group(1) if m else None
-cand = [c for c in cat if c["language"] == "English" and gid(c["url_text_source"]) in pgids and c["id"] not in post and 8 <= int(c["num_sections"] or 0) <= 80 and int(c["totaltimesecs"] or 0) < 6 * 3600]
+cand = [c for c in cat if c["language"] == "English" and gid(c["url_text_source"]) in pgids and 8 <= int(c["num_sections"] or 0) <= 80 and int(c["totaltimesecs"] or 0) < 6 * 3600]
 cand.sort(key=lambda c: int(c["id"])); rng = random.Random(20261106)
 step = max(1, len(cand) // NP); picks = [cand[i] for i in range(rng.randrange(step), len(cand), step)][:NP]
 print("candidates", len(cand), "picked", len(picks), flush=True)
@@ -106,7 +94,7 @@ def title_positions(pgt, secs):
         pos = [p0 for p0, n0 in lines if n0 == t]
         if pos: out[str(q["section_number"])] = pos[-1]
     return out
-stats = dict(projects=0, sections_seen=0, dl=0, dl_bytes=0, sha1_bad=0, post_wall_item=0, paired=0, no_heading=0, rate_out=0, no_pg=0, api_fail=0)
+stats = dict(projects=0, sections_seen=0, dl=0, dl_bytes=0, sha1_bad=0, paired=0, no_heading=0, rate_out=0, no_pg=0, api_fail=0)
 pairs = []; pp = OUT + "/pairs.jsonl"
 done_ids = {json.loads(l)["section_id"] for l in open(pp, encoding="utf-8")} if os.path.exists(pp) else set()
 fo = open(pp, "a", encoding="utf-8")
@@ -124,7 +112,6 @@ for c in picks:
     meta = curl_json(f"https://archive.org/metadata/{item}"); time.sleep(1)
     if not meta or "files" not in meta: stats["api_fail"] += 1; continue
     pubdate = (meta.get("metadata", {}).get("publicdate") or "")[:10]
-    if pubdate > WALL: stats["post_wall_item"] += 1; continue
     sha = {f["name"]: f.get("sha1") for f in meta["files"]}
     ex = curl_json(f"https://librivox.org/api/feed/audiobooks?id={pid}&format=json&extended=1"); rd = {}
     for b0 in (ex or {}).get("books", []):
@@ -159,7 +146,7 @@ for c in picks:
                    transcript_sha256=(hashlib.sha256(txt.encode()).hexdigest() if txt is not None else None), pg_ebook=g, pg_heading=(hd if txt is not None else None), words=(len(txt.split()) if txt is not None else None), playtime_s=secsn,
                    words_per_s=(round(len(txt.split()) / secsn, 2) if txt is not None and secsn else None),
                    licence="LibriVox: public-domain dedication by volunteer readers (wording UNVERIFIED -> PRIVATE twin); text PD(US) Project Gutenberg", origin=f"https://librivox.org/ project {pid}; archive.org/{item}",
-                   archive_sha1=sha.get(fn), readers=rd.get(str(s["section_number"]), []), fetch_date=time.strftime("%Y-%m-%d"), content_date_max=pubdate or WALL)
+                   archive_sha1=sha.get(fn), readers=rd.get(str(s["section_number"]), []), fetch_date=time.strftime("%Y-%m-%d"), content_date_max=(pubdate or None))
         fo.write(json.dumps(row, ensure_ascii=False) + "\n"); fo.flush(); stats["paired"] += 1
     try:   # rolling raw budget (lead 81397): upload this project's mp3 to the private raw repo, verify, delete local
         sys.path.insert(0, ROOT + "/scripts"); import raw_roll

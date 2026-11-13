@@ -206,7 +206,7 @@ def lane_ccby():
     sel = [t for t in tree if any(k in t.path for k in pref)]
     sel.sort(key=lambda t: (next(v for k, v in pref.items() if k in t.path), t.path))
     log(f"ccby: {len(sel)} parquet files selected = {sum(t.size for t in sel)/2**30:.0f} GiB (mid-res buckets only)")
-    CUT = "2022-10-31"
+    # no date wall (owner 2026-11-11, lead 83389): datetaken is kept in the rows as metadata; ccby_manifest records content_date_max from dateuploaded
     def one(path, size):
         d = f"{STG}/dl"; os.makedirs(d, exist_ok=True)
         upload_first(); wait_space(2 * size + 2**28)
@@ -216,7 +216,7 @@ def lane_ccby():
             pf = pq.ParquetFile(fh); cols = [c for c in pf.schema_arrow.names if c != "blip2_caption"]
             for b in pf.iter_batches(batch_size=32, columns=cols):
                 n_in += b.num_rows
-                keep = [i for i, (st, dt) in enumerate(zip(b.column("status").to_pylist(), b.column("datetaken").to_pylist())) if st == "success" and (dt is None or dt.strftime("%Y-%m-%d") <= CUT)]
+                keep = [i for i, (st, dt) in enumerate(zip(b.column("status").to_pylist(), b.column("datetaken").to_pylist())) if st == "success"]
                 if not keep: continue
                 b = b.take(keep)
                 if w is None: parts.append([f"{STG}/out-{tag}-p{len(parts):02d}.parquet", 0]); w = pq.ParquetWriter(parts[-1][0], b.schema, compression="zstd")
@@ -229,7 +229,7 @@ def lane_ccby():
         for pi, (fp, nrows) in enumerate(parts):
             rp = f"image/commoncatalog-cc-by/{path}" if len(parts) == 1 else f"image/commoncatalog-cc-by/{path[:-8]}.p{pi:02d}.parquet"
             meta = dict(source=f"huggingface.co/datasets/{SRC}@{rev} {path}", licence="CC-BY (Flickr per-image licensename/licenseurl kept in rows; dataset card cc-by-4.0)", modality="image", units={"images": nrows}, rows_in=n_in, rows_out=n_out, part=f"{pi+1}/{len(parts)}",
-                        dropped_fields=["blip2_caption (external-model caption, lead 81651/GOAL 14)"], filters=f"status==success; datetaken<={CUT}")
+                        dropped_fields=["blip2_caption (external-model caption, lead 81651/GOAL 14)"], filters="status==success (no date filter; datetaken kept in rows)")
             tot += push(fp, rp, meta)
         return tot
     run_pool([(t.path, t.size) for t in sel], one, 1)   # 1 worker: PD12M gets the bandwidth (lead 81661)

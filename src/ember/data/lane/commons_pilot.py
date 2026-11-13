@@ -1,14 +1,14 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Wikimedia Commons pilot (lead 81169/81222): ~1,000 human-described images, uploaded 2015..2022, description last edited <= 2022-10-31 by a non-bot.
+"""Wikimedia Commons pilot (lead 81169/81222): ~1,000 human-described images, uploaded 2015..now, description last edited by a non-bot. NO DATE WALL (owner 2026-11-11, lead 83389): upload and last-edit timestamps are recorded as content_date_max, never filtered.
 Usage: commons_pilot.py OUTDIR [TARGET=1000] [CANDIDATES=6000]
 Read-only public API, 1 request/2 s, 512 px server-made thumbnails (deterministic resize, no ML). Resumable: OUTDIR/cands.jsonl, OUTDIR/thumbs/, OUTDIR/manifest.jsonl.
 Filters (deterministic): licence in allow-list (PD*, CC0, CC BY, CC BY-SA, GFDL excluded), description >= 15 words after tag strip and not a filename echo,
-last revision timestamp <= WALL, last editor not in group 'bot' and name has no 'bot', mime jpeg/png, upload ts in [2015-01-01, WALL]."""
+last editor not in group 'bot' and name has no 'bot', mime jpeg/png, upload ts sampled over [2015-01-01, now]."""
 import sys, os, re, json, time, random, html, hashlib, urllib.request, urllib.parse
 OUT = sys.argv[1]; TARGET = int(sys.argv[2]) if len(sys.argv) > 2 else 1000; NC = int(sys.argv[3]) if len(sys.argv) > 3 else 6000
-WALL = "2022-10-31T23:59:59Z"; API = "https://commons.wikimedia.org/w/api.php"
+API = "https://commons.wikimedia.org/w/api.php"
 UA = "ember-data-pilot/1.0 (research dataset pilot; read-only; contact: project mail)"
 os.makedirs(OUT + "/thumbs", exist_ok=True)
 def get(url, binary=False):
@@ -27,7 +27,7 @@ LIC_OK = re.compile(r"^(public domain|pd[- ]|cc0|cc[- ]by(-sa)?[- ]\d|cc by(-sa)
 def clean(h): return WS.sub(" ", html.unescape(TAG.sub(" ", h or ""))).strip()
 cp = OUT + "/cands.jsonl"; cands = [json.loads(l) for l in open(cp, encoding="utf-8")] if os.path.exists(cp) else []
 seen = {c["title"] for c in cands}; rng = random.Random(20261106)
-t0 = time.mktime((2015, 1, 1, 0, 0, 0, 0, 0, 0)); t1 = time.mktime((2022, 10, 31, 0, 0, 0, 0, 0, 0))
+t0 = time.mktime((2015, 1, 1, 0, 0, 0, 0, 0, 0)); t1 = time.time()
 with open(cp, "a", encoding="utf-8") as fo:
     while len(cands) < NC:
         ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(rng.uniform(t0, t1)))
@@ -51,12 +51,11 @@ else:
         for u in (d or {}).get("query", {}).get("users", []):
             if "bot" in (u.get("groups") or []): bots.add(u["name"])
     json.dump(sorted(bots), open(ucp, "w"))
-stat = dict(cands=len(cands), lic=0, desc=0, wall=0, bot=0, mime=0, upload=0, kept=0)
+stat = dict(cands=len(cands), lic=0, desc=0, bot=0, mime=0, upload=0, kept=0)
 kept = []
 for c in cands:
     if not (c["mime"] in ("image/jpeg", "image/png") and c["thumb"]): stat["mime"] += 1; continue
     if not (c["lic"] and LIC_OK.search(c["lic"])): stat["lic"] += 1; continue
-    if c["rev_ts"] > WALL or c["upload_ts"] > WALL: stat["wall"] += 1; continue
     if c["rev_user"] in bots or "bot" in (c["rev_user"] or "").lower() or "bot" in (c["uploader"] or "").lower(): stat["bot"] += 1; continue
     nm = re.sub(r"^File:|\.[a-z]+$", "", c["title"], flags=re.I).replace("_", " ").lower()
     if len(c["desc"].split()) < 15 or c["desc"].lower().strip() == nm: stat["desc"] += 1; continue

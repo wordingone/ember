@@ -1,9 +1,9 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Commons pilot v2: caption = the 'description' field of the page revision AS OF the wall (2022-10-31), not the current text (80% of pages were edited after the wall, so
-'last edit <= wall' keeps only 0.3%). Reuses commons-pilot/cands.jsonl. Usage: commons_pilot2.py OUTDIR [TARGET=1000]
-Rules (deterministic): latest file version uploaded <= wall; jpeg/png; licence allow-list (current licence, 'licence-now' caveat recorded); uploader name has no 'bot'; the as-of-wall revision's editor
+"""Commons pilot v2: caption = the 'description' field of a page revision. NO DATE WALL (owner 2026-11-11, lead 83389): the default is the LATEST revision; an optional AS_OF (ISO timestamp, argv[3]) selects the revision as of that instant instead (a version selector, never an exclusion).
+The revision timestamp and upload ts are recorded as content_date_max. Reuses commons-pilot/cands.jsonl. Usage: commons_pilot2.py OUTDIR [TARGET=1000] [AS_OF]
+Rules (deterministic): latest file version of any upload date; jpeg/png; licence allow-list (current licence, 'licence-now' caveat recorded); uploader name has no 'bot'; the chosen revision's editor
 not in group bot and no 'bot' in name; description from {{Information}} parsed by fixed regexes, English only (en template or plain ASCII-dominant), >= 15 words, not a filename echo."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
@@ -11,7 +11,7 @@ from lane_config import LANE_ROOT
 import sys, os, re, json, time, html, hashlib, urllib.parse
 pass
 OUT = sys.argv[1]; TARGET = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
-WALL = "2022-10-31T23:59:59Z"; API = "https://commons.wikimedia.org/w/api.php"; UA = "ember-data-pilot/1.0 (research dataset pilot; read-only)"
+AS_OF = sys.argv[3] if len(sys.argv) > 3 else None; API = "https://commons.wikimedia.org/w/api.php"; UA = "ember-data-pilot/1.0 (research dataset pilot; read-only)"
 import urllib.request
 def get(url, binary=False):
     for t in range(5):
@@ -49,11 +49,11 @@ def botuser(u):
 for c in cands:
     if len(rows) >= TARGET: break
     if len((c.get("desc") or "").split()) < 15: stat["pre_drop"] += 1; continue   # prefilter on current description length (cheap) before the as-of-wall lookup
-    if not (c["mime"] in ("image/jpeg", "image/png") and c["thumb"] and c["lic"] and LIC_OK.search(c["lic"]) and c["upload_ts"] <= WALL and not botuser(c["uploader"] or "x")):
+    if not (c["mime"] in ("image/jpeg", "image/png") and c["thumb"] and c["lic"] and LIC_OK.search(c["lic"]) and not botuser(c["uploader"] or "x")):
         stat["pre_drop"] += 1; continue
     r = seen.get(c["title"])
     if r is None:
-        d = api(action="query", titles=c["title"], prop="revisions", rvprop="content|timestamp|user", rvslots="main", rvstart=WALL, rvdir="older", rvlimit="1")
+        d = api(action="query", titles=c["title"], prop="revisions", rvprop="content|timestamp|user", rvslots="main", rvlimit="1", **(dict(rvstart=AS_OF, rvdir="older") if AS_OF else {}))
         try: rv = d["query"]["pages"][0]["revisions"][0]; r = dict(title=c["title"], ts=rv["timestamp"], user=rv.get("user"), wt=rv["slots"]["main"]["content"])
         except Exception: r = dict(title=c["title"], ts=None, user=None, wt=None)
         fo.write(json.dumps(r, ensure_ascii=False) + "\n"); fo.flush(); seen[c["title"]] = r
@@ -68,7 +68,7 @@ for c in cands:
         time.sleep(1.0); b = get(c["thumb"], binary=True)
         if not b: stat["thumb_fail"] += 1; continue
         open(fn, "wb").write(b)
-    rows.append(dict(path=fn.replace(chr(92), "/"), caption=desc, licence=c["lic"], licence_url=c["lic_url"], licence_note="licence-now (current page); item text is the as-of-2022-10-31 revision", author=c["artist"], credit=c["credit"],
+    rows.append(dict(path=fn.replace(chr(92), "/"), caption=desc, licence=c["lic"], licence_url=c["lic_url"], licence_note="licence-now (current page); item text is the " + (("as-of-" + AS_OF + " revision") if AS_OF else "latest revision"), author=c["artist"], credit=c["credit"],
                      origin="https://commons.wikimedia.org/wiki/" + urllib.parse.quote(c["title"].replace(" ", "_")), fetch_date=time.strftime("%Y-%m-%d"), upload_ts=c["upload_ts"], desc_revision_ts=r["ts"], desc_revision_user_is_bot=False,
                      content_date_max=max(c["upload_ts"], r["ts"])[:10]))
     if len(rows) % 50 == 0: print(len(rows), json.dumps(stat), flush=True)
