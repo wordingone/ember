@@ -27,7 +27,13 @@ try:
     chk("e) ... once", "ESCALATE" not in n)
     n, sfx = E.apply("nothing to push", 0, st, lg)
     n, sfx = E.apply("pack-c: refused_hits (hits 3) (was PASS earlier: ESCALATE)", 0, st, lg)
-    chk("f) an item that went away and came back is a state change and escalates again", "ESCALATE" in n)
+    chk("f) an item that went away for a tick and came back inside 24 h is a known repeat (lead 83299)", "ESCALATE" not in n and "known repeat" in n)
+    old = json.load(open(st)); old["seen"] = {k: "2026-01-01T00:00:00" for k in old["seen"]}; json.dump(old, open(st, "w"))
+    n, sfx = E.apply("pack-c: refused_hits (hits 3) (was PASS earlier: ESCALATE)", 0, st, lg)
+    chk("f2) the same item not seen for over 24 h escalates again", "ESCALATE" in n)
+    json.dump({"items": ["pack-z: stuck (was pass earlier: escalate)"], "head": None, "ts": "2026-01-01T00:00:00"}, open(st, "w"))
+    n, sfx = E.apply("pack-z: stuck (was PASS earlier: ESCALATE)", 0, st, lg)
+    chk("f3) an old-format state file (items only, last tick) is read as seen at its ts; an old ts is stale so it escalates", "ESCALATE" in n)
     n, sfx = E.apply("pack-d: STUCK x; y", 3, st, lg)
     chk("g) blocked-3-ticks suffix shown the first time", sfx is True)
     n, sfx = E.apply("pack-d: STUCK x; y", 4, st, lg)
@@ -38,7 +44,7 @@ try:
     chk("j) not blocked: no suffix", sfx is False)
     chk("k) the state file is valid json with the items key", isinstance(json.load(open(st)).get("items"), list))
     # mutant: state never remembered -> check b must fail
-    real = E._load; E._load = lambda p: (set(), None)
+    real = E._load; E._load = lambda p: ({}, None)
     try:
         n, sfx = E.apply(N1, 0, st, lg)
         n2, sfx2 = E.apply(N1, 0, st, lg)
