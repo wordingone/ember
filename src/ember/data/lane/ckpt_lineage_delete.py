@@ -48,6 +48,17 @@ def sha256(p):
     return _hc[k]
 
 
+DEC = os.path.dirname(MAN) + "/ckpt-lineage-delete-decisions.jsonl"      # issue 2481: one row per file saying what this run DECIDED, fsynced BEFORE the removal is attempted (the manifest is the plan, the receipts are the outcome)
+
+
+def _dec(r, cur, decision, marker=None):
+    """Append and fsync the decision row for file r under the protected set `cur` re-read for THIS file. decision = "remove" (admitted for removal now) or "kept" (with the marker that kept it)."""
+    row = dict(ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), child=r["child"], path=r["path"], size=r["size"], decision=decision, marker=marker, protected_set_sha256=cur["sha256"], protected_set_path=cur["path"],
+               planned_under_sha256=r.get("protected_set_sha256_at_plan"))
+    with open(DEC, "a", encoding="utf-8") as df:
+        df.write(json.dumps(row) + chr(10)); df.flush(); os.fsync(df.fileno())
+
+
 def main():
     if apply_ and not os.path.exists(PASS):
         print("REFUSED: round-trip gate logs/ckpt-roundtrip.PASS missing"); sys.exit(2)
@@ -138,7 +149,9 @@ def main():
     for r in nc_rows: r["pinned_by"] = (r["pinned_by"] or "") + " ; plan sha256 " + plan      # the manifest and receipt rows carry both pins
     reader = READER or VR.hub_reader()
     child_dir = {r["name"]: r["dir"] for r in sel}
+    _plan_sha = _PS.load()["sha256"]                    # issue 2481: the protected set the plan is written under; every manifest row and every decision row names it
     for r in rows:
+        r["protected_set_sha256_at_plan"] = _plan_sha
         if not r["hf_ref"]: r["sha256"] = sha256(r["path"])             # no-copy rows: hashed once, manifest fsynced before the first remove; server rows: hashed inside the remove call, receipt before each remove
         else: r["sha256"] = None; r["hashed_in"] = "receipt row (verified_remove), same call as the server read-back"
     with open(MAN, "a") as mf:
@@ -149,8 +162,9 @@ def main():
     for r in rows:
         cur = _PS.load()      # #2450: the declared protected set re-read right before this remove (selection and hashing ran minutes ago); a marker declared since refuses the file, and the receipt records the set that admitted it
         _k = _E.kept(r["path"], cur["markers"])
-        if _k: kept.append((r["path"], "under a KEEP node (re-declared during the run): " + _k)); continue
+        if _k: _dec(r, cur, "kept", _k); kept.append((r["path"], "under a KEEP node (re-declared during the run): " + _k)); continue
         r["protected_set_sha256"] = cur["sha256"]; r["protected_set_path"] = cur["path"]
+        _dec(r, cur, "remove")                              # issue 2481: the decision row is on disk BEFORE the removal below is attempted
         roots = [child_dir[r["child"]]]
         req = nl_left.setdefault(r["ino"], r["nlink"])      # planned nlink minus the names already removed; a name added after the plan still refuses (#2459 F5)
         if r["hf_ref"]:

@@ -30,12 +30,15 @@ for n in names:
 json.dump({"C": dict(status="COVERED", dir=C, step_dir="lineage/C")}, open(T + "/lane/logs/ckpt-lineage-check.json", "w")); json.dump([], open(T + "/lane/logs/ckpt-probes.json", "w")); json.dump([], open(T + "/lane/logs/ckpt-old.json", "w"))
 open(T + "/lane/logs/ckpt-roundtrip.PASS", "w").write("ok")
 state = dict(markers=[], sha="sha-before")
-PS = types.ModuleType("protected_set"); PS.load = lambda: dict(sha256=state["sha"], path="stub-declaration.json", markers=list(state["markers"]), reserve_markers=[])
+PS = types.ModuleType("protected_set"); PS.load = lambda: dict(sha256=state["sha"], path="stub-declaration.json", markers=list(state["markers"]), reserve_markers=[]); PS.markers = lambda: list(state["markers"])      # verified_remove.protected_hit (F8, #2472) reads protected_set.markers(); without it every removal is refused as "protected set unreadable"
 E = types.ModuleType("evict_ckpt_list"); E.kept = lambda p, markers=None: next((m for m in (markers or []) if m in p.replace("\\", "/")), None)
 B = types.ModuleType("ckpt_bound"); B.bound_dirs = lambda: []; B.is_bound = lambda d, b: False
 for m in (PS, E, B): sys.modules[m.__name__] = m
 sys.argv = ["ckpt_lineage_delete.py", "--apply"]
 spec = importlib.util.spec_from_file_location("cld_dec", SC + "/ckpt_lineage_delete.py"); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+import hashlib
+_SRV = {n: (os.path.getsize(C + "/" + n), hashlib.sha256(open(C + "/" + n, "rb").read()).hexdigest()) for n in names}
+mod.READER = lambda repo, hp: _SRV.get(hp.rsplit("/", 1)[-1])      # fake server (the deleter's injection point); without it the run asks the real Hub and every file is kept as "no server entry"
 DEC = os.path.dirname(mod.MAN) + "/ckpt-lineage-delete-decisions.jsonl"
 real_remove = os.remove; seen = []
 def spy(p, *a, **k):
@@ -46,6 +49,7 @@ def spy(p, *a, **k):
         state["markers"] = ["/child/f3.pt"]; state["sha"] = "sha-after"
     return real_remove(p, *a, **k)
 os.remove = spy
+_kw = mod.VR.remove_verified.__kwdefaults__; _kw_real = _kw["remove"]; _kw["remove"] = spy      # remove_verified binds remove=os.remove at definition time, so patching os.remove alone never reaches it
 buf = io.StringIO(); rc = 0
 try:
     with contextlib.redirect_stdout(buf):
@@ -53,17 +57,18 @@ try:
         except SystemExit as e: rc = e.code or 0
 finally:
     os.remove = real_remove
+    _kw["remove"] = _kw_real
 out = buf.getvalue()
 dec = [json.loads(l) for l in open(DEC, encoding="utf-8")] if os.path.exists(DEC) else []
 man = [json.loads(l) for l in open(mod.MAN, encoding="utf-8")]
 by = {os.path.basename(r["path"]): r for r in dec}
-check("run completed (exit 0) and two files were removed, the third kept", rc == 0 and not os.path.exists(C + "/f1.pt") and not os.path.exists(C + "/f2.pt") and os.path.exists(C + "/f3.pt") and "deleted 2 names" in out)
+check("run completed with exit 7 (a kept file makes the run partial: `if kept: sys.exit(7)`) and two files were removed, the third kept", rc == 7 and not os.path.exists(C + "/f1.pt") and not os.path.exists(C + "/f2.pt") and os.path.exists(C + "/f3.pt") and "deleted 2 names" in out)
 check("RED the manifest lists all three planned rows (it is the plan, not the outcome)", len(man) == 3 and all("protected_set_sha256_at_plan" in r and "protected_set_sha256" not in r for r in man))
 check("the decisions file has one row per file: two `remove`, one `kept`", sorted(r["decision"] for r in dec) == ["kept", "remove", "remove"])
 check("RED the kept file is marked `kept` with the marker that kept it (a reader does not conclude it was deleted)", by["f3.pt"]["decision"] == "kept" and by["f3.pt"]["marker"] == "/child/f3.pt")
 check("RED receipt-before-remove: for every os.remove the `remove` decision row for that path was already on disk", len(seen) == 2 and all(flag for _, flag in seen))
 check("RED each row records the set re-read for THAT file: f1 under sha-before, f2 and f3 under sha-after; the plan was written under sha-before", by["f1.pt"]["protected_set_sha256"] == "sha-before" and by["f2.pt"]["protected_set_sha256"] == "sha-after" and by["f3.pt"]["protected_set_sha256"] == "sha-after" and all(r["planned_under_sha256"] == "sha-before" for r in dec))
 src = open(SC + "/ckpt_lineage_delete.py", encoding="utf-8").read()
-check("source: the decision row is written before os.remove", src.index('_dec(r, cur, "remove")') < src.index("os.remove(r[\"path\"])"))
+check("source: the decision row is written before the removal call (VR.remove_verified / remove_ruled)", src.index('_dec(r, cur, "remove")') < src.index("VR.remove_verified("))
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
