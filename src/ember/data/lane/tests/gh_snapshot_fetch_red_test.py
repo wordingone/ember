@@ -244,13 +244,15 @@ def scenario_main(res):
     rec("a5", "a) the file list is the clone's `git ls-tree -r -z <wall commit>` and nothing else: zero gh_api calls, no `ls-tree -l` (it would fetch every blob), no ls-tree of the catalogue tip (breaks if a GitHub answer or the tip's tree is used)",
         run_r.gh_calls == [] and any(("ls-tree -r -z %s" % c[1]) in x for x in run_r.calls) and not any(" ls-tree" in " " + x and (" -l" in x.split("|")[0] or c[4] in x.split("|")[0]) for x in run_r.calls if "ls-tree" in x))
     rec("a6", "a) every ledger row with a wall commit has committer time AND author time strictly < 1667260800 and records both (breaks if the wall is crossed or the author stamp is not kept)",
-        all(r["wall_commit_ts"] < WALL and r.get("wall_commit_author_ts", WALL) < WALL for r in led.values() if r["wall_commit"] and r["skipped_reason"] != "history_dates_not_monotone") and w.get("wall_commit_ts") == 1667131200 and w.get("wall_commit_author_ts") == 1667131200)
+        all(r["wall_commit_ts"] < WALL and r.get("wall_commit_author_ts", WALL) < WALL for r in led.values() if r["wall_commit"] and not r.get("history_dates_not_monotone")) and w.get("wall_commit_ts") == 1667131200 and w.get("wall_commit_author_ts") == 1667131200)
     # w) the wall over the whole ancestry
     bd = led.get("o/backdated", {}); ad = led.get("o/authordate", {}); ed = led.get("o/edge", {}); rows_e = {r["path"]: r["text"] for r in shard_of(lane, "o/edge")}
-    rec("w1", "w) a back-dated tip (committer June) sitting on post-wall history (December) -> skipped whole, reason history_dates_not_monotone, a ledger row, no docs (breaks if only the chosen commit's stamp is read)",
-        bd.get("skipped_reason") == "history_dates_not_monotone" and bd.get("files_kept") == 0 and shard_of(lane, "o/backdated") == [])
-    rec("w2", "w) a commit with a pre-wall committer time but a post-wall AUTHOR time in the ancestry -> history_dates_not_monotone (breaks if author times are not checked)",
-        ad.get("skipped_reason") == "history_dates_not_monotone" and shard_of(lane, "o/authordate") == [])
+    rec("w1", "w) NO DATE WALL (lead 83389): a back-dated tip (committer June) sitting on December history is NOT skipped: files kept, ledger history_dates_not_monotone True, content_date_max = 2022-12-01 (breaks if the repo is excluded again, or if only the chosen commit's stamp is read)",
+        bd.get("skipped_reason") is None and bd.get("files_kept", 0) > 0 and bd.get("history_dates_not_monotone") is True and bd.get("content_date_max") == "2022-12-01" and shard_of(lane, "o/backdated") != [])
+    rec("w2", "w) NO DATE WALL: a commit with a pre-wall committer time but a post-wall AUTHOR time in the ancestry is kept, flagged history_dates_not_monotone, content_date_max = the author date 2022-12-15 (breaks if author times are not read or the repo is skipped)",
+        ad.get("skipped_reason") is None and ad.get("history_dates_not_monotone") is True and ad.get("content_date_max") == "2022-12-15" and shard_of(lane, "o/authordate") != [])
+    rec("w4", "w) every kept row of the snapshot form carries the ledger's content_date_max, and a monotone repo (o/edge) records its wall commit day 2022-10-31 with the flag False (breaks if the date is not recorded per row)",
+        ed.get("history_dates_not_monotone") is False and ed.get("content_date_max") == "2022-10-31" and all(r.get("content_date_max") == "2022-12-01" for r in shard_of(lane, "o/backdated")) and all(r.get("content_date_max") == "2022-10-31" for r in shard_of(lane, "o/edge")))
     rec("w3", "w) a commit one second before the wall (real git) is the wall commit and its files are kept; the commit AT the wall is not (breaks if the boundary is off by one)",
         ed.get("wall_commit") == REPOS["o/edge"][1][1] and ed.get("wall_commit_ts") == WALL - 1 and rows_e.get("edge.py") == "edge = 1\n" and "post.py" not in rows_e)
     # c) no licence file at the wall commit

@@ -3,8 +3,8 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Assemble issue->PR->commits->review->CI chain docs for candidates via READ-ONLY gh api calls (<=~3600 req/h).
 Usage: gh_assemble.py CANDS.jsonl OUT.jsonl.zst [TARGET_CHAINS] [STATS.json]
-Rules: repo SPDX in MIT/Apache-2.0/BSD-2/BSD-3; every API-sourced text item must have updated_at <= WALL (no post-wall edits);
-bots removed; any element after WALL -> chain dropped; PII regex mask; usernames -> username_i. No model anywhere."""
+Rules: repo SPDX in MIT/Apache-2.0/BSD-2/BSD-3; no date wall (owner 2026-11-11, lead 83389): each chain records content_date_max = the latest date of any element in it (PR/issue updated_at, comments, reviews, commits, merge, close);
+bots removed; PII regex mask; usernames -> username_i. No model anywhere."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import M_ROOT
@@ -13,7 +13,6 @@ from tokenizers import Tokenizer
 CANDS, OUT = sys.argv[1], sys.argv[2]
 TARGET = int(sys.argv[3]) if len(sys.argv) > 3 else 1000
 STATS = sys.argv[4] if len(sys.argv) > 4 else OUT + ".stats.json"
-WALL = "2022-10-31T23:59:59Z"
 OK_LIC = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause"}
 tk = Tokenizer.from_file((M_ROOT + "/custody-tokenizer-2c557/tokenizer-2c557.json"))
 BOTS = {"dependabot", "renovate", "greenkeeper", "snyk-bot", "codecov", "github-actions", "travis-ci", "coveralls", "imgbot", "allcontributors", "stale", "pyup-bot", "mergify", "whitesource-bolt-for-github", "sonarcloud", "netlify", "vercel", "codecov-io", "houndci-bot", "dependabot-preview"}
@@ -49,19 +48,17 @@ class Names:
     def __call__(s, login):
         if login not in s.m: s.m[login] = f"username_{len(s.m)}"
         return s.m[login]
-def clean_ok(items):
-    return all((x.get("updated_at") or x.get("created_at") or "") <= WALL for x in items)
 def chain(c, st):
     repo, prn, issues = c["repo"], c["pr"], c["issues"]
     L = lic(repo)
     if L not in OK_LIC: st["drop_license"] += 1; return None
     pr = gh(f"repos/{repo}/pulls/{prn}")
-    if not pr or (pr.get("updated_at") or "z") > WALL: st["drop_pr_updated_post_wall"] += 1; return None
+    if not pr: st["drop_pr_missing"] += 1; return None
     if is_bot(pr.get("user")): st["drop_bot_pr"] += 1; return None
     iss = None
     for n in issues:
         d = gh(f"repos/{repo}/issues/{n}")
-        if d and "pull_request" not in d and not is_bot(d.get("user")) and (d.get("updated_at") or "z") <= WALL: iss = d; break
+        if d and "pull_request" not in d and not is_bot(d.get("user")): iss = d; break
     if not iss: st["drop_no_valid_issue"] += 1; return None
     icom = gh(f"repos/{repo}/issues/{iss['number']}/comments?per_page=100", paginate=True) or []
     pcom = gh(f"repos/{repo}/issues/{prn}/comments?per_page=100", paginate=True) or []
@@ -77,8 +74,6 @@ def chain(c, st):
     pcom = [x for x in pcom if not is_bot(x.get("user")) and x["created_at"] <= merged]
     rcom = [x for x in rcom if not is_bot(x.get("user")) and x["created_at"] <= merged]
     revs = [x for x in revs if not is_bot(x.get("user")) and (x.get("body") or "").strip() and (x.get("submitted_at") or "") <= merged]
-    if not clean_ok(icom + pcom + rcom + [dict(updated_at=r.get("submitted_at")) for r in revs]): st["drop_comment_post_wall"] += 1; return None
-    if any((x.get("commit", {}).get("author", {}).get("date") or "z") > WALL for x in cms): st["drop_commit_post_wall"] += 1; return None
     nm = Names(); ev = []
     ev.append((iss["created_at"], f"=== ISSUE #{iss['number']}  opened {iss['created_at']} by {nm(iss['user']['login'])}\nTITLE: {mask(iss['title'])}\n{mask(iss.get('body'))}"))
     for x in icom: ev.append((x["created_at"], f"--- COMMENT {x['created_at']} {nm(x['user']['login'])}\n{mask(x['body'])}"))
@@ -95,6 +90,7 @@ def chain(c, st):
     for s in (sts or {}).get("statuses", []) or []:
         ci.append(f"--- CI status \"{s.get('context')}\" state={s.get('state')} head={(sha or '')[:7]} updated={s.get('updated_at')}")
     ev.sort(key=lambda t: t[0])
+    cdm = max([x for x in [pr.get("updated_at"), iss.get("updated_at"), merged, iss.get("closed_at")] + [e[0] for e in ev] if x] or [None])      # latest date of anything in the chain (metadata only)
     dtxt = mask(diff)
     if len(dtxt) > 200000: dtxt = dtxt[:200000] + f"\n[diff truncated: {len(diff) - 200000} bytes]"
     body = [e[1] for e in ev]
@@ -104,7 +100,7 @@ def chain(c, st):
     if iss.get("closed_at"): body.append(f"--- ISSUE #{iss['number']} closed {iss['closed_at']}")
     head = f"REPO {repo}  LICENSE_NOW {L}  LICENSE_CAVEAT license-now-not-license-at-item-date  PRIVATE-TWIN-ONLY\n"
     text = head + "\n".join(body)
-    return dict(id=f"gh-{repo.replace('/', '_')}-pr{prn}", repo=repo, license_now=L, pr=prn, issue=iss["number"], merged_at=merged, created_at=iss["created_at"],
+    return dict(id=f"gh-{repo.replace('/', '_')}-pr{prn}", repo=repo, license_now=L, pr=prn, issue=iss["number"], merged_at=merged, created_at=iss["created_at"], content_date_max=cdm,
                 n_events=len(ev), n_ci=len(ci), text=text, tokens=len(tk.encode(text).ids), origin="born-digital (GitHub, GH Archive discovery + API assembly)")
 def main():
     cands = [json.loads(l) for l in open(CANDS)]

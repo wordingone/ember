@@ -1,7 +1,10 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Pre-wall code snapshot fetch (D3, lead 82956): each clean-signal MIT repo of the catalogue taken AS OF its last commit before the 2022-11-01T00:00:00Z wall, kept only when every root licence file at that commit is MIT,
+"""NO DATE WALL (owner 2026-11-11, lead 83389): the 2022-11-01 instant below is the AS-OF version selector of the snapshot form (the licence must be read at the tree being taken), not a content filter. The only date rule that used to exclude whole repos,
+the ancestry monotone check, is now metadata: every ledger and shard row records content_date_max (the latest committer/author date in the ancestry, snapshot form; the head commit date, head form) and the snapshot ledger records history_dates_not_monotone.
+
+Pre-wall code snapshot fetch (D3, lead 82956): each clean-signal MIT repo of the catalogue taken AS OF its last commit before the 2022-11-01T00:00:00Z wall, kept only when every root licence file at that commit is MIT,
 with a per-file licence step on the content, written as the source class "code, pre-wall snapshot".
 
 Usage: python gh_snapshot_fetch.py run [--limit N] [--workers 4] [--ignore-stop]   |   python gh_snapshot_fetch.py status
@@ -12,7 +15,7 @@ It does not establish that a file's content was written before the wall in any o
 Per repo (catalogue row = licence MIT and has_tests_root, has_ci, recent_commit_365d, not_fork, not_archived, not awesome_or_dump_flag; size_kb present):
   1. blobless clone (no checkout); wall commit = `git rev-list -1 --before=<2022-10-31T23:59:59Z> <catalogue commit>`. HARD CHECK its committer time < 1667260800 or WallViolation is raised (the run aborts, durable row kind wall_violation).
      No commit before the wall: skipped, reason no_pre_wall_history.
-  2. ancestry: one `git log --format='%ct %at' <wall commit>`; any ancestor (the wall commit included) with committer OR author time >= the wall: skipped, reason history_dates_not_monotone (a row, not an abort). Both times of the wall commit go in the ledger.
+  2. ancestry: one `git log --format='%ct %at' <wall commit>`; content_date_max = the latest committer/author time in it; any ancestor (the wall commit included) with committer OR author time >= the as-of instant sets history_dates_not_monotone in the ledger row (a flag, no longer a skip). Both times of the wall commit go in the ledger.
   3. file list = `git ls-tree -r -z <wall commit>` in the clone (path, mode, type, sha). No GitHub API call anywhere. `ls-tree -l` is NOT used: in a blobless clone it fetches every blob of the tree (measured), so sizes are judged on the fetched bytes.
   4. licence: every root LICENSE / LICENCE / COPYING / UNLICENSE (optionally with extension) blob is read from the clone and must be the MIT text (case, whitespace, quotes normalised; only the title and copyright lines are free).
      None: no_licence_file_at_wall_commit. None MIT: licence_not_mit_at_wall_commit. Some MIT, some not: licence_mixed_at_wall_commit.
@@ -44,9 +47,9 @@ Timing report: after the first 100 repos of a run finish, loops/code-head-timing
 The end-of-run summary (printed) and `status --form head` report attributed N, none_stated M and the skipped-reason counts."""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from lane_config import LANE_ROOT
 import os, sys, re, json, time, base64, hashlib, shutil, stat, subprocess, threading, argparse, collections
 import zstandard
-import lane_config
 import reserve_plan
 
 WALL_TS = 1667260800                       # 2022-11-01T00:00:00Z: a commit is inside the wall only when its committer time is STRICTLY before this
@@ -92,6 +95,10 @@ def _log(*a):
 class CatalogueCommitMissing(RuntimeError):
     """Head form: the catalogue commit is not reachable in the clone. An error row, no ledger row."""
     kind = "catalogue_commit_missing"
+
+
+def _iso_day(ts):
+    return time.strftime("%Y-%m-%d", time.gmtime(int(ts)))
 
 
 class WallViolation(Exception):
@@ -575,10 +582,10 @@ class Engine:
     def _snapshot(self, row, clone, res):
         repo, csha, r, head = row["full_name"], row["commit_sha"], self.runner, self.head
         if head:
-            led = dict(repo=repo, catalog_commit_sha=csha, head_commit_ts=None, history_commits=None, history_truncated=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
+            led = dict(repo=repo, catalog_commit_sha=csha, head_commit_ts=None, content_date_max=None, history_commits=None, history_truncated=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
                        files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None, agent_attribution=None)
         else:
-            led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, wall_commit_author_ts=None, history_commits=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
+            led = dict(repo=repo, catalog_commit_sha=csha, wall_commit=None, wall_commit_ts=None, wall_commit_author_ts=None, content_date_max=None, history_dates_not_monotone=None, history_commits=None, licence_file_sha=None, tree_entries=None, bytes_kept=0, files_kept=0,
                        files_dropped={}, ineligible={}, skipped_reason=None, fetch_s=0.0, shard=None)
         os.makedirs(os.path.dirname(clone), exist_ok=True)
         try:
@@ -597,6 +604,7 @@ class Engine:
         if head:
             wsha = csha                                          # the tree to read is the catalogue commit itself: no wall commit, no ancestry check
             led["head_commit_ts"] = int(r.git(["show", "-s", "--format=%ct", csha], clone).decode().strip() or 0)
+            led["content_date_max"] = _iso_day(led["head_commit_ts"])
             ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
             attr, led["history_commits"], led["history_truncated"] = agent_attribution(r, clone, csha, ents); led["agent_attribution"] = attr
             suf = "_at_head"
@@ -607,8 +615,8 @@ class Engine:
             wsha, wts = wall; led["wall_commit"], led["wall_commit_ts"] = wsha, wts
             hist = history_times(r, clone, wsha)
             led["wall_commit_author_ts"], led["history_commits"] = hist[0][1], len(hist)
-            if any(ct >= WALL_TS or at >= WALL_TS for ct, at in hist):
-                return self._skip(led, "history_dates_not_monotone")
+            led["history_dates_not_monotone"] = any(ct >= WALL_TS or at >= WALL_TS for ct, at in hist)      # metadata only (owner 2026-11-11): recorded, never a skip
+            led["content_date_max"] = _iso_day(max(max(ct, at) for ct, at in hist))
             ents = list_tree(r, clone, wsha); led["tree_entries"] = len(ents)
             suf = "_at_wall_commit"
         # licence: EVERY root licence file must be the MIT text
@@ -661,9 +669,9 @@ class Engine:
                     if why:
                         drops[why] += 1; continue
                     if head:
-                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], head_commit=wsha, spdx="MIT", source_class=HEAD_SOURCE_CLASS, agent_attribution=led["agent_attribution"]))
+                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], head_commit=wsha, content_date_max=led["content_date_max"], spdx="MIT", source_class=HEAD_SOURCE_CLASS, agent_attribution=led["agent_attribution"]))
                     else:
-                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, spdx="MIT", source_class=SOURCE_CLASS))
+                        rows.append(dict(id="%s@%s:%s" % (repo, w12, e["path"]), text=text, repo=repo, path=e["path"], blob_sha=e["sha"], wall_commit=wsha, content_date_max=led["content_date_max"], spdx="MIT", source_class=SOURCE_CLASS))
                     led["bytes_kept"] += len(b); kept += 1
                 if rows:
                     if shard is None:
@@ -816,7 +824,7 @@ def main(argv=None, runner=None, lane=None):
     r = sp.add_parser("run"); r.add_argument("--limit", type=int, default=0); r.add_argument("--workers", type=int, default=None, help="default 4 (snapshot form), 8 (head form)"); r.add_argument("--ignore-stop", action="store_true")
     r.add_argument("--form", choices=("snapshot", "head"), default="snapshot"); r.add_argument("--max-size-mb", type=int, default=None, help="tranche cap on size_kb; default 100 in head form, none in snapshot form")
     s = sp.add_parser("status"); s.add_argument("--form", choices=("snapshot", "head"), default="snapshot"); s.add_argument("--max-size-mb", type=int, default=None)
-    a = ap.parse_args(argv); lane = lane or lane_config.LANE_ROOT
+    a = ap.parse_args(argv); lane = lane or LANE_ROOT
     if a.cmd == "status":
         return status(lane, a.form, a.max_size_mb)
     eng = Engine(lane, runner=runner, workers=a.workers, form=a.form, max_size_mb=a.max_size_mb); code = eng.run(limit=a.limit, ignore_stop=a.ignore_stop)

@@ -15,7 +15,8 @@ sys.argv = ["bulk_lane.py", LANE]
 pass
 import bulk_lane as B
 import zstandard
-WALL = "2022-10-31"; PACK_TOK_TARGET = 1.0e9
+SPLIT_DATE = "2022-10-31"   # NOT a filter (owner 2026-11-11, lead 83389): the date wall is gone; this only splits the "<lane>_post" remainder from packs already built on the old pre-wall rule. Every doc records content_date_max as metadata.
+PACK_TOK_TARGET = 1.0e9
 HELDOUT_EXTRA = (LANE_ROOT + "/heldout-index/wiki-heldout-2M.npy," + LANE_ROOT + "/arxiv/heldout-pdf-sent-hashes.npy")
 ENV = dict(os.environ, HELDOUT_EXTRA=HELDOUT_EXTRA, PYTHONIOENCODING="utf-8", CUDA_VISIBLE_DEVICES="")
 W = f"{ROOT}/textwork/{LANE}"; os.makedirs(W, exist_ok=True)
@@ -33,27 +34,27 @@ def rows_loc(path):
         pf = pq.ParquetFile(fh)
         for b in pf.iter_batches(batch_size=64):
             for r in b.to_pylist(): yield r
+def _year_end(y):
+    y = str(y or ""); return f"{y}-12-31" if re.fullmatch(r"\d{4}", y) else None
 def prep_loc(r, st):
     t = (r.get("text") or "").replace("\r\n", "\n").strip()
     if not words_ok(t): st["quality"] += 1; return None
-    return dict(id=f"loc-{r['lccn']}-{r['filename']}", title=r.get("title"), issued=str(r.get("year")), text=t, origin="human-written (OCR of LoC-declared public-domain books)", license="CC0-1.0 / US public domain (LoC-declared)", src="storytracer/LoC-PD-Books", url=f"https://www.loc.gov/item/{r['lccn']}/")
+    return dict(id=f"loc-{r['lccn']}-{r['filename']}", title=r.get("title"), issued=str(r.get("year")), content_date_max=_year_end(r.get("year")), text=t, origin="human-written (OCR of LoC-declared public-domain books)", license="CC0-1.0 / US public domain (LoC-declared)", src="storytracer/LoC-PD-Books", url=f"https://www.loc.gov/item/{r['lccn']}/")
 def rows_json(path):
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for l in f: yield json.loads(l)
 def prep_pes2o(r, st):
-    if norm_date(r.get("created")) > WALL: st["post_wall"] += 1; return None
     m = str(r.get("metadata")); lic = re.search(r"'oa_license': '([^']*)'", m); lic = lic.group(1) if lic else "unspecified-in-row (common-pile open-licence filter)"
     if BADLIC.search(lic): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="pes2o-" + str(r["id"]), title=None, issued=norm_date(r.get("created")), text=t, origin="human-written (S2ORC open-access papers)", license=lic, src="common-pile/peS2o", url=None)
+    return dict(id="pes2o-" + str(r["id"]), title=None, issued=norm_date(r.get("created")), content_date_max=norm_date(r.get("created")) or None, text=t, origin="human-written (S2ORC open-access papers)", license=lic, src="common-pile/peS2o", url=None)
 def prep_pubmed(r, st):
-    if norm_date(r.get("created")) > WALL: st["post_wall"] += 1; return None
     m = str(r.get("metadata")); lic = re.search(r"'license': '([^']*)'", m); lic = lic.group(1) if lic else ""
     if not lic or BADLIC.search(lic): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="pubmed-" + str(r["id"]), title=None, issued=norm_date(r.get("created")), text=t, origin="human-written (PMC open-access papers)", license=lic, src="common-pile/pubmed", url=f"https://www.ncbi.nlm.nih.gov/pmc/articles/{r['id']}/")
+    return dict(id="pubmed-" + str(r["id"]), title=None, issued=norm_date(r.get("created")), content_date_max=norm_date(r.get("created")) or None, text=t, origin="human-written (PMC open-access papers)", license=lic, src="common-pile/pubmed", url=f"https://www.ncbi.nlm.nih.gov/pmc/articles/{r['id']}/")
 
 # ---- common-pile wall-safe fill (lead 81977): per-doc date where the source carries one; by-source only when the collection snapshot predates the wall or is pre-1929 by construction
 def _lic_ok(m, st):
@@ -65,71 +66,62 @@ def prep_caselaw(r, st):    # CAP: no per-doc date in rows; collection (static.c
     if not lic: return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="caselaw-" + str(r["id"]), title=None, issued=None, text=t, origin="human-written (US court opinions, Caselaw Access Project)", license=lic, src="common-pile/caselaw_access_project_filtered", url="https://static.case.law/", date_method="source-snapshot: CAP coverage ends 2020 (<= 2022-10-31); no per-doc date")
+    return dict(id="caselaw-" + str(r["id"]), title=None, issued=None, content_date_max="2020-12-31", text=t, origin="human-written (US court opinions, Caselaw Access Project)", license=lic, src="common-pile/caselaw_access_project_filtered", url="https://static.case.law/", date_method="source-snapshot: CAP coverage ends 2020 (<= 2022-10-31); no per-doc date")
 def prep_usgpo(r, st):      # per-doc publication date
-    d = norm_date(r.get("date"))
-    if not d or d > WALL: st["post_wall"] += 1; return None
+    d = norm_date(r.get("date")) or None      # undated docs are kept (no wall); content_date_max stays None
     lic = _lic_ok(r.get("metadata"), st)
     if not lic: return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="usgpo-" + str(r["id"]), title=r.get("title"), issued=d, text=t, origin="human-written (US Government Publishing Office documents)", license=lic, src="common-pile/usgpo_filtered", url=None, date_method="per-doc date field")
-def prep_hansard(r, st):    # sitting date is the tail of the id (e.g. lordswrans2016-06-15); fall back to metadata year only when <= 2021
-    m = re.search(r"(\d{4}-\d{2}-\d{2})$", str(r.get("id"))); d = m.group(1) if m else None
+    return dict(id="usgpo-" + str(r["id"]), title=r.get("title"), issued=d, content_date_max=d, text=t, origin="human-written (US Government Publishing Office documents)", license=lic, src="common-pile/usgpo_filtered", url=None, date_method="per-doc date field")
+def prep_hansard(r, st):    # sitting date is the tail of the id (e.g. lordswrans2016-06-15); fall back to the metadata year (any year; no wall)
+    m = re.search(r"(\d{4}-\d{2}-\d{2})$", str(r.get("id"))); d = m.group(1) if m else None; cdm = d
     if d is None:
-        y = re.search(r"['\"]year['\"]\s*:\s*['\"]?(\d{4})", str(r.get("metadata"))); d = f"{y.group(1)}-01-01" if y and int(y.group(1)) <= 2021 else None
-    if not d or d > WALL: st["post_wall"] += 1; return None
+        y = re.search(r"['\"]year['\"]\s*:\s*['\"]?(\d{4})", str(r.get("metadata"))); d = f"{y.group(1)}-01-01" if y else None; cdm = f"{y.group(1)}-12-31" if y else None
     lic = _lic_ok(r.get("metadata"), st)
     if not lic: return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="hansard-" + str(r["id"]), title=None, issued=d, text=t, origin="human-written (UK Parliament Hansard)", license=lic, src="common-pile/uk_hansard_filtered", url=None, date_method="sitting date from id / year<=2021")
+    return dict(id="hansard-" + str(r["id"]), title=None, issued=d, content_date_max=cdm, text=t, origin="human-written (UK Parliament Hansard)", license=lic, src="common-pile/uk_hansard_filtered", url=None, date_method="sitting date from id / year<=2021")
 def prep_pre1929(r, st):    # pre-1929 by construction (HathiTrust public-domain pre-1929 set)
     t = (r.get("text") or "").strip()
     if not words_ok(t, 120, 0.5): st["quality"] += 1; return None
-    return dict(id="pre1929-" + str(r["id"]), title=None, issued="<1929", text=t, origin="human-written (OCR of public-domain books published before 1929)", license="Public Domain (pre-1929, US)", src="common-pile/pre_1929_books_filtered", url=None, date_method="pre-1929 by construction")
+    return dict(id="pre1929-" + str(r["id"]), title=None, issued="<1929", content_date_max="1928-12-31", text=t, origin="human-written (OCR of public-domain books published before 1929)", license="Public Domain (pre-1929, US)", src="common-pile/pre_1929_books_filtered", url=None, date_method="pre-1929 by construction")
 
 # ---- Tier-1 (lead 81977 follow-up; per-doc `created` verified by range reads 2026-11-09, data/state/datewall-tier1-20261109.md)
 BADLIC2 = re.compile(r"non[\s_-]?commercial|no[\s_-]?deriv|noderiv", re.I)
 PERMISSIVE = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "unlicense", "cc0-1.0", "zlib", "0bsd", "bsl-1.0", "cc-by-4.0", "python-2.0", "mit-0", "bsd-3-clause-clear"}
-def _created_ok(r, st):
-    d = norm_date(r.get("created"))
-    if not d or d > WALL: st["post_wall"] += 1; return None
-    return d
+def _created_ok(r, st):     # no wall (owner 2026-11-11): returns the per-doc created date as metadata; "" when the row has none
+    return norm_date(r.get("created")) or ""
 def prep_stackv2_edu(r, st):
     d = _created_ok(r, st)
-    if not d: return None
     ls = [str(x).lower() for x in ((r.get("metadata") or {}).get("detected_licenses") or [])]
     if not ls or any(x not in PERMISSIVE for x in ls): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if len(t) < 200 or len(t) > 400000: st["quality"] += 1; return None
-    return dict(id="stackv2edu-" + str(r["id"]), title=(r.get("metadata") or {}).get("filename"), issued=d, text=t, origin="human-written (permissively licensed code/docs, Stack-Edu v2 via Common Pile)", license=",".join(ls), src="common-pile/stackv2_edu_filtered", url=None, date_method="per-doc created (blob committer date)")
+    return dict(id="stackv2edu-" + str(r["id"]), title=(r.get("metadata") or {}).get("filename"), issued=d, content_date_max=d or None, text=t, origin="human-written (permissively licensed code/docs, Stack-Edu v2 via Common Pile)", license=",".join(ls), src="common-pile/stackv2_edu_filtered", url=None, date_method="per-doc created (blob committer date)")
 def prep_github_archive(r, st):
     d = _created_ok(r, st)
-    if not d: return None
     m = r.get("metadata") or {}
     if str(m.get("license_type")) != "permissive" or BADLIC2.search(str(m.get("license"))): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if len(t.split()) < 60: st["quality"] += 1; return None
-    return dict(id="gharchive-" + str(r["id"]), title=None, issued=d, text=t, origin="human-written (GitHub issues/PRs of permissively licensed repos)", license=str(m.get("license")), src="common-pile/github_archive_filtered", url=m.get("url"), date_method="per-doc created")
+    return dict(id="gharchive-" + str(r["id"]), title=None, issued=d, content_date_max=d or None, text=t, origin="human-written (GitHub issues/PRs of permissively licensed repos)", license=str(m.get("license")), src="common-pile/github_archive_filtered", url=m.get("url"), date_method="per-doc created")
 def prep_arxiv_papers(r, st):
     d = _created_ok(r, st)
-    if not d: return None
     lic = str((r.get("metadata") or {}).get("license") or "")
     if not lic or BADLIC.search(lic) or BADLIC2.search(lic): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 200, 0.4): st["quality"] += 1; return None
-    return dict(id="arxiv-" + re.sub(r"v\d+$", "", str(r["id"])), title=None, issued=d, text=t, origin="human-written (arXiv papers, per-paper permissive licence)", license=lic, src="common-pile/arxiv_papers_filtered", url=(r.get("metadata") or {}).get("url"), date_method="per-doc created (submission date)")
+    return dict(id="arxiv-" + re.sub(r"v\d+$", "", str(r["id"])), title=None, issued=d, content_date_max=d or None, text=t, origin="human-written (arXiv papers, per-paper permissive licence)", license=lic, src="common-pile/arxiv_papers_filtered", url=(r.get("metadata") or {}).get("url"), date_method="per-doc created (submission date)")
 def prep_uspto(r, st):
     d = _created_ok(r, st)
-    if not d: return None
     m = r.get("metadata") or {}; pd = norm_date(m.get("publication_date"))
-    if pd and pd > WALL: st["post_wall"] += 1; return None
     lic = str(m.get("license") or "")
     if not lic or BADLIC.search(lic) or BADLIC2.search(lic): st["bad_licence"] += 1; return None
     t = (r.get("text") or "").strip()
     if not words_ok(t, 150, 0.5): st["quality"] += 1; return None
-    return dict(id="uspto-" + str(r["id"]), title=None, issued=d, text=t, origin="human-written (US patents, USPTO via Google Patents Public Data)", license=lic, src="common-pile/uspto_filtered", url=None, date_method="per-doc created+publication_date")
+    return dict(id="uspto-" + str(r["id"]), title=None, issued=d, content_date_max=max(d, pd) or None, text=t, origin="human-written (US patents, USPTO via Google Patents Public Data)", license=lic, src="common-pile/uspto_filtered", url=None, date_method="per-doc created+publication_date")
 SPEC = {
  "loc": dict(repo="storytracer/LoC-PD-Books", pref="data/", suffix=".parquet", rows=rows_loc, prep=prep_loc, rawdir="sources/loc-pd-books"),
  "pes2o": dict(repo="common-pile/peS2o", pref="v0/documents", suffix=".json.gz", rows=rows_json, prep=prep_pes2o, rawdir="text/pes2o"),
@@ -146,21 +138,18 @@ SPEC = {
 
 def _tail_date(r):
     m = re.search(r"(\d{4}-\d{2}-\d{2})$", str(r.get("id"))); return m.group(1) if m else None
-_POST_DATE = {   # the date the wall rule uses per lane; for the lift only docs with a date AFTER the wall are kept
+_POST_DATE = {   # the date used per lane to split the remainder; for "<lane>_post" only docs dated AFTER SPLIT_DATE are written (the existing packs hold the rest)
  "usgpo": lambda r: norm_date(r.get("date")), "hansard": _tail_date,
  "uspto": lambda r: max(norm_date(r.get("created")), norm_date((r.get("metadata") or {}).get("publication_date"))),
 }
 def _post_prep(base_prep, datef):
-    """Inverted wall (lead 83085): undated docs and docs dated on/before the wall are skipped (the existing packs carry the latter); the rest go through the lane's own licence/quality prep with the date test passed."""
+    """Remainder split (lead 83085; the wall itself is gone, lead 83389): docs dated on/before SPLIT_DATE are skipped because the existing packs carry them; undated docs are skipped here and counted in st["undated"] (the old rule never admitted them, so no existing pack holds them: a later pass can take them); the rest go through the lane's own licence/quality prep."""
     def prep(r, st):
-        global WALL
         d = datef(r)
         if not d: st["undated"] = st.get("undated", 0) + 1; return None
-        if d <= WALL: st["pre_wall_skip"] = st.get("pre_wall_skip", 0) + 1; return None
-        save = WALL; WALL = "9999-12-31"
-        try: rec = base_prep(r, st)
-        finally: WALL = save
-        if rec: rec["wall_class"] = "post-wall lift (lead 83085): dated after 2022-10-31; licence/quality gates as the lane"; rec["issued"] = d
+        if d <= SPLIT_DATE: st["pre_wall_skip"] = st.get("pre_wall_skip", 0) + 1; return None
+        rec = base_prep(r, st)
+        if rec: rec["split_class"] = "post-split remainder (lead 83085; no wall since lead 83389): dated after 2022-10-31; licence/quality gates as the lane"; rec["issued"] = d; rec["content_date_max"] = d
         return rec
     return prep
 if POST: SPEC = dict(SPEC, prep=_post_prep(SPEC["prep"], _POST_DATE.get(BASE) or (lambda r: norm_date(r.get("created")))))
@@ -225,7 +214,7 @@ def one(path, size, idx):
     rev = B.api.dataset_info(SPEC["repo"]).sha
     loc = B.retry(lambda: throttled_get(SPEC["repo"], path, rev, d, size), what=path)
     rawsha = B.sha256f(loc)
-    st = dict(docs_in=0, post_wall=0, bad_licence=0, quality=0, gate_dup=0, kept=0, pre_wall_skip=0, undated=0)
+    st = dict(docs_in=0, bad_licence=0, quality=0, gate_dup=0, kept=0, pre_wall_skip=0, undated=0)
     n = f"{idx:05d}"; prepf = f"{W}/prep-{n}.jsonl.zst"; cctx = zstandard.ZstdCompressor(level=6); batch = []
     import overlap_gate as G
     def flush(w):
@@ -261,15 +250,18 @@ def maybe_pack(force=False):
     if not todo or (est < PACK_TOK_TARGET and not force): return
     name = f"{LANE}-{todo[0]}-{todo[-1]}"
     prov = f"{ROOT}/packed/{name}.prov.jsonl"; os.makedirs(f"{ROOT}/packed", exist_ok=True)
+    cdm = ""      # pack-level content_date_max = the latest per-doc content_date_max (metadata only, never a filter; owner 2026-11-11)
     with open(prov, "w", encoding="utf-8") as pf:
         for k in todo:
             v = fin[k]
             with open(v["path"], "rb") as f:
                 for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(f), encoding="utf-8"):
-                    r = json.loads(line); pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"))) + "\n")
+                    r = json.loads(line); cdm = max(cdm, r.get("content_date_max") or "")
+                    pf.write(json.dumps(dict(doc_id=r["id"], raw_sha256=v["raw_sha256"], raw_file=v["raw_file"], fetched_ts=time.strftime("%Y-%m-%d"), license_url=r.get("license"), content_date_max=r.get("content_date_max"))) + "\n")
+    cdm = cdm or "undated"
     run([sys.executable, ROOT + "/scripts/pack.py", ROOT + "/packed", name] + [fin[k]["path"] for k in todo], f"{ROOT}/logs/pack-{name}.log")
-    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), (time.strftime("%Y-%m-%d") if POST else WALL), "text"], f"{ROOT}/logs/srcman-{name}.log")
-    json.dump(dict(domain=SPEC.get("domain", "mixed"), wall=WALL, wall_class=("post-wall lift (lead 83085)" if POST else "pre-wall"), source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{ROOT}/packed/{name}/domain.json", "w"))   # lead 81977: domain tag per pack so training can weight the mix
+    run([sys.executable, ROOT + "/scripts/source_manifest.py", f"{ROOT}/packed/{name}", prov, f"huggingface.co/datasets/{SPEC['repo']} (see raw_file per row; " + ("public rev-pinned source, no raw re-host)" if SPEC.get("rawup") is False else f"raw copy in {HF_RAW_REPO} {SPEC['rawdir']}/)"), "per-doc licence (see rows)", time.strftime("%Y-%m-%d"), cdm, "text"], f"{ROOT}/logs/srcman-{name}.log")
+    json.dump(dict(domain=SPEC.get("domain", "mixed"), content_date_max=cdm, split_class=("post-split remainder (lead 83085)" if POST else "main"), source_repo=SPEC["repo"], date_method="per-doc date where present; else source-snapshot/pre-1929 (see prep fn)", uspto_cap=SPEC.get("uspto_cap", "n/a")), open(f"{ROOT}/packed/{name}/domain.json", "w"))   # lead 81977: domain tag per pack so training can weight the mix
     for k in todo: fin[k]["packed"] = name
     import overlap_gate as G; G.build_docs([name])   # later shards must not duplicate this pack
     B.save(); B.log("PACKED", name, f"{len(todo)} finals")

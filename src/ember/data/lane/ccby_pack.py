@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Image lane (queue item 7): stream-through pack of commoncatalog-cc-by from <raw-repo> image/commoncatalog-cc-by (our verified raw copy).
-Per parquet: download -> ccby_manifest (licence/wall/human-text/heldout/dedup) -> delete parquet. Then pack_media image over the merged manifest -> packed to A:/ember-stage/media-packed (or B: media-packed) -> delete staged images.
+Per parquet: download -> ccby_manifest (licence/human-text/heldout/dedup; no date wall) -> delete parquet. Then pack_media image over the merged manifest -> packed to A:/ember-stage/media-packed (or B: media-packed) -> delete staged images.
 Resumable: staging/ccby-pack/state.json. Done marker: staging/ccby-pack/ALL.done. Usage: python scripts/ccby_pack.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
@@ -32,7 +32,10 @@ with open(man, "w", encoding="utf-8") as mo:
     for i in range(len(files)):
         pm = W + f"/parts/{i:03d}/manifest.jsonl"
         if os.path.exists(pm): mo.write(open(pm, encoding="utf-8").read())
-meta = W + "/meta.json"; json.dump({"dataset_id": "media:" + NAME, "content_date_max": "2022-10-31"}, open(meta, "w"))
+cdm = ""      # pack-level content_date_max = latest per-row content_date_max (metadata only; no date wall since 2026-11-11, lead 83389)
+for l in open(man, encoding="utf-8"):
+    cdm = max(cdm, (json.loads(l).get("content_date_max") or ""))
+meta = W + "/meta.json"; json.dump({"dataset_id": "media:" + NAME, "content_date_max": cdm or "undated"}, open(meta, "w"))
 outd = "A:/ember-stage/media-packed" if shutil.disk_usage("A:/").free > 30 * 2**30 else ROOT + "/media-packed"
 r = subprocess.run([sys.executable, ROOT + "/scripts/pack_media.py", "image", outd, NAME, man, meta], capture_output=True, text=True, env=dict(os.environ, PACK_MEDIA_SPEC="v2")); log(r.stdout[-400:], r.stderr[-300:])
 if r.returncode: sys.exit(3)

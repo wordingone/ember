@@ -6,7 +6,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from lane_config import LANE_ROOT, M_ROOT
 import json, hashlib, collections
-M = (M_ROOT + "/ember-data/custody/a1-v5-manifest/combined-train-manifest-v5-no-arxivqa.jsonl"); OUT = (LANE_ROOT + "/audit/a1-v5-provenance.jsonl"); WALL = "2022-10-31"
+M = (M_ROOT + "/ember-data/custody/a1-v5-manifest/combined-train-manifest-v5-no-arxivqa.jsonl"); OUT = (LANE_ROOT + "/audit/a1-v5-provenance.jsonl")
 DS = {
  "pd12m-full-train-0": dict(origin="https://huggingface.co/datasets/Spawning/PD12M (pd12m-full); paper https://arxiv.org/abs/2410.23144", image_date="unknown (public-domain images, many pre-2022; per-image date not recorded)", caption_date="2024-10-30", caption_author="model", caption_model="Florence-2-large", date_basis="paper arXiv 2410.23144 (Oct 2024); captions generated for the release", date_verified=True),
  "docci": dict(origin="https://google.github.io/docci/ ; https://arxiv.org/abs/2404.19753", image_date="2022-10..2023-11 (DOCCI-AAR range per paper; annotated-15k photo dates not recorded)", caption_date="2024-04-30", caption_author="human", caption_model=None, date_basis="paper submitted 2024-04-30; annotation year not found", date_verified=True),
@@ -25,9 +25,9 @@ with open(OUT, "w", encoding="utf-8") as fo:
     for i, l in enumerate(open(M, encoding="utf-8")):
         d = json.loads(l); p = DS[d["dataset_id"]]
         r = dict(row_index=i, object_sha256=d["object_sha256"], dataset_id=d["dataset_id"], licence=d["licence"], origin=p["origin"], image_date=p["image_date"], caption_date=p["caption_date"],
-                 caption_author=p["caption_author"], caption_model=p["caption_model"], date_basis=p["date_basis"], date_verified=p["date_verified"], post_wall=p["caption_date"] > WALL, eval_set=bool(p.get("eval_set")))
+                 caption_author=p["caption_author"], caption_model=p["caption_model"], date_basis=p["date_basis"], date_verified=p["date_verified"], content_date_max=p["caption_date"], eval_set=bool(p.get("eval_set")))
         if d["dataset_id"] == "docci": r["docci_example_id"], r["docci_split"] = docci[d["object_sha256"]]
-        r["verdict"] = "FAIL" if (r["post_wall"] or p["caption_author"] == "model" or r["eval_set"] or d["dataset_id"] == "docci") else ("CONDITIONAL_NC" if "NC" in d["licence"] else "PASS")
+        r["verdict"] = "FAIL" if (p["caption_author"] == "model" or r["eval_set"] or d["dataset_id"] == "docci") else ("CONDITIONAL_NC" if "NC" in d["licence"] else "PASS")
         cnt[(d["dataset_id"], r["verdict"])] += 1; n += 1
         fo.write(json.dumps(r, ensure_ascii=False) + "\n")
 print(n); [print(v, k) for k, v in sorted(cnt.items())]
