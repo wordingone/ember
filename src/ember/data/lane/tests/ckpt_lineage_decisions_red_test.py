@@ -2,10 +2,11 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Red test for the decision rows of ckpt_lineage_delete.py (issue 2450, review round 2): the manifest lists the PLAN, the decisions file says what was DONE.
-EXECUTED against a sandbox lane root (tmp tree, stub guards, stub protected set, os.remove spied): three covered files; the first removal declares a marker over the third, so
+EXECUTED against a sandbox lane root (tmp tree, stub guards, stub protected set, os.remove spied): four covered files; the first removal declares a marker over the third, and the fourth has no server entry (the fake server does not list it), so
 (1) the third file is kept and the decisions file says `kept` with that marker, the manifest still lists it as planned;
 (2) every `remove` decision row exists, fsynced, BEFORE the os.remove of that path (checked inside the spy);
-(3) each decision row carries the protected-set sha256 re-read for THAT file: the second removal records the new sha, not the one the plan was written under.
+(3) each decision row carries the protected-set sha256 re-read for THAT file: the second removal records the new sha, not the one the plan was written under;
+(4) the fourth file, refused INSIDE the removal call ("no server entry"), keeps its `remove` row and gets a second row: decision `kept`, reason = the refusal text, outcome_of `remove` (follow-up to 2481, lead mail 83411).
 Run: python scripts/tests/ckpt_lineage_decisions_red_test.py"""
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
@@ -24,7 +25,7 @@ os.environ["EMBER_LANE_ROOT"] = T + "/lane"; os.environ["EMBER_HF_RAW_REPO"] = "
 for sub in ("logs", "loops", "scratch"): os.makedirs(T + "/lane/" + sub, exist_ok=True)
 MB = 1 << 20; old = time.time() - 7200
 C = T + "/child"; os.makedirs(C)
-names = ("f1.pt", "f2.pt", "f3.pt")
+names = ("f1.pt", "f2.pt", "f3.pt", "f4.pt")
 for n in names:
     open(C + "/" + n, "wb").write(os.urandom(MB + 5) + n.encode()); os.utime(C + "/" + n, (old, old))
 json.dump({"C": dict(status="COVERED", dir=C, step_dir="lineage/C")}, open(T + "/lane/logs/ckpt-lineage-check.json", "w")); json.dump([], open(T + "/lane/logs/ckpt-probes.json", "w")); json.dump([], open(T + "/lane/logs/ckpt-old.json", "w"))
@@ -37,7 +38,7 @@ for m in (PS, E, B): sys.modules[m.__name__] = m
 sys.argv = ["ckpt_lineage_delete.py", "--apply"]
 spec = importlib.util.spec_from_file_location("cld_dec", SC + "/ckpt_lineage_delete.py"); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 import hashlib
-_SRV = {n: (os.path.getsize(C + "/" + n), hashlib.sha256(open(C + "/" + n, "rb").read()).hexdigest()) for n in names}
+_SRV = {n: (os.path.getsize(C + "/" + n), hashlib.sha256(open(C + "/" + n, "rb").read()).hexdigest()) for n in names if n != "f4.pt"}      # f4 has no server entry: remove_verified refuses it after its `remove` decision row
 mod.READER = lambda repo, hp: _SRV.get(hp.rsplit("/", 1)[-1])      # fake server (the deleter's injection point); without it the run asks the real Hub and every file is kept as "no server entry"
 DEC = os.path.dirname(mod.MAN) + "/ckpt-lineage-delete-decisions.jsonl"
 real_remove = os.remove; seen = []
@@ -62,13 +63,17 @@ out = buf.getvalue()
 dec = [json.loads(l) for l in open(DEC, encoding="utf-8")] if os.path.exists(DEC) else []
 man = [json.loads(l) for l in open(mod.MAN, encoding="utf-8")]
 by = {os.path.basename(r["path"]): r for r in dec}
-check("run completed with exit 7 (a kept file makes the run partial: `if kept: sys.exit(7)`) and two files were removed, the third kept", rc == 7 and not os.path.exists(C + "/f1.pt") and not os.path.exists(C + "/f2.pt") and os.path.exists(C + "/f3.pt") and "deleted 2 names" in out)
-check("RED the manifest lists all three planned rows (it is the plan, not the outcome)", len(man) == 3 and all("protected_set_sha256_at_plan" in r and "protected_set_sha256" not in r for r in man))
-check("the decisions file has one row per file: two `remove`, one `kept`", sorted(r["decision"] for r in dec) == ["kept", "remove", "remove"])
+check("run completed with exit 7 (a kept file makes the run partial: `if kept: sys.exit(7)`) and two files were removed, the third and fourth kept", rc == 7 and not os.path.exists(C + "/f1.pt") and not os.path.exists(C + "/f2.pt") and os.path.exists(C + "/f3.pt") and os.path.exists(C + "/f4.pt") and "deleted 2 names" in out)
+check("RED the manifest lists all four planned rows (it is the plan, not the outcome)", len(man) == 4 and all("protected_set_sha256_at_plan" in r and "protected_set_sha256" not in r for r in man))
+check("the decisions file has a row per decision: three `remove` (f1, f2, f4) and two `kept` (f3 by marker, f4 refused in the removal call)", sorted(r["decision"] for r in dec) == ["kept", "kept", "remove", "remove", "remove"])
 check("RED the kept file is marked `kept` with the marker that kept it (a reader does not conclude it was deleted)", by["f3.pt"]["decision"] == "kept" and by["f3.pt"]["marker"] == "/child/f3.pt")
 check("RED receipt-before-remove: for every os.remove the `remove` decision row for that path was already on disk", len(seen) == 2 and all(flag for _, flag in seen))
 check("RED each row records the set re-read for THAT file: f1 under sha-before, f2 and f3 under sha-after; the plan was written under sha-before", by["f1.pt"]["protected_set_sha256"] == "sha-before" and by["f2.pt"]["protected_set_sha256"] == "sha-after" and by["f3.pt"]["protected_set_sha256"] == "sha-after" and all(r["planned_under_sha256"] == "sha-before" for r in dec))
+f4 = [r for r in dec if os.path.basename(r["path"]) == "f4.pt"]
+check("RED a file refused inside the removal call keeps its `remove` row and gets a second row after it: decision `kept`, outcome_of `remove`, reason = the refusal text, no marker", [r["decision"] for r in f4] == ["remove", "kept"] and f4[1].get("outcome_of") == "remove" and "no server entry" in (f4[1].get("reason") or "") and f4[1].get("marker") is None and f4[0].get("outcome_of") is None)
+check("the marker-kept row (f3) carries no outcome_of and no reason (the two reasons for keeping stay distinguishable)", by["f3.pt"].get("outcome_of") is None and by["f3.pt"].get("reason") is None and by["f3.pt"]["marker"] == "/child/f3.pt")
 src = open(SC + "/ckpt_lineage_delete.py", encoding="utf-8").read()
 check("source: the decision row is written before the removal call (VR.remove_verified / remove_ruled)", src.index('_dec(r, cur, "remove")') < src.index("VR.remove_verified("))
+check("source: the refusal row is written after the removal call returns (outcome_of=\"remove\" follows VR.remove_ruled)", src.index("VR.remove_ruled(") < src.index('outcome_of="remove"', src.index("VR.remove_ruled(")))
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
