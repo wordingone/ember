@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "q2_terminal_chain.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+MODULE_PATH = TRANCHE_DIR / "q2_terminal_chain.py"
 
 
 def _load():
@@ -36,7 +36,7 @@ def _seal(value: dict[str, object], field: str = "receipt_sha256") -> dict[str, 
 
 
 def _write(root: Path) -> dict[str, Path]:
-    fixture_path = ROOT / "tests" / "test_capture_loader.py"
+    fixture_path = TRANCHE_DIR / "tests" / "test_capture_loader.py"
     spec = importlib.util.spec_from_file_location("q2_terminal_loader_fixture", fixture_path)
     assert spec is not None and spec.loader is not None
     fixture = importlib.util.module_from_spec(spec)

@@ -13,12 +13,12 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
-ADJUDICATOR_PATH = ROOT / "q2_capture_adjudicator.py"
-ADAPTER_PATH = ROOT / "q2_actual_event_adapter.py"
-ADAPTER_FIXTURE_PATH = ROOT / "tests" / "test_actual_event_adapter.py"
-PRESERVED_CONSUMER = ROOT / "q2_actual_update_successor.py"
-TERMINAL_CHAIN_PATH = ROOT / "q2_terminal_chain.py"
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+ADJUDICATOR_PATH = TRANCHE_DIR / "q2_capture_adjudicator.py"
+ADAPTER_PATH = TRANCHE_DIR / "q2_actual_event_adapter.py"
+ADAPTER_FIXTURE_PATH = TRANCHE_DIR / "tests" / "test_actual_event_adapter.py"
+PRESERVED_CONSUMER = TRANCHE_DIR / "q2_actual_update_successor.py"
+TERMINAL_CHAIN_PATH = TRANCHE_DIR / "q2_terminal_chain.py"
 
 
 def _load(path: Path, name: str):

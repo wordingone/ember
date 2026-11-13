@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "scripts/self-location-baseline.json",
-  "artifact_sha256": "bafd0492227ba088b177f732ec03713e997d84b13bbc23d2be5f23c1b3d2c947",
+  "artifact_sha256": "f272c3881e5a61f52a2e0e1817097bbe56de6a639dbf5491cb51d0dc6974ce65",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

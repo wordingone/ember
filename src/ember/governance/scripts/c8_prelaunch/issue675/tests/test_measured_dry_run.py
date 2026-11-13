@@ -8,7 +8,7 @@ from pathlib import Path
 
 import torch
 
-ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT))
+TRANCHE_DIR=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(TRANCHE_DIR))
 import q2_measured_dry_run as runner
 import pytest
 

@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(TRANCHE_DIR))
 
 from q2_event_inputs import EventInputRefusal, admit_event_inputs
 
@@ -70,7 +70,7 @@ def _fixture(tmp_path):
     for tensor in (x, torch.ones_like(x), torch.arange(2, dtype=torch.int64).unsqueeze(0), x, x):
         digest.update(tensor.numpy().tobytes())
     content_sha = hashlib.sha256(digest.hexdigest().encode()).hexdigest()
-    builder_sha = hashlib.sha256((ROOT / "q2_input_manifest_builder.py").read_bytes()).hexdigest()
+    builder_sha = hashlib.sha256((TRANCHE_DIR / "q2_input_manifest_builder.py").read_bytes()).hexdigest()
     batch = {"schema": "q2-event-batch-input-v1", "source_commit": source, "run_id": run, "builder_sha256": builder_sha, "microsteps": [{"x": refs[0], "y0": refs[1], "y_mtp": [refs[2]]}], "payload_sha256": hashlib.sha256(_canonical([hashes])).hexdigest(), "batch_sha256": content_sha}
     cp = tmp_path / "checkpoint.json"; bp = tmp_path / "batch.json"
     _write_json(cp, checkpoint); _write_json(bp, batch)

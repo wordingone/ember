@@ -61,9 +61,9 @@ from datetime import datetime, timezone
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS_ROOT = os.path.dirname(HERE)
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_ROOT))))  # <root>/src/ember/governance/scripts -> <root>
-sys.path.insert(0, SCRIPTS_ROOT)
+SCRIPTS_DIR = os.path.dirname(HERE)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS_DIR))))  # <root>/src/ember/governance/scripts -> <root>
+sys.path.insert(0, SCRIPTS_DIR)
 
 from w2_heldout.build_decontam_batch import (
     cheap_shard_sizes,

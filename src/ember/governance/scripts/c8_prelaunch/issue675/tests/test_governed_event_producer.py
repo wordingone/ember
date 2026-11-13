@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+TRANCHE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(TRANCHE_DIR))
 import q2_governed_event_producer as producer
 
 
