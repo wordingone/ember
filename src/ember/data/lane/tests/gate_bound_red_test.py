@@ -24,7 +24,8 @@ T = tempfile.mkdtemp(dir=SCR, prefix="gb-test-").replace("\\", "/"); G = T + "/g
 LED = S + "/h-ratio-k3/h-ledger-v1.jsonl"; open(LED, "w").write("x"); open(S + "/other-dir/f.bin", "w").write("y"); open(S + "/h-extra/z.bin", "w").write("z")
 PSF = T + "/protected-set.json"
 json.dump({"markers": [{"marker": "keep-this-hour-zz-20991231T000000Z/"}], "reserve_markers": []}, open(PSF, "w"))
-PS.PATH = PSF; PS.GATE_RECEIPTS = G
+LV = T + "/live"; os.makedirs(LV + "/rootA-20260905T0000Z/admission"); os.makedirs(LV + "/rootB-20260906T0000Z"); os.makedirs(LV + "/rootC-selfref"); os.makedirs(LV + "/rootD-20260907T0000Z"); os.makedirs(LV + "/cia-hour-a1-five-attn-stage-d4-20260101T000000Z")
+PS.PATH = PSF; PS.GATE_RECEIPTS = G; PS.LIVE_RECEIPTS = LV
 rcp = lambda name, inputs: json.dump({"inputs": inputs, "verdict": "PASS"}, open(G + "/" + name, "w"))
 rcp("c1c2-pack-a.json", {"trained": LED, "trained_sha256": "00", "candidate": T + "/packed/pack-a/ledger.jsonl", "trained_end": 5})
 hit = lambda p: V.protected_hit(p)[0] is not None
@@ -57,6 +58,24 @@ os.remove(G + "/c1c2-pack-a.json")
 check("no receipt with an `inputs` object refuses everything (cannot know what is bound)", hit(S + "/other-dir"))
 os.remove(G + "/c1c2-noinputs.json")
 check("an empty receipt dir refuses everything", hit(S + "/other-dir"))
+# gap 1 of #2486: path lists nested inside `inputs`, and lineage roots named by another live receipt
+rcp("c1c2-pack-a.json", {"trained": LED, "nested": {"extra_lists": [S + "/other-dir/f.bin", {"deeper": S + "/h-extra"}]}})
+check("a path nested inside `inputs` (dict in list in dict) is bound", hit(S + "/other-dir/f.bin") and hit(S + "/h-extra/z.bin"))
+rcp("c1c2-pack-a.json", {"trained": LED, "trained_sha256": "00", "candidate": T + "/packed/pack-a/ledger.jsonl", "trained_end": 5})
+open(LV + "/rootB-20260906T0000Z/contract.json", "w").write(json.dumps({"parent": LV + "/rootA-20260905T0000Z/admission/census-v1.json"}))
+open(LV + "/rootC-selfref/self.json", "w").write(json.dumps({"me": LV + "/rootC-selfref/x"}))
+os.makedirs(LV + "/rootD-20260907T0000Z/m"); open(LV + "/rootD-20260907T0000Z/m/broken.json", "w").write('{"truncated": "' + LV.replace("/", "\\\\") + '\\rootE-gone"')
+check("a live root named by another live receipt is refused (root and what is inside it)", hit(LV + "/rootA-20260905T0000Z") and hit(LV + "/rootA-20260905T0000Z/admission/census-v1.json"))
+check("a live root named only by its own receipt, or by nobody, is allowed", not hit(LV + "/rootC-selfref") and not hit(LV + "/rootB-20260906T0000Z"))
+os.makedirs(LV + "/rootE-gone"); open(LV + "/rootB-20260906T0000Z/c2.json", "w").write('{"x": "' + LV.replace("/", "\\\\") + '\\rootD-20260907T0000Z\\m')
+check("a naming file that does not parse still binds the root it names (text scan, backslash form)", hit(LV + "/rootD-20260907T0000Z"))
+open(LV + "/rootB-20260906T0000Z/hour.json", "w").write(json.dumps({"parent": LV + "/cia-hour-a1-five-attn-stage-d4-20260101T000000Z/m"}))
+check("an hour dir named by a later hour receipt is NOT bound by the cross-reference (the reserve planner reclaims old hours)", not hit(LV + "/cia-hour-a1-five-attn-stage-d4-20260101T000000Z"))
+os.remove(LV + "/rootB-20260906T0000Z/contract.json")
+check("and the binding ends when the naming receipt is removed (cache re-keyed)", not hit(LV + "/rootA-20260905T0000Z"))
+PS.LIVE_RECEIPTS = T + "/no-such-live-root"
+check("a missing live-receipts root refuses everything (fail closed)", hit(S + "/other-dir"))
+PS.LIVE_RECEIPTS = LV
 # mutant: bound check off -> the deleter would take the ledger dir (proves the red catches it)
 rcp("c1c2-pack-a.json", {"trained": LED})
 orig = PS.bound_hit; PS.bound_hit = lambda *a, **k: (None, "")
@@ -64,10 +83,21 @@ check("MUTANT (bound check off) lets the ledger dir through, so the red above is
 PS.bound_hit = orig
 check("restored: refused again", hit(S + "/h-ratio-k3"))
 # real receipts: the live set parses (read only)
-PS.GATE_RECEIPTS = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state"); PS.PATH = (LANE_ROOT + "/loops/protected-set.json")
+PS.GATE_RECEIPTS = (M_ROOT + "/avir/" + SEAT_TRAIN + "/state"); PS.PATH = (LANE_ROOT + "/loops/protected-set.json"); PS.LIVE_RECEIPTS = LV
 try:
     b = PS.bound_paths(); check("real gate receipts parse (%d receipts, %d bound paths)" % (b["receipts"], len(b["paths"])), b["receipts"] > 0 and len(b["paths"]) > 0)
 except Exception as e:
     check("real gate receipts parse: " + repr(e), False)
+# real live-receipts root (read only): the cross-reference scan parses it and binds at least one root; the #2116 image-n256 root (the case #2486 is about) must read as bound if it still exists
+REAL_LIVE = (M_ROOT + "/ember-live-receipts")
+try:
+    rr = PS._live_roots(REAL_LIVE); first = list(rr.items())[:3]
+    check("real live-receipts root scans without error and binds at least one root (%d roots bound)" % len(rr), len(rr) > 0)
+    for k, v in first: print("   bound:", k.split("/")[-1][:60], "|", v[:110])
+    R2116 = REAL_LIVE + "/issue2116-image-n256-lineage-b185faf1-20260905T2119Z"
+    if os.path.isdir(R2116): check("the #2116 image-n256 root reads as bound", PS._norm(R2116) in rr)
+    else: print("NOTE the #2116 image-n256 root no longer exists on disk (removed by the 2026-10-07 reclaim), so its bound state cannot be exercised")
+except Exception as e:
+    check("real live-receipts root scan: " + repr(e), False)
 shutil.rmtree(T, ignore_errors=True)
 print("ALL PASS" if ok else "FAILED"); sys.exit(0 if ok else 1)
