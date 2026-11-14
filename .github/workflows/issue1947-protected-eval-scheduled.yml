@@ -4,8 +4,15 @@
 name: issue1947 protected eval scheduled verification
 
 on:
-  schedule:
-    - cron: "23 10 * * *"
+  # Schedule DISABLED 2026-11-05. The last step verifies
+  # receipts/issue1947/release-bundle-pointer.json, and no release bundle has
+  # been admitted to master (the issue1947 campaign is paused), so every
+  # scheduled run refused on a missing pointer and carried no signal.
+  # RE-ENABLE CONDITION: a release-bundle pointer is admitted on master at
+  # receipts/issue1947/release-bundle-pointer.json. Then restore:
+  #   schedule:
+  #     - cron: "23 10 * * *"
+  # workflow_dispatch stays available for manual runs in the meantime.
   workflow_dispatch:
 
 permissions:
