@@ -67,6 +67,13 @@ def _git(root: Path, *args: str) -> str:
     return proc.stdout.strip()
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_installed_lab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Every test starts with no installed ember-lab visible, whatever this host has."""
+    monkeypatch.delenv(gate.INSTALLED_EXE_ENV, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "no-local-app-data"))
+
+
 @pytest.fixture
 def main_tree(tmp_path: Path) -> Path:
     """A real, standalone repository standing in for the durable main tree."""
@@ -135,3 +142,70 @@ def test_canonical_ember_lab_binary_from_worktree_with_no_main_tree_build_is_non
     by accident of both paths being equally empty).
     """
     assert gate.canonical_ember_lab_binary(worktree) is None
+
+
+def _write_exe(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"stand-in binary bytes")
+    return path.resolve()
+
+
+def test_installed_exe_from_env_is_found_with_no_local_build(
+    main_tree: Path, worktree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """RED when only the local target path is tried: a host that carries a released
+    ``ember-lab.exe`` and no ``runtime/ember-lab/target`` build must still resolve a
+    binary, so custody-verify works once the lab source is not in this repository.
+    """
+    installed = _write_exe(tmp_path / "released" / "ember-lab.exe")
+    monkeypatch.setenv(gate.INSTALLED_EXE_ENV, str(installed))
+    assert not (main_tree / "runtime").exists()
+    assert gate.canonical_ember_lab_binary(worktree) == installed
+
+
+def test_installed_exe_from_fixed_install_dir_is_found_with_no_local_build(
+    main_tree: Path, worktree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The fixed install dir under ``%LOCALAPPDATA%`` is the second installed route."""
+    local_app_data = tmp_path / "local-app-data"
+    installed = _write_exe(local_app_data / "ember-lab" / "bin" / "ember-lab.exe")
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    assert gate.canonical_ember_lab_binary(worktree) == installed
+
+
+def test_installed_exe_wins_over_a_local_build(
+    main_tree: Path, worktree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Installed first: with both present, the installed release is the answer."""
+    _write_exe(main_tree / "runtime" / "ember-lab" / "target" / "release" / "ember-lab.exe")
+    installed = _write_exe(tmp_path / "released" / "ember-lab-185b8abd.exe")
+    monkeypatch.setenv(gate.INSTALLED_EXE_ENV, str(installed))
+    assert gate.canonical_ember_lab_binary(worktree) == installed
+
+
+def test_env_pointing_at_a_missing_file_falls_back_to_the_local_build(
+    main_tree: Path, worktree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A stale env value is skipped, not an error: the local target is the fallback."""
+    local = _write_exe(main_tree / "runtime" / "ember-lab" / "target" / "release" / "ember-lab.exe")
+    monkeypatch.setenv(gate.INSTALLED_EXE_ENV, str(tmp_path / "gone" / "ember-lab.exe"))
+    assert gate.canonical_ember_lab_binary(worktree) == local
+
+
+def test_env_pointing_at_a_misnamed_file_is_not_accepted(
+    main_tree: Path, worktree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Only ``ember-lab*.exe`` counts, so the variable cannot name an arbitrary program."""
+    other = _write_exe(tmp_path / "released" / "calc.exe")
+    monkeypatch.setenv(gate.INSTALLED_EXE_ENV, str(other))
+    assert gate.canonical_ember_lab_binary(worktree) is None
+
+
+def test_custody_verify_refusal_names_every_place_it_looked(
+    main_tree: Path, worktree: Path
+):
+    """With nothing installed and nothing built, the refusal says both routes."""
+    with pytest.raises(gate.CustodyRefused) as caught:
+        gate.custody_verify(worktree, ["0" * 64], {})
+    reason = caught.value.receipt["refusal_reason"]
+    assert "EMBER_LAB_EXE" in reason and "runtime/ember-lab/target" in reason
