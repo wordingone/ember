@@ -22,6 +22,7 @@ basis for a missing-verdict.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -75,15 +76,54 @@ def _durable_repo_root(repo_root: Path) -> Path:
     return common_dir.parent
 
 
-def canonical_ember_lab_binary(repo_root: Path) -> Path | None:
-    """The one repository-governed daemon/CLI binary -- never a caller-supplied path.
+#: Environment variable naming an installed ``ember-lab.exe`` (a released build,
+#: operator-set). Tried before any local build.
+INSTALLED_EXE_ENV = "EMBER_LAB_EXE"
 
-    Mirrors ``src/ember/governance/scripts/ember_dispatch_token.py::_canonical_ember_lab_binary`` exactly:
-    the same two candidate build outputs, the same containment check. Always
-    resolved against the durable main-tree root (``_durable_repo_root``), even
-    when ``repo_root`` names a worktree -- there is exactly one governed build,
-    never a per-worktree copy.
+#: Fixed install location of a released ``ember-lab.exe``, under ``%LOCALAPPDATA%``.
+INSTALLED_EXE_RELATIVE = Path("ember-lab") / "bin" / "ember-lab.exe"
+
+
+def installed_ember_lab_binary() -> Path | None:
+    """A released ``ember-lab.exe`` installed on this host, or ``None``.
+
+    Order: the path in ``EMBER_LAB_EXE``, then ``%LOCALAPPDATA%/ember-lab/bin/ember-lab.exe``.
+    A candidate counts only when it resolves to an existing regular file whose name
+    is ``ember-lab*.exe``; a missing or misnamed candidate is skipped, never an
+    error, so the caller can fall back to a local build.
     """
+    candidates: list[Path] = []
+    explicit = os.environ.get(INSTALLED_EXE_ENV)
+    if explicit:
+        candidates.append(Path(explicit))
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / INSTALLED_EXE_RELATIVE)
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        name = resolved.name.lower()
+        if resolved.is_file() and name.startswith("ember-lab") and name.endswith(".exe"):
+            return resolved
+    return None
+
+
+def canonical_ember_lab_binary(repo_root: Path) -> Path | None:
+    """The one governed daemon/CLI binary.
+
+    An installed release comes first (``installed_ember_lab_binary``), so a host
+    without the lab source can still verify custody. The fallback is the local
+    build output, with the same two candidates and the same containment check as
+    ``src/ember/governance/scripts/ember_dispatch_token.py::_canonical_ember_lab_binary``,
+    always resolved against the durable main-tree root (``_durable_repo_root``),
+    even when ``repo_root`` names a worktree -- there is exactly one governed
+    local build, never a per-worktree copy.
+    """
+    installed = installed_ember_lab_binary()
+    if installed is not None:
+        return installed
     root = _durable_repo_root(repo_root)
     for candidate in (
         root / "runtime" / "ember-lab" / "target" / "release" / "ember-lab.exe",
@@ -142,12 +182,13 @@ def custody_verify(
             "admitted": False,
             "results": [],
             "refusal_reason": (
-                "no canonical ember-lab binary is built under this repository "
+                "no ember-lab binary found: neither an installed release "
+                "($EMBER_LAB_EXE or %LOCALAPPDATA%/ember-lab/bin/ember-lab.exe) nor a local build "
                 "(runtime/ember-lab/target/{release,debug}/ember-lab.exe)"
             ),
         }
         raise CustodyRefused(
-            "custody-verify: no canonical ember-lab binary is built", refusal
+            "custody-verify: no ember-lab binary is installed or built", refusal
         )
     db_path = db if db is not None else default_catalog_db(repo_root)
 
