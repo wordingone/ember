@@ -2,6 +2,8 @@
 <!-- workstream_id: EMBER-02B -->
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 
+> **Earlier plan.** This contract is for the 3B from-scratch run, which has ended. It is kept as record. For what Ember is now, read the [root README](../../../../README.md).
+
 # Ember restart sparse 3B namespace and run contract
 
 [configs/ember-restart-3b.json](../../../../configs/ember-restart-3b.json) version 2 supersedes the retired dense, positionless declaration before any production allocation. It describes a clean-random 14-layer H=2048 unified decoder with shared attention and four independently trainable SwiGLU banks per layer: vision, audio, reasoning, and tool.

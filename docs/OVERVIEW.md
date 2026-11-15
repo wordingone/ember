@@ -1,3 +1,5 @@
+> **Earlier plan.** This page was written for the 3B from-scratch lineage, which has ended. It is kept as record and has not been revised for Ember 27B A3B. For what Ember is now, read the [root README](../README.md).
+
 # Ember in plain words: an overview for reviewers
 
 This page is for a reader who has not worked on Ember and wants to know, in about ten minutes, what

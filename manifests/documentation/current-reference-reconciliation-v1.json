@@ -14,7 +14,7 @@
     "corrected_regex_sha256": "c0af16ec09ef721b49bfc733c050e8724baa8e04d44aa4a03d946ec0f49be511"
   },
   "counts": {
-    "documents": 398,
+    "documents": 400,
     "filing_classifier_current_unresolved": 484,
     "corrected_classifier_current_unresolved": 380,
     "explicit_filing_dispositions": 444,

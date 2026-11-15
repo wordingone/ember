@@ -7,99 +7,67 @@ mechanism_erasure=forbidden
 -->
 <!-- Reading note for the header above: its field names are fixed tokens that authority verification
 checks in every governed document. `borrowed_lineage=frozen_reference_only` names the historical
-baseline boundary (hours 1-43); it does not forbid declared open-weight use after the baseline hours, which
+baseline boundary (hours 1-43) and does not forbid declared open-weight use after the baseline hours, which
 the text below states and each training hour records. -->
+
 
 # Ember
 
 <a id="ember.claim.identity"></a>
 <a id="ember.claim.problem"></a>
-Ember is a project to build its own AI model on one home computer with one consumer graphics
-card, and to run it locally. Training hours 1-43 are a from-scratch, model-free baseline: they use no
-borrowed model weights, teacher models or judge models, and every weight in them was learned here.
-Since early November 2026, declared open-weight teachers, judges, generated data, and open weights whose
-licence permits it may also be used. Each use is declared and recorded per training hour, and every claim
-about what the model can do must say which of them were used and point to public evidence anyone can check.
-Training data is human-sourced first. Model-generated data is allowed when it is declared,
-licence-recorded, marked, screened for quality and contamination, and counted separately from
-human-sourced data. This page does not claim that any model-generated data has been consumed: the per-hour
-declarations are the record. The project also includes `ember-cli`, the command-line tool used to run and
-watch the training, and a lab for running experiments.
+I am now obsessed with training my own foundation model, creating my own harness for the terminal, and experimenting to push the bounds of what is possible with the resources I have. Ember is that work. It runs locally on one home computer with one consumer GPU, and every claim about what it can do points to public evidence anyone can check.
+
+I've also earnestly been reading research papers, trying to understand software, computer science as much as I could by myself using available resources, not just entrusting that the agents would handle everything. The experiments and most of the code are still built and run with AI agents (Claude). Training data is human-sourced first.
+
+## What Ember is now
+
+Ember is four things. The first two are research. The proposed 27B-to-Ember transformation is a research and engineering pathway, not an already demonstrated capability.
+
+**Ember 27B A3B.** Ember 27B can't be built just to allow for the current Qwen 27B transplant. What happens when newer open source models are released? Ember 27B A3B needs to be 1 million context window, so that design of that Ember must consider that. It's not just the personal module being replaceable.
+
+**The transplant research.** Given that the donor model receives score x.xx on MLE-bench, and the recipient model scores x.xx-y.yy, how must the transplant be done in order to then raise the recipient model post transplant to x.xx? The goal isn't one time success or even multiple time success, it's doing enough varied experiments to understand the underlying methods in which how to do it successfully every time, no matter the variable. The goal isn't to make Ember 27B a Qwen specific recipient, but more of a universal recipient. And then the transplants should happen without ever destroying those weights. It wasn't, get better at addition, it was literally getting better at math as a whole.
+
+**Ember, the agent.** We also need to increasingly be moving (ember+ember-lab+ember-studio) from a tool that lets us (Claude agents, me, Ember) conduct experiments to a system drivable solely by Ember that can systematically and continuously conduct and learn from them. Ember should manage/initiate the experiments and then go dormant, as well as inspect the results post.
+
+**Ember Studio.** Make it a research environment in which visual and spatial interaction is the primary way of understanding and manipulating ML systems. A fundamental principle in Ember Studio's tabs and graphics must be that it MUST be a visual interface.
+
+## How the research is run
+
+Don't define a method then figure out the outcome. Define the outcome then figure out the method. Make sure that we aren't digging down the wrong hole where others have already dug and found it to be 100% a dead end.
+
+## History
+
+We will not be training the 3B Ember model anymore. Earlier Ember was a 3B model trained from scratch on this one GPU, and its checkpoints, receipts and ledgers stay here as an archive.
+
+## Status
 
 <a id="ember.claim.maturity"></a>
 <a id="ember.claim.target"></a>
-Ember has a certified custody and experiment spine, but no current checkpoint is an admitted Ember
-model. The governing target remains a sufficiently trained sparse unified text-image-audio decoder
-with native reasoning and structured tool use. Designed, implemented, executed, measured,
-independently reproduced, and admitted are different maturity states; documentation never upgrades
-one into another.
-
-## First-reader facts
-
-- Ember is the complete sovereign foundation-intelligence project: the local
-  foundation-model creation primitive, continuously improving organism, `ember-cli` operator body,
-  and general local AI laboratory.
-- It addresses creating and operating owned local foundation intelligence on one consumer GPU.
-  Claims require verified public experience and receipts; declared open-weight models whose licence
-  permits it and declared model-assisted training are allowed, and every claim states whether they were
-  used. One dated data exception is described under
-  [Current truth and roadmap](#current-truth-and-roadmap).
-- `EMBER-01` is certified and grants no model-training or capability credit. `EMBER-02` is the active goal.
-  This public checkout does not establish an admitted checkpoint. Its minimum network is 3,000,000,000
-  total parameters and its destination exceeds 27,000,000,000; these are goal thresholds, not current
-  measurements. Read [CONTINUITY](docs/domains/governance/authority/CONTINUITY.md) for dated owner-
-  reported training and score status, selected-pointer evidence, and receipt-stamped snapshots. A score
-  or pointer advance does not establish checkpoint admission or capability.
-- The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
-  Lab integrates experiments across declared interfaces and does not replace domain authority.
-- Inspection starts at this root README and the [canonical start page](docs/domains/governance/guides/START-HERE.md).
-  On Windows, `tools/launchers/Ember.cmd` is the operator entry. Python uses
-  `manifests/python-environment-v1.json`; Rust uses `runtime/ember-lab/Cargo.toml`; `ember-cli` uses
-  `src/ember/infrastructure/tools/ember-cli/src/package.json`.
-- The smallest safe executable check is CPU-only authority verification from the repository root:
-  `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
-  conservation; it requires no credentials, weights, or GPU and grants no model capability.
-- Exact mutable current truth lives only in
-  [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md); this README links rather than
-  copying it. Public roadmap certificates, not prose or progress bars, carry completion.
-- Contribution and independent reproduction start at
-  [`docs/contributing.md`](docs/contributing.md) and the public
-  [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md): bind an exact public source, replay
-  documented commands, and verify source identities and receipts without hidden or local evidence.
+- Ember 27B A3B: the stock Qwen3.8-27B layer stack runs today, and about 3.27B parameters used per token is a target with no result yet
+- The transplant research: the paper is a working draft that claims no result, and no transplant harness is in this repository
+- Ember, the agent: I and the AI agents I direct still do most of the loop steps today
+- Ember Studio: [wordingone/ember-studio](https://github.com/wordingone/ember-studio) is the public face, no release build is published yet, and its application source is not in this repository
+- Overall: no current checkpoint is an admitted Ember model, and the goal file still sets the target as a sufficiently trained sparse unified text-image-audio decoder with native reasoning and structured tool use
+- What runs today and what is a hypothesis, with the test and the date of each: [the status page](docs/STATUS.md)
 
 ## Where things are
 
-This map points to the current implementation and authority surfaces. The guard test keeps every
-path live and requires every tracked top-level directory to remain explained.
-
-| Kind | Name | Path | What you find there |
+| Kind | Name | Path | Contents |
 |---|---|---|---|
-| Domain | Model | `src/ember/model` | The canonical Python model implementation. |
-| Domain | Data | `src/ember/data` | Dataset custody, synchronization, and data-domain code. |
-| Domain | Training | `src/ember/training` | The canonical training-loop implementation. |
-| Domain | Evaluation | `src/ember/evaluation` | Protected and held-out evaluation entry points. |
-| Domain | Runtime | `src/ember/runtime` | Python inference and runtime entry points. |
-| Domain | Lab | `domains/lab` | Cross-domain experiments and their declared interfaces. |
-| Domain | Infrastructure | `src/ember/infrastructure` | Operator tooling, launchers, and execution support. |
-| Domain | Governance/contracts | `src/ember/governance` | Policy enforcement and receipt-governance code. |
-| Artifact | Model | `src/ember/model/ember_v0_model.py` | Unified decoder definition. |
-| Artifact | Training loop | `src/ember/training/pretrain.py` | Owned pretraining loop. |
-| Artifact | Evaluator | `src/ember/evaluation/cbase_heldout_eval.py` | Held-out evaluation entry point. |
-| Artifact | Runtime entry | `src/ember/runtime/infer.py` | Inference entry point. |
-| Artifact | Data pipeline | `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py` | Current text-lab corpus pipeline. |
-| Artifact | Governing contracts | `docs/domains/governance/authority` | Canonical goal, continuity, and governance authorities. |
-
-Start with the [first-reader route](docs/domains/governance/guides/START-HERE.md), or use the
-[documentation map](docs/domains/governance/DOCS-README.md) to choose a route by task, audience, or technical domain.
-
-## Architecture
-
-The adopted domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and
-Governance. Lab integrates experiments across the declared domain interfaces; it does not replace
-their authority. Infrastructure and Governance are cross-cutting. The
-[system overview](docs/architecture/system-overview.md) explains the boundaries, dependencies, and
-implemented-versus-designed state, and the [domain index](docs/domains/governance/DOCS-README.md#technical-domains)
-links each canonical overview.
+| Domain | Model | `src/ember/model` | The canonical Python model implementation |
+| Domain | Data | `src/ember/data` | Dataset custody, synchronization, and data-domain code |
+| Domain | Training | `src/ember/training` | The canonical training-loop implementation |
+| Domain | Evaluation | `src/ember/evaluation` | Protected and held-out evaluation entry points |
+| Domain | Runtime | `src/ember/runtime` | Python inference and runtime entry points |
+| Domain | Lab | `domains/lab` | Cross-domain experiments and their declared interfaces |
+| Domain | Infrastructure | `src/ember/infrastructure` | Operator tooling, launchers, and execution support |
+| Domain | Governance/contracts | `src/ember/governance` | Policy enforcement and receipt-governance code |
+| Artifact | Model | `src/ember/model/ember_v0_model.py` | Unified decoder definition |
+| Artifact | Training loop | `src/ember/training/pretrain.py` | Owned pretraining loop |
+| Artifact | Evaluator | `src/ember/evaluation/cbase_heldout_eval.py` | Held-out evaluation entry point |
+| Artifact | Runtime entry | `src/ember/runtime/infer.py` | Inference entry point |
+| Artifact | Data pipeline | `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py` | Current text-lab corpus pipeline |
+| Artifact | Governing contracts | `docs/domains/governance/authority` | Canonical goal, continuity, and governance authorities |
 
 ## Inspect or install
 
@@ -119,60 +87,28 @@ root, install the measured direct environment:
 python src/ember/infrastructure/tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
 ```
 
-This requires a supported Windows Python environment and network access for dependencies; it does
+This requires a supported Windows Python environment and network access for dependencies. It does
 not require model weights or a GPU. See the [start guide](docs/domains/governance/guides/START-HERE.md) before using
 operator or training surfaces.
-
-## Verify safely
-
-The smallest safe default is CPU-only authority verification from the repository root:
-
-```text
-python src/ember/governance/scripts/verify_authority_conservation.py --root .
-```
-
-For a smaller demonstration of receipt semantics, run:
-
-```text
-python src/ember/governance/scripts/receipt_check.py --selftest
-```
-
-These checks require no credentials, weights, or GPU and grant no model capability. The
-[verification guide](docs/guides/VERIFY.md) records expected results and the complete four-command
-public replay set.
 
 ## Current truth and roadmap
 
 <a id="ember.claim.mutable-state-owner"></a>
-Exact mutable state lives in
-[`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). This README links to that owner and
-does not duplicate its rapidly changing identities. That page separates owner-reported live status
-from generated receipt- and manifest-stamped snapshots. To reproduce a board block, inspect its named
-receipt and use `python src/ember/governance/scripts/gen_readme_status.py --check` with the same `--data-root`; that checks only that receipt
-tree. Public milestone contracts and certificates live under the
-[roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
-completion claim.
-
-Data exception: an internal audit ([`receipts/genesis/genesis-audit-20260706.md`](receipts/genesis/genesis-audit-20260706.md)) found earlier training data included FineWeb-Edu, selected by a classifier trained on Llama-3-70B-Instruct annotations; it was later dropped ([`docs/domains/governance/anatomy/14_MODEL_CARD.md`](docs/domains/governance/anatomy/14_MODEL_CARD.md)). The lineage is not certified clean.
+Exact mutable state lives in [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). Public milestone contracts and certificates live under the [roadmap](docs/domains/governance/roadmap/README.md).
 
 ## Documentation routes
 
-- Understand the project: [system overview](docs/architecture/system-overview.md) and
-  [glossary](docs/GLOSSARY.md).
-- Use or inspect it: [start guide](docs/domains/governance/guides/START-HERE.md).
-- Verify evidence: [verification guide](docs/guides/VERIFY.md) and
-  [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md).
-- Operate it: [operator documentation](docs/domains/governance/operator/README.md).
-- Audit authority: [continuity](docs/domains/governance/authority/CONTINUITY.md),
-  [invariant](docs/authority/INVARIANT.md), and
-  [governance](docs/domains/governance/authority/GOVERNANCE.md).
-- Browse every current entry document: [generated canonical index](docs/INDEX.md).
+- [Docs map](docs/README.md), current versus archive
+- [Status](docs/STATUS.md), what runs today and what is a hypothesis
+- [First-reader route](docs/domains/governance/guides/START-HERE.md) and the [documentation map](docs/domains/governance/DOCS-README.md)
+- [Verification guide](docs/guides/VERIFY.md), the CPU-only checks
+- [System overview](docs/architecture/system-overview.md) and [glossary](docs/GLOSSARY.md)
+- [Operator documentation](docs/domains/governance/operator/README.md)
+- [Generated canonical index](docs/INDEX.md)
 
 ## Contributing
 
-Use the [canonical contribution route](docs/contributing.md). Contributions must preserve public
-source identity, replay their documented commands, and separate implementation evidence from model
-or campaign claims.
+Use the [canonical contribution route](docs/contributing.md).
 
 ## License
 
