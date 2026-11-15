@@ -1,3 +1,5 @@
+> **Earlier plan.** The identity and EMBER-02 sentences below were written for the 3B lineage, which has ended, and have not been revised. For what Ember is now, read the [root README](../../../../README.md).
+
 # Start here
 
 This route is for a technically capable reader with no project history. Ember is a complete local
