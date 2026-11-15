@@ -65,6 +65,16 @@ MECHANISM_PATH = "docs/domains/governance/spec/llmq/mechanism-attribution-v1.jso
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_installed_lab(monkeypatch, tmp_path_factory):
+    """No test sees an ember-lab release installed on the host running it."""
+    monkeypatch.delenv("EMBER_LAB_EXE", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path_factory.mktemp("no-local-app-data")))
+
+
 def _run_hidden(args, **kwargs):
     return subprocess.run(
         args,
@@ -1657,3 +1667,143 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     tampered = assess(tmp_path, payload)
     assert tampered["verdict"] == "PRELAUNCH_REJECTED"
     assert "governed_source_receipt.source_manifest_binding" in tampered["missing"]
+
+
+# --- installed release exe, bound to the release's recorded source sha ------------------
+
+
+def _write_release(directory, *, source_sha256="c" * 64, binary_bytes=b"released ember-lab daemon binary", **manifest_overrides):
+    directory.mkdir(parents=True, exist_ok=True)
+    exe = directory / "ember-lab.exe"
+    exe.write_bytes(binary_bytes)
+    binary_sha256 = hashlib.sha256(binary_bytes).hexdigest()
+    manifest = {"schema": "ember-lab-release-v1", "binary_sha256": binary_sha256, "source_sha256": source_sha256}
+    manifest.update(manifest_overrides)
+    (directory / "ember-lab-release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return exe, binary_sha256, source_sha256
+
+
+def test_installed_release_is_the_canonical_binary_with_its_recorded_source(monkeypatch, tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    exe, _binary_sha, source_sha = _write_release(tmp_path / "installed")
+    empty_repo = tmp_path / "repo-without-lab-source"
+    empty_repo.mkdir()
+    monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
+    assert readiness._canonical_ember_lab_binary(empty_repo) == exe.resolve()
+    assert readiness._canonical_ember_lab_source_sha256(empty_repo) == source_sha
+    # Installed wins over the local build that this repository checkout also carries.
+    assert readiness._canonical_ember_lab_binary(REPO_ROOT) == exe.resolve()
+    assert readiness._canonical_ember_lab_source_sha256(REPO_ROOT) == source_sha
+
+
+def test_installed_release_in_fixed_install_dir_and_local_fallback(monkeypatch, tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    install_root = tmp_path / "local-app-data"
+    exe, _binary_sha, source_sha = _write_release(install_root / "ember-lab" / "bin")
+    monkeypatch.setenv("LOCALAPPDATA", str(install_root))
+    assert readiness._installed_ember_lab_release() == (exe.resolve(), source_sha)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "empty"))
+    assert readiness._installed_ember_lab_release() is None
+    expected_source = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
+    assert expected_source is not None and expected_source != source_sha
+
+
+def test_unverifiable_installed_release_is_skipped(monkeypatch, tmp_path):
+    from scripts import llmq_adoption_readiness as readiness
+
+    def installed(directory, **overrides):
+        exe, _b, _s = _write_release(directory, **overrides)
+        monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
+        return exe
+
+    installed(tmp_path / "wrong-binary-sha", binary_sha256="d" * 64)
+    assert readiness._installed_ember_lab_release() is None
+    installed(tmp_path / "wrong-schema", schema="other")
+    assert readiness._installed_ember_lab_release() is None
+    installed(tmp_path / "unknown-key", extra="x")
+    assert readiness._installed_ember_lab_release() is None
+    installed(tmp_path / "short-source", source_sha256="abc")
+    assert readiness._installed_ember_lab_release() is None
+    exe = installed(tmp_path / "no-manifest")
+    (exe.parent / "ember-lab-release.json").unlink()
+    assert readiness._installed_ember_lab_release() is None
+    exe = installed(tmp_path / "sums-disagree")
+    (exe.parent / "SHA256SUMS").write_text("e" * 64 + "  ember-lab.exe\n", encoding="utf-8")
+    assert readiness._installed_ember_lab_release() is None
+    exe = installed(tmp_path / "sums-agree")
+    (exe.parent / "SHA256SUMS").write_text(hashlib.sha256(exe.read_bytes()).hexdigest() + " *ember-lab.exe\n", encoding="utf-8")
+    assert readiness._installed_ember_lab_release() is not None
+    exe = installed(tmp_path / "misnamed")
+    exe = exe.rename(exe.with_name("other.exe"))
+    monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
+    assert readiness._installed_ember_lab_release() is None
+
+
+def test_live_daemon_assessment_binds_an_installed_release_without_local_source(monkeypatch, tmp_path):
+    """The red for this change: with only a released exe (no lab source, no local build),
+    the live-daemon assessment must still open. Resolved against the local target alone it
+    returns None."""
+    from scripts import llmq_adoption_readiness as readiness
+
+    exe, binary_sha, source_sha = _write_release(tmp_path / "installed")
+    empty_repo = tmp_path / "repo-without-lab-source"
+    empty_repo.mkdir()
+    identity = {"binary_sha256": binary_sha, "source_sha256": source_sha}
+    receipt = {
+        "schema": "ember-lab-operational-receipt-v1",
+        "ember_lab_identity": identity,
+        "job_id": "job-installed",
+        "identity_sha256": "a" * 64,
+        "resource_lease": "CPU-1",
+        "state": "exited",
+        "pid": 321,
+        "executable_identity": str(exe),
+        "restart_policy": "never",
+        "exit_code": 0,
+        "logs": {
+            "stdout": {"file_name": "stdout.log", "sealed": True, "sha256": hashlib.sha256(b"").hexdigest()},
+            "stderr": {"file_name": "stderr.log", "sealed": True, "sha256": hashlib.sha256(b"").hexdigest()},
+        },
+        "events": [{"kind": "job_started"}, {"kind": "job_exited"}],
+        "outage_events": [],
+        "scientific_capability_evidence": False,
+    }
+    schedule = {"schema_version": "ember-lab-schedule-alarm-state-v1", "ember_lab_identity": identity, "runs": [], "alarms": {}}
+
+    def fake_rpc(_pipe_name, job_id, directory):
+        directory.mkdir()
+        preflight = _daemon_preflight(job_id, identity, source_commit="b" * 40, program_sha256=binary_sha)
+        values = {
+            "preflight_receipt": (json.dumps(preflight, indent=2, sort_keys=True).encode(), ".preflight.json"),
+            "operational_receipt": (json.dumps(receipt, indent=2, sort_keys=True).encode(), ".operational.json"),
+            "stdout_log": (b"", ".stdout.log"),
+            "stderr_log": (b"", ".stderr.log"),
+            "schedule_alarm_state": (json.dumps(schedule, indent=2, sort_keys=True).encode(), ".schedule.json"),
+        }
+        result = {"schema": "ember-lab-assessment-evidence-v1", "ember_lab_identity": identity}
+        for field, (raw, suffix) in values.items():
+            artifact_sha = hashlib.sha256(raw).hexdigest()
+            path = directory / f"{artifact_sha}{suffix}"
+            path.write_bytes(raw)
+            result[field] = {"path": str(path), "sha256": artifact_sha}
+        return result, binary_sha, exe
+
+    monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
+    monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
+    monkeypatch.setattr(readiness, "_run_git", lambda _root, *_args: "b" * 40)
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
+    live = readiness._acquire_live_daemon_assessment(empty_repo, "job-installed")
+    assert live is not None
+    assert live["canonical_source_sha256"] == source_sha
+    assert live["server_binary_sha256"] == binary_sha
+
+    # A daemon built from other source cannot ride the release manifest.
+    def other_source(*args):
+        result, sha, path = fake_rpc(*args)
+        result["ember_lab_identity"]["source_sha256"] = "9" * 64
+        return result, sha, path
+
+    monkeypatch.setattr(readiness, "_rpc_export_assessment", other_source)
+    assert readiness._acquire_live_daemon_assessment(empty_repo, "job-installed") is None
