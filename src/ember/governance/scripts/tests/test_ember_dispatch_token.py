@@ -47,6 +47,13 @@ VALID_DAEMON_PID = "4321"
 VALID_MAXIMUM_JOB_MEMORY_BYTES = 58_032_391_267
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_installed_lab(monkeypatch, tmp_path_factory):
+    """No test sees an ember-lab release installed on the host running it."""
+    monkeypatch.delenv("EMBER_LAB_EXE", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path_factory.mktemp("no-local-app-data")))
+
+
 def _env(**overrides) -> dict:
     base = {
         "EMBER_LAB_PIPE": VALID_PIPE,
@@ -533,3 +540,141 @@ def test_provider_compatibility_preserves_closed_contract_refusals(monkeypatch, 
     monkeypatch.setattr(token, "_call_consume_rpc", forbidden_rpc)
     with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_TOKEN_INVALID"):
         token.consume_dispatch(tmp_path)
+
+
+# --- installed release exe, bound to the release's recorded source sha ------------------
+
+
+def _write_release(directory, *, source_sha256="c" * 64, binary_bytes=b"released ember-lab daemon binary", **manifest_overrides):
+    """An installed release: exe plus the manifest recording the source it was built from."""
+    directory.mkdir(parents=True, exist_ok=True)
+    exe = directory / "ember-lab.exe"
+    exe.write_bytes(binary_bytes)
+    binary_sha256 = hashlib.sha256(binary_bytes).hexdigest()
+    manifest = {
+        "schema": "ember-lab-release-v1",
+        "binary_sha256": binary_sha256,
+        "source_sha256": source_sha256,
+    }
+    manifest.update(manifest_overrides)
+    (directory / "ember-lab-release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return {"binary_path": exe, "binary_sha256": binary_sha256, "source_sha256": source_sha256}
+
+
+def test_installed_release_binds_without_local_source_or_build(monkeypatch, tmp_path):
+    """The red for this change: a host with only a released exe (no lab source tree, no
+    local target) must still consume a dispatch. Tried against the local target alone,
+    consume_dispatch refuses 'canonical ember-lab daemon build is not available'."""
+    release = _write_release(tmp_path / "installed")
+    empty_repo = tmp_path / "repo-without-lab-source"
+    empty_repo.mkdir()
+    monkeypatch.setattr(os, "environ", _env(EMBER_LAB_EXE=str(release["binary_path"])))
+    envelope = _well_formed_envelope(release, int(VALID_DAEMON_PID))
+    monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
+
+    assert token.consume_dispatch(empty_repo) == VALID_MAXIMUM_JOB_MEMORY_BYTES
+    assert token._canonical_ember_lab_binary(empty_repo) == release["binary_path"].resolve()
+    assert token._canonical_ember_lab_source_sha256(empty_repo) == release["source_sha256"]
+
+
+def test_installed_release_found_in_fixed_install_dir(monkeypatch, tmp_path):
+    install_root = tmp_path / "local-app-data"
+    release = _write_release(install_root / "ember-lab" / "bin")
+    monkeypatch.setenv("LOCALAPPDATA", str(install_root))
+    assert token._installed_ember_lab_release() == (
+        release["binary_path"].resolve(), release["source_sha256"]
+    )
+
+
+def test_installed_release_wins_over_local_build(monkeypatch, tmp_path):
+    local = _write_canonical_repo(tmp_path / "repo")
+    release = _write_release(tmp_path / "installed")
+    monkeypatch.setenv(token.INSTALLED_EXE_ENV, str(release["binary_path"]))
+    assert token._canonical_ember_lab_binary(tmp_path / "repo") == release["binary_path"].resolve()
+    assert token._canonical_ember_lab_source_sha256(tmp_path / "repo") == release["source_sha256"]
+    assert release["source_sha256"] != local["source_sha256"]
+
+
+def test_local_build_is_the_fallback_when_nothing_is_installed(monkeypatch, tmp_path):
+    local = _write_canonical_repo(tmp_path / "repo")
+    monkeypatch.setenv(token.INSTALLED_EXE_ENV, str(tmp_path / "no-such" / "ember-lab.exe"))
+    assert token._canonical_ember_lab_binary(tmp_path / "repo") == local["binary_path"].resolve()
+    assert token._canonical_ember_lab_source_sha256(tmp_path / "repo") == local["source_sha256"]
+
+
+@pytest.mark.parametrize("case", [
+    "no_manifest",
+    "manifest_binary_sha_differs_from_exe",
+    "manifest_wrong_schema",
+    "manifest_unknown_key",
+    "manifest_short_source_sha",
+    "manifest_not_json",
+    "sums_disagree_with_exe",
+    "misnamed_exe",
+])
+def test_unverifiable_installed_release_is_skipped(monkeypatch, tmp_path, case):
+    directory = tmp_path / "installed"
+    release = _write_release(directory)
+    manifest_path = directory / "ember-lab-release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    exe = release["binary_path"]
+    if case == "no_manifest":
+        manifest_path.unlink()
+    elif case == "manifest_binary_sha_differs_from_exe":
+        manifest["binary_sha256"] = "d" * 64
+    elif case == "manifest_wrong_schema":
+        manifest["schema"] = "something-else"
+    elif case == "manifest_unknown_key":
+        manifest["extra"] = "x"
+    elif case == "manifest_short_source_sha":
+        manifest["source_sha256"] = "abc"
+    elif case == "manifest_not_json":
+        manifest_path.write_text("not json", encoding="utf-8")
+    elif case == "sums_disagree_with_exe":
+        (directory / "SHA256SUMS").write_text("e" * 64 + "  ember-lab.exe\n", encoding="utf-8")
+    elif case == "misnamed_exe":
+        renamed = directory / "other.exe"
+        exe.rename(renamed)
+        exe = renamed
+    if case not in ("no_manifest", "manifest_not_json"):
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setenv(token.INSTALLED_EXE_ENV, str(exe))
+    assert token._installed_ember_lab_release() is None
+
+
+def test_installed_release_with_matching_sums_is_accepted(monkeypatch, tmp_path):
+    directory = tmp_path / "installed"
+    release = _write_release(directory)
+    (directory / "SHA256SUMS").write_text(
+        f"{release['binary_sha256']} *ember-lab.exe\n{'0' * 64}  notes.txt\n", encoding="utf-8"
+    )
+    monkeypatch.setenv(token.INSTALLED_EXE_ENV, str(release["binary_path"]))
+    assert token._installed_ember_lab_release() == (
+        release["binary_path"].resolve(), release["source_sha256"]
+    )
+
+
+def test_installed_release_daemon_reporting_another_source_refuses(monkeypatch, tmp_path):
+    """The daemon's own source identity must equal the release's recorded one, not the
+    local tree's: a daemon built from other source cannot ride a release manifest."""
+    release = _write_release(tmp_path / "installed")
+    empty_repo = tmp_path / "repo-without-lab-source"
+    empty_repo.mkdir()
+    monkeypatch.setattr(os, "environ", _env(EMBER_LAB_EXE=str(release["binary_path"])))
+    envelope = _well_formed_envelope(release, int(VALID_DAEMON_PID))
+    envelope["result"]["daemon_identity"]["source_sha256"] = "9" * 64
+    monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
+    with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_REFUSED"):
+        token.consume_dispatch(empty_repo)
+
+
+def test_local_build_daemon_refused_when_a_release_is_installed(monkeypatch, tmp_path):
+    """Installed wins: a daemon running from the local build is not the governed one
+    while a verified release is installed."""
+    local = _write_canonical_repo(tmp_path / "repo")
+    release = _write_release(tmp_path / "installed")
+    monkeypatch.setattr(os, "environ", _env(EMBER_LAB_EXE=str(release["binary_path"])))
+    envelope = _well_formed_envelope(local, int(VALID_DAEMON_PID))
+    monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
+    with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_DAEMON_IDENTITY_REFUSED"):
+        token.consume_dispatch(tmp_path / "repo")

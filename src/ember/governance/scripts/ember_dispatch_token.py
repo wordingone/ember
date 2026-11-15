@@ -27,11 +27,13 @@ EMBER_LAB_DISPATCH_DAEMON_PID. Nothing else in the codebase writes those
 four variables.
 
 Trust anchors are resolved from the repository, never from anything the
-caller (env, argv) supplies: the daemon binary is the one committed build
-output at `runtime/ember-lab/target/{release,debug}/ember-lab.exe`, and the
-source identity hash is computed over the same seven files, the same
-length-delimited way, as `ember_lab_source_hash()` in
-`runtime/ember-lab/src/lib.rs`. The named pipe's real OS server process is
+caller (env, argv) supplies: the daemon binary is an installed release
+(`$EMBER_LAB_EXE` or `%LOCALAPPDATA%/ember-lab/bin/ember-lab.exe`, with the
+`ember-lab-release.json` manifest beside it recording the release's source
+identity hash) when one is present, else the one committed build output at
+`runtime/ember-lab/target/{release,debug}/ember-lab.exe`, whose source identity
+hash is computed over the same seven files, the same length-delimited way, as
+`ember_lab_source_hash()` in `runtime/ember-lab/src/lib.rs`. The named pipe's real OS server process is
 authenticated (PID + binary path + binary hash, via
 `GetNamedPipeServerProcessId`/`QueryFullProcessImageNameW`) before a single
 byte of its RPC response is trusted, and the daemon's own self-reported
@@ -106,8 +108,97 @@ def _refuse(code: str, detail: str) -> DispatchTokenError:
     return DispatchTokenError(f"{code}: {detail}")
 
 
+#: Environment variable naming an installed, released `ember-lab.exe` (operator-set).
+INSTALLED_EXE_ENV = "EMBER_LAB_EXE"
+
+#: Fixed install location of a released `ember-lab.exe`, under `%LOCALAPPDATA%`.
+INSTALLED_EXE_RELATIVE = Path("ember-lab") / "bin" / "ember-lab.exe"
+
+#: The release manifest that sits beside an installed exe. It records the source
+#: identity hash the release was built from, because a host with an installed exe
+#: need not hold the lab source tree that `_canonical_ember_lab_source_sha256`
+#: would otherwise hash.
+RELEASE_MANIFEST_NAME = "ember-lab-release.json"
+_RELEASE_MANIFEST_SCHEMA = "ember-lab-release-v1"
+_RELEASE_MANIFEST_MAX_BYTES = 64 * 1024
+_RELEASE_SUMS_NAME = "SHA256SUMS"
+
+
+def _is_sha256_hex(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(c in "0123456789abcdef" for c in value)
+    )
+
+
+def _installed_ember_lab_release() -> tuple[Path, str] | None:
+    """A released `ember-lab.exe` installed on this host with its recorded source sha.
+
+    Candidates, in order: the path in `EMBER_LAB_EXE`, then
+    `%LOCALAPPDATA%/ember-lab/bin/ember-lab.exe`. A candidate counts only when it
+    is an existing regular file named `ember-lab*.exe` with a valid
+    `ember-lab-release.json` beside it: the manifest's `binary_sha256` must equal
+    the exe's actual sha256 (so the manifest belongs to this exe), and a
+    `SHA256SUMS` file beside it, when it lists the exe, must agree. The returned
+    source sha is the manifest's `source_sha256`, the release's own recorded
+    identity. Anything else is skipped (never an error), so the caller falls back
+    to the local build.
+    """
+    candidates: list[Path] = []
+    explicit = os.environ.get(INSTALLED_EXE_ENV)
+    if explicit:
+        candidates.append(Path(explicit))
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / INSTALLED_EXE_RELATIVE)
+    for candidate in candidates:
+        try:
+            exe = candidate.resolve(strict=True)
+            name = exe.name.lower()
+            if not (exe.is_file() and name.startswith("ember-lab") and name.endswith(".exe")):
+                continue
+            manifest_path = exe.parent / RELEASE_MANIFEST_NAME
+            if not manifest_path.is_file() or manifest_path.stat().st_size > _RELEASE_MANIFEST_MAX_BYTES:
+                continue
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (
+                not isinstance(manifest, dict)
+                or manifest.get("schema") != _RELEASE_MANIFEST_SCHEMA
+                or not {"schema", "binary_sha256", "source_sha256"} <= set(manifest)
+                or not set(manifest) <= {"schema", "binary_sha256", "source_sha256", "source_commit"}
+                or not _is_sha256_hex(manifest["binary_sha256"])
+                or not _is_sha256_hex(manifest["source_sha256"])
+            ):
+                continue
+            actual = hashlib.sha256(exe.read_bytes()).hexdigest()
+            if actual != manifest["binary_sha256"]:
+                continue
+            sums_path = exe.parent / _RELEASE_SUMS_NAME
+            if sums_path.is_file() and sums_path.stat().st_size <= _RELEASE_MANIFEST_MAX_BYTES:
+                listed = {}
+                for line in sums_path.read_text(encoding="utf-8").splitlines():
+                    parts = line.split(None, 1)
+                    if len(parts) == 2:
+                        listed[parts[1].lstrip("*").strip().lower()] = parts[0].lower()
+                if exe.name.lower() in listed and listed[exe.name.lower()] != actual:
+                    continue
+            return exe, manifest["source_sha256"]
+        except (OSError, ValueError, UnicodeError):
+            continue
+    return None
+
+
 def _canonical_ember_lab_binary(repo_root: Path) -> Path | None:
-    """The one repository-governed daemon binary -- never a caller-supplied path."""
+    """The one governed daemon binary -- never a caller-supplied path.
+
+    An installed release (`_installed_ember_lab_release`) comes first, so a host
+    without the lab source can still bind the daemon. The fallback is the local
+    build output under the repository.
+    """
+    installed = _installed_ember_lab_release()
+    if installed is not None:
+        return installed[0]
     root = repo_root.resolve(strict=True)
     for candidate in (
         root / "runtime" / "ember-lab" / "target" / "release" / "ember-lab.exe",
@@ -123,7 +214,15 @@ def _canonical_ember_lab_binary(repo_root: Path) -> Path | None:
 
 
 def _canonical_ember_lab_source_sha256(repo_root: Path) -> str | None:
-    """Reproduce Rust's `ember_lab_source_hash()` over the same 7 canonical files."""
+    """The source identity hash bound to `_canonical_ember_lab_binary`.
+
+    For an installed release this is the release's recorded `source_sha256`. For
+    the local build it reproduces Rust's `ember_lab_source_hash()` over the same 7
+    canonical files.
+    """
+    installed = _installed_ember_lab_release()
+    if installed is not None:
+        return installed[1]
     root = repo_root.resolve(strict=True)
     digest = hashlib.sha256()
     for relative in _EMBER_LAB_SOURCE_RELATIVE:
