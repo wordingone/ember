@@ -55,7 +55,7 @@ Ember Studio is a desktop program to train, explore and use Ember and open-weigh
 client of ember-lab. The public face is [wordingone/ember-studio](https://github.com/wordingone/ember-studio)
 for the manual and issues. No release build is published yet, and the application source is not in this
 repository. The ember-lab control plane, which starts and supervises runs and model servers, is
-`runtime/ember-lab` here.
+installed from the released build on that repository; its source is in a private repository and is no longer carried here.
 
 ## History
 

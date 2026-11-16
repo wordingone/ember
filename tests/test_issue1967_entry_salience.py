@@ -47,8 +47,11 @@ def assert_direct_install_route(text: str) -> None:
     assert normalized.index("`tools/launchers/Ember.cmd` is the operator entry") < command_index
     assert normalized.index("Python uses") < command_index
     assert normalized.index("manifests/python-environment-v1.json") < command_index
-    assert normalized.index("Rust uses") < command_index
-    assert normalized.index("runtime/ember-lab/Cargo.toml") < command_index
+    # C22: the ember-lab daemon source moved to a private repository, so the entry text
+    # names the released build instead of a Rust manifest in this tree.
+    assert normalized.index("the ember-lab daemon is installed from the released build") < command_index
+    assert normalized.index("wordingone/ember-studio") < command_index
+    assert "runtime/ember-lab/Cargo.toml" not in normalized
     assert normalized.index("`ember-cli` uses") < command_index
     assert normalized.index("src/ember/infrastructure/tools/ember-cli/src/package.json") < command_index
 

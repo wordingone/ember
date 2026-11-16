@@ -155,7 +155,9 @@ R1_ENTRY_SOURCE_FILES = {
     "contract": "src/ember/governance/scripts/ember_restart/contract.py",
     "cli_train": "src/ember/infrastructure/tools/ember-cli/src/commands/train.ts",
     "certified_consumer": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
-    "ember_lab_verify": "runtime/ember-lab/src/training_verify.rs",
+    # C22: the lab verify source (runtime/ember-lab/src/training_verify.rs) moved to a private
+    # repository. The consumer above binds the lab's identity through the pinned
+    # ember-lab-release-v1 manifest, so no lab source file is pinned here.
 }
 R1_ENTRY_PINNED_FILES = {
     "prereg_sha256": "docs/domains/governance/spec/ember02-preregistration-v1.md",

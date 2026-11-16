@@ -28,13 +28,8 @@ CONTROL_PATHS = (
     # would be judged against an expectation nobody froze.
     'src/ember/governance/scripts/cia_numerical_split.py',
     'src/ember/governance/scripts/ember_dispatch_token.py',
-    'runtime/ember-lab/src/lib.rs',
-    'runtime/ember-lab/src/data_catalog.rs',
-    'runtime/ember-lab/src/rpc.rs',
-    'runtime/ember-lab/src/main.rs',
-    'runtime/ember-lab/src/training_verify.rs',
-    'runtime/ember-lab/Cargo.toml',
-    'runtime/ember-lab/Cargo.lock',
+    # C22: the lab daemon source (runtime/ember-lab) moved to a private repository; its identity is
+    # the pinned ember-lab-release-v1 manifest, not files in this tree.
     'src/ember/governance/scripts/verify_authority_conservation.py',
     'src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py',
     'src/ember/governance/scripts/registry_gate.py',

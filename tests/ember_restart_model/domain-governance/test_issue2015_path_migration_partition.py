@@ -150,16 +150,70 @@ def test_legacy_tool_prefix_is_only_a_non_executable_tombstone() -> None:
         assert (ROOT / path).is_file(), path
 
 
+LAB_PREFIX = "runtime/ember-lab/"
+CERTIFIED_LAUNCH = (
+    ROOT
+    / "src"
+    / "ember"
+    / "infrastructure"
+    / "tools"
+    / "ember-restart-3b"
+    / "certified_train_launch.py"
+)
+DOCS_INFORMATION_SYSTEM = ROOT / "scripts" / "docs_information_system.py"
+
+
 def test_every_excluded_row_preserves_only_its_original_source() -> None:
+    """The nine excluded rows whose source is still in this tree keep only that source."""
     _original, _landed, _ruled, excluded = _partition()
     live_excluded = excluded - LATE_PERFORMED_AFTER_RECORD
+    in_tree = {row for row in live_excluded if not row[0].startswith(LAB_PREFIX)}
     assert len(live_excluded) == 13
-    for source, target in live_excluded:
+    assert len(in_tree) == 9
+    for source, target in in_tree:
         assert (ROOT / source).is_file(), source
         assert not (ROOT / target).exists(), target
     for source, target in LATE_PERFORMED_AFTER_RECORD:
         assert not (ROOT / source).exists(), source
         assert (ROOT / target).is_file(), target
+
+
+def test_c22_lab_source_rows_are_gone_and_the_release_manifest_is_the_authority() -> None:
+    """Named successor of the lab rows of the test above (C22).
+
+    The four excluded rows whose source was under runtime/ember-lab are not
+    weakened into an optional case: their sources are asserted absent from the
+    tree and from the index, and the replacing authority (the pinned
+    ember-lab-release-v1 manifest) is asserted to be what the launch consumer and
+    the docs reconciliation bind to.
+    """
+    _original, _landed, _ruled, excluded = _partition()
+    lab_rows = {row for row in excluded if row[0].startswith(LAB_PREFIX)}
+    assert {source for source, _target in lab_rows} == {
+        "runtime/ember-lab/src/lib.rs",
+        "runtime/ember-lab/src/main.rs",
+        "runtime/ember-lab/tests/artifact_custody.rs",
+        "runtime/ember-lab/tests/control_plane.rs",
+    }
+    for source, target in lab_rows:
+        assert not (ROOT / source).exists(), source
+        assert not (ROOT / target).exists(), target
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", "runtime/ember-lab"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8").split("\0")
+    assert [path for path in tracked if path] == []
+    assert not (ROOT / "runtime" / "ember-lab").exists()
+
+    launch = CERTIFIED_LAUNCH.read_text(encoding="utf-8")
+    assert 'EMBER_LAB_RELEASE_MANIFEST_NAME = "ember-lab-release.json"' in launch
+    assert 'EMBER_LAB_RELEASE_MANIFEST_SCHEMA = "ember-lab-release-v1"' in launch
+    assert "_pinned_ember_lab_release()" in launch
+    assert "EMBER_LAB_SOURCE_RELATIVE_PATHS" not in launch
+    docs = DOCS_INFORMATION_SYSTEM.read_text(encoding="utf-8")
+    assert 'MOVED_PRIVATE_PREFIXES = {"runtime/ember-lab": "wordingone/ember-lab"}' in docs
 
 
 def test_excluded_targets_have_no_path_or_dotted_module_references() -> None:

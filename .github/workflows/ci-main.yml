@@ -48,14 +48,3 @@ jobs:
         run: |
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py
           python -B scripts/docs_information_system.py check --root .
-  ember-lab:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: runtime/ember-lab
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - run: cargo test --locked

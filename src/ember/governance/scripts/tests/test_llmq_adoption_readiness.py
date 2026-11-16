@@ -120,7 +120,8 @@ def _daemon_preflight(job_id, identity, source_commit="b" * 40, program_sha256="
 def test_live_daemon_assessment_requires_authenticated_pipe_and_exact_export(monkeypatch, tmp_path):
     from scripts import llmq_adoption_readiness as readiness
 
-    source_sha = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
+    source_sha = "d" * 64
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_source_sha256", lambda _root: source_sha)
     binary_sha = hashlib.sha256(b"resident-ember-lab-binary").hexdigest()
     canonical_binary = tmp_path / "canonical" / "ember-lab.exe"
     canonical_binary.parent.mkdir()
@@ -303,29 +304,13 @@ def test_live_daemon_rpc_worker_is_hidden_and_deadline_bounded(monkeypatch, tmp_
         raise AssertionError("hung pipe worker did not fail closed")
 
 
-def test_live_daemon_source_identity_matches_rust_composite_hash(monkeypatch, tmp_path):
-    """The live daemon identity is Rust's length-delimited seven-file digest."""
+def test_live_daemon_source_identity_is_the_installed_release_manifests(monkeypatch, tmp_path):
+    """The live daemon identity is the installed release manifest's source_sha256 (C22:
+    nothing is hashed from the repository tree)."""
     from scripts import llmq_adoption_readiness as readiness
 
-    canonical_binary = tmp_path / "canonical" / "ember-lab.exe"
-    canonical_binary.parent.mkdir()
-    canonical_binary.write_bytes(b"resident-ember-lab-binary")
-    binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
-    source_files = [
-        REPO_ROOT / "runtime/ember-lab/src/lib.rs",
-        REPO_ROOT / "runtime/ember-lab/src/data_catalog.rs",
-        REPO_ROOT / "runtime/ember-lab/src/rpc.rs",
-        REPO_ROOT / "runtime/ember-lab/src/main.rs",
-        REPO_ROOT / "runtime/ember-lab/src/training_verify.rs",
-        REPO_ROOT / "runtime/ember-lab/Cargo.toml",
-        REPO_ROOT / "runtime/ember-lab/Cargo.lock",
-    ]
-    digest = hashlib.sha256()
-    for source in source_files:
-        raw = source.read_bytes()
-        digest.update(len(raw).to_bytes(8, "little"))
-        digest.update(raw)
-    source_sha = digest.hexdigest()
+    canonical_binary, binary_sha, source_sha = _write_release(tmp_path / "canonical")
+    monkeypatch.setenv("EMBER_LAB_EXE", str(canonical_binary))
     identity = {"binary_sha256": binary_sha, "source_sha256": source_sha}
     stdout = b""
     stderr = b""
@@ -380,7 +365,6 @@ def test_live_daemon_source_identity_matches_rust_composite_hash(monkeypatch, tm
 
     monkeypatch.setenv("EMBER_LAB_PIPE", r"\\.\pipe\ember-lab-test")
     monkeypatch.setattr(readiness, "_rpc_export_assessment", fake_rpc)
-    monkeypatch.setattr(readiness, "_canonical_ember_lab_binary", lambda _root: canonical_binary)
     live = readiness._acquire_live_daemon_assessment(REPO_ROOT, "job-composite-source")
     assert live is not None
     assert live["canonical_source_sha256"] == source_sha
@@ -970,7 +954,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     binary_manifest_sha = hashlib.sha256(binary_manifest.read_bytes()).hexdigest()
     producer_source = tmp_path / "runtime" / "ember-lab" / "src" / "lib.rs"
     producer_source.parent.mkdir(parents=True)
-    producer_source.write_bytes((REPO_ROOT / "runtime" / "ember-lab" / "src" / "lib.rs").read_bytes())
+    producer_source.write_bytes(b"fixture ember-lab producer source")
     producer_source_sha = hashlib.sha256(producer_source.read_bytes()).hexdigest()
     producer_binary = tmp_path / "runtime" / "ember-lab" / "ember-lab.exe"
     producer_binary.write_bytes(b"governed ember-lab binary")
@@ -1113,8 +1097,9 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
     # daemon export: terminal job identity plus daemon-sealed stdout/stderr.
     canonical_source = authority_root / "runtime" / "ember-lab" / "src" / "lib.rs"
     canonical_source.parent.mkdir(parents=True)
-    canonical_source.write_bytes((REPO_ROOT / "runtime" / "ember-lab" / "src" / "lib.rs").read_bytes())
-    canonical_source_sha = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
+    canonical_source.write_bytes(b"fixture ember-lab canonical source")
+    canonical_source_sha = hashlib.sha256(canonical_source.read_bytes()).hexdigest()
+    monkeypatch.setattr(readiness, "_canonical_ember_lab_source_sha256", lambda _root: canonical_source_sha)
     canonical_binary = authority_root / "runtime" / "ember-lab" / "ember-lab.exe"
     canonical_binary.write_bytes(b"canonical ember-lab daemon binary")
     canonical_binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
@@ -1692,12 +1677,11 @@ def test_installed_release_is_the_canonical_binary_with_its_recorded_source(monk
     monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
     assert readiness._canonical_ember_lab_binary(empty_repo) == exe.resolve()
     assert readiness._canonical_ember_lab_source_sha256(empty_repo) == source_sha
-    # Installed wins over the local build that this repository checkout also carries.
     assert readiness._canonical_ember_lab_binary(REPO_ROOT) == exe.resolve()
     assert readiness._canonical_ember_lab_source_sha256(REPO_ROOT) == source_sha
 
 
-def test_installed_release_in_fixed_install_dir_and_local_fallback(monkeypatch, tmp_path):
+def test_installed_release_in_fixed_install_dir_and_no_local_fallback(monkeypatch, tmp_path):
     from scripts import llmq_adoption_readiness as readiness
 
     install_root = tmp_path / "local-app-data"
@@ -1706,8 +1690,26 @@ def test_installed_release_in_fixed_install_dir_and_local_fallback(monkeypatch, 
     assert readiness._installed_ember_lab_release() == (exe.resolve(), source_sha)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "empty"))
     assert readiness._installed_ember_lab_release() is None
-    expected_source = readiness._canonical_ember_lab_source_sha256(REPO_ROOT)
-    assert expected_source is not None and expected_source != source_sha
+    assert readiness._canonical_ember_lab_binary(REPO_ROOT) is None
+    assert readiness._canonical_ember_lab_source_sha256(REPO_ROOT) is None
+
+
+def test_no_pinned_manifest_means_no_canonical_binary_even_beside_a_local_build(monkeypatch, tmp_path):
+    """C22 red: a local ember-lab build in the tree is never a fallback. With no valid
+    installed release manifest the daemon binary and its source identity are both
+    absent (fail closed)."""
+    from scripts import llmq_adoption_readiness as readiness
+
+    repo = tmp_path / "repo"
+    local_build = repo / "runtime" / "ember-lab" / "target" / "release"
+    local_build.mkdir(parents=True)
+    (local_build / "ember-lab.exe").write_bytes(b"locally built daemon")
+    (local_build / "ember-lab").write_bytes(b"locally built daemon")
+    exe, _binary_sha, _source_sha = _write_release(tmp_path / "installed")
+    (exe.parent / "ember-lab-release.json").unlink()
+    monkeypatch.setenv("EMBER_LAB_EXE", str(exe))
+    assert readiness._canonical_ember_lab_binary(repo) is None
+    assert readiness._canonical_ember_lab_source_sha256(repo) is None
 
 
 def test_unverifiable_installed_release_is_skipped(monkeypatch, tmp_path):

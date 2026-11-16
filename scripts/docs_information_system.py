@@ -658,6 +658,20 @@ def current_unresolved_reference_rows(
     return [rows[key] for key in sorted(rows)]
 
 
+#: Targets C22 moved out of this repository into a private one. A reference to a path
+#: under one of these prefixes that no longer exists here is reconciled by the
+#: MOVED_PRIVATE kind, never by rewriting the (historical) page that names it.
+MOVED_PRIVATE_PREFIXES = {"runtime/ember-lab": "wordingone/ember-lab"}
+MOVED_PRIVATE_MOVED_BY = "C22"
+
+
+def moved_private_repository(target: str) -> str | None:
+    for prefix, repository in MOVED_PRIVATE_PREFIXES.items():
+        if target == prefix or target.startswith(prefix + "/"):
+            return repository
+    return None
+
+
 def validate_current_reference_reconciliation(
     root: Path,
     value: dict[str, Any],
@@ -717,6 +731,7 @@ def validate_current_reference_reconciliation(
     observed_keys: set[tuple[str, int, str]] = set()
     container_count = 0
     explicit_count = 0
+    moved_private_count = 0
     for row in rows:
         if (
             not isinstance(row, dict)
@@ -785,6 +800,20 @@ def validate_current_reference_reconciliation(
                     f"CURRENT_REFERENCE_RECONCILIATION_DISPOSITION_INVALID:{key}"
                 )
             explicit_count += 1
+        elif resolution.get("kind") == "MOVED_PRIVATE":
+            repository = moved_private_repository(str(row["target"]))
+            if (
+                set(resolution) != {"kind", "private_repository", "moved_by"}
+                or repository is None
+                or resolution.get("private_repository") != repository
+                or resolution.get("moved_by") != MOVED_PRIVATE_MOVED_BY
+                or str(row["target"]) in tracked_paths
+                or (root / str(row["target"])).exists()
+            ):
+                raise DocsInfoError(
+                    f"CURRENT_REFERENCE_RECONCILIATION_MOVED_PRIVATE_INVALID:{key}"
+                )
+            moved_private_count += 1
         else:
             raise DocsInfoError(
                 f"CURRENT_REFERENCE_RECONCILIATION_RESOLUTION_INVALID:{key}"
@@ -798,6 +827,7 @@ def validate_current_reference_reconciliation(
         "corrected_classifier_current_unresolved": len(corrected_rows),
         "explicit_filing_dispositions": explicit_count,
         "contained_resolved_canonical_tokens": container_count,
+        "moved_private": moved_private_count,
     }
     if counts != expected_counts or value.get("rows_sha256") != sha256_bytes(
         canonical_compact(rows)
@@ -843,6 +873,14 @@ def build_current_reference_reconciliation(
             resolution = {
                 "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
                 "canonical_token": current["containing_token"],
+            }
+        elif moved_private_repository(str(current["target"])) is not None and not (
+            root / str(current["target"])
+        ).exists():
+            resolution = {
+                "kind": "MOVED_PRIVATE",
+                "private_repository": moved_private_repository(str(current["target"])),
+                "moved_by": MOVED_PRIVATE_MOVED_BY,
             }
         else:
             candidates = [by_key[key]] if key in by_key else by_target.get(str(current["target"]), [])
@@ -891,6 +929,7 @@ def build_current_reference_reconciliation(
             "corrected_classifier_current_unresolved": len(corrected_keys),
             "explicit_filing_dispositions": kinds.count("EXPLICIT_FILING_DISPOSITION"),
             "contained_resolved_canonical_tokens": kinds.count("CONTAINED_RESOLVED_CANONICAL_TOKEN"),
+            "moved_private": kinds.count("MOVED_PRIVATE"),
         },
         "rows": rows,
         "rows_sha256": sha256_bytes(canonical_compact(rows)),

@@ -26,8 +26,7 @@ designed state, smallest safe verification route, and canonical evidence.
 ## Package and state boundaries
 
 <a id="ember.claim.package-authorities"></a>
-Python package authority is [`pyproject.toml`](../../pyproject.toml), Rust runtime authority is
-[`runtime/ember-lab/Cargo.toml`](../../runtime/ember-lab/Cargo.toml), and ember-cli authority is
+Python package authority is [`pyproject.toml`](../../pyproject.toml), the ember-lab daemon is a released build (see [wordingone/ember-studio](https://github.com/wordingone/ember-studio/releases); its source is in a private repository), and ember-cli authority is
 [`src/ember/infrastructure/tools/ember-cli/src/package.json`](../../src/ember/infrastructure/tools/ember-cli/src/package.json). Application state,
 data, checkpoints, caches, evidence, and worktrees are explicit typed roots rather than hidden
 source-tree assumptions.

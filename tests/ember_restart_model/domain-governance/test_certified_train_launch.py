@@ -29,26 +29,39 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
 
-EMBER_LAB_SOURCE_FIXTURE = (
-    ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
-    ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
-    ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
-    ("runtime/ember-lab/src/main.rs", b"fixture main\\n"),
-    ("runtime/ember-lab/src/training_verify.rs", b"fixture training verify\\n"),
-    ("runtime/ember-lab/Cargo.toml", b"[package]\\nname='fixture'\\n"),
-    ("runtime/ember-lab/Cargo.lock", b"# fixture lock\\n"),
-)
+EMBER_LAB_FIXTURE_EXE_BYTES = b"fixture ember-lab release binary\n"
+EMBER_LAB_FIXTURE_SOURCE_SHA256 = "c" * 64
 
 
-def install_ember_lab_source_fixture(repo: pathlib.Path) -> str:
-    digest = hashlib.sha256()
-    for relative, payload in EMBER_LAB_SOURCE_FIXTURE:
-        path = repo / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
-        digest.update(len(payload).to_bytes(8, "little", signed=False))
-        digest.update(payload)
-    return digest.hexdigest()
+def install_ember_lab_release_fixture(
+    directory: pathlib.Path,
+    *,
+    source_sha256: str = EMBER_LAB_FIXTURE_SOURCE_SHA256,
+    write_manifest: bool = True,
+    manifest_binary_sha256: str | None = None,
+) -> tuple[pathlib.Path, str, str]:
+    """A fake installed release: `ember-lab.exe` plus `ember-lab-release.json`.
+
+    Returns `(exe_path, binary_sha256, source_sha256)`. C22: the launch consumer
+    binds to this pinned manifest; nothing is read from the repository tree.
+    """
+
+    directory.mkdir(parents=True, exist_ok=True)
+    exe = directory / "ember-lab.exe"
+    exe.write_bytes(EMBER_LAB_FIXTURE_EXE_BYTES)
+    binary_sha256 = hashlib.sha256(EMBER_LAB_FIXTURE_EXE_BYTES).hexdigest()
+    if write_manifest:
+        (directory / "ember-lab-release.json").write_text(
+            json.dumps(
+                {
+                    "schema": "ember-lab-release-v1",
+                    "binary_sha256": manifest_binary_sha256 or binary_sha256,
+                    "source_sha256": source_sha256,
+                }
+            ),
+            encoding="utf-8",
+        )
+    return exe, binary_sha256, source_sha256
 
 
 def canonical_bytes(value: object) -> bytes:
@@ -2540,9 +2553,12 @@ ANCESTOR_SHA = "e" * 40
 
 
 def valid_training_verify_receipt(
-    repo: pathlib.Path, closure_sha256: str, source_sha256: str = EVIDENCE_SHA256
+    repo: pathlib.Path,
+    closure_sha256: str,
+    source_sha256: str = EVIDENCE_SHA256,
+    binary_sha256: str = EVIDENCE_SHA256,
 ) -> dict[str, object]:
-    """Mirrors runtime/ember-lab/src/training_verify.rs::run's receipt."""
+    """Mirrors the training-verify receipt the private Ember Lab daemon emits."""
 
     return {
         "schema_version": "ember-lab-training-verify-receipt-v1",
@@ -2580,7 +2596,7 @@ def valid_training_verify_receipt(
                 "detail": "closure_sha256_matches=true pin_is_ancestor=true",
             },
         ],
-        "ember_lab_binary_sha256": EVIDENCE_SHA256,
+        "ember_lab_binary_sha256": binary_sha256,
         "ember_lab_source_sha256": source_sha256,
     }
 
@@ -2603,9 +2619,12 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
         )
 
-        source_sha256 = install_ember_lab_source_fixture(paths["repo"])
+        lab_exe, binary_sha256, source_sha256 = install_ember_lab_release_fixture(
+            paths["custody_root"] / "lab-release"
+        )
+        self._lab_exe = lab_exe
         receipt = valid_training_verify_receipt(
-            paths["repo"], closure_sha256, source_sha256
+            paths["repo"], closure_sha256, source_sha256, binary_sha256
         )
         if mutate_receipt is not None:
             mutate_receipt(receipt)
@@ -2625,13 +2644,17 @@ class CompletionHeadAncestorTests(unittest.TestCase):
 
     @contextlib.contextmanager
     def _patched(self, module, is_ancestor: bool = True):
-        with mock.patch.object(
+        environment = {"EMBER_LAB_EXE": str(self._lab_exe)}
+        with mock.patch.dict(os.environ, environment), mock.patch.dict(
+            os.environ
+        ) as isolated, mock.patch.object(
             module, "read_current_master", return_value=SHA
         ), mock.patch.object(
             module, "read_pin_is_ancestor", return_value=True
         ), mock.patch.object(
             module, "read_commit_is_ancestor", return_value=is_ancestor
         ):
+            isolated.pop("LOCALAPPDATA", None)
             yield
 
     def test_ancestor_head_with_green_training_receipt_is_accepted(self) -> None:
@@ -2665,13 +2688,13 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                         paths["run_spec"],
                     )
 
-    def test_stale_ember_lab_source_hash_is_refused(self) -> None:
+    def _refuse_with_receipt_change(self, mutate, message: str) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as directory:
             paths, _ = self._ancestor_bundle(directory)
             receipt_path = paths["custody_root"] / "training-verify.json"
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-            receipt["ember_lab_source_sha256"] = EVIDENCE_SHA256
+            mutate(receipt)
             write_json(receipt_path, receipt)
             run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
             run_spec["training_verify_receipt_sha256"] = sha256_bytes(
@@ -2680,9 +2703,61 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             write_json(paths["run_spec"], run_spec)
             _write_custody_sidecars(paths)
             with self._patched(module):
-                with self.assertRaisesRegex(
-                    ValueError, "Ember Lab source identity does not match"
-                ):
+                with self.assertRaisesRegex(ValueError, message):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_receipt_source_hash_differing_from_the_pinned_manifest_is_refused(
+        self,
+    ) -> None:
+        self._refuse_with_receipt_change(
+            lambda receipt: receipt.__setitem__(
+                "ember_lab_source_sha256", EVIDENCE_SHA256
+            ),
+            "Ember Lab source identity does not match the pinned release manifest",
+        )
+
+    def test_receipt_binary_hash_differing_from_the_pinned_manifest_is_refused(
+        self,
+    ) -> None:
+        self._refuse_with_receipt_change(
+            lambda receipt: receipt.__setitem__(
+                "ember_lab_binary_sha256", EVIDENCE_SHA256
+            ),
+            "Ember Lab binary identity does not match the pinned release manifest",
+        )
+
+    def test_missing_release_manifest_refuses_fail_closed(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            manifest = self._lab_exe.parent / "ember-lab-release.json"
+            manifest.write_text("{}", encoding="utf-8")
+            manifest.unlink()
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "no pinned Ember Lab release"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_manifest_whose_binary_hash_is_not_the_exes_refuses_fail_closed(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            install_ember_lab_release_fixture(
+                self._lab_exe.parent, manifest_binary_sha256=EVIDENCE_SHA256
+            )
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "no pinned Ember Lab release"):
                     module.validate_certified_request(
                         paths["repo"],
                         paths["certificate"],
@@ -2928,24 +3003,16 @@ class CompletionHeadAncestorTests(unittest.TestCase):
             },
         )
 
-    def test_receipt_fixture_keys_match_the_rust_producer(self) -> None:
-        """Bind the consumer's closed key set to runtime/ember-lab/src/
-        training_verify.rs::run, so producer drift breaks CI, not the launch."""
+    def test_receipt_fixture_keys_match_the_consumer_key_set(self) -> None:
+        """The fixture's closed key set equals the consumer's. The producer-side
+        check (the private daemon source emits every key) moved to the private
+        ember-lab repository with C22."""
 
         module = load_module()
         fixture_keys = set(
             valid_training_verify_receipt(pathlib.Path("."), "0" * 64)
         )
         self.assertEqual(fixture_keys, module.TRAINING_VERIFY_RECEIPT_KEYS)
-
-        source = (
-            ROOT / "runtime" / "ember-lab" / "src" / "training_verify.rs"
-        ).read_text(encoding="utf-8")
-        marker = f'"schema_version": "{module.TRAINING_VERIFY_RECEIPT_SCHEMA}"'
-        self.assertIn(marker, source)
-        body = source[source.index(marker) :]
-        for key in module.TRAINING_VERIFY_RECEIPT_KEYS:
-            self.assertIn(f'"{key}":', body, f"producer stopped emitting {key}")
 
     def test_read_commit_is_ancestor_answers_from_real_git_history(self) -> None:
         module = load_module()
@@ -6632,30 +6699,6 @@ class JobMemoryCeilingProbeTests(unittest.TestCase):
                 "signed_delta_bytes": signed_delta,
             }
         }
-
-    def rust_key_set(self, constant: str) -> set[str]:
-        source = (ROOT / "runtime" / "ember-lab" / "src" / "main.rs").read_text(
-            encoding="utf-8"
-        )
-        match = re.search(
-            rf"const {constant}: &\[&str\] = &\[(.*?)\];", source, re.DOTALL
-        )
-        self.assertIsNotNone(match, f"Rust schema constant {constant} is absent")
-        return set(re.findall(r'"([A-Za-z0-9_]+)"', match.group(1)))
-
-    def test_rust_required_key_inventories_match_python_schema(self) -> None:
-        self.assertEqual(
-            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS"),
-            self.module.RUN_SPEC_KEYS,
-        )
-        self.assertEqual(
-            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS"),
-            self.module.AUTHORIZED_SCOPE_KEYS,
-        )
-        self.assertEqual(
-            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_REQUESTED_SCOPE_KEYS"),
-            self.module.REQUESTED_SCOPE_KEYS,
-        )
 
     def test_closed_pair_binds_nonzero_signed_delta(self) -> None:
         self.module._require_scope_subset(self.requested_scope, self.authorized)

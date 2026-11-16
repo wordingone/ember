@@ -72,18 +72,3 @@ def test_native_source_identity_hashes_the_versioned_model(monkeypatch):
     observed = screen._source_closure(ROOT)
     assert set(observed) == set(screen._SOURCE_NAMES)
     assert observed["model.py"] == hashlib.sha256((MODEL_DIR / "ember_v0_model.py").read_bytes()).hexdigest()
-
-
-def test_lab_runtime_model_binding_uses_the_versioned_file():
-    import hashlib
-    path = ROOT / "runtime/ember-lab/scripts/issue1949_a_clean_consumer.py"
-    spec = importlib.util.spec_from_file_location("_ember_v0_lab_binding", path)
-    consumer = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(consumer)
-    expected = MODEL_DIR / "ember_v0_model.py"
-    assert consumer._production_module_path(ROOT, "model") == expected
-    assert consumer._module_bindings(ROOT, ("model",)) == [{
-        "name": "model",
-        "path": expected.relative_to(ROOT).as_posix(),
-        "sha256": hashlib.sha256(expected.read_bytes()).hexdigest(),
-    }]
