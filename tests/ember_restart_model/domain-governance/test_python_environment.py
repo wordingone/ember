@@ -158,6 +158,12 @@ def test_prose_authority_rejects_windows_rooted_path() -> None:
         python_environment.validate_manifest_shape(manifest)
 
 
+def test_linked_manifest_accepts_a_tree_without_the_rust_row() -> None:
+    manifest = load_manifest()
+    manifest["linked_manifests"].pop("rust", None)
+    python_environment.validate_repository_contract(root=ROOT, manifest=manifest)
+
+
 def test_linked_manifest_rejects_windows_rooted_path() -> None:
     manifest = load_manifest()
     manifest["linked_manifests"]["rust"] = r"\Windows\Cargo.toml"
