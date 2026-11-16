@@ -160,7 +160,7 @@ def test_prose_authority_rejects_windows_rooted_path() -> None:
 
 def test_linked_manifest_rejects_windows_rooted_path() -> None:
     manifest = load_manifest()
-    manifest["linked_manifests"]["typescript"] = r"\Windows\package.json"
+    manifest["linked_manifests"]["rust"] = r"\Windows\Cargo.toml"
     with pytest.raises(
         python_environment.EnvironmentContractError,
         match="must be repo-relative",

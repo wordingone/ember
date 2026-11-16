@@ -472,81 +472,35 @@ TRAINING_VERIFY_RECEIPT_KEYS = {
     "ember_lab_source_sha256",
 }
 
-# C22: the Ember Lab source is no longer carried in this repository, so the
-# launch consumer never re-derives a source identity from the tree. It binds
-# the receipt's `ember_lab_binary_sha256` and `ember_lab_source_sha256` to the
-# pinned `ember-lab-release-v1` manifest that sits beside the installed
-# `ember-lab.exe` (`EMBER_LAB_EXE`, then `%LOCALAPPDATA%/ember-lab/bin`). The
-# manifest's `binary_sha256` must equal the exe's actual sha256. A missing,
-# malformed or mismatched manifest refuses (fail closed): there is no local-tree
-# fallback.
-EMBER_LAB_EXE_ENV = "EMBER_LAB_EXE"
-EMBER_LAB_INSTALLED_RELATIVE = pathlib.Path("ember-lab") / "bin" / "ember-lab.exe"
-EMBER_LAB_RELEASE_MANIFEST_NAME = "ember-lab-release.json"
-EMBER_LAB_RELEASE_MANIFEST_SCHEMA = "ember-lab-release-v1"
-_EMBER_LAB_RELEASE_MANIFEST_MAX_BYTES = 64 * 1024
-_LOWER_HEX_64 = frozenset("0123456789abcdef")
+# Must remain byte-identical to runtime/ember-lab/src/lib.rs::
+# `ember_lab_source_hash`.  The Rust producer hashes these seven embedded
+# files in this order, prefixing each payload with its little-endian u64 byte
+# length.  Re-deriving the value here makes the receipt's self-identity
+# fields load-bearing at the launch consumer rather than merely present.
+EMBER_LAB_SOURCE_RELATIVE_PATHS = (
+    "runtime/ember-lab/src/lib.rs",
+    "runtime/ember-lab/src/data_catalog.rs",
+    "runtime/ember-lab/src/rpc.rs",
+    "runtime/ember-lab/src/main.rs",
+    "runtime/ember-lab/src/training_verify.rs",
+    "runtime/ember-lab/Cargo.toml",
+    "runtime/ember-lab/Cargo.lock",
+)
 
 
-def _is_lower_sha256(value: object) -> bool:
-    return (
-        isinstance(value, str)
-        and len(value) == 64
-        and all(character in _LOWER_HEX_64 for character in value)
-    )
-
-
-def _pinned_ember_lab_release() -> tuple[str, str]:
-    """The installed release's `(binary_sha256, source_sha256)`, or a refusal.
-
-    Candidates, in order: the path in `EMBER_LAB_EXE`, then
-    `%LOCALAPPDATA%/ember-lab/bin/ember-lab.exe`. A candidate is the pinned
-    release only when it is an existing regular file named `ember-lab*.exe`
-    with a valid `ember-lab-release.json` beside it whose `binary_sha256` equals
-    the exe's actual sha256. Nothing is derived from the repository tree.
-    """
-
-    candidates: list[pathlib.Path] = []
-    explicit = os.environ.get(EMBER_LAB_EXE_ENV)
-    if explicit:
-        candidates.append(pathlib.Path(explicit))
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        candidates.append(pathlib.Path(local_app_data) / EMBER_LAB_INSTALLED_RELATIVE)
-    for candidate in candidates:
+def _live_ember_lab_source_sha256(repo_root: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for relative in EMBER_LAB_SOURCE_RELATIVE_PATHS:
+        path = repo_root / relative
         try:
-            exe = candidate.resolve(strict=True)
-            name = exe.name.lower()
-            if not (
-                exe.is_file() and name.startswith("ember-lab") and name.endswith(".exe")
-            ):
-                continue
-            manifest_path = exe.parent / EMBER_LAB_RELEASE_MANIFEST_NAME
-            if (
-                not manifest_path.is_file()
-                or manifest_path.stat().st_size > _EMBER_LAB_RELEASE_MANIFEST_MAX_BYTES
-            ):
-                continue
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if (
-                not isinstance(manifest, dict)
-                or manifest.get("schema") != EMBER_LAB_RELEASE_MANIFEST_SCHEMA
-                or not {"schema", "binary_sha256", "source_sha256"} <= set(manifest)
-                or not set(manifest)
-                <= {"schema", "binary_sha256", "source_sha256", "source_commit"}
-                or not _is_lower_sha256(manifest["binary_sha256"])
-                or not _is_lower_sha256(manifest["source_sha256"])
-            ):
-                continue
-            if hashlib.sha256(exe.read_bytes()).hexdigest() != manifest["binary_sha256"]:
-                continue
-            return manifest["binary_sha256"], manifest["source_sha256"]
-        except (OSError, ValueError, UnicodeError):
-            continue
-    raise ValueError(
-        "no pinned Ember Lab release: an installed ember-lab.exe with a valid "
-        "ember-lab-release.json beside it is required"
-    )
+            payload = path.read_bytes()
+        except OSError as exc:
+            raise ValueError(
+                f"live Ember Lab source is unreadable: {relative}"
+            ) from exc
+        digest.update(len(payload).to_bytes(8, "little", signed=False))
+        digest.update(payload)
+    return digest.hexdigest()
 
 
 class ValidatedLaunch(NamedTuple):
@@ -1136,18 +1090,10 @@ def _validate_training_verify_receipt(
         receipt.get("ember_lab_source_sha256"),
         "training verify ember_lab_source_sha256",
     )
-    receipt_binary_sha256 = _require_sha256(
-        receipt.get("ember_lab_binary_sha256"),
-        "training verify ember_lab_binary_sha256",
-    )
-    pinned_binary_sha256, pinned_source_sha256 = _pinned_ember_lab_release()
-    if receipt_source_sha256 != pinned_source_sha256:
+    live_source_sha256 = _live_ember_lab_source_sha256(repo_root)
+    if receipt_source_sha256 != live_source_sha256:
         raise ValueError(
-            "training verify receipt Ember Lab source identity does not match the pinned release manifest"
-        )
-    if receipt_binary_sha256 != pinned_binary_sha256:
-        raise ValueError(
-            "training verify receipt Ember Lab binary identity does not match the pinned release manifest"
+            "training verify receipt Ember Lab source identity does not match the live tree"
         )
 
 
