@@ -51,8 +51,6 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "python",
-                "rust",
-                "rust-linux-test",
                 "eval-canary-image",
                 "cli",
                 "launcher",
