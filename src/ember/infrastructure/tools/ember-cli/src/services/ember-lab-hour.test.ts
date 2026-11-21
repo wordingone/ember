@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import net from "node:net";
 import { isAbsolute, resolve } from "node:path";
 
-import { hourJobExitCode, hourJobState, jobEvents, startHour, stopHourJob } from "./ember-lab-hour.ts";
+import { checkHour, hourJobExit, hourJobExitCode, hourJobState, jobEvents, startHour, stopHourJob } from "./ember-lab-hour.ts";
 import { callEmberLab, EmberLabRpcError } from "./ember-lab-rpc.ts";
 
 const servers: net.Server[] = [];
@@ -62,6 +62,7 @@ describe("startHour", () => {
     });
     expect(result).toEqual({
       ok: true,
+      kind: "hour",
       jobId: "hour-aaaaaaaaaaaa-bbbbbbbb",
       pid: 4321,
       script: "B:/s/h49_dispatch_v2.sh",
@@ -78,9 +79,31 @@ describe("startHour", () => {
     expect(sent.params["env"]).toEqual({ PATH: "p", HOME: "h" });
     expect(sent.params["script"]).toBe(resolve("B:/work", "h49_dispatch_v2.sh"));
     expect(isAbsolute(String(sent.params["log"]))).toBe(true);
-    expect(sent.params["cwd"]).toBe(null);
+    // F8: the hour runs in the client's directory (baseDir), never in the lab daemon's own
+    expect(sent.params["cwd"]).toBe(resolve("B:/work", "."));
+    expect(sent.params["kind"]).toBe("hour");
     expect(sent.params["bash"]).toBe(null);
-    expect(Object.keys(sent.params).sort()).toEqual(["bash", "cwd", "env", "log", "script", "sha256"]);
+    expect(Object.keys(sent.params).sort()).toEqual(["bash", "cwd", "env", "kind", "log", "script", "sha256"]);
+  });
+
+  winTest("sends the requested job kind and an explicit cwd resolved against baseDir", async () => {
+    const daemon = fakeDaemon(() => ({
+      result: {
+        kind: "learn",
+        job_id: "learn-aaaaaaaaaaaa-bbbbbbbb",
+        pid: 99,
+        script: "B:/s/learn_x.sh",
+        sha256: SHA,
+        log: "B:/l/learn.log",
+        receipt_path: "B:/l/learn.log.lab-start.json",
+        bash: "C:/Program Files/Git/bin/bash.exe",
+        cwd: "B:/work/sub",
+      },
+    }));
+    const result = await startHour({ pipeName: daemon.pipe, kind: "learn", script: "learn_x.sh", sha256: SHA, log: "learn.log", cwd: "sub", baseDir: "B:/work", env: {} });
+    expect(result.ok && result.kind).toBe("learn");
+    expect(daemon.requests[0]!.params["kind"]).toBe("learn");
+    expect(daemon.requests[0]!.params["cwd"]).toBe(resolve("B:/work", "sub"));
   });
 
   winTest("a running hour whose start receipt could not be completed is a SUCCESS carrying jobId, pid and the receipt error", async () => {
@@ -156,6 +179,44 @@ describe("startHour", () => {
   });
 });
 
+describe("checkHour", () => {
+  winTest("sends check_hour with the same params as a start and parses the answer; nothing is started", async () => {
+    const daemon = fakeDaemon(() => ({
+      result: {
+        job_id: "hour-aaaaaaaaaaaa-bbbbbbbb",
+        script: "B:/s/h49_dispatch_v2.sh",
+        sha256: SHA,
+        log: "B:/l/hour.log",
+        receipt_path: "B:/l/hour.log.lab-start.json",
+        bash: "C:/Program Files/Git/bin/bash.exe",
+        cwd: "B:/work",
+      },
+    }));
+    const result = await checkHour({ pipeName: daemon.pipe, script: "h49_dispatch_v2.sh", sha256: SHA, log: "hour.log", baseDir: "B:/work", env: { PATH: "p" } });
+    expect(result).toEqual({
+      ok: true,
+      kind: "hour",
+      jobId: "hour-aaaaaaaaaaaa-bbbbbbbb",
+      script: "B:/s/h49_dispatch_v2.sh",
+      sha256: SHA,
+      log: "B:/l/hour.log",
+      receiptPath: "B:/l/hour.log.lab-start.json",
+      bash: "C:/Program Files/Git/bin/bash.exe",
+      cwd: "B:/work",
+    });
+    expect(daemon.requests[0]!.method).toBe("check_hour");
+    expect(Object.keys(daemon.requests[0]!.params).sort()).toEqual(["bash", "cwd", "env", "kind", "log", "script", "sha256"]);
+  });
+
+  winTest("returns a contract refusal as a value", async () => {
+    const daemon = fakeDaemon(() => ({
+      error: { code: -32001, message: "hour_refused", data: { refusal_code: "hour_lease_conflict", rc: 120, detail: "held" } },
+    }));
+    const result = await checkHour({ pipeName: daemon.pipe, script: "B:/s/h1_dispatch_v1.sh", sha256: SHA, log: "B:/l/c.log", env: {} });
+    expect(result).toEqual({ ok: false, refusalCode: "hour_lease_conflict", rc: 120, detail: "held" });
+  });
+});
+
 describe("job RPC wrappers", () => {
   winTest("jobEvents parses events and sends the cursor", async () => {
     const daemon = fakeDaemon(() => ({
@@ -178,5 +239,14 @@ describe("job RPC wrappers", () => {
     expect(stop.requests[0]!.method).toBe("stop_job");
     const refusedStop = fakeDaemon(() => ({ result: { stopped: false } }));
     await expect(stopHourJob(refusedStop.pipe, "hour-1")).rejects.toThrow("stop_job result is malformed");
+  });
+
+  winTest("hourJobExit tells running, exited with a code and exit unknown apart (#2460 F14)", async () => {
+    const running = fakeDaemon(() => ({ result: { state: "running" } }));
+    expect(await hourJobExit(running.pipe, "hour-1")).toEqual({ status: "running" });
+    const exited = fakeDaemon((request) => ({ result: request.method === "job_state" ? { state: "exited" } : { exit_code: 3 } }));
+    expect(await hourJobExit(exited.pipe, "hour-1")).toEqual({ status: "exited", exitCode: 3 });
+    const stopped = fakeDaemon((request) => ({ result: request.method === "job_state" ? { state: "stopped" } : { exit_code: null } }));
+    expect(await hourJobExit(stopped.pipe, "hour-1")).toEqual({ status: "unknown", state: "stopped" });
   });
 });
