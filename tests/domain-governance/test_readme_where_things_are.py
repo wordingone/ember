@@ -43,7 +43,6 @@ TOP_LEVEL_ALLOWLIST = {
     "data": "Versioned data inputs distinct from data-domain implementation code.",
     "manifests": "Immutable input, environment, and run manifests.",
     "receipts": "Versioned verification and execution receipts.",
-    "runtime": "The Rust application runtime and operator lab workspace.",
     "scripts": "Repository maintenance and compatibility entry points.",
     "state": "Checked-in public state required by governed consumers.",
     "tests": "Cross-domain and acceptance test suites.",
