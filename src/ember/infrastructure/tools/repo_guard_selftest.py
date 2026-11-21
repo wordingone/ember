@@ -710,6 +710,34 @@ def test_red_resident_cockpit_state_dir():
         cleanup(tmp)
 
 
+def test_red_tracked_removed_private_source_path():
+    # The removed private-source homes must never be tracked again: a staged or committed
+    # file under runtime/ or domains/runtime/runtime/ reds the guard.
+    for rel in ("runtime/ember-lab/src/main.rs", "domains/runtime/runtime/ember-lab/lib.rs"):
+        tmp = make_fixture("fix/selftest-removed-paths")
+        try:
+            target = tmp / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("fn main() {}\n", encoding="utf-8", newline="\n")
+            commit_fixture(tmp)
+            rc, out = run_guard(tmp)
+            assert rc != 0, f"expected failure for a tracked {rel}\n{out}"
+            assert "removed-paths" in out, out
+            assert rel in out, out
+        finally:
+            cleanup(tmp)
+
+
+def test_green_no_removed_private_source_path():
+    tmp = make_fixture("fix/selftest-removed-paths-green")
+    try:
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert "ok   [removed-paths]" in out, out
+    finally:
+        cleanup(tmp)
+
+
 def test_red_cockpit_state_as_a_file():
     # Any SHAPE is refused, not just a populated directory — otherwise the check has a
     # blind spot exactly where a shim would sit.
@@ -2424,6 +2452,8 @@ ALL_TESTS = [
     test_red_names_hashed_staged_bypass_worktree_restore,
     test_red_resident_cockpit_state_dir,
     test_red_cockpit_state_as_a_file,
+    test_red_tracked_removed_private_source_path,
+    test_green_no_removed_private_source_path,
     test_green_empty_cockpit_state_dir,
     test_red_pathfrags_staged_bypass_worktree_restore,
     test_green_pr_merge_excludes_live_base_squash_commit,
