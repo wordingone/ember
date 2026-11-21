@@ -8,7 +8,7 @@ Three things are pinned. (1) The release is real and harmless: `release_training
 left behind, touches CUDA only where torch already initialised it, and `verify_checkpoint_restore` calls it before it reads or restores
 anything. (2) `run_hour` drops the capture, the static buffers and the last pack before the verify and reads none of them afterwards. (3)
 The release changes no byte: a fixed-seed tiny hour's published child (every object, the optimizer state, the replay state, the manifest)
-has the sha256 the PRE-change writer produced (computed on origin/master 7e8b19fa), and the state restored by the verify equals the state
+has the sha256 the PRE-change writer produced (computed on origin/master a30eb3e1), and the state restored by the verify equals the state
 before it bit for bit. The parameter-counter receipt is the one file that moves, and only in its counter_sha256 field (the streaming
 counter is a new source file; its previous source is kept in counter-history). CPU only, 26 tiny owners."""
 import ast
@@ -44,7 +44,7 @@ import cia_fp32_master as M  # noqa: E402
 ZERO = torch.zeros(())
 GIB = 1 << 30
 # The sha256 over the decoded tensor content of every .pt the fixed-seed tiny hour publishes (26 model objects, the optimizer state, the replay
-# state), in sorted order of their own digests. Computed on the PRE-change tree (origin/master 7e8b19fa) and on this branch: identical. The
+# state), in sorted order of their own digests. Computed on the PRE-change tree (origin/master a30eb3e1) and on this branch: identical. The
 # decoded content, not the file bytes, so a torch version that frames its zip differently does not move it.
 GOLDEN_TENSOR_DIGEST = 'b597ce056eae5df5c2e2f3a1c24cee8e9e9ed61380c779ebc9441e2871aca9a6'
 GOLDEN_TENSOR_FILES = 28

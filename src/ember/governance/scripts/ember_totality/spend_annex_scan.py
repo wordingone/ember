@@ -679,7 +679,7 @@ GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES = [
      "its name in scripts/, tools/, or docs/). This whole directory was restored wholesale "
      "via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, "
      "source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at "
-     "commit d3dff30): a live local UI-capture session against a local qwen model server, "
+     "commit 851f2b8): a live local UI-capture session against a local qwen model server, "
      "never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above."),
 ]
 
@@ -692,27 +692,27 @@ GENERATOR_ABSENT_HISTORICAL_PATH_PREFIXES = [
 GENERATOR_ABSENT_HISTORICAL_PATHS = {
     "receipts/ember-c-scale/land210g-experiment-runners-receipt.json":
         ("manually_authored", "receipts/ember-c-scale/land210g-experiment-runners-receipt.json: "
-         "manually-authored landing inventory introduced by commit 617f071e with the reviewed family; "
+         "manually-authored landing inventory introduced by commit acb103a0 with the reviewed family; "
          "no committed writer constructs this filename"),
     "receipts/ember-c-scale/land210h-ops-tools-receipt.json":
         ("manually_authored", "receipts/ember-c-scale/land210h-ops-tools-receipt.json: "
-         "manually-authored landing inventory introduced by commit ea39d694 with the reviewed family; "
+         "manually-authored landing inventory introduced by commit cb1ac623 with the reviewed family; "
          "no committed writer constructs this filename"),
     "receipts/ember-c-scale/land210i-harness-entry-receipt.json":
         ("manually_authored", "receipts/ember-c-scale/land210i-harness-entry-receipt.json: "
-         "manually-authored landing inventory introduced by commit 93b5b726 with the reviewed family; "
+         "manually-authored landing inventory introduced by commit c121dc34 with the reviewed family; "
          "no committed writer constructs this filename"),
     "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json":
         ("manually_authored", "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json: "
-         "manually-authored landing inventory introduced by commit 70aefaa0 with the reviewed family; "
+         "manually-authored landing inventory introduced by commit 1896263b with the reviewed family; "
          "no committed writer constructs this filename"),
     "receipts/ember-c-scale/land210k-e2b-pair-receipt.json":
         ("manually_authored", "receipts/ember-c-scale/land210k-e2b-pair-receipt.json: "
-         "manually-authored landing inventory introduced by commit 560f93c3 with the reviewed family; "
+         "manually-authored landing inventory introduced by commit e0cad406 with the reviewed family; "
          "no committed writer constructs this filename"),
     "receipts/issue-580-pr-b-retro-audit-20260730.json":
         ("manually_authored", "receipts/issue-580-pr-b-retro-audit-20260730.json: "
-         "manually-authored retrospective audit introduced by commit 7b75f758 alongside the corrected "
+         "manually-authored retrospective audit introduced by commit 33506308 alongside the corrected "
          "sources and tests; no committed writer constructs this filename"),
 }
 

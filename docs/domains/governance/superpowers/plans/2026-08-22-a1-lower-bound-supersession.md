@@ -14,7 +14,7 @@
 
 - The frozen v1 preregistration is append-only and remains byte-unchanged.
 - `docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json` remains byte-unchanged.
-- Trigger only on the executed both-tiers-fail R1-E8 evidence at source `24decc312c771ec0e9309882f24f2a3ba82ea156`.
+- Trigger only on the executed both-tiers-fail R1-E8 evidence at source `ce4d1fd4f3481429fa5fb81f2d350fbb034cedd3`.
 - A1 receives no R2 funding and cannot carry dense-null, beaten-null, capability-credit, or result-credit claims.
 - `NO_THRESHOLD_CHANGE` and `NO_NEW_PARALLEL_AUTHORITY` are explicit closed fields.
 
@@ -47,7 +47,7 @@ Expected: FAIL because `docs/domains/governance/spec/ember02-a1-lower-bound-only
 
 - [ ] **Step 3: Add the minimal closed amendment JSON**
 
-Include exact `supersedes`, `thresholds`, `trigger_evidence`, `decision`, `change_control`, `execution_boundary`, and `rollback` objects. Bind the preregistration pin `3d48d3870919bd04cec735f68d0fad45fcfae0b2` alongside raw SHA-256 `a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51`.
+Include exact `supersedes`, `thresholds`, `trigger_evidence`, `decision`, `change_control`, `execution_boundary`, and `rollback` objects. Bind the preregistration pin `64819ce5fff2e52d2294a5ee7f1e57e124e4c56b` alongside raw SHA-256 `a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51`.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
@@ -81,7 +81,7 @@ State that the amendment records the preregistered result, changes no threshold,
 
 - [ ] **Step 2: Push the frozen branch and open a draft PR**
 
-Use the safe Git/GitHub wrappers. Expected: draft PR whose base is public master `24decc312c771ec0e9309882f24f2a3ba82ea156`.
+Use the safe Git/GitHub wrappers. Expected: draft PR whose base is public master `ce4d1fd4f3481429fa5fb81f2d350fbb034cedd3`.
 
 - [ ] **Step 3: Route exact head to the independent reviewer and wait for CI/review**
 

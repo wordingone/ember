@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
             "schema_version": "ember-mmmu-front-unit-v1",
             "result": "FRONT_UNIT_PASS_NO_CAPABILITY_CREDIT",
             "claim_boundary": "ONE_ITEM_CPU_WIRING_ONLY; NO_IMAGE_CAPABILITY_OR_CHECKPOINT_QUALITY_CREDIT",
-            "authority": {"source_commit": "c25d1c3cdfa0d08b1e17b38a3d860f406815edd5", "build_mail_id": 29793, "two_state_ruling_mail_id": 29802},
+            "authority": {"source_commit": "6d79c37f3e97b5fe51d1fb7b93803a5a6fae1c00", "build_mail_id": 29793, "two_state_ruling_mail_id": 29802},
             "custody": {"answer_sha256": ANSWER_SHA256, "eligible_count": 847, "eligible_id_set_sha256": ELIGIBLE_ID_SET_SHA256, "custody_sha256": CUSTODY_SHA256, "freeze_sha256": FREEZE_SHA256, "image_inputs_sha256": IMAGE_INPUTS_SHA256},
             "implementation": {"front_unit_sha256": file_sha(Path(__file__)), "adapter_sha256": PREDICTION_CONTRACT_SHA256, "scorer_sha256": SCORER_SHA256},
             "loader": loader,

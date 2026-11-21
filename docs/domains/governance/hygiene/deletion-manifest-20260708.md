@@ -32,7 +32,7 @@ categorized conclusions.
 
 1. **This repo's local git history is shallow (3 commits total, confirmed
    via `git rev-parse --is-shallow-repository` on both the main tree and
-   this worktree).** One of those three commits (`a9d3337`) alone adds
+   this worktree).** One of those three commits (`e042a2b`) alone adds
    2,270 files in a single squash-shaped diff. Practical effect: `git log
    -1 -- <path>` returns 2026-07-08 for nearly every file in the repo,
    regardless of the file's true authoring age. **Last-commit date is not

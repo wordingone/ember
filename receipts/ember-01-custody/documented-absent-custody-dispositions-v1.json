@@ -6,7 +6,7 @@
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
-  "source_commit": "78dc2bf4d47df14fe8a7f41f188f216397b14089",
+  "source_commit": "96f8d0b1145eb138609b79d03ae8d964a36d1c7f",
   "source_document": "docs/custody-disposition-20260708.md",
   "source_document_sha256": "f1b9db7ce7b717552d900943ffe0ab7babfdf3529035d3cbfe7bb07ef6093efd",
   "sha_convention": "sha256 over exact on-disk file bytes, no normalization",

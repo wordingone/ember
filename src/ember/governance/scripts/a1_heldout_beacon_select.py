@@ -141,7 +141,7 @@ def selftest() -> int:
         got = select(hx, check_collision=False)["final_index"]
         assert got == want, f"selftest FAIL {hx}: got {got} want {want}"
     # index formula matches the spec's one-liner
-    assert int("ccde4a67", 16) % 8 == 7
+    assert int("5dc47809", 16) % 8 == 7
     print("A1_HELDOUT_BEACON_SELECT_SELFTEST_PASS (4 vectors)")
     return 0
 

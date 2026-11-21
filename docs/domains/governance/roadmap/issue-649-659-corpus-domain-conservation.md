@@ -6,7 +6,7 @@ trackers only. Canonical owners #648 and #1116 remain open. This ruling grants
 `training-capability-milestone_credit=false`.
 
 Source master for this crosswalk:
-`87f9669c537715ff0008080c22002eff04040bba`.
+`6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 The exact append-only transfers that must be accepted before any #649-#659
 closure are:

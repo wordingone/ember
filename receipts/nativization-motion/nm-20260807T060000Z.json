@@ -8,7 +8,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "source_commit": "71641690b477a901f061bedd7592bb7e8ee8bb75",
+  "source_commit": "9014a2d5ac49177888080896e2f15071b1ebd3e0",
   "run_import_manifest_sha256": "d08537c6d9dfa52d9a6a107a2359bb424e9b1591a26d9c07d0d026646fc26b6e",
   "run_import_trace_sha256": "af34638112fa30f22c38d5e7b1d96e11b406cde935cb690dca8f29520476f5fe",
   "run_import_trace_producer_sha256": "478be400244249979b1fee3044e3b81c0f7f813f0432305bb63a052f3e556454",

@@ -5,12 +5,12 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue": 243,
   "evidence_class": "LIVE_COMPILED_BINARY_CONPTY",
-  "source_commit": "96b9c105c6227a2da4e707ce9345d07745e880d7",
+  "source_commit": "6847610afc8ab19e50048ac52be9bf5d786335b9",
   "binary": {
     "artifact": "tools/ember-cli/src/ember.exe",
     "sha256": "990176cd4b7e570ee4460558e559abcd4a71fbea40e823f9c29e2e3f13e6a6b5",
     "reproducible_rebuild": {
-      "source_commit": "96b9c105c6227a2da4e707ce9345d07745e880d7",
+      "source_commit": "6847610afc8ab19e50048ac52be9bf5d786335b9",
       "sha256": "990176cd4b7e570ee4460558e559abcd4a71fbea40e823f9c29e2e3f13e6a6b5",
       "equals_captured_binary": true
     }
@@ -59,7 +59,7 @@
         "sha256": "c3d6941a2001d80b896569a936900a04f685f11e8dfc39787fc60694236a39ff"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-1-80.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/6847610afc8ab19e50048ac52be9bf5d786335b9/stage-1-80.raw",
         "bytes": 4034,
         "sha256": "d03ebe37c2a4a4ff337cedff9f799bebfe20d89902c219e855cc6b714daf79fe"
       },
@@ -109,7 +109,7 @@
         "sha256": "5d8503e59f42254db92bcf6ed1eb782b18180c7f82993b3c2aec9bf02c89d094"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-2-40.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/6847610afc8ab19e50048ac52be9bf5d786335b9/stage-2-40.raw",
         "bytes": 4022,
         "sha256": "ca8f1ef0ce6f698ea7f6fd709597832bcbb0597f631eb1a302d6ab878f4ba8c8"
       },
@@ -149,7 +149,7 @@
         "sha256": "042e8735afd48d219615ea8a56e481e126ee75b8e6c8158fecca86198e4f7354"
       },
       "raw_private_exact": {
-        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/96b9c105c6227a2da4e707ce9345d07745e880d7/stage-3-80.raw",
+        "logical_locator": "EMBER_PRIVATE_EVIDENCE:ember-cli/issue-243/live-resize-v1/6847610afc8ab19e50048ac52be9bf5d786335b9/stage-3-80.raw",
         "bytes": 6176,
         "sha256": "e7344a07d1a62b7560d2797c39da2da08e5192836c8e7566e676acfd64a25ca7"
       },

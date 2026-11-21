@@ -77,14 +77,14 @@ rule its `eval_freeze_hash_rule` clause (3) states).
 **What changes:** the declaration's consumer rule (3) — "the pointer commit is an
 ancestor of the ref they build from" — is amended to **declaration-content-in-master
 binding**: a consumer verifies (1) the pointer file
-`receipts/eval-suite-freeze/EVAL-FREEZE-HASH` names commit `ccde4a67` and that commit
+`receipts/eval-suite-freeze/EVAL-FREEZE-HASH` names commit `5dc47809` and that commit
 contains the declaration byte-identical (unchanged), (2) `freeze_ts` predates the
 consumer's `launch_ts` (unchanged), and (3-amended) **the declaration file is present
 byte-identical in the build-ref's tree** (master lineage), failing CLOSED on any
 content mismatch or absence. Ancestry of the pointer commit is recorded and disclosed
 by the consumer, no longer required.
 
-**Why:** PR #603 was squash-merged, so the freeze-content commit `ccde4a67` the
+**Why:** PR #603 was squash-merged, so the freeze-content commit `5dc47809` the
 pointer names is dangling — reachable as an object, byte-identical declaration
 verified at it, but **not an ancestor of master**. Rule (3) as written is therefore
 unsatisfiable from master forever, through no property of any launch. Re-anchoring
@@ -324,7 +324,7 @@ permanent.
 
 **Receipts:** `receipts/grow-operator-dryrun-20260708T060841Z.json`,
 `receipts/grow-op-verify-20260708T060841Z.json` (merged to public/master via PR #402, commit
-e4a3e05). Relates to issues #411, #406.
+38ed8d5). Relates to issues #411, #406.
 
 ---
 

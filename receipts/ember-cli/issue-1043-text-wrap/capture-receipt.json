@@ -4,7 +4,7 @@
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue": 1043,
-  "implementation_commit": "8ad674e1f125b4daa2817fed50f3cb6adb7f9f4c",
+  "implementation_commit": "79421a81e9b85c248a65da03dc6e8803738341fa",
   "binary": {
     "name": "ember.exe",
     "sha256": "1181f882bdb71e329ff185f0939b9cc352b75e1bd6f106b25ec989915653ad5c"

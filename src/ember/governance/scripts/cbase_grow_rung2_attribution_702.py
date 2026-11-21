@@ -286,7 +286,7 @@ MIN_ACTIVE_STEPS = 10
 OVERHEAD_BOUND_FRAC = 0.10          # matched unprofiled block, median step wall
 CLOSURE_BOUND_FRAC = 0.05           # subphase-sum vs measured step wall
 
-# ember #702 (2026-07-11, external falsifier's independent re-run at a6e5fba:
+# ember #702 (2026-07-11, external falsifier's independent re-run at 41adabc:
 # overhead_frac 0.452 vs the 0.10 bound while a concurrent 434M-param leg
 # loaded the box): overhead/closure are wall-clock-ratio gates with a FIXED
 # bound -- environment-dependent by construction, since anything else on this
@@ -1786,7 +1786,7 @@ def _other_tenancy_frac(before: dict, after: dict) -> dict:
 
 
 def _tenancy_disposition(other_tenancy: dict | None) -> str:
-    """ember #702 (2026-07-11, external falsifier round-2 BLOCK on 53a84a39,
+    """ember #702 (2026-07-11, external falsifier round-2 BLOCK on 9aeaf175,
     PR #762 static-gate contract c4946411737): classifies the interval
     other-tenancy signal into exactly three states, never conflated.
     'unmeasurable' is genuine ABSENCE of evidence -- no other_tenancy at
@@ -1807,7 +1807,7 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
                     other_tenancy: dict | None = None) -> dict:
     gates: dict = {}
     # ember #702 (2026-07-11, external falsifier DEFECT 1 cure, then round-2
-    # BLOCK on the first cure attempt 53a84a39): the burst-CV probe is a
+    # BLOCK on the first cure attempt 9aeaf175): the burst-CV probe is a
     # cheap fast pre-check ONLY -- it is disclosed in both gate dicts below
     # for visibility but NEVER licenses a claim by itself (it is blind to a
     # STEADY contender, which slows every burst equally and so reports
@@ -1820,7 +1820,7 @@ def _evaluate_gates(*, n_warmup: int, n_active: int, profiled_walls: list,
     # it must span the ACTUAL AB/BA wall-clock window, not this call's own
     # instant).
     #
-    # Round-2 finding (own selftest receipt, 53a84a39): a 31-contender pool
+    # Round-2 finding (own selftest receipt, 9aeaf175): a 31-contender pool
     # measured other_tenancy_frac=0.828 (definitively busy) yet BOTH
     # overhead_frac and closure_frac still landed within bound -- uniform
     # contention drags profiled/unprofiled (and subphase-sum/wall) by
@@ -3361,7 +3361,7 @@ def _selftest_integration_all_gates_pass() -> None:
     # ember #702 quiet-box precondition (2026-07-11, external falsifier's
     # independent re-run: overhead_frac 0.452 vs the 0.10 bound while a
     # concurrent 434M-param leg loaded the box; corrected round-2 after the
-    # first cure attempt's own selftest, 53a84a39, proved the earlier
+    # first cure attempt's own selftest, 9aeaf175, proved the earlier
     # design let a coincidentally-in-bound ratio pass under measured
     # tenancy=="busy"): overhead/closure are the only wall-clock-ratio
     # gates -- their "passed" can legitimately be None (tenancy
@@ -3444,14 +3444,14 @@ def _selftest_integration_all_gates_pass() -> None:
 
 def _selftest_invalid_under_measured_steady_load() -> None:
     """ember #702 (2026-07-11, external falsifier round-2 BLOCK on the
-    first cure attempt 53a84a39, PR #762 static-gate contract c4946411737):
+    first cure attempt 9aeaf175, PR #762 static-gate contract c4946411737):
     negative fixture proving a DEFINITIVELY-measured busy environment
     (tenancy=="busy") forces the fail-closed INVALID verdict UNCONDITIONALLY
     -- regardless of what overhead_frac/closure_frac themselves read --
     never the softer ENVIRONMENT_INCONCLUSIVE (reserved for tenancy ==
     "unmeasurable", genuine absence of evidence) and never a silent PASS.
 
-    First cure attempt's own selftest receipt (head 53a84a39, this exact
+    First cure attempt's own selftest receipt (head 9aeaf175, this exact
     fixture, n_cores-1=31 contenders on a 32-core box) is the falsifying
     repro that forced this round: other_tenancy_frac=0.828 (definitively
     busy) yet BOTH overhead_frac and closure_frac still landed within

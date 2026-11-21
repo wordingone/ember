@@ -14,7 +14,7 @@ import hashlib
 from pathlib import Path
 
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
-GENESIS_TS = "2026-07-06T14:13:23-07:00"  # committerDate of genesis merge (commit 9c89f7f66)
+GENESIS_TS = "2026-07-06T14:13:23-07:00"  # committerDate of genesis merge (commit e3892493f)
 
 
 def _hash_json(data: dict) -> str:

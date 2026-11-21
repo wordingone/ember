@@ -6,7 +6,7 @@
   },
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "receipts/ember-01-completion/evidence-pack-v1/verify-run-receipt-20260804.json",
-  "artifact_sha256": "82052d7ad0db75557b68b202ab5e2f12404571952b93c69c0b2864b7076616d8",
+  "artifact_sha256": "c2d1d9d8aa7639e4f9a7612424277eb470d1b0ae81e6d6098ea0284374e48aaf",
   "ticket": "1401",
   "ts": "2026-08-04T19:39:52Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",

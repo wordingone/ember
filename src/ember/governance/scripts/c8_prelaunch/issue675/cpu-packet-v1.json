@@ -4,7 +4,7 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "schema_version": "q2-actual-update-cpu-packet-v1",
   "issue": 675,
-  "reviewed_source_master": "c893e6e9eb5a8ccb9f06348aed934b93c5f23660",
+  "reviewed_source_master": "d0bc974b435652bee0f5cab0e95b6ecd74e60ffb",
   "artifacts": [
     {"path": "capture-manifest-schema-v1.json", "sha256": "fda8abe28c82b9a9971b7b15a1d2e3252e039b9e883adefa9097ec9585d95b2b", "bytes": 8099},
     {"path": "pre-dispatch-audit-v1.json", "sha256": "546d6fe677fdd3e2a2fca73a9acb3e71b3ce319f9694c1e9a7f6413a589b3de4", "bytes": 2573},

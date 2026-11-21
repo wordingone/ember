@@ -8,8 +8,8 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "repository": "wordingone/ember",
   "issue": 378,
-  "base_commit": "1b78d347a564ede9585ef0fe1cbe102f8179f119",
-  "implementation_commit": "7b587c2c91327522e32b940ae2d1310dda8386d2",
+  "base_commit": "acb6ba1c3cf8aa4c69741dfe1d8caae0f685c263",
+  "implementation_commit": "6bbb18a3face4fe4596403bda6781b8067e0b441",
   "claim_boundary": "atomic checked receipt publication and last-known-good preservation only; no historical receipt restoration, total custody-green, training, checkpoint, benchmark, admission, sufficient-pretraining, or capability claim",
   "implementation_scope": {
     "writer": "scripts/receipt_write.py",
@@ -46,7 +46,7 @@
     "source_compile": "PASS",
     "diff_check": "PASS",
     "repository_guard": {
-      "command": "tools/repo-guard.sh --base 1b78d347a564ede9585ef0fe1cbe102f8179f119",
+      "command": "tools/repo-guard.sh --base acb6ba1c3cf8aa4c69741dfe1d8caae0f685c263",
       "result": "PASS"
     }
   },

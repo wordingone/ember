@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the historical 2.2B offload-attribution
 vehicle. The surviving current-scale optimizer and memory-traffic obligations
 are conserved by canonical issue #707 and the EMBER-02 contract.
 
-Source master: `4d814bbec3116ea0eb9d16298a7747c043828727`.
+Source master: `0e2aedafd42f91def88d1c8b974bb72990a7e946`.
 
 ## Historical scope and evidence boundary
 

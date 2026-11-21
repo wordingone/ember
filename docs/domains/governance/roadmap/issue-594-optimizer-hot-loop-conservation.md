@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the historical v9/C8/2.2B optimizer
 hot-loop vehicle. Current optimizer and transition obligations belong to
 #707; current resource, process and operational custody belongs to #898.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

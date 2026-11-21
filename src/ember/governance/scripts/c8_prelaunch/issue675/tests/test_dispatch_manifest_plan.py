@@ -85,7 +85,7 @@ def _files(root: Path) -> dict[str, Path]:
     receipt = {
         "schema_version": "q2-host-commit-simulation-receipt-v1",
         "job_id": "q2-actual-update-001",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "measurement_mode": "bounded_dry_run",
         "process": {"pid": 42, "started_at_ms": 1, "ended_at_ms": 2, "exit_code": 0},
         "bindings": {
@@ -115,7 +115,7 @@ def _files(root: Path) -> dict[str, Path]:
     cuda_receipt = {
         "schema": "q2-cuda-allocability-receipt-v1",
         "job_id": "q2-actual-update-001",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "config_sha256": hashlib.sha256(files["config"].read_bytes()).hexdigest(),
         "measurement_tool_sha256": hashlib.sha256(
             files["component_measured_dry_run"].read_bytes()
@@ -178,7 +178,7 @@ def _files(root: Path) -> dict[str, Path]:
     )
     producer_contract = {
         "schema_version": "q2-governed-producer-contract-v1",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "mode": "governed-vertical",
         "producer_sha256": hashlib.sha256(files["producer"].read_bytes()).hexdigest(),
         "component_sha256": {
@@ -361,7 +361,7 @@ def _kwargs(tmp_path: Path, files: dict[str, Path]) -> dict[str, object]:
     gib = 1024**3
     return {
         "job_id": "q2-actual-update-001",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "not_before_ms": 1_000,
         "expires_at_ms": 61_000,
         "program_path": files["program"],

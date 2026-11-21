@@ -9,7 +9,7 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue_id": 54,
   "result": "MEASURED",
-  "source_commit": "5782062d60602d040efe18edce07ffeadc726eb7",
+  "source_commit": "2c60a90886799fc0b6230f74b5ce91bce2f189c5",
   "binary_sha256": "5d353c5679ac9fb1f8102dd0d81d9ba3d30d75af5c37190eeef2383ee165410c",
   "capture_tool_sha256": "a65e3f56ad3a09ce3a8b2d80f4da872dfe28324c5883de4f3f05962ad94081ee",
   "viewport": {

@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Exact base is `b4084ac442a3f70c38f1bec0a0bd480512b7e145` in the assigned linked worktree.
+- Exact base is `c6519c37affbb96ff89a2f21f544d9ecefaae08d` in the assigned linked worktree.
 - Run the census on the existing 2,000 ms resource-monitor interval; create no detached helper or second monitor authority.
 - Fence trigger is `GetPerformanceInfo` commit remaining below the existing 10 GiB floor; 4 GiB inclusive is an attribution cutoff only.
 - Every complete observation sums `PROCESS_MEMORY_COUNTERS_EX.PrivateUsage` for all non-owned user processes, including sub-threshold processes.

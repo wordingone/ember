@@ -26,7 +26,7 @@
   ],
   "open_prs": "none-open",
   "covered_commits": {
-    ".": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3"
+    ".": "38e815b9a088aed9db8bdfaba6b9d8733733efe3"
   },
   "delegation": {
     "#601": {
@@ -87,16 +87,16 @@
     }
   },
   "publication_state": {
-    "public_master_sha": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3",
+    "public_master_sha": "38e815b9a088aed9db8bdfaba6b9d8733733efe3",
     "local_shas": {
-      ".": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3"
+      ".": "38e815b9a088aed9db8bdfaba6b9d8733733efe3"
     },
     "unpublished_landings": 0
   },
   "merges": [
     {
       "pr": 601,
-      "sha": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3",
+      "sha": "38e815b9a088aed9db8bdfaba6b9d8733733efe3",
       "mergedAt": "2026-07-09T23:29:09Z",
       "subject": "master test-debt: typecheck exit-0 + ember-cli suite 3199/0 (refs #189 #56 #581; verifies #412 #368 #424 #336)"
     }

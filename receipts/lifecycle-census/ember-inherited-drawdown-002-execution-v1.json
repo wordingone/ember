@@ -1,13 +1,13 @@
 {
   "after": {
     "captured_at": "2026-07-23T11:23:39.1347518Z",
-    "master_sha": "66845142a89d19c68dcadd68b1568b14f6205600",
+    "master_sha": "2eeb87ed775f033fd73983e579f24449fc58cec5",
     "open_issue_count": 216,
     "open_pr_count": 23,
     "remote_branch_count": 78
   },
   "before": {
-    "master_sha": "27b7bf1a1322587f02d9dd629b9a81dbb09969d5",
+    "master_sha": "f2e9c73ca59679693372d5bd77eaf12007765077",
     "open_pr_count": 23,
     "remote_branch_count": 77,
     "source": "manifest live_refresh"
@@ -25,12 +25,12 @@
   "goal_id": "EMBER-02",
   "interpretation": "No deletion API or filesystem mutation was performed; before/after count deltas are not attributed to this task.",
   "manifest": {
-    "file_sha256": "65a48b76d98cd39279ce80cb2ad6a59f270235a35b53205a515d3457e35dd877",
+    "file_sha256": "6d97cef7d8929ea41fc555a5e0ae618a3ad69d9df5c76205db3e9563c2c0a5f9",
     "manifest_sha256": "f0d4687d6139af9c215fa8a875aa6ebe990f1b553431a432595ec0db4743ff97",
     "path": "receipts/lifecycle-census/ember-inherited-drawdown-002-keep-manifest-v2.json"
   },
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "receipt_sha256": "d20c152c52d7bd778f52e627d9ca4021068db4510ce9ec835220cf88ae236390",
+  "receipt_sha256": "1c951a531e0e67cccfcdc3abdce9c12ead9d64a08d28c9bc80cce85ee3033941",
   "reconstruction": {
     "command": "python scripts/verify_lifecycle_drawdown_manifest.py receipts/lifecycle-census/ember-inherited-drawdown-002-keep-manifest-v2.json",
     "result": "PASS verified_delete_count=0"

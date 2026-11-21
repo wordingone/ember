@@ -7,7 +7,7 @@ narrow current-master successor to stale PR #806 for issue #243.
 
 ## Problem
 
-At public master `9835eb53cb22eeebdfc3c69445a8a8c123e8772c`,
+At public master `278e9652e81bfbb277947190f0bbe5b4ea55cbed`,
 `PromptInput` renders a dim horizontal rule, the prompt row, and another dim
 rule. The real `StatusLine` is a separate sibling in `screens/repl.ts`. The
 operator therefore does not receive a closed input affordance and the status

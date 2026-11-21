@@ -80,7 +80,7 @@ describe("issue #898 heap attribution diagnostic", () => {
   test("requires an absolute path and refuses every output collision", () => {
     expect(() => createHeapAttributionDiagnostic({
       filePath: "relative.jsonl",
-      sourceCommit: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+      sourceCommit: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
       dependencies: dependencies([]),
     })).toThrow("HEAP_ATTRIBUTION_PATH_NOT_ABSOLUTE");
 
@@ -89,7 +89,7 @@ describe("issue #898 heap attribution diagnostic", () => {
     fs.writeFileSync(filePath, "custody\n");
     expect(() => createHeapAttributionDiagnostic({
       filePath,
-      sourceCommit: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+      sourceCommit: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
       dependencies: dependencies([]),
     })).toThrow("HEAP_ATTRIBUTION_OUTPUT_EXISTS");
     expect(fs.readFileSync(filePath, "utf8")).toBe("custody\n");
@@ -100,7 +100,7 @@ describe("issue #898 heap attribution diagnostic", () => {
       fs.writeFileSync(siblingPath, `snapshot-custody-${pass}\n`);
       expect(() => createHeapAttributionDiagnostic({
         filePath: siblingBase,
-        sourceCommit: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+        sourceCommit: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
         dependencies: dependencies([]),
       })).toThrow("HEAP_ATTRIBUTION_OUTPUT_EXISTS");
       expect(fs.existsSync(siblingBase)).toBe(false);
@@ -114,7 +114,7 @@ describe("issue #898 heap attribution diagnostic", () => {
     let now = 1_000;
     const diagnostic = createHeapAttributionDiagnostic({
       filePath,
-      sourceCommit: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+      sourceCommit: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
       dependencies: dependencies(events),
       now: () => now,
     });
@@ -137,7 +137,7 @@ describe("issue #898 heap attribution diagnostic", () => {
 
     const emitted = rows(filePath);
     expect(emitted.map((row) => row.render_passes)).toEqual([120, 240, 480, 720]);
-    expect(emitted.every((row) => row.source_commit === "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81")).toBe(true);
+    expect(emitted.every((row) => row.source_commit === "d20d25f94d051f85ba7d8d83a057a78717d134d1")).toBe(true);
     expect(events.filter((event) => event === "gc")).toHaveLength(8);
     expect(events.filter((event) => event === "snapshot")).toHaveLength(2);
     expect(fs.readFileSync(`${filePath}.pass120.heapsnapshot`, "utf8")).toBe("snapshot-1");
@@ -150,7 +150,7 @@ describe("issue #898 heap attribution diagnostic", () => {
     const filePath = path.join(scratch(), "heap.jsonl");
     const diagnostic = createHeapAttributionDiagnosticFromEnv({
       [HEAP_ATTRIBUTION_ENV]: filePath,
-      EMBER_PUBLIC_SOURCE_COMMIT: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+      EMBER_PUBLIC_SOURCE_COMMIT: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
     }, dependencies([]));
     expect(diagnostic).toBeDefined();
     diagnostic!.close();
@@ -164,7 +164,7 @@ describe("issue #898 heap attribution diagnostic", () => {
     failing.collectStats = () => { throw new Error("HEAP_STATS_TEST_FAILURE"); };
     const diagnostic = createHeapAttributionDiagnostic({
       filePath,
-      sourceCommit: "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81",
+      sourceCommit: "d20d25f94d051f85ba7d8d83a057a78717d134d1",
       dependencies: failing,
       onError(error) { errors.push(error.message); },
     });
@@ -194,7 +194,7 @@ describe("issue #898 heap attribution diagnostic", () => {
     let handle: ReturnType<typeof mountInk> | undefined;
     try {
       process.env[HEAP_ATTRIBUTION_ENV] = filePath;
-      process.env.EMBER_PUBLIC_SOURCE_COMMIT = "e9fd74c3c3f1df8352fe5c40c6713c17d9201c81";
+      process.env.EMBER_PUBLIC_SOURCE_COMMIT = "d20d25f94d051f85ba7d8d83a057a78717d134d1";
       handle = mountInk(React.createElement(Text, null, "heap-env-wired"), {
         stream: { write() { return true; } },
         stdout: { columns: 20, rows: 2 },

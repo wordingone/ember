@@ -42,7 +42,7 @@ The pool is exactly the seven datasets of frozen eval-suite v1, and nothing else
 not chosen:
 
 - The amendment's §0 fixes F3's scoring surface as **suite (b)**, and §1's A1 precondition binds
-  suite (b) to `eval_freeze_hash` = `ccde4a676085e633b69d8ba1b501b80f49e2e907`
+  suite (b) to `eval_freeze_hash` = `5dc478092e45c2244daa69889a618f80253f361a`
   (`receipts/eval-suite-freeze/EVAL-FREEZE-HASH`; declaration
   `receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json`, `freeze_ts`
   2026-07-09T23:30:50Z, seven pinned datasets).

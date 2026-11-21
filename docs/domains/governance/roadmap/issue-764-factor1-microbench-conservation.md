@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the 434M/2.2B micro-benchmark
 vehicle. The surviving optimizer-state and transition-equivalence obligations
 are conserved by canonical issue #707 and the EMBER-05 contract.
 
-Source master: `e2869608bc339860b6395efbc45d11680baf7aaf`.
+Source master: `136812876926554c562e500efcc32ff6ad705c1f`.
 
 ## Historical scope and evidence boundary
 

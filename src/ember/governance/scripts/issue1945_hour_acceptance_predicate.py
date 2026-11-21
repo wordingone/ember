@@ -40,7 +40,7 @@ than in a changelog because each one is a rule about how this kind of consumer g
    exactly to `restore_finished - started`, which PRECEDES the wall reading, so the true relation is
    `sum <= governed_wall` and the realistic endpoint (3600 / 5 / 1 against a 3606.1 wall) was being
    refused. Two lessons, and the second is the larger: my first re-read said the counterpart seat had
-   the direction backwards, because I read the worktree at commit 514a212f, where the field is a
+   the direction backwards, because I read the worktree at commit 9529925b, where the field is a
    lazily-evaluated `perf_counter()` inside the result dict and the sign genuinely is the other way.
    A stale worktree is a different program. And a tolerance whose size the author picks is a check
    that cannot fail: 60 seconds of unaccounted time inside a 3,600 second hour is 1.7% of the whole

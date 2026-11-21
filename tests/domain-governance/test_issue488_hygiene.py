@@ -686,7 +686,7 @@ class Issue488HygieneTests(unittest.TestCase):
         receipt = json.loads(
             (REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json").read_text(encoding="utf-8")
         )
-        manifest["source_commit"] = "e8a3768bcc2a1623ac4fcaa2acdc98b1a3e22079"
+        manifest["source_commit"] = "8556271d37d27179052565ee58a88d71316711bc"
         manifest = _seal_manifest(mod, manifest)
         receipt["manifest_sha256"] = manifest["manifest_sha256"]
         source = manifest["source_commit"]

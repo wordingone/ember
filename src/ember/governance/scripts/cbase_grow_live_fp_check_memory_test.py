@@ -18,7 +18,7 @@ still passes) so the memory fix did not alter the deterministic proof.
 NOTE on module reachability (see PR body / issue #406 closing comment for
 the full finding): src/ember/governance/scripts/timeshare_pretrain.py was locked to
 EMBER_ARTIFACT_CLASS=historical_only (unconditional `raise SystemExit(...)`
-at import time) by 4f758db "fix: lock Ember authority and totality"
+at import time) by cc43461 "fix: lock Ember authority and totality"
 (2026-07-12), four days after this issue was filed. cbase_grow_live.py does
 `import timeshare_pretrain as ts` at module scope (line 84), so as of that
 commit `import cbase_grow_live` itself unconditionally raises SystemExit

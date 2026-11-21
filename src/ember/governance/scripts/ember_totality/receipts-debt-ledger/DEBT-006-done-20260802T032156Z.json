@@ -5,7 +5,7 @@
   "ticket": "DEBT-006",
   "disposition": "DONE",
   "ts": "20260802T032156Z",
-  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "verified_against_master": "186a2e302354cd777bf4def58e0e375468ab64a3",
   "row": "DEBT-006 | ACTIVE-NEXT | Resident-training A/B/C evaluator not yet implemented",
   "required_receipt_text": "executable evaluator with A, B, C, Deleted definitions and per-row scores",
   "why_it_mattered": "Without fixed A/B/C/deleted arms, a pilot can become a toy success.",

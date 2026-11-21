@@ -3,7 +3,7 @@
 Status: `SUPERSEDED_NOT_PLANNED` for the named run; scientific obligation
 preserved under issue #723.
 
-Source master: `3cc9c1634a91d04059242c6765e1cd025bc88147`.
+Source master: `9d2704d3023c9c061727f90589480b1feb6b1b34`.
 
 ## What #779 authorized
 
@@ -20,13 +20,13 @@ no signal, no null result, no model capability, and no completed experiment.
 ## Why the named run is no longer executable
 
 1. The original #726 implementation (merge
-   `50588e0cc1bc3edefd4e04c6ca8d7d501d07bd43`) was blocked for live use by
+   `988f3bfa4775d26c1ef3661e1356d0bb88869322`) was blocked for live use by
    pre-consumption Amendment 2 on #723. The amendment showed that its
    prevalence gate measured a band that the frozen treatment did not select.
 2. The selector-aligned and definedness repair landed later in #732 (merge
-   `b4ee58698debf47985d4e0b93762c3640b3f0b3d`), followed by the tokenizer
+   `f620a4be7f35f2159cc76b4be81fb624ad9b5b71`), followed by the tokenizer
    lineage sidecar repair in #737 (merge
-   `9bf384db5cbeae129ab9acc4429198ee1f85411a`). Running "#726 exactly as
+   `548d8adfe3835296f5e39d41cb036288235e96b8`). Running "#726 exactly as
    merged", as #779 requires, would knowingly execute the blocked apparatus;
    running the repaired apparatus would violate #779's frozen invocation.
 3. #774 was a dated 2026-07-11 2.2B/rung-2 yield window. It expired without a

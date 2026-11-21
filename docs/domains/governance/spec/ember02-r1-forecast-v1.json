@@ -3,7 +3,7 @@
   "authored_utc": "2026-08-06T05:25:00Z",
   "prereg": {
     "doc": "docs/domains/governance/spec/ember02-preregistration-v1.md",
-    "pin": "3d48d387",
+    "pin": "64819ce5",
     "clause": "section 3 common structure, closing receipts: forecast-recalibration receipt carries predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory"
   },
   "applies_to": {

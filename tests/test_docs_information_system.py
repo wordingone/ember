@@ -954,7 +954,7 @@ def test_moved_private_builder_classifies_a_removed_lab_path_and_refuses_other_p
         {"rows": []},
         {
             "source": {
-                "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+                "commit": "580fe6648049e3d4e5b7f97c3698655d3a6e00c0",
                 "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
                 "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
                 "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
@@ -969,7 +969,7 @@ def test_unreconciled_reference_still_fails_while_a_moved_private_row_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = load_module()
-    source_row = {"commit": "f78e05de04b375e87a2f385316fbbda385930272",
+    source_row = {"commit": "580fe6648049e3d4e5b7f97c3698655d3a6e00c0",
                   "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
                   "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
                   "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04"}

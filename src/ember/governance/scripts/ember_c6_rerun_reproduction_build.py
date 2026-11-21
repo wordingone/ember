@@ -56,7 +56,7 @@ CAUSE_TEXT = (
     "history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable "
     "public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. "
     "2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption "
-    "in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner "
+    "in this exact file was found and fixed in commit 9841639 (2026-07-08, 'exec runner "
     "format-string fix (refs #483)'): the arm-B template's %s format specifier had been "
     "mangled to the literal token %<local-path> by the consolidation's path-redaction "
     "sweep, and was restored to %s. The recipe's reproducibility block hashes only the "

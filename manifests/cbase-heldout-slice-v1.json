@@ -1,7 +1,7 @@
 {
     "schema":  "cbase-heldout-slice/v1",
     "issue":  "#760",
-    "captured_public_master":  "db571b310b0ad20f8b257760cdc7c7ee69714929",
+    "captured_public_master":  "b9e4e72879ed70bb2e1655ee74db3dd4e76d6433",
     "source_corpus":  {
                           "combined_sha256":  "aa48f6ee5e74a40b533f3565ccb4025f9b6c5ad28d7926abc6bd0272ae92d88a",
                           "receipt_path":  "receipts/token-shards-v0-20260611T170047Z.json",

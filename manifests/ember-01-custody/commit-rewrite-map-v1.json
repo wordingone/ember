@@ -1,0 +1,158 @@
+{
+  "pairs": [
+    {
+      "new": "0772faef8e929261dabdf258b5df5342162ef57c",
+      "old": "4826c45e3741db17aa3a59feb6384e0d4251ad5a"
+    },
+    {
+      "new": "08d8f4e935d47b5fcb4be684a2535d2fb15866ae",
+      "old": "6675e2ae63fbea20a771d0bc31d946f806d0533f"
+    },
+    {
+      "new": "0c9bdb6bbf248d8fb12b6e76db7f3fedb9f7d61a",
+      "old": "4f83d5b1713befa2d44e48d0096423ac3a41f7f2"
+    },
+    {
+      "new": "195519c7894d21f7f19f9f2153d6d8d517097fa9",
+      "old": "de667fe259ba22db2fa4c792f87a82698372ec97"
+    },
+    {
+      "new": "1a21fdc863916ca5d878e81ad419ed097dce159b",
+      "old": "15d1868c263d31b68692a0b2a594c5297793a3bd"
+    },
+    {
+      "new": "215d90cf29f2634c3a3bda0036433f83ca763619",
+      "old": "3a32358ad86bc30cabfe627952bbc578e51e3aa0"
+    },
+    {
+      "new": "25a46bcdf22995834629ec6a2b1d1b7d26b2c357",
+      "old": "5de25720b63b947b09d92c2d0e737a410cefc96a"
+    },
+    {
+      "new": "2da79f7eb957f146f4c399d5c81a422c2f7eedd7",
+      "old": "6877405bf301c75328d661f7ec9da53c86140d07"
+    },
+    {
+      "new": "34881d08d301cb08053176fa77844c35f7b693e0",
+      "old": "0742185017c307c34fb215c99b4cf473111ac2e5"
+    },
+    {
+      "new": "38e815b9a088aed9db8bdfaba6b9d8733733efe3",
+      "old": "782796cee1ec7c7750cc9abde65be0acdf0ce9b3"
+    },
+    {
+      "new": "494f76b7ff9fb075c4efa71721987731a0407944",
+      "old": "b1ee102063b25be4ebf3801f8a75cdc3c5ae9b9c"
+    },
+    {
+      "new": "4adc3248799d9beceb3b13585ba656fff963e80d",
+      "old": "38fb127598b06f070522ee38b68970306de18c9e"
+    },
+    {
+      "new": "57c11103b2e0cca1dd3c726d0c97a716713b3605",
+      "old": "e7c53a036acb588e7c00c50420430751f1cea8ae"
+    },
+    {
+      "new": "5beae4ea8adcd7d70cff1c7398576eb0f0a58d97",
+      "old": "12553f3eb5eeeca93e7fd53ad88c0f8c6af20b32"
+    },
+    {
+      "new": "5d3e72973f219c991ee1dc7d909e0e3bda298e25",
+      "old": "dc27070cca098a327b4deceeff3a408d1ce57232"
+    },
+    {
+      "new": "5d7f160ab9aa13a579a3a0e67c178a373117190d",
+      "old": "47f39fbea444af5720a8f4308efe133a6ae12ecf"
+    },
+    {
+      "new": "5e24e4e9f875cbd750b0b49beed3c13df71ad7a5",
+      "old": "e115e020311566b149acda5f0336648fe71cb414"
+    },
+    {
+      "new": "5e9fca776e0838902e3907b5d3487f905f9aa2e0",
+      "old": "16f1bdb7fc45f1a62d83ecbf3597b5c5955594ed"
+    },
+    {
+      "new": "62ed4d61aea29c8726573cc2fc041f10e6e5e878",
+      "old": "d10de3fef44f145c70e6e99f441028e8e4bcc4ed"
+    },
+    {
+      "new": "6bc2f81c652885318dea07710efc0256d8991858",
+      "old": "8bd849f6e3a5e37cddd3fb18525bf9fd80e35e93"
+    },
+    {
+      "new": "7a9e831148304921d5b7d3c8a320b79a83403278",
+      "old": "3a683ce6208c6745617eb57d46a44d0b6580c971"
+    },
+    {
+      "new": "8a2ea99cb54255e98cfe4a474f5b036f652573e9",
+      "old": "b37de25131b5771a158955d5bc2a31bdd3506e53"
+    },
+    {
+      "new": "9c6941839341355127ca5a3470f3744379da53b9",
+      "old": "84a061bb84b5e91779e1295b749ed5ea49b31314"
+    },
+    {
+      "new": "9dba36fe1848c6b404eecf9ee1fc8d3c37ec762a",
+      "old": "bde7df30ad7d56d9af2cce88a2e211036ffbbe43"
+    },
+    {
+      "new": "a55052279ffe7701cf50bb405eb4b21e163f3d60",
+      "old": "021ee8fab3ab957eeb4a34a48242c75a619b2683"
+    },
+    {
+      "new": "ab31cd4a6a471bf8ef617f62332e0487bf171c73",
+      "old": "d134d51f67a64fc739739b93fd05394f97881a67"
+    },
+    {
+      "new": "b3ba95e3236c6ca7db4495f4bf3ccf72ccdd20e0",
+      "old": "4da375b9a95c4a41ea5a3b78e9e3f118b6b2456c"
+    },
+    {
+      "new": "b97e7ba04dbf7db0e4a26cdbe5458814abcad6f7",
+      "old": "bce8fc8fc1d8072f47feb41452584ddc144b552c"
+    },
+    {
+      "new": "d3457f34872ef1602beab2e2eb4f6ffd735108a9",
+      "old": "3f741ec31be32bdee87fc1c709b3e8ea7c7138cb"
+    },
+    {
+      "new": "d97806ba272f87870df0c4ce1bece7e1d035ddd4",
+      "old": "e49075ac47344509179a01d8aafa9278edadaef6"
+    },
+    {
+      "new": "da217143cb1219cbc57b3d722389a074fd3ce92c",
+      "old": "25c6ffc80943dd5f1fe021fb2125f758d48ee781"
+    },
+    {
+      "new": "e08baef7e365114345bdde4d9a9da3eb36bbe588",
+      "old": "2bec31098e48c2775c0bb90c0831a4a23787fd54"
+    },
+    {
+      "new": "e562c922669c73ff2a398094cf161c37c80a5654",
+      "old": "2d4bfc9ecdf2df2c77dac884d1b42ee8d702228e"
+    },
+    {
+      "new": "e613bf025ae008a72798eefd949e99820b942b00",
+      "old": "0351594b1f02ad02a4da46c95bd08b6e09396fe2"
+    },
+    {
+      "new": "e9c348f06749f98a6face737950ebc95fbb5645b",
+      "old": "927a70c58fa3b5e9b5773b792f58ef4f3ef87d86"
+    },
+    {
+      "new": "f35128aecd61d973cc0dad019688a1cafb40cbba",
+      "old": "f965f05571f602e2d2c1c112bbe15d8a43c27239"
+    },
+    {
+      "new": "fef56fce55d6653208d605dea86fdcc0b20dcb1e",
+      "old": "cd972cc9822bbbabddac302442ed7ee04a41ca95"
+    },
+    {
+      "new": "ff2975283650b8a8e4bd4bc5edfb06f0f30a04ba",
+      "old": "af31edf0501b166f663bebba849f09c1689747d5"
+    }
+  ],
+  "purpose": "Pre-rewrite commit ids named by recorded issue comments, for each implementation commit the public issue census cites.",
+  "schema": "ember-commit-rewrite-map-v1"
+}

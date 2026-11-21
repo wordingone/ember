@@ -11,7 +11,7 @@ accepts this manifest at an immutable PR head.
 ## Snapshot and law
 
 - Repository: `wordingone/ember`
-- Snapshot: public `master` `c8ce2dd4022cc03533b31059c667b90365da60d5`
+- Snapshot: public `master` `6430491106613db3d7d5f70d29201b324cee5e4f`
 - Evidence time: 2026-07-18T00:00Z (GitHub API, safe wrapper)
 - Equivalence law: a candidate is prunable only when its PR is merged, its
   merge commit is reachable from current `master`, every PR-changed path is
@@ -25,9 +25,9 @@ accepts this manifest at an immutable PR head.
 
 | PR | ref | current ref SHA | base SHA | PR head SHA | merge commit | state | open-PR query | merge reachability |
 |---:|---|---|---|---|---|---|---|---|
-| 385 | `feat/main-tree-guard` | `198a18b83e6fc19594eadfd6896d99bfb76ca570` | `e115e020311566b149acda5f0336648fe71cb414` | `198a18b83e6fc19594eadfd6896d99bfb76ca570` | `16ed66ab345f45e835d84e094c6c49a1253bb439` | closed/merged | only closed #385; no open match | `master...merge`: behind 663, ahead 0 |
-| 403 | `fix/issue-400` | `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `3848c8feef4437688983273d8e8a0b732f02534d` | `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `06834127cd104bb3cc92b8b7522fc4ad3356ca51` | closed/merged | only closed #403; no open match | `master...merge`: behind 653, ahead 0 |
-| 409 | `fix/custody-sidecar-401` | `d938e32a2e52b3edb374238b39c161f5a66839f1` | `06834127cd104bb3cc92b8b7522fc4ad3356ca51` | `d938e32a2e52b3edb374238b39c161f5a66839f1` | `d134d51f67a64fc739739b93fd05394f97881a67` | closed/merged | only closed #409; no open match | `master...merge`: behind 652, ahead 0 |
+| 385 | `feat/main-tree-guard` | `7c1d69098a0e79aafc44cdb7344a40690c323d60` | `5e24e4e9f875cbd750b0b49beed3c13df71ad7a5` | `7c1d69098a0e79aafc44cdb7344a40690c323d60` | `01829cc97d783086db68a158fd0d363a1b2e560e` | closed/merged | only closed #385; no open match | `master...merge`: behind 663, ahead 0 |
+| 403 | `fix/issue-400` | `267e98420545611c43f08895c17b670d6e7ab7c4` | `2f9f599843cc6d1bfdaa62fdda8114d589562391` | `267e98420545611c43f08895c17b670d6e7ab7c4` | `aa9d2022cb17ff746f9e4b5ebd990e7a075d09c6` | closed/merged | only closed #403; no open match | `master...merge`: behind 653, ahead 0 |
+| 409 | `fix/custody-sidecar-401` | `eb62ceea3a5a78832fa8215a1833a37cb1c2640b` | `aa9d2022cb17ff746f9e4b5ebd990e7a075d09c6` | `eb62ceea3a5a78832fa8215a1833a37cb1c2640b` | `ab31cd4a6a471bf8ef617f62332e0487bf171c73` | closed/merged | only closed #409; no open match | `master...merge`: behind 652, ahead 0 |
 
 `base...head` was respectively 1, 6, and 1 commit ahead. `master...head`
 is intentionally diverged for each because these were squash-merged; this is
@@ -81,58 +81,58 @@ The complete six-commit chain was refreshed from the PR API. The path digest is 
 
 | commit | path | blob SHA | content disposition |
 |---|---|---|---|
-| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | retained |
-| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | retained |
-| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T173924Z.json` | `08b179c735c78396937355573899baf933a41032` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T174158Z.json` | `f7d847ee064067107ce78f26d647c7e9224b3067` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T184903Z.json` | `46a8a19d9b9e46b269ca9718955fa87605ee504f` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/milestone-reconciliation-20260707T173937Z.json` | `e51328e69680e8ebfdf5529d6e7ec52b5895c47e` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/milestone-reconciliation-20260707T174211Z.json` | `922a2f531f9e0fe3d6237550db21f314187a529a` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/milestone-reconciliation-20260707T184931Z.json` | `ae6d338198ed4f6a6ba181a01f8d5884844ab7b5` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/milestone-reconciliation-20260707T205426Z.json` | `87eb6b0423fbe0ea25af37b74d3da01e95b8891d` | retained |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/publication-gate-20260707T173926Z.json` | `4c1b4133cc096eb538e36374c65ec2a4c5e0009c` | retained (later content evolution) |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/publication-gate-20260707T174201Z.json` | `723eefb22d4916e2f042ee87737f05be60ac6759` | retained (later content evolution) |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/publication-gate-20260707T184909Z.json` | `b2d50e387ec44d38b4676af16cee8028b58e2fbe` | retained (later content evolution) |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/publication-gate-20260707T205415Z.json` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | retained (later content evolution) |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json` | `e6975d8d209ad4f67e45f3f59758eec8b0c44a8d` | later-removed by `965863ba` |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json` | `6c2a5339cfdadf7a3897fd585376157ce6b8caf2` | later-removed by `965863ba` |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json` | `c850a070d4d985f47c3c5d7156fe0b47958241cb` | later-removed by `965863ba` |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | retained |
-| `d01b59fe5c223cafc6999e05dce5e12b55af4519` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | retained |
-| `d01b59fe5c223cafc6999e05dce5e12b55af4519` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | retained |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |
-| `965863ba591c23c055041b33e454946bfc1f5b19` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json` | `e6975d8d209ad4f67e45f3f59758eec8b0c44a8d` | removed, retained disposition in merge |
-| `965863ba591c23c055041b33e454946bfc1f5b19` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json` | `6c2a5339cfdadf7a3897fd585376157ce6b8caf2` | removed, retained disposition in merge |
-| `965863ba591c23c055041b33e454946bfc1f5b19` | `scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json` | `c850a070d4d985f47c3c5d7156fe0b47958241cb` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
-| `d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `882b264377d9869dbcb0373426d663751d6f2f17` | `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | retained |
+| `882b264377d9869dbcb0373426d663751d6f2f17` | `src/ember/governance/scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | retained |
+| `882b264377d9869dbcb0373426d663751d6f2f17` | `src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/disconfirmation-eval-20260707T173924Z.json` | `08b179c735c78396937355573899baf933a41032` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/disconfirmation-eval-20260707T174158Z.json` | `f7d847ee064067107ce78f26d647c7e9224b3067` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/disconfirmation-eval-20260707T184903Z.json` | `46a8a19d9b9e46b269ca9718955fa87605ee504f` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/milestone-reconciliation-20260707T173937Z.json` | `e51328e69680e8ebfdf5529d6e7ec52b5895c47e` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/milestone-reconciliation-20260707T174211Z.json` | `922a2f531f9e0fe3d6237550db21f314187a529a` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/milestone-reconciliation-20260707T184931Z.json` | `ae6d338198ed4f6a6ba181a01f8d5884844ab7b5` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/milestone-reconciliation-20260707T205426Z.json` | `87eb6b0423fbe0ea25af37b74d3da01e95b8891d` | retained |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/publication-gate-20260707T173926Z.json` | `4c1b4133cc096eb538e36374c65ec2a4c5e0009c` | retained (later content evolution) |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/publication-gate-20260707T174201Z.json` | `723eefb22d4916e2f042ee87737f05be60ac6759` | retained (later content evolution) |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/publication-gate-20260707T184909Z.json` | `b2d50e387ec44d38b4676af16cee8028b58e2fbe` | retained (later content evolution) |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `receipts/publication-gate-20260707T205415Z.json` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | retained (later content evolution) |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json` | `e6975d8d209ad4f67e45f3f59758eec8b0c44a8d` | later-removed by `7bbc1d00` |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json` | `6c2a5339cfdadf7a3897fd585376157ce6b8caf2` | later-removed by `7bbc1d00` |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json` | `c850a070d4d985f47c3c5d7156fe0b47958241cb` | later-removed by `7bbc1d00` |
+| `1ba22e829fecbb71273af049eaff148da2aebd2a` | `src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | retained |
+| `34dd62c36455fb93685fe9d5d963890a946b8d37` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | retained |
+| `34dd62c36455fb93685fe9d5d963890a946b8d37` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | retained |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `448d11dae99459d34d469e0379b04bc48114feb6` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `267e9842` |
+| `7bbc1d0063d01262f8de12f9cceae226379b917f` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json` | `e6975d8d209ad4f67e45f3f59758eec8b0c44a8d` | removed, retained disposition in merge |
+| `7bbc1d0063d01262f8de12f9cceae226379b917f` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json` | `6c2a5339cfdadf7a3897fd585376157ce6b8caf2` | removed, retained disposition in merge |
+| `7bbc1d0063d01262f8de12f9cceae226379b917f` | `scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json` | `c850a070d4d985f47c3c5d7156fe0b47958241cb` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
+| `267e98420545611c43f08895c17b670d6e7ab7c4` | `receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | removed, retained disposition in merge |
 
-Intermediate path-set digests: c71ad32 `fb226dca278b5db1cec2423252f003b5c32ee91a4c5acf011093c83972a8c072` (3); db541939 `27a7192c06dd14d2dcfb030aedd77754e81a41c31a4564a666fda59b68aef083` (15); d01b59 `50a5014484170f5b2d89c874f52fa283620bd413abca7ef2cebe80a92c35aad9` (2); 5ebc9e `9f53cb3bfde3c3e7ae6240db845eb03338d5f0339e8f06085c16a89398d3420a` (12); 965863 `aa46c44d557fcad2a8bba3d27eb87493412417c7479dfc274bafe864161e45d3` (3); d105e2 `9f53cb3bfde3c3e7ae6240db845eb03338d5f0339e8f06085c16a89398d3420a` (12).
+Intermediate path-set digests: 882b264 `fb226dca278b5db1cec2423252f003b5c32ee91a4c5acf011093c83972a8c072` (3); 1ba22e82 `27a7192c06dd14d2dcfb030aedd77754e81a41c31a4564a666fda59b68aef083` (15); d01b59 `50a5014484170f5b2d89c874f52fa283620bd413abca7ef2cebe80a92c35aad9` (2); 5ebc9e `9f53cb3bfde3c3e7ae6240db845eb03338d5f0339e8f06085c16a89398d3420a` (12); 965863 `aa46c44d557fcad2a8bba3d27eb87493412417c7479dfc274bafe864161e45d3` (3); d105e2 `9f53cb3bfde3c3e7ae6240db845eb03338d5f0339e8f06085c16a89398d3420a` (12).
 ## Refreshed custody and consumer evidence
 
-Refresh snapshot: 2026-07-18T00:12:38Z; current public master remained `c8ce2dd4022cc03533b31059c667b90365da60d5`. The three live refs still resolved to the exact SHAs in the candidate table; each protection endpoint returned HTTP 404 (`Branch not protected`); each head-specific PR query returned zero open PRs. Merge timestamps and the explicit seven-day floor are:
+Refresh snapshot: 2026-07-18T00:12:38Z; current public master remained `6430491106613db3d7d5f70d29201b324cee5e4f`. The three live refs still resolved to the exact SHAs in the candidate table; each protection endpoint returned HTTP 404 (`Branch not protected`); each head-specific PR query returned zero open PRs. Merge timestamps and the explicit seven-day floor are:
 
 | PR | merged_at | age at snapshot (seconds / days) | `age >= 604800` |
 |---:|---|---:|---|
@@ -176,9 +176,9 @@ Get-FileHash -Algorithm SHA256 head.patch,merge.patch  # equal digests recorded 
 Tested in a clean temporary worktree (current master was not used as a patch base), with the exact immutable refs:
 
 ```text
-#385 ref=198a18b83e6fc19594eadfd6896d99bfb76ca570 head=198a18b83e6fc19594eadfd6896d99bfb76ca570 path_count=1 path_equal=True patch_equal=True head_patch=4C90BCAF0089BCC2B403F7D6980B5F97B1292FF278B09A06AFC138D6CEA3486C merge_patch=4C90BCAF0089BCC2B403F7D6980B5F97B1292FF278B09A06AFC138D6CEA3486C
-#403 ref=d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1 head=d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1 path_count=17 path_equal=True patch_equal=True head_patch=02402EADD6526DF01C3738F29C588DA6947F2D978A489597958190F2AA3A6BE1 merge_patch=02402EADD6526DF01C3738F29C588DA6947F2D978A489597958190F2AA3A6BE1
-#409 ref=d938e32a2e52b3edb374238b39c161f5a66839f1 head=d938e32a2e52b3edb374238b39c161f5a66839f1 path_count=2 path_equal=True patch_equal=True head_patch=0C3FA95F293B662C670AEE34AA52601F51444BF6607FD7D26CB08F98FFE7 merge_patch=0C3FA95F293B662C670AEE34AA52601F51444BF6607FD7D26CB08F98FFE7
+#385 ref=7c1d69098a0e79aafc44cdb7344a40690c323d60 head=7c1d69098a0e79aafc44cdb7344a40690c323d60 path_count=1 path_equal=True patch_equal=True head_patch=4C90BCAF0089BCC2B403F7D6980B5F97B1292FF278B09A06AFC138D6CEA3486C merge_patch=4C90BCAF0089BCC2B403F7D6980B5F97B1292FF278B09A06AFC138D6CEA3486C
+#403 ref=267e98420545611c43f08895c17b670d6e7ab7c4 head=267e98420545611c43f08895c17b670d6e7ab7c4 path_count=17 path_equal=True patch_equal=True head_patch=02402EADD6526DF01C3738F29C588DA6947F2D978A489597958190F2AA3A6BE1 merge_patch=02402EADD6526DF01C3738F29C588DA6947F2D978A489597958190F2AA3A6BE1
+#409 ref=eb62ceea3a5a78832fa8215a1833a37cb1c2640b head=eb62ceea3a5a78832fa8215a1833a37cb1c2640b path_count=2 path_equal=True patch_equal=True head_patch=0C3FA95F293B662C670AEE34AA52601F51444BF6607FD7D26CB08F98FFE7 merge_patch=0C3FA95F293B662C670AEE34AA52601F51444BF6607FD7D26CB08F98FFE7
 ```
 The GitHub API deletion operation, only after the authorized reviewer accepts this manifest and a
 fresh pre-delete recheck passes, is one request per exact ref:

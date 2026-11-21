@@ -269,7 +269,7 @@ class ClaimSectionAndCandidateTests(Base):
             page.load_continuity_status(self.write(snap))
 
     def test_green_a_measured_accounting_claim_loads_and_renders_its_nested_total(self):
-        # review of b22b65c9: the loader admitted this shape but the renderer read a top-level total and raised KeyError
+        # review of e39cb009: the loader admitted this shape but the renderer read a top-level total and raised KeyError
         claim = {'status': 'MEASURED', 'predicate_sha256': self.real_claim()['predicate_sha256'],
                  'accounting': {'head_segment_id': H3, 'eligible_unique_total': 12345}}
         block = page.render_continuity_status_block(page.load_continuity_status(self.write(self.snapshot_with(claim))))
@@ -312,7 +312,7 @@ class ClaimSectionAndCandidateTests(Base):
                 page.load_continuity_status(self.write(snap))
 
     def test_deliberate_red_a_truthy_string_flag_or_a_non_integer_credit_refuses(self):
-        # review of b22b65c9: 'false' is truthy, so `in_chain is True` and `if not in_chain` both passed a refused candidate with credit 1
+        # review of e39cb009: 'false' is truthy, so `in_chain is True` and `if not in_chain` both passed a refused candidate with credit 1
         cases = (('false', 1), ('false', 0), (0, 0), (None, 0), (False, True), (False, 1), (False, -1), (False, 0.0), (False, '0'))
         for flag, credit in cases:
             snap = snapshot_dict()
@@ -333,7 +333,7 @@ class ClaimSectionAndCandidateTests(Base):
         self.assertIn('positions credited to the lineage `150`', block)
 
     def test_deliberate_red_an_audit_tuple_that_disagrees_with_the_selected_lineage_refuses(self):
-        # review of b22b65c9: each_hour_counted_once=true was accepted beside counts that did not reconcile with the selected lineage
+        # review of e39cb009: each_hour_counted_once=true was accepted beside counts that did not reconcile with the selected lineage
         def distinct(a):
             a['duplicate_credit']['distinct_manifests'] = 1
         def hops(a):

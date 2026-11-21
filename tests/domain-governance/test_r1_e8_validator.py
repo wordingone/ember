@@ -74,7 +74,7 @@ def _run(arm: str, *, tier: str, mechanism: str) -> dict:
         "mechanism": mechanism,
         "status": "TERMINAL",
         "certified_launch_sha256": "6" * 64,
-        "source_commit": "a45b41ffcc2753f5027e77d4ea59021d68ec46fb",
+        "source_commit": "93a6fe5de8eac88be1f18baf4b322a2a6e7aeddb",
         "architecture_revision": "ember-dense-3b-a1-v1" if dense else "ember-sparse-3b-v2",
         "parameter_count": 3_839_000_000,
         "active_parameter_count": 3_839_000_000 if dense else 1_021_000_000,

@@ -13,7 +13,7 @@
     "registry_state": "HASH_PINNED_TEXT_AUTHORITY",
     "source_manifest": {
       "path": "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
-      "sha256": "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3",
+      "sha256": "1248b2bd4204f3fef6372f28dfb0603917f0045f174423f626d564a74c2106eb",
       "schema": "ember02-r1-r2-cheap-probe-suite/v1",
       "rows": 64
     },
@@ -31,12 +31,12 @@
         "MMLU-Pro": "2ba1c758081f09317c86ad0c3f183596d4519cfef4dfdbaed04280929bef3627",
         "ARC-Challenge": "c0e7635ee91b9ca47bf388f1f6cd5140fda083a71dccda44de72c364645df3f3"
       },
-      "exclusion_receipt_sha256": "9f4b11c82cd757429456c0d0a91797227c4aea6f943689852d6070b97249981c"
+      "exclusion_receipt_sha256": "90dffe122fa52f3f724567ec4f1bad68f27500c7277400fc9194ba5590d47dfc"
     },
     "implementations": {
       "compiler": {
         "path": "src/ember/governance/scripts/r1_cheap_probe_suite.py",
-        "sha256": "784cfd53ca35f2311990efb7c8f41fdfe6b135513758cbd650b655e5a405efa0"
+        "sha256": "0c7b8a8470d50745492f56074a47e5b93c3be8f96dd16c0699ec4d639a3af779"
       },
       "r1_runner": {
         "path": "src/ember/governance/scripts/r1_frozen_eval_runner.py",

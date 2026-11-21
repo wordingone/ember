@@ -31,7 +31,7 @@
    "target": "zero_attack_gap: Tokenizer efficiency measurement",
    "verdict": "REAL_AND_OPEN",
    "reason": "Tokenizer is frozen (sha256 6923a52...) but no tokens-per-eval metric exists. Issue #695 notes tokenizer gap but quantification is absent.",
-   "covering_evidence": "Issue #695 commit d1cce0f references 'eval scoring-window (math500 + AC2 smoke + tokenizer gap)' but no measurement receipt found",
+   "covering_evidence": "Issue #695 commit 049df1a references 'eval scoring-window (math500 + AC2 smoke + tokenizer gap)' but no measurement receipt found",
    "decisive_experiment": {
     "intervention": "Evaluate current frozen tokenizer (sha256 6923a52) vs reference tokenizer (tiktoken/GPT-4 level) on same eval data",
     "measurement": "avg tokens per eval item, BPB impact, tokens-to-capability crossing vs reference",
@@ -114,8 +114,8 @@
   {
    "target": "field_lever: Muon optimizer (MuonEq-R) small-scale efficiency",
    "verdict": "ALREADY_COVERED",
-   "reason": "Field_levers row 3 states this is 'already live' in issues #580/#587 (P-equivariance transplant). Git log shows receipts/custody corrections merged to master (commits 50fc7c6, 6f05a29, 9bc79a7 reference #580, #683). Implementation is live.",
-   "covering_evidence": "Field_levers row 3: 'already live in #580/#587 P-equivariance transplant'; git log commit 6f05a29 'receipts: #580 custody cure -- forensic erratum + cache commitment'; commit 50fc7c6 'fix: #580 site 4 - phase_b1m'[s own unfixed global-indexed lookup](http<LOCAL> evidence of live implementation and correction"
+   "reason": "Field_levers row 3 states this is 'already live' in issues #580/#587 (P-equivariance transplant). Git log shows receipts/custody corrections merged to master (commits 7d26ce8, d23ed9f, 5141fbe reference #580, #683). Implementation is live.",
+   "covering_evidence": "Field_levers row 3: 'already live in #580/#587 P-equivariance transplant'; git log commit d23ed9f 'receipts: #580 custody cure -- forensic erratum + cache commitment'; commit 7d26ce8 'fix: #580 site 4 - phase_b1m'[s own unfixed global-indexed lookup](http<LOCAL> evidence of live implementation and correction"
   },
   {
    "target": "field_lever: Depth recurrence vs real-growth tradeoff analysis",

@@ -10,7 +10,7 @@
       "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       "workstream_id": "EMBER-02A"
     },
-    "capture_sha256": "30eb518b7a3e705e4b8cdfdbfe53791f5ac83ead635bd56326fcac71f49626b4",
+    "capture_sha256": "f7e8ff8aac100b2601851c11773bbb6e73964b8bc04ccce6cee8c9acb2b5845d",
     "captured_at": "2026-07-30T18:50:43Z",
     "cursor": {
       "after_created_at": "2026-07-09T13:32:22Z",
@@ -1024,7 +1024,7 @@
         "url": "https://github.com/wordingone/ember/issues/651"
       }
     ],
-    "master_sha": "53505c7775d0dab8d6b032f715abe52617dfeb79",
+    "master_sha": "bf821658d633ac3d1f17b9a1122a39d3e6115b87",
     "open_issue_population": 152,
     "pagination": {
       "comments": [
@@ -1560,7 +1560,7 @@
       "issues_pre.json": "44a7da65cb5846a622ac875020d1d6421f18ac46f35bafafa661c3b31d207adc"
     }
   },
-  "capture_sha256": "30eb518b7a3e705e4b8cdfdbfe53791f5ac83ead635bd56326fcac71f49626b4",
+  "capture_sha256": "f7e8ff8aac100b2601851c11773bbb6e73964b8bc04ccce6cee8c9acb2b5845d",
   "deletion_or_issue_mutation_authority": "NOT_GRANTED",
   "disposition_counts": {
     "CLOSE": 1,
@@ -1568,8 +1568,8 @@
     "PARTIAL": 19,
     "SUPERSEDED": 0
   },
-  "master_sha": "53505c7775d0dab8d6b032f715abe52617dfeb79",
-  "packet_sha256": "28888efab549db518e57ebced20fc442e25724df78ae8d5b73a7500a0d04795f",
+  "master_sha": "bf821658d633ac3d1f17b9a1122a39d3e6115b87",
+  "packet_sha256": "239e1527fffc3c32c357c49a07796eba4dc0305837cc0ef352c22c821f6dfbd3",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
@@ -1632,7 +1632,7 @@
       "authority_review": {
         "citation": "https://github.com/wordingone/ember/pull/1220#issuecomment-5134938825",
         "review_provenance": "SELF_ONLY",
-        "reviewed_commit_sha": "047d6efa9165b01451c7617d3666e7097f9625a0",
+        "reviewed_commit_sha": "dfd7d789d8ca2dbafb1540e484dd8ddbaa5be00e",
         "reviewer": "self-review-authority",
         "verdict": "PASS"
       },
@@ -1642,7 +1642,7 @@
           "blob_sha1": "0708ee0bba17a53ac4f1092bf963b47b21d66fc0",
           "citation": "https://github.com/wordingone/ember/pull/1220#issuecomment-5134938825",
           "clean_checkout": true,
-          "commit_sha": "047d6efa9165b01451c7617d3666e7097f9625a0",
+          "commit_sha": "dfd7d789d8ca2dbafb1540e484dd8ddbaa5be00e",
           "passed": true,
           "path": "scripts/ember_cli_spec_policy.py",
           "production_shaped": true,
@@ -1652,7 +1652,7 @@
           "blob_sha1": "41d5fb2dd37e01d342ba4f1d0530f2e2ea8d6553",
           "citation": "https://github.com/wordingone/ember/pull/1220#issuecomment-5134938825",
           "clean_checkout": true,
-          "commit_sha": "047d6efa9165b01451c7617d3666e7097f9625a0",
+          "commit_sha": "dfd7d789d8ca2dbafb1540e484dd8ddbaa5be00e",
           "passed": true,
           "path": "scripts/github/live_pr_policy.py",
           "production_shaped": true,
@@ -1662,7 +1662,7 @@
           "blob_sha1": "8008759d67dc93e394836669301e96fd305aae8c",
           "citation": "https://github.com/wordingone/ember/actions/runs/30572072953",
           "clean_checkout": true,
-          "commit_sha": "047d6efa9165b01451c7617d3666e7097f9625a0",
+          "commit_sha": "dfd7d789d8ca2dbafb1540e484dd8ddbaa5be00e",
           "passed": true,
           "path": ".github/workflows/repo-policy-gate.yml",
           "production_shaped": true,
@@ -1672,7 +1672,7 @@
       "disposition": "CLOSE",
       "issue_number": 567,
       "issue_url": "https://github.com/wordingone/ember/issues/567",
-      "receipt_sha256": "e21254f27a6f3490679a72351454ef7eceeb3c9b9f6f7aed454d7c2df8e2b86b",
+      "receipt_sha256": "0430f88ae6429bfe594557e40280913ac663ec9524f927c4f9be05ea3ddb9c72",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,

@@ -524,6 +524,28 @@ def _content_proof_errors(
                     errors.append(f"completion_absent_path_present:{number}")
     return errors
 
+_REWRITE_MAP_RELATIVE = "manifests/ember-01-custody/commit-rewrite-map-v1.json"
+
+
+def _legacy_commit_prefixes(repository_root: Path | None, commit: str) -> list[str]:
+    """Pre-rewrite ids of `commit`: issue comments recorded before the public history rewrite name those."""
+    if repository_root is None:
+        return []
+    try:
+        rows = json.loads((Path(repository_root) / _REWRITE_MAP_RELATIVE).read_text(encoding="utf-8")).get("pairs", [])
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [
+        row["old"] for row in rows
+        if isinstance(row, Mapping) and row.get("new") == commit and isinstance(row.get("old"), str)
+    ]
+
+
+def _commit_bound_in_comment(repository_root: Path | None, commit: str, body: str) -> bool:
+    commit = str(commit)
+    return commit[:8] in body or any(old[:8] in body for old in _legacy_commit_prefixes(repository_root, commit))
+
+
 def validate_issue_census(
     payload: Mapping[str, Any], repository_root: Path | None = None
 ) -> list[str]:
@@ -651,7 +673,7 @@ def validate_issue_census(
                     body = _decode_text(matching.get("body_base64", ""))
                     if hashlib.sha256(body.encode("utf-8")).hexdigest() != evidence_hash:
                         errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
-                    if str(proof.get("implementation_commit", ""))[:8] not in body:
+                    if not _commit_bound_in_comment(repository_root, proof.get("implementation_commit", ""), body):
                         errors.append(f"implementation_commit_comment_unbound:{number}")
                     if proof.get("verification_exit_code") != 0:
                         errors.append(f"completion_verification_exit_nonzero:{number}")
@@ -726,7 +748,7 @@ def validate_issue_census(
                 body = _decode_text(matching.get("body_base64", ""))
                 if hashlib.sha256(body.encode("utf-8")).hexdigest() != proof.get("evidence_comment_body_sha256"):
                     errors.append(f"completion_evidence_comment_hash_mismatch:{number}")
-                if str(proof.get("implementation_commit", ""))[:8] not in body:
+                if not _commit_bound_in_comment(repository_root, proof.get("implementation_commit", ""), body):
                     errors.append(f"implementation_commit_comment_unbound:{number}")
                 if proof.get("verification_exit_code") != 0 or proof.get("verification_outcome") != "independently_verified":
                     errors.append(f"completion_verification_outcome_unbound:{number}")

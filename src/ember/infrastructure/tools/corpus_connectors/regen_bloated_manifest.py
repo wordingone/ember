@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """regen_bloated_manifest.py -- one-time migration for the three lean_fetch.py
-receipts (G-train-2, A-train-1, G-heldout-1) landed before commit 4075d25
+receipts (G-train-2, A-train-1, G-heldout-1) landed before commit bc519c7
 ("fix(corpus): stop lean_fetch.py's O(n^2) manifest.jsonl growth (#1753)").
 
 Those receipts' manifest.jsonl rows each embed the full per-file breakdown
@@ -68,7 +68,7 @@ import lean_fetch  # noqa: E402
 from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt  # noqa: E402
 
 # Literal copy of the bounded-notes template lean_fetch.fetch() builds after
-# commit 4075d25. Kept as one constant so this migration and any future
+# commit bc519c7. Kept as one constant so this migration and any future
 # reader can see at a glance it matches the fix, not a paraphrase of it.
 NOTES_TEMPLATE = (
     "disjoint-partition GitHub tree fetch; {full_tree_file_count} files in full tree; "

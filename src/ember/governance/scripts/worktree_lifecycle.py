@@ -945,7 +945,7 @@ def resolve_default_start_point(repo: Path) -> str:
     `origin/master` without one is worthless: the remote-tracking ref goes stale
     alongside the branch, so both read the same superseded commit and any divergence
     check passes. Observed directly on 2026-08-15 -- `master` and `origin/master` both
-    read 6fe9e27 and looked synchronized until a fetch revealed origin at e139258.
+    read 6fe9e27 and looked synchronized until a fetch revealed origin at 8e7df89.
 
     A repo with no `origin` keeps the old `HEAD` behaviour: there is no upstream for it
     to be stale against.

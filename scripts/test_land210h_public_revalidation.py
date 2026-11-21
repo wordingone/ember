@@ -18,7 +18,7 @@ HISTORICAL = (
     / "ember-c-scale"
     / "land210h-ops-tools-receipt.json"
 )
-SUBJECT = "801cd32723734697eab58e19b7a22aef7b28f0a8"
+SUBJECT = "edd6e639568fedc88918d92c468d35c389e92433"
 
 
 def load_revalidator():

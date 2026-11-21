@@ -187,7 +187,7 @@
   "https://github.com/wordingone/ember/issues/782"
  ],
  "covered_commits": {
-  ".": "b7b5912cecf1abc7569632ffd4e429cb61142d04"
+  ".": "a655d969dec092d44cebeeb709b6979fb14bd12f"
  },
  "delegation": {
   "issue-210": {

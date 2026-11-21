@@ -29,7 +29,7 @@
     "optimizer_steps": 20,
     "param_count": 2228265984,
     "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
-    "sha256": "0de233a1d8f2780a79c4ba69f33b517d47734605738a4b1461c22c60d84e7a54",
+    "sha256": "013ec299d7d5b0eedf9d20e6b2f7660b026a9bc699ee2208f3c44cd8d195ddbc",
     "verdict": "MEASURED_PASS"
   },
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",

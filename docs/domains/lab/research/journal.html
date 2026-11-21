@@ -1332,7 +1332,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 </ul>
 <h3>2026-10-01 01:11 PM LA — Next after <code>issue2119-d0-admission-probe-20260930-attempt2</code></h3>
 <ul>
-<li><strong>Successor hypothesis / not closed:</strong> SUPPORTED admission probe on merged source 2d0ce2fa from the R3 child; the successor was the governed hour A on S4 (issue2119-a-hour-s4-20260930), which ran and advanced the lineage. Not closed by this row: nothing (the probe answered only admissibility, which hour A then consumed).</li>
+<li><strong>Successor hypothesis / not closed:</strong> SUPPORTED admission probe on merged source edee476e from the R3 child; the successor was the governed hour A on S4 (issue2119-a-hour-s4-20260930), which ran and advanced the lineage. Not closed by this row: nothing (the probe answered only admissibility, which hour A then consumed).</li>
 <li><strong>Successor id:</strong> <code>issue2119-a-hour-s4-20260930</code></li>
 </ul>
 <h3>2026-10-01 01:50 AM LA — SUPPORTED: <code>issue2119-speed-null-a-20261001</code></h3>
@@ -1439,7 +1439,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> The fourth hour added 105.28M positions after the reference child; text NLL should move down slightly from the reference 1.866 and MMMU stay in the chance band. Criterion is identity and receipt integrity, not score.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause of the declaration frozen criterion fails (REFUTED with reason); no score bar, no timing claim</li>
-<li><strong>Ruling:</strong> Frozen criterion (receipt integrity) held: verdict.json SUPPORTED; NLL receipt complete, bound to d7c34b42, text targets 2,097,152; three MMMU receipts n=847 bound to d7c34b42, missing 847/847 imageless, wrong shift 423 (767/847 differ); pointer 3c41b369 equal before/after; source 2d0ce2fa. PREDICTION MISSED: text NLL observed 2.1728 vs predicted 1.80 [1.72,1.90] (reference 1.8664; +0.3064, 86% of documents worse); caption 1.2853 vs 1.30 [1.22,1.40] inside. MMMU real 0.286 (bar 0.2857, 242/847 = 0.2857 exactly), missing 0.269, wrong 0.299; real-minus-wrong -0.013. Descriptive, no retained credit.</li>
+<li><strong>Ruling:</strong> Frozen criterion (receipt integrity) held: verdict.json SUPPORTED; NLL receipt complete, bound to d7c34b42, text targets 2,097,152; three MMMU receipts n=847 bound to d7c34b42, missing 847/847 imageless, wrong shift 423 (767/847 differ); pointer 3c41b369 equal before/after; source edee476e. PREDICTION MISSED: text NLL observed 2.1728 vs predicted 1.80 [1.72,1.90] (reference 1.8664; +0.3064, 86% of documents worse); caption 1.2853 vs 1.30 [1.22,1.40] inside. MMMU real 0.286 (bar 0.2857, 242/847 = 0.2857 exactly), missing 0.269, wrong 0.299; real-minus-wrong -0.013. Descriptive, no retained credit.</li>
 <li><strong>Receipt:</strong> <code>seat record: verdict.json</code></li>
 </ul>
 <h3>2026-09-30 09:01 PM LA — Next after <code>issue2119-h4b-hour-20260930</code></h3>
@@ -1451,7 +1451,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> H2 104,247,296 and H3b 105,181,184 applied on the same config with rising p10; this hour should apply a comparable count and publish a descendant advancing the head; text delta = 0.75 x applied (confirmed twice).</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause of declaration frozen criterion fails: NO ADVANCE(reason)</li>
-<li><strong>Ruling:</strong> All frozen clauses met: complete hour-result, parent 242357b6, child d7c34b42, applied_positions 105,275,392 in [96M,109M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced 7ae8b66e-&gt;3c41b3693 naming the new child; text delta 78,956,544 = 0.75 x applied, pass 3 REPEATS.</li>
+<li><strong>Ruling:</strong> All frozen clauses met: complete hour-result, parent 242357b6, child d7c34b42, applied_positions 105,275,392 in [96M,109M], worker terminal completed, cleanup_verified true, source edee476e, ledger e4 1e4a748f bound, pointer advanced 7ae8b66e-&gt;3c41b3693 naming the new child; text delta 78,956,544 = 0.75 x applied, pass 3 REPEATS.</li>
 <li><strong>Receipt:</strong> <code>state\issue2119-receipts\H4-20260930\h4b-ruling-evidence.md</code></li>
 </ul>
 <h3>2026-09-30 07:33 PM LA — Next after <code>issue2119-h4-hour-20260930</code></h3>
@@ -1475,7 +1475,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> H2 applied 104,247,296 positions on the same config; H3 has the same config and a fresh probe on its own parent/cursor/e4, so it should apply a comparable count and publish a descendant that advances the head. Repeat text changes no compute; text delta tracks 0.75 x applied.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause fails: NO ADVANCE(reason); no score bar</li>
-<li><strong>Ruling:</strong> All frozen clauses met: complete hour-result, parent d157f2df, child 242357b6, applied_positions 105,181,184 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, ledger e4 1e4a748f bound, pointer advanced f859775d-&gt;7ae8b66e naming the new child; fresh probe admitted first. Text delta 78,885,888 = 0.75 x applied, pass 3 REPEATS.</li>
+<li><strong>Ruling:</strong> All frozen clauses met: complete hour-result, parent d157f2df, child 242357b6, applied_positions 105,181,184 in [95M,108M], worker terminal completed, cleanup_verified true, source edee476e, ledger e4 1e4a748f bound, pointer advanced f859775d-&gt;7ae8b66e naming the new child; fresh probe admitted first. Text delta 78,885,888 = 0.75 x applied, pass 3 REPEATS.</li>
 <li><strong>Receipt:</strong> <code>state\issue2119-receipts\H3-20260930\h3b-ruling-evidence.md</code></li>
 </ul>
 <h3>2026-09-30 03:36 PM LA — Next after <code>issue2119-h3-hour-20260930</code></h3>
@@ -1499,7 +1499,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> R (same full-model config, 5,656 s wall) applied 103,354,368 positions; H2 has the same config, geometry and a valid probe on its own parent, so it should apply a comparable count and publish a descendant that advances the selected continuation head.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause fails: NO ADVANCE(reason); no score bar</li>
-<li><strong>Ruling:</strong> All frozen criterion clauses met (complete result, child d157f2df, parent 198f60cb, positions 104,247,296 in [95M,108M], worker terminal completed, cleanup_verified true, source 2d0ce2fa, pointer advanced 78d9e4c8-&gt;d157f2df). Disclosed 21:03-21:08Z check clean; residual: edits present 21:03-21:08Z, no mid-hour load evidence.</li>
+<li><strong>Ruling:</strong> All frozen criterion clauses met (complete result, child d157f2df, parent 198f60cb, positions 104,247,296 in [95M,108M], worker terminal completed, cleanup_verified true, source edee476e, pointer advanced 78d9e4c8-&gt;d157f2df). Disclosed 21:03-21:08Z check clean; residual: edits present 21:03-21:08Z, no mid-hour load evidence.</li>
 <li><strong>Receipt:</strong> <code>state\issue2119-receipts\H2-20260930\h2-ruling-evidence.md</code></li>
 </ul>
 <h3>2026-09-30 01:50 PM LA — Next after <code>issue2119-d2-probe-20260930</code></h3>
@@ -1510,7 +1510,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> The probe binds its parent's data cursor (cia_hour.py:156 validate_probe_inputs 'data'); H2's parent is R's child, so H2 needs its own probe. Same mechanism as D1 on A child, which ADMITted.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause fails: REFUSE(reason); no timing claim</li>
-<li><strong>Ruling:</strong> Every frozen clause evidenced: verdict.json ADMIT; parent 198f60cb, source_commit 2d0ce2fa, cursor_start {401,345248}, purpose DIAGNOSTIC, pointer sha unchanged 78d9e4c8, R child manifest unchanged, occupancy 893 s &lt;= 1,760. The registered occupancy interval [1300,1760] MISSED low (893 s): probe ran 44% faster than D1-based calibration.</li>
+<li><strong>Ruling:</strong> Every frozen clause evidenced: verdict.json ADMIT; parent 198f60cb, source_commit edee476e, cursor_start {401,345248}, purpose DIAGNOSTIC, pointer sha unchanged 78d9e4c8, R child manifest unchanged, occupancy 893 s &lt;= 1,760. The registered occupancy interval [1300,1760] MISSED low (893 s): probe ran 44% faster than D1-based calibration.</li>
 <li><strong>Receipt:</strong> <code>state\issue2119-receipts\d2-20260930\verdict.json</code></li>
 </ul>
 <h3>2026-09-30 01:33 PM LA — Next after <code>issue2119-r-eval-20260930</code></h3>
@@ -1521,7 +1521,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> R added 103.35M positions on A's ledger family; NLL should move slightly down from A (1.905 text / 1.370 caption) and MMMU stay at chance band with real-missing within 1 SE. Criterion is identity and receipt integrity, not score.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if any clause above fails (REFUTED with reason); no score bar, no timing claim</li>
-<li><strong>Ruling:</strong> Every frozen clause evidenced from emitted fields in verdict.json: manifest 198f60cb on all four receipts, n=847 each, image_condition recorded real/missing/wrong, wrong shift 423, hour-binding source_head_sha 2d0ce2fa, pointer unchanged. Text NLL 1.866 in [1.85,2.02], caption 1.324 in [1.28,1.44], MMMU 0.274/0.270/0.280 in intervals, real-missing 0.004 within 1 SE, NLL wall 928 s in [700,1100].</li>
+<li><strong>Ruling:</strong> Every frozen clause evidenced from emitted fields in verdict.json: manifest 198f60cb on all four receipts, n=847 each, image_condition recorded real/missing/wrong, wrong shift 423, hour-binding source_head_sha edee476e, pointer unchanged. Text NLL 1.866 in [1.85,2.02], caption 1.324 in [1.28,1.44], MMMU 0.274/0.270/0.280 in intervals, real-missing 0.004 within 1 SE, NLL wall 928 s in [700,1100].</li>
 <li><strong>Receipt:</strong> <code>state\issue2119-receipts\r-eval-20260930\verdict.json</code></li>
 </ul>
 <h3>2026-09-30 12:49 PM LA — Next after <code>issue2119-r-hour-s4-20260930</code></h3>
@@ -1537,13 +1537,13 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 </ul>
 <h3>2026-09-30 11:21 AM LA — Next after <code>issue2119-d1-admission-probe-20260930-attempt2</code></h3>
 <ul>
-<li><strong>Successor hypothesis / not closed:</strong> R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on 2d0ce2fa).</li>
+<li><strong>Successor hypothesis / not closed:</strong> R can reuse the D1 probe result reference; next: R governed hour on A child with REUSE_PROBE_IN; 152756Z payload COMPRESS-KERNEL now authorised by ruling 41584 (D1 admitted validly on edee476e).</li>
 </ul>
 <h3>2026-09-30 11:21 AM LA — SUPPORTED: <code>issue2119-d1-admission-probe-20260930-attempt2</code></h3>
 <ul>
 <li><strong>Hypothesis:</strong> Attempt 1's identity was correct; the only failure was the allowance reservation, now with 5,656 s headroom. Mechanism expected as D0's identical probe (ADMIT, 774 s occupancy). Source fields named: hour-result.json source_commit and prediction.json identity.source_commit (emitted in D0's probe custody). Dry run prints purpose=DIAGNOSTIC, full-model forward (ARM_NO_TEMPLATE=1, layer_template none), parent 36eb0f8a.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if Anything else: REFUSE(reason). Budget 1,700 s + 60 s; no timing claim (clause 9). Any D1 refusal, and any R failure to reuse D1, is a REFUSAL under S4's fixed total. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3.</li>
-<li><strong>Ruling:</strong> ADMIT: all six clauses read from emitted fields: probe terminal records completed rc0 cleanup-verified, dispatcher rc 0; parent_manifest_sha256 = 36eb0f8a...; source_commit = 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15 in hour-result.json and prediction.json identity; input_binding.cursor_start = {382, 2521248} = A cursor_after; pointer e834ebde equal after, A child manifest equal after; result reference hour-result.json sha256 5b06c4470c066135476f02305eff62a78e4a397f8c5777c5a7151f12332cd73d. Occupancy 809 s (descriptive prediction 1,600 [1,300,1,760] MISSED low; no timing claim).</li>
+<li><strong>Ruling:</strong> ADMIT: all six clauses read from emitted fields: probe terminal records completed rc0 cleanup-verified, dispatcher rc 0; parent_manifest_sha256 = 36eb0f8a...; source_commit = edee476ef2e0370f6d0881023e977b05ae77702c in hour-result.json and prediction.json identity; input_binding.cursor_start = {382, 2521248} = A cursor_after; pointer e834ebde equal after, A child manifest equal after; result reference hour-result.json sha256 5b06c4470c066135476f02305eff62a78e4a397f8c5777c5a7151f12332cd73d. Occupancy 809 s (descriptive prediction 1,600 [1,300,1,760] MISSED low; no timing claim).</li>
 <li><strong>Receipt:</strong> <code>seat record: verdict.json</code></li>
 </ul>
 <h3>2026-09-30 11:06 AM LA — Next after <code>issue2119-d1-admission-probe-20260930</code></h3>
@@ -1553,7 +1553,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 </ul>
 <h3>2026-09-30 11:06 AM LA — REFUTED: <code>issue2119-d1-admission-probe-20260930</code></h3>
 <ul>
-<li><strong>Hypothesis:</strong> D0's identical probe on R3's child reached ADMIT in 774 s occupancy (prediction.json identity.source_commit 2d0ce2fa, hour-result.json source_commit, hour-result.json parent_manifest_sha256, input_binding.cursor_start, worker-terminal.json and owned.json terminal records). D1 repeats it one link deeper on A's child; expected ADMIT, launch-through-cleanup 1,600 s [1,300,1,760] per the declaration. Source field grep (D0 probe custody cia-probe-...152756Z/measurement-6f7724e6...): emitted fields are hour-result.json source_commit and prediction.json identity.source_commit (2d0ce2fa); this criterion names only those.</li>
+<li><strong>Hypothesis:</strong> D0's identical probe on R3's child reached ADMIT in 774 s occupancy (prediction.json identity.source_commit edee476e, hour-result.json source_commit, hour-result.json parent_manifest_sha256, input_binding.cursor_start, worker-terminal.json and owned.json terminal records). D1 repeats it one link deeper on A's child; expected ADMIT, launch-through-cleanup 1,600 s [1,300,1,760] per the declaration. Source field grep (D0 probe custody cia-probe-...152756Z/measurement-6f7724e6...): emitted fields are hour-result.json source_commit and prediction.json identity.source_commit (edee476e); this criterion names only those.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if Anything else: REFUSE(reason). Budget 1,700 s + 60 s; no timing claim (clause 9). Any D1 refusal, and any R failure to reuse D1, is a REFUSAL under S4's fixed total. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3.</li>
 <li><strong>Ruling:</strong> REFUSE(diagnostic allowance exhausted (occupancy) for lineage bf20f050...: 11,312 reserved + 5,656 &gt; 14,400 cap; pre-run refusal, no probe ran, 26 s charged). Pointer e834ebde and A child manifest unchanged. this seat 41612 ruled attempt 1 REFUSE; attempt 2 lawful under the same declaration.</li>
 <li><strong>Receipt:</strong> <code>seat record: verdict.json</code></li>
@@ -1566,7 +1566,7 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <ul>
 <li><strong>Hypothesis:</strong> A added 102,346,752 positions on pass-3 repeats of the e3 ledger from R3's child; D measures whether NLL and the three MMMU conditions moved. Registered predictions are descriptive only: text NLL 1.95 [1.85,2.05]; caption NLL 1.44 [1.38,1.50]; MMMU real 0.27, missing 0.27 [0.24,0.30], wrong 0.26 [0.23,0.29]; real minus missing within +-1 SE.</li>
 <li><strong>Frozen criterion:</strong> REFUTED if Anything else: REFUTED(reason). No score bar and no timing claim (clause 9). Occupancy counts as diagnostic. Pointer BEFORE-value full sha256 e834ebdeb9f943beb565d59ae396f21fa187a2cf7dd32bc2d68d6caee12c31a3 recorded in custody before launch.</li>
-<li><strong>Ruling:</strong> frozen clause 'source_commit is 2d0ce2fa in every receipt' fails literally: no NLL or MMMU receipt emits a source_commit field (source-commit-clause.json); declaration defect of this seat's, not a model finding. Every other clause held: NLL complete and bound to 36eb0f8a, three MMMU n=847 bound, conditions proven (missing 847/847 imageless, wrong shift 423, 767/847 differ), pointer e834ebde equal before/after; hour-binding source_head_sha = 2d0ce2fa in all three. Observed value: text NLL 1.9052; caption 1.3703; real-missing 1.04 SE.</li>
+<li><strong>Ruling:</strong> frozen clause 'source_commit is edee476e in every receipt' fails literally: no NLL or MMMU receipt emits a source_commit field (source-commit-clause.json); declaration defect of this seat's, not a model finding. Every other clause held: NLL complete and bound to 36eb0f8a, three MMMU n=847 bound, conditions proven (missing 847/847 imageless, wrong shift 423, 767/847 differ), pointer e834ebde equal before/after; hour-binding source_head_sha = edee476e in all three. Observed value: text NLL 1.9052; caption 1.3703; real-missing 1.04 SE.</li>
 <li><strong>Receipt:</strong> <code>seat record: verdict.json</code></li>
 </ul>
 <h3>2026-09-30 10:11 AM LA — SUPPORTED: <code>issue2119-a-hour-s4-20260930</code></h3>
@@ -1579,14 +1579,14 @@ s=0.010, [-0.010,0.030] -&gt; rule 6 INCONCLUSIVE. s=0.030, [0.006,0.054] -&gt; 
 <h3>2026-09-30 08:41 AM LA — SUPPORTED: <code>issue2119-d0-admission-probe-20260930-attempt2</code></h3>
 <ul>
 <li><strong>Hypothesis:</strong> Attempt 1 died on a transient python.exe row with a null CommandLine in the runner's resource census, so the mechanism is host activity during the window, not the source. Attempt 2 runs unchanged source with all seats python-silent and a python census quoted immediately before dispatch.</li>
-<li><strong>Frozen criterion:</strong> REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15; training_job_purpose == DIAGNOSTIC; charged occupancy &lt;= 1,700 s + 60 s. Any miss is REFUSE(reason). No timing-bound claim (S4 clause 9).</li>
-<li><strong>Ruling:</strong> verdict.json ADMIT: rc 0 with result reference (measurement-6f7724e6, result sha 57a981bd); pointer sha after == aa6c5e6f; R3 manifest after == f4831d3b; source_commit 2d0ce2fa; purpose DIAGNOSTIC; occupancy 774 s &lt;= 1,760 s. Attempt 1 charged 27 s + 60 s.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == edee476ef2e0370f6d0881023e977b05ae77702c; training_job_purpose == DIAGNOSTIC; charged occupancy &lt;= 1,700 s + 60 s. Any miss is REFUSE(reason). No timing-bound claim (S4 clause 9).</li>
+<li><strong>Ruling:</strong> verdict.json ADMIT: rc 0 with result reference (measurement-6f7724e6, result sha 57a981bd); pointer sha after == aa6c5e6f; R3 manifest after == f4831d3b; source_commit edee476e; purpose DIAGNOSTIC; occupancy 774 s &lt;= 1,760 s. Attempt 1 charged 27 s + 60 s.</li>
 <li><strong>Receipt:</strong> <code>seat record: verdict.json</code></li>
 </ul>
 <h3>2026-09-30 08:27 AM LA — REFUTED: <code>issue2119-d0-admission-probe-20260930</code></h3>
 <ul>
-<li><strong>Hypothesis:</strong> The preparation on the merged head was proven executable in prep-only (red: CONTINUE_TRAINING refused rc 6; green: DIAGNOSTIC prepared). Whether the probe runs to a result on 2d0ce2fa from R3's child is unmeasured; R3's probe ran on an older head and cannot serve.</li>
-<li><strong>Frozen criterion:</strong> REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == 2d0ce2fae8f3636839e5a8d84e5e4eaa0e9eef15; training_job_purpose == DIAGNOSTIC; charged occupancy &lt;= 1,700 s + 60 s. Any miss is REFUSE(reason), records branch C NOT SUCCESSFUL, no fallback. No timing-bound claim (S4 clause 9).</li>
+<li><strong>Hypothesis:</strong> The preparation on the merged head was proven executable in prep-only (red: CONTINUE_TRAINING refused rc 6; green: DIAGNOSTIC prepared). Whether the probe runs to a result on edee476e from R3's child is unmeasured; R3's probe ran on an older head and cannot serve.</li>
+<li><strong>Frozen criterion:</strong> REFUTED if Anything other than all of: probe completes rc 0 with its result reference present; pointer sha after == aa6c5e6fb1ca2b5546e5a2173efe1c0d33b670043cca9eca1229fb52c39010ec; R3 child manifest after == f4831d3bb00c5f5e9a5884bd83e59a7910732a066c5735331da43ab806c39a0f; source_commit in the probe receipt == edee476ef2e0370f6d0881023e977b05ae77702c; training_job_purpose == DIAGNOSTIC; charged occupancy &lt;= 1,700 s + 60 s. Any miss is REFUSE(reason), records branch C NOT SUCCESSFUL, no fallback. No timing-bound claim (S4 clause 9).</li>
 <li><strong>Ruling:</strong> Attempt 1 is REFUSE(worker exception in resource_census: ValueError cannot classify model process resources, no probe result) under the declaration's frozen criterion (this seat 41392). Pointer and R3 manifest unchanged. Funded retry follows from S4's 3,400 D0 reserve; attempt 1 charged 27 s + 60 s.</li>
 <li><strong>Receipt:</strong> <code>&lt;host-local path&gt;</code></li>
 </ul>

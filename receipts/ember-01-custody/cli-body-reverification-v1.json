@@ -8,14 +8,14 @@
     "path": "<managed-worktree-root>/ember-wt/r8-cli-reverif",
     "branch": "feat/r8-cli-body-reverif",
     "start_point": "origin/master",
-    "head_commit": "13484c14fabd0a1ef1d569369fc01f6d4068fd86"
+    "head_commit": "3527f8ed48b308ea7dcbfd28782f69fc86c9a7ff"
   },
   "purpose": "EMBER-01 R8 Part-A: ember-cli-body four-state reverification, receipt only (no authority edit, no push)",
   "states": {
     "SOURCE_EXPECTED": {
       "state": "ESTABLISHED",
       "method": "git ls-tree -r HEAD -- tools/ember-cli, sorted, sha256'd (blob path+content addressed via git's own object hashing; deterministic on a given commit)",
-      "commit_sha": "13484c14fabd0a1ef1d569369fc01f6d4068fd86",
+      "commit_sha": "3527f8ed48b308ea7dcbfd28782f69fc86c9a7ff",
       "tracked_file_count": 480,
       "tree_listing_sha256": "8de30c7b3983cc3da8cf1feda682c7d610e718603a2f7e7e386880d7617eac6c",
       "commands": [
@@ -37,7 +37,7 @@
       "embedded_build_commit_binding": {
         "symbol": "__EMBER_BUILD_COMMIT__",
         "mechanism": "build-tools/build-cockpit.ts requireBuildCommit()/buildCommitBanner(): shells `git -C <repoRoot> rev-parse HEAD` at build time, refuses (throws) unless tracked status (git status --porcelain --untracked-files=no) is exactly empty, then bakes the commit into a `--banner` passed to `bun build --compile`",
-        "commit_bound": "13484c14fabd0a1ef1d569369fc01f6d4068fd86",
+        "commit_bound": "3527f8ed48b308ea7dcbfd28782f69fc86c9a7ff",
         "verified_clean_tracked_status_at_build_time": true,
         "note": "commit_bound equals worktree HEAD (build was run with zero tracked-file edits in this worktree, confirmed by git status --porcelain --untracked-files=no returning empty both before and after the build)"
       }
@@ -94,7 +94,7 @@
     }
   },
   "agreement": {
-    "source_vs_built": "N/A_NO_DIVERGENCE_POSSIBLE -- BUILT_BINARY was built directly from SOURCE_EXPECTED's exact commit (13484c14fabd0a1ef1d569369fc01f6d4068fd86) in the same worktree with verified-clean tracked status; the embedded __EMBER_BUILD_COMMIT__ equals the commit SOURCE_EXPECTED's tree hash was computed against",
+    "source_vs_built": "N/A_NO_DIVERGENCE_POSSIBLE -- BUILT_BINARY was built directly from SOURCE_EXPECTED's exact commit (3527f8ed48b308ea7dcbfd28782f69fc86c9a7ff) in the same worktree with verified-clean tracked status; the embedded __EMBER_BUILD_COMMIT__ equals the commit SOURCE_EXPECTED's tree hash was computed against",
     "built_vs_installed": "NOT_COMPARABLE -- INSTALLED_BINARY is EXPLICIT_UNAVAILABLE (no installed cockpit binary found on this machine); no comparison possible",
     "owned_seat_status": "EXPLICIT_UNAVAILABLE, both OWNED_ADMITTED and OWNED_DEVELOPMENT -- the owned 3B model is unborn pre-EMBER-02; the one on-disk development manifest present is itself NON_ADMISSIBLE/HISTORICAL_ONLY/EXCLUDED_CONTAMINATED per the project's own EMBER-01-completion receipt, so it does not constitute an owned identity under any reading",
     "overall": "SOURCE and BUILT agree by direct construction (built from source at the recorded commit, clean tree). INSTALLED is explicit-unavailable (nothing installed). LIVE seat identities for OFFLINE and REFERENCE_ONLY are available now per static source read; OWNED_ADMITTED and OWNED_DEVELOPMENT are explicit-unavailable, never faked or defaulted to a reference model."

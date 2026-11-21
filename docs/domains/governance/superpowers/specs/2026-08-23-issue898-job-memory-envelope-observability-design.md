@@ -3,7 +3,7 @@
 **Date:** 2026-08-23  
 **Issue:** #898  
 **Packet:** 1 — Cure D mechanism-derived `maximum_job_memory_bytes` plus Cure C job-scoped alarm and peak observability  
-**Base:** `3126da1b6d84914d8e58101e3243c2fa3976c526`
+**Base:** `ad80aea9ca4508197aede9e74ce2bf4abca0fd04`
 
 ## Outcome
 

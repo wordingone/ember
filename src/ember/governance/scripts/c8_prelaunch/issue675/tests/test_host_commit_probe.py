@@ -41,7 +41,7 @@ def test_probe_emits_validator_accepted_os_high_water_trace(tmp_path: Path):
     clock = iter(range(1_000, 2_000, 10))
     probe = module.HostCommitProbe(
         job_id="q2-actual-update-001",
-        source_commit="f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        source_commit="744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         bindings=_bindings(),
         peak_commit_sampler=lambda: next(values),
         clock_ms=lambda: next(clock),
@@ -65,7 +65,7 @@ def test_probe_refuses_phase_reorder_or_non_growth():
     module = _load(MODULE_PATH, "q2_host_commit_probe_refusal")
     probe = module.HostCommitProbe(
         job_id="q2-actual-update-001",
-        source_commit="f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        source_commit="744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         bindings=_bindings(),
         peak_commit_sampler=lambda: 100,
         clock_ms=lambda: 1_000,
@@ -86,7 +86,7 @@ def test_probe_refuses_incomplete_or_failed_run():
     clock = iter([1_000, 1_010, 1_020, 1_030])
     probe = module.HostCommitProbe(
         job_id="q2-actual-update-001",
-        source_commit="f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        source_commit="744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         bindings=_bindings(),
         peak_commit_sampler=lambda: next(values),
         clock_ms=lambda: next(clock),

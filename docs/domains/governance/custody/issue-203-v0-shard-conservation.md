@@ -13,7 +13,7 @@ or grant model, training, benchmark, or capability credit.
 ## Bound public evidence
 
 The crosswalk is bound to public master
-`06accab43eb955a301a35492052ca2ea531e04cf`.
+`7889e202736a3f1f31450597f9cc0a7ff8e9f8b9`.
 
 The historical shard receipt is
 `receipts/token-shards-v0-20260611T170047Z.json`. Its current Git blob is the

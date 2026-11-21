@@ -198,7 +198,7 @@ execution graph. They cannot waive this milestone's completion certificate.
 <!-- transfer-id: EMBER-03.TRANSFER.696.20260807 -->
 The historical #696 brain-server-supervisor obligation is accepted here as a
 lossless transfer to the current Ember Lab owner. The merged #802 behavioral
-carrier (`00eec85d2bd3073b137b51f2d89b78d905b46076`) proves the current owner for
+carrier (`6b6f2e89bf5d7ae1844aef5254606636d50d5aa2`) proves the current owner for
 lazy owned-server consumption, daemon-owned health/process fencing, planned
 outage ordering and expiry, governed restore, activity/receipt evidence, and
 restart backoff. The historical borrowed 2.2B `:8083` vehicle is retired; no

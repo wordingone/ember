@@ -56,7 +56,7 @@
     "inspect_floor_contracts_integration": "Complete - parse_errors added to main errors list, gate blocks when errors not empty"
   },
   "branch": {
-    "commit": "b309646",
+    "commit": "88761e9",
     "remote": "public/fix/floor-contract-manifest",
     "pushed": true
   },

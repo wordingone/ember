@@ -7,9 +7,9 @@
   "ticket": "C-CUSTODY-DOCUMENTED-ABSENT-WAVE031",
   "ts": "2026-07-31T16:28:18Z",
   "sha_convention": "sha256 over exact on-disk file bytes, no normalization",
-  "source_commit": "52d6d49037719e26b0268865037d295171f9a589",
+  "source_commit": "0997f8089059e2c2900d43d0b39f2b35add15780",
   "source_document": "docs/custody-disposition-20260731-wave031.md",
-  "source_document_sha256": "8b6ebf6073cc54f0f1366206d78599cdcbd5f82177e9e38b13b24a884d07961b",
+  "source_document_sha256": "cf595ddaa50e42c6f62d92875e2b86c907dd67d772f45d04e318735b106fe121",
   "documented_absent": [
     {
       "doc": "docs/custody-disposition-20260731-wave031.md",

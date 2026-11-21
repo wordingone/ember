@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 MISSING_REF = "receipts/ember-cli/issue-1043-text-wrap/ember.exe"
 SUBJECT_RECEIPT = "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json"
-SUBJECT_RECEIPT_SHA256 = "0c856572684b449427d493dd38a1d8c2faa0f959e47890c7be323fc06dd0ba43"
+SUBJECT_RECEIPT_SHA256 = "035ba0dfd0dd68da68df2a5b901a6bdd25e00e178b2489b50206522d0799c635"
 BINARY_SHA256 = "1181f882bdb71e329ff185f0939b9cc352b75e1bd6f106b25ec989915653ad5c"
 
 

@@ -6,7 +6,7 @@
   "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint files; sha256 over device-normalized (cpu, contiguous, bitcast-to-uint8) tensor bytes prefixed with shape+dtype for every model/optimizer state tensor and RNG buffer hashed below (the tensor_hash convention used throughout this receipt)",
   "ref": "issue #735 comment 4942417647 (coordinator erratum + scope-narrowing on the landed w1-baseline-replay-closure-20260711T025650Z.json receipt); supplements, never retro-edits, that receipt -- append-only evidence. v3 repair round 2: PR #758 external falsifier live run BLOCK (exit 0 / FULLSTATE_RESUME_EXACT with save_fidelity_checked=false, source dirty -- a round-1 vacuous-default verdict bug). Fixes: (1) verdict grammar now encodes 'pre-save state unavailable => max claim is FULLSTATE_LOAD_PATH_EXACT, regardless of input binds' in code (save_fidelity_top_claim_ok requires CHECKED+exact, never defaults true when unchecked); (2) runtime-reconstruction-input pins are now equality-gated against the landed closure receipt's own preflight.pricing_receipt_sha256/rung_manifest_sha256 (round-1 only checked file-readability, never compared to anything); (3) a dirty source tree is bound via its exact diff sha256 and never qualifies for the top verdict.",
   "source_commit": {
-    "sha": "2c1d2e8138608d3e8c7d5c8a9c82ffa5924a1744",
+    "sha": "25a1251d001122651bd11214c4bf8a476a191183",
     "working_tree_dirty": true,
     "dirty_diff_sha256": "79490e1be7a6871bbb932de8761c85c2738c3d2e35404e80057234611166add7",
     "available": true
@@ -191,7 +191,7 @@
     "runtime_binds_satisfied": true,
     "runtime_binds_measured_and_failed": false,
     "source_commit": {
-      "sha": "2c1d2e8138608d3e8c7d5c8a9c82ffa5924a1744",
+      "sha": "25a1251d001122651bd11214c4bf8a476a191183",
       "working_tree_dirty": true,
       "dirty_diff_sha256": "79490e1be7a6871bbb932de8761c85c2738c3d2e35404e80057234611166add7",
       "available": true

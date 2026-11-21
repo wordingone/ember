@@ -5,7 +5,7 @@
   "ticket": "DEBT-009, GATE-001, GATE-002, GATE-003, GATE-004, GATE-005, GATE-006",
   "disposition": "TRIGGER-FORMALIZATION",
   "ts": "20260802T032156Z",
-  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "verified_against_master": "186a2e302354cd777bf4def58e0e375468ab64a3",
   "what_this_is_not": "This receipt does NOT dispose any row. All seven rows remain live obligations with their required actions unchanged, unweakened, and unreworded. What changes is only that each row's fire condition is now written as a machine-checkable predicate instead of prose that could never be evaluated false. No row's work is reduced, deferred, or reclassified.",
   "why_the_rows_were_triggerless": "C10 reads a row's fire condition from its Status cell. All seven rows carried the bare token 'TRIGGER-GATED' there, so the probe classified them triggerless — correctly, since a bare token names no condition. For DEBT-009 and GATE-001/002/006 a real condition already existed, but only in the separate Trigger column, invisible to the check that has to evaluate it. For GATE-003/004/005 no evaluable condition existed anywhere: the prose named an event with no observable that could witness it.",
   "trigger_state_verified_not_inherited": {
@@ -68,6 +68,6 @@
     }
   },
   "classification_law_basis": "docs/ember-debt-ledger.md 'Classification Law': a row for which disposal proof does not exist 'remains ACTIVE or TRIGGER-GATED'. TRIGGER-GATED is therefore the ledger's own sanctioned state for a live, not-yet-due obligation. These seven rows stay in that state; only their fire conditions become testable. None is moved toward ARCHIVAL, KILLED, or EXCLUDED, and none of the never-killable rows (RLM, iGRPO, clean-room predecessor-CLI) is touched here.",
-  "claim_boundary": "This receipt claims only that each of the seven rows now carries a machine-checkable fire condition, and that none of those conditions has fired as of master 3b2a6456. It does NOT dispose any row, does NOT assert any row's work is done or unnecessary, does NOT weaken any required action, and makes no claim about whether the resident-training programme should be resumed.",
+  "claim_boundary": "This receipt claims only that each of the seven rows now carries a machine-checkable fire condition, and that none of those conditions has fired as of master 186a2e30. It does NOT dispose any row, does NOT assert any row's work is done or unnecessary, does NOT weaken any required action, and makes no claim about whether the resident-training programme should be resumed.",
   "produced_by": "automated disposition receipt, worktree fix/c10-debt-ledger-drain-2"
 }

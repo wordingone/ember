@@ -7,7 +7,7 @@
    "pr": 569,
    "what": "drop two superseded debug receipts (#558 chain)",
    "mergedAt": "2026-07-09T14:59:03Z",
-   "sha": "c5607303"
+   "sha": "2f5a335b"
   },
   {
    "pr": 568,
@@ -19,19 +19,19 @@
    "pr": 571,
    "what": "render integrity: banner/input/status regions locked + overflow:hidden renderer-wide (unsplit; split ruling reversed, dated)",
    "mergedAt": "2026-07-09T15:45:04Z",
-   "sha": "b1ee1020"
+   "sha": "494f76b7"
   },
   {
    "pr": 573,
    "what": "forward mmap_cache_dir through run_v0_segment + regression test (cures #570, found live during #480 launch)",
    "mergedAt": "2026-07-09T16:36:50Z",
-   "sha": "a6321769"
+   "sha": "b6f34f5a"
   },
   {
    "pr": 574,
    "what": "P0-B activity-feed watermark/exclusion/coalescing - kills the receipts replay-flood source",
    "mergedAt": "2026-07-09T16:36:48Z",
-   "sha": "33e01642"
+   "sha": "1f3eeeba"
   }
  ],
  "prs_closed_unmerged": [

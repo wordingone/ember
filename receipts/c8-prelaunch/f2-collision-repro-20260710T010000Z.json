@@ -10,7 +10,7 @@
   ],
   "precure_generator_git_blob": "e12494f5dd3eea288677416aa0829a0cc95b36e1",
   "precure_generator_sha256": "e71077962ca4a2c1156534a0103b003edc57204f3cd184bb1198a7f27a55669a",
-  "precure_generator_source_commit": "dd4c14fac75520ccdc79fa354d263120f2009198",
+  "precure_generator_source_commit": "bf6052865f4200a5e6d98fd8b543a0a96bd92dc5",
   "audit_source": "issue #123 comment thread, Independent audit - falsification lead, Commitment-collision replay",
   "inputs": {
     "k": 1,

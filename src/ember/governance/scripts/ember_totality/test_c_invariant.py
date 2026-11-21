@@ -52,7 +52,7 @@ INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e
 
 # [PROBE-HARDEN cure] Genesis boundary for the post-genesis stamp scan below.
 # Same value as src/ember/governance/scripts/receipt_check.py's GENESIS_TS (committerDate of the
-# genesis merge commit 9c89f7f66, "genesis: entrench constitutional invariant
+# genesis merge commit e3892493f, "genesis: entrench constitutional invariant
 # (#281)") -- duplicated rather than imported, matching the existing
 # src/ember/governance/scripts/test_receipt_check_invariant.py precedent of a standalone constant
 # so this probe stays self-contained (test_c11.py-style: no cross-script
@@ -67,7 +67,7 @@ GENESIS_TS = "2026-07-06T14:13:23-07:00"
 ERRATA_FILE = ROOT / "docs" / "ledgers" / "receipt-errata.jsonl"
 
 # [ERRATA cure, gh issue #612 point 3, FROZEN SPEC] Hard cutoff: the #608
-# hardening merge's own committer-date timestamp (sha 411d35e5, "fix:
+# hardening merge's own committer-date timestamp (sha 4423ec97, "fix:
 # probe-harden C-GROW/C-INV vocabulary gaps + totality ts self-stamp (#608)").
 # Errata coverage is CLOSED to any receipt whose OWN `ts` is AFTER this
 # constant -- the annex is a historical record, never an ongoing bypass.

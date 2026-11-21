@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Source baseline is exact public master `0129fe44b94a3586b146e7214ccda1ebfc696400`.
+- Source baseline is exact public master `c5130a6be478d8f790698f50edb1b3199023b4a5`.
 - The consumer is issue-specific evidence code, not production runtime or cure authority.
 - Arm custody inputs are read-only; output is exclusive-created in a distinct sibling evidence directory.
 - Kernel census PID/start token is sole identity authority; renderer runtime-origin tolerance is exactly 5000 ms and sanity-only.
@@ -426,7 +426,7 @@ bun test src/ember/infrastructure/tools/ember-cli/src/services/issue898-installe
 - [ ] **Step 2: Run repository TypeScript typecheck and compare clean-base control**
 
 Use the repository's existing typecheck command. If it is nonzero, run the identical
-command against clean baseline `0129fe44` and prove zero diff-caused diagnostics;
+command against clean baseline `c5130a6b` and prove zero diff-caused diagnostics;
 never relabel baseline failures as GREEN.
 
 - [ ] **Step 3: Run diff and source-boundary checks**

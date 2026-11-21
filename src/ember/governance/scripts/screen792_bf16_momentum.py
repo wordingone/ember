@@ -105,7 +105,7 @@ authoring host until the coordinator's explicit window-release GO --
 --selftest and --schema-probe are safe (CPU-only, no live dispatch) and are
 the only legs this build phase runs.
 
-CURE ROUND (external falsifier, head f81728f3, three pre-execution findings,
+CURE ROUND (external falsifier, head 6a24c514, three pre-execution findings,
 all addressed below): (1) MEASURAND-1 orchestration -- run_screen used to
 retain arm A and arm A2's full model+optimizer state while building arm B,
 so the commit-footprint delta included retained-arm + machine-global noise;
@@ -1228,7 +1228,7 @@ def run_arm_block(*, model, loader, optimizers, base_lrs, cfg, ce_fn,
                    batch_size: int, collector=None) -> dict:
     """PRODUCTION-PARITY (team-lead review, #792 cure round, falsifier
     finding 2): the per-step body is now the SHARED ts._run_production_step
-    (landed master #762, sha 6332494d) -- this function used to be a
+    (landed master #762, sha 9da4de54) -- this function used to be a
     hand-composed copy of that same body (QAT pre-forward, WSD apply,
     forward/loss/backward, QAT post-backward restore, opt.step()/
     zero_grad()) with no parity guarantee, exactly the sibling-
@@ -1527,7 +1527,7 @@ def _selftest() -> int:
     """CPU-only coverage: bf16 memmap round-trip, byte-arithmetic check
     branches, noise-band + verdict-evaluation branches (KILL/INCONCLUSIVE/
     PROMOTE/INVALID), the SIGN and ORCHESTRATION cure-round fixtures
-    (falsifier findings against head f81728f3), the PROVENANCE binding
+    (falsifier findings against head 6a24c514), the PROVENANCE binding
     fixture (#801 convention), and the required negative fixture (delegated
     to tests/test_screen792_bf16_momentum.py so the fixture lives in
     exactly one place)."""

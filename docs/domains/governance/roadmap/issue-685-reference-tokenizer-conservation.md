@@ -5,7 +5,7 @@ tokenizer-extraction subject. Exact reference-tokenizer and benchmark identity
 obligations are conserved by EMBER-11 issue #1125, with EMBER-02 issue #1116
 retaining the frozen-reference evaluation boundary.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

@@ -19,8 +19,8 @@
  ],
  "open_prs": [],
  "covered_commits": {
-  "from_exclusive": "decdc2f2",
-  "to_inclusive": "5a0f4416ac",
+  "from_exclusive": "5afd888d",
+  "to_inclusive": "861f003e9d",
   "count": 20
  },
  "delegation": {
@@ -28,7 +28,7 @@
    "boardrun46 (haiku, board render #610)",
    "docsfresh (sonnet, #605)",
    "svcrestore25 (sonnet, services restore via watchdog designed path)",
-   "cockpitrelaunch (sonnet, cockpit swap to d68f869 binary)",
+   "cockpitrelaunch (sonnet, cockpit swap to acf1226 binary)",
    "dg-lanes via delegate-coordinator: W2c/#606, W2d/#614, W2e/#609, W2f/#613, W2g/#617, W2b/#608, W2a/#607, quick-flips/#604, custody/#596",
    "a1-freeze lane (#603)",
    "stab480v8 (landing chain, push-unblock ruling issued)",
@@ -39,121 +39,121 @@
  "merges": [
   {
    "pr": 590,
-   "sha": "c56763476d",
+   "sha": "4ef70fcb80",
    "mergedAt": "2026-07-09T21:12:18Z",
    "subject": "docs: AI-lab corpus charter (11-domain floor) + GOAL addenda"
   },
   {
    "pr": 587,
-   "sha": "6639839e91",
+   "sha": "e46127e467",
    "mergedAt": "2026-07-09T21:51:40Z",
    "subject": "optimizer-state index helper: muon_local_id map (refs #580)"
   },
   {
    "pr": 595,
-   "sha": "8eee828cbe",
+   "sha": "6499f19635",
    "mergedAt": "2026-07-09T22:11:45Z",
    "subject": "docs: board status refresh from totality receipt"
   },
   {
    "pr": 596,
-   "sha": "08b2c0f620",
+   "sha": "5cc2666066",
    "mergedAt": "2026-07-09T22:53:26Z",
    "subject": "fix: C-CUSTODY violations 34 -> 23 (untracked cleared, twin-resolution)"
   },
   {
    "pr": 597,
-   "sha": "14086d0703",
+   "sha": "077e51c009",
    "mergedAt": "2026-07-09T23:03:05Z",
    "subject": "cockpit: planned-outage status banner (issue #475)"
   },
   {
    "pr": 598,
-   "sha": "abbce01109",
+   "sha": "f4ac14cc59",
    "mergedAt": "2026-07-09T23:07:05Z",
    "subject": "ember-cli /goal: goal receipts feed the activity surface (#211 delta 4)"
   },
   {
    "pr": 600,
-   "sha": "cdad68e2ab",
+   "sha": "522d82bddf",
    "mergedAt": "2026-07-09T23:19:04Z",
    "subject": "repo-guard: scope commit-time paths check to staged diff"
   },
   {
    "pr": 589,
-   "sha": "a8ecaa42cb",
+   "sha": "e3ba9bc2be",
    "mergedAt": "2026-07-09T23:20:43Z",
    "subject": "feat(#588): GPU-free cockpit boot with EMBER_GPU_FREE=1"
   },
   {
    "pr": 601,
-   "sha": "782796cee1",
+   "sha": "38e815b9a0",
    "mergedAt": "2026-07-09T23:20:54Z",
    "subject": "master test-debt: typecheck exit-0 + ember-cli suite 3199/0"
   },
   {
    "pr": 604,
-   "sha": "7be0b283ad",
+   "sha": "dc145136a9",
    "mergedAt": "2026-07-09T23:38:48Z",
    "subject": "fix: board quick-flips - C-LEGIB dir map, annex round-4, C-SURFACE2/VOID-mirror verify"
   },
   {
    "pr": 603,
-   "sha": "9249cec943",
+   "sha": "e1c71d0b14",
    "mergedAt": "2026-07-09T23:49:45Z",
    "subject": "a1: eval-freeze execution - declaration, quarantine, first-ever predicate scan, held-out selection rule"
   },
   {
    "pr": 607,
-   "sha": "964a997cdc",
+   "sha": "1f59a632b1",
    "mergedAt": "2026-07-09T23:52:39Z",
    "subject": "ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift"
   },
   {
    "pr": 606,
-   "sha": "9b7a2c6175",
+   "sha": "9d21f55e3f",
    "mergedAt": "2026-07-09T23:56:25Z",
    "subject": "C6: executed-rerun reproduction records for 10 d3-gym recipes"
   },
   {
    "pr": 608,
-   "sha": "411d35e511",
+   "sha": "4423ec9729",
    "mergedAt": "2026-07-10T00:08:35Z",
    "subject": "fix: probe-harden C-GROW/C-INV vocabulary gaps + totality ts self-stamp"
   },
   {
    "pr": 609,
-   "sha": "d68f869e89",
+   "sha": "acf1226a4f",
    "mergedAt": "2026-07-10T00:09:02Z",
    "subject": "exp: C12 selector ablation + wired per-decision receipts (refs #19)"
   },
   {
    "pr": 613,
-   "sha": "b7382b9412",
+   "sha": "ee8f710477",
    "mergedAt": "2026-07-10T00:30:39Z",
    "subject": "exp: C-PORT simulated-device receipt + governor device-relative gaps (refs #21)"
   },
   {
    "pr": 610,
-   "sha": "a17f6ff269",
+   "sha": "ab67e74b6c",
    "mergedAt": "2026-07-10T00:38:24Z",
    "subject": "docs: board refresh 20260710 (GREEN=11 RED=25 UNEVALUABLE=1)"
   },
   {
    "pr": 605,
-   "sha": "4698797f01",
+   "sha": "018429760b",
    "mergedAt": "2026-07-10T00:38:40Z",
    "subject": "docs: freshness pass 20260709e (refs #591)"
   },
   {
    "pr": 614,
-   "sha": "d10de3fef4",
+   "sha": "62ed4d61ae",
    "mergedAt": "2026-07-10T00:38:56Z",
    "subject": "fix: EMBER_GPU_FREE=1 takes precedence over persisted endpoint (refs #602)"
   },
   {
    "pr": 617,
-   "sha": "5a0f4416ac",
+   "sha": "861f003e9d",
    "mergedAt": "2026-07-10T00:56:18Z",
    "subject": "exp: C-IND legs IND-5/IND-3/IND-4 executed receipts (refs #6, #88)"
   }

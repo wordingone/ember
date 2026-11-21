@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` only after this exact carrier receives independ
 
 Source: https://github.com/wordingone/ember/issues/674
 
-Public-master basis: `2ff1cd844f8d984d3f594a847c1f510534fc7919`.
+Public-master basis: `bbdff950de8b100333de7715ce748a4343f1f4d3`.
 
 Accepted owner: https://github.com/wordingone/ember/issues/1116#issuecomment-5225623244
 

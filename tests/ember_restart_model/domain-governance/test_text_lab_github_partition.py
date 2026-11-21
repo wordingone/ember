@@ -279,7 +279,7 @@ def test_partition_authority_refuses_tampered_closed_v2_table(
         table["transitions"][-1]["cause_commit"] = "0" * 40
     elif mutation == "unreachable_resolved":
         table["transitions"][-1]["resolved_source_commits"] = [
-            "0f06bc87ecf3c18774a2bf1aeed54f3d2c0f1044"
+            "51c700ee04cf6c95537223fedb68423f24399ba7"
         ]
     else:
         table["unexpected"] = True
@@ -441,7 +441,7 @@ def test_partition_plan_mints_v4_packet_and_reopens_partial_authority(tmp_path: 
 
     result = consumer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -486,7 +486,7 @@ def test_partition_plan_mints_v4_packet_and_reopens_partial_authority(tmp_path: 
     first_receipt = output / "tranche-admission-receipt.json"
     second = consumer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=output,
         predecessor_receipt_name=first_receipt.name,
         predecessor_receipt_sha256=_sha(first_receipt.read_bytes()),

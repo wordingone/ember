@@ -985,7 +985,7 @@ def _selftest_fail_closed_against_real_schema():
             assert "not on disk" in str(e)
         # a DAMAGED ruling (malformed JSON line) is a refusal, never a
         # partial read -- this branch previously had zero coverage anywhere
-        # (independent review of e55446a, finding 1), so a regression could
+        # (independent review of 24b17c0, finding 1), so a regression could
         # have silently turned "damaged" into "skip the bad line"
         with open(f"{td}/receipts/damaged-ruling.jsonl", "w",
                   encoding="utf-8") as fh:

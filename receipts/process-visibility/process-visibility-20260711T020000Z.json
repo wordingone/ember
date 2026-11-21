@@ -7,25 +7,25 @@
    "pr": 738,
    "what": "feat(#735): W1 step25->step50 baseline replay closure runner (Leg A)",
    "mergedAt": "2026-07-10T19:04:41Z",
-   "sha": "5360d99"
+   "sha": "aad5249"
   },
   {
    "pr": 736,
    "what": "fix: repair #702 attribution runner production-path defects",
    "mergedAt": "2026-07-10T19:10:27Z",
-   "sha": "99e28fd"
+   "sha": "5423eef"
   },
   {
    "pr": 741,
    "what": "fix: execution-bind C6/C12 probes (#683 class extension)",
    "mergedAt": "2026-07-10T19:15:56Z",
-   "sha": "3255b70"
+   "sha": "0d11847"
   },
   {
    "pr": 742,
    "what": "fix: #702 capacity gate fail-closed on unavailable measurement",
    "mergedAt": "2026-07-10T19:39:12Z",
-   "sha": "f629e6f"
+   "sha": "188c08e"
   }
  ],
  "prs_closed_unmerged": [],

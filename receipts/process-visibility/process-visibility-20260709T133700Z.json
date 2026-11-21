@@ -4,8 +4,8 @@
   "author": "coordinator",
   "window": "2026-07-09 morning-midday coordination window (continuation of 124202Z receipt)",
   "covered_master_range": {
-    "from": "e042f6e",
-    "to": "d1803e3f9f3d5085ce30892ea1b55ec02b80531d"
+    "from": "29403a6",
+    "to": "ffadfebe867aee13834cd524b08ecb4607c577be"
   },
   "merges_this_window": [
     {
@@ -20,7 +20,7 @@
     {
       "pr": 556,
       "mergedAt": "2026-07-09T13:31:26Z",
-      "sha": "d1803e3f",
+      "sha": "ffadfebe",
       "subject": "watchdog freshness (#545) + model-server parent tether (#110) + marker-expiry enforcement (#464)"
     }
   ],

@@ -6,7 +6,7 @@
  "board_anchor": "ember-totality-20260711T103912Z.json (12G/24R/1U+3AOK, unlanded, rides annex PR)",
  "regression_alarm": {
   "verdict": "CLEAN",
-  "evidence": "git rev-list --count e03cf7c..origin/master = 0; zero merges since the 10:45Z audit anchor => GREEN set, probes, and consumed receipts unchanged by construction"
+  "evidence": "git rev-list --count 4f92cce..origin/master = 0; zero merges since the 10:45Z audit anchor => GREEN set, probes, and consumed receipts unchanged by construction"
  },
  "execution_probe_reruns": "DEFERRED unchanged (dated 10:45Z decision; timing yield lease extended to 14:30Z; re-runs contaminate frozen CPU timing legs both directions)",
  "new_finding": {

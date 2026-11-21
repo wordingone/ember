@@ -37,7 +37,7 @@ checkpoint (cross-checked against step-00000730, same gap). Routing code
 (split_param_groups, this file's import of timeshare_pretrain, lines
 801-821) is confirmed unconditional over all layers -- this is not a
 routing exclusion, the data was simply never captured (most likely: commit
-2445c4b "file-backed optimizer state to eliminate commit exhaustion",
+4b5de6c "file-backed optimizer state to eliminate commit exhaustion",
 landed 2026-07-08, one day AFTER this checkpoint was written 2026-07-03).
 Branch A cannot be made whole; per team-lead's ruling this script applies
 Branch A exactly where verified momentum exists (rung_boundary_momentum_
@@ -1113,7 +1113,7 @@ def build_transplanted_resume_checkpoint(seed_ckpt_dir: str, grown_cache_path: s
         "pre_buffer_rms_consumed": pre_buffer_rms_consumed,
         "resolved_lr_muon": resolved_lr_muon,
         "disclosed_deviation": {
-            "cause": "write-time optimizer.pt truncation predating commit 2445c4b "
+            "cause": "write-time optimizer.pt truncation predating commit 4b5de6c "
                      "(file-backed optimizer state, landed 2026-07-08); checkpoint "
                      "written 2026-07-03",
             "reset_param_id_range": [TRUNCATED_PARAM_ID_START, total_params - 1],

@@ -9,7 +9,7 @@
   "receipt_refs": [
     "first_occurrence_ts provenance: the run's own machine-readable artifacts for this kill did not survive \u2014 the repro diag root diag-projection-20260803 (off-repo, full child traceback) and the quarantine record checkpoint-write-failed-815badea*.json under live-receipts custody root r1-warm100-20260802 (off-repo) were both superseded by subsequent dispatches into the same roots (the runner receipt path is overwritten per run). first_occurrence_ts is therefore taken from the instant quoted by the class's own issue thread: the GitHub filing instant of wordingone/ember#1315, 2026-08-03T06:03:10Z, which is an upper bound on the kill (the issue reports the completed kill and cites the receipts above). No timestamp in this row is estimated or invented.",
     "wordingone/ember#1315 (issue body): defect statement, route-invariant root cause, measured 4-record shard census, and the two receipt paths named above",
-    "wordingone/ember#1316 (cure PR, merged): three enforcement sites corrected, 59 passed / 3 skipped at reviewed head e9e94080e1f94592f3b507115704db6f5593633d"
+    "wordingone/ember#1316 (cure PR, merged): three enforcement sites corrected, 59 passed / 3 skipped at reviewed head 6b6b29ca9cd85273838948f9127e423e8ccfa214"
   ],
   "related_class_ids": [
     "checkpoint-byte-bound-single-expert-invariant-vs-full-coverage-vertical",

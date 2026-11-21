@@ -1,6 +1,6 @@
 # Issue #1437 prose-gap plan (PREP_ONLY)
 
-Authority: current public master `73d7cd55ad5697877f2164ec887c25d27fc3db43`.
+Authority: current public master `305f9a37353b152c6fcaa6bdeef095fa35503d6d`.
 This is a CPU/file-only planning artifact. It does not fetch, move, select,
 train, or claim a model/result.
 

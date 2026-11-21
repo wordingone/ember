@@ -91,25 +91,25 @@
         "sha256": "055821d5fd2a07251b1f1c75d24721b123826922dd23e29ed971715e4eea6d5b"
       }
     ],
-    "landing_commit": "617f071e36b2af20efccd9af4a574ea488ed3088",
+    "landing_commit": "acb103a0bac80908b821859f13531f07d4d29c9a",
     "lineage_commits": {
-      "authority_lock_pr_807_head": "4f758db0ec11b5089698d80215a1145d48ef7537",
-      "e2b_pair_pr_780": "560f93c3ceb9a86e67f663f9f8bfc5c8389ccaa7",
-      "experiment_runners_pr_766": "617f071e36b2af20efccd9af4a574ea488ed3088",
-      "family_3_stragglers_pr_777": "70aefaa0a92fdebd376c068133749cc87760d074",
-      "mixture_retirement_pr_1132": "7ea8b38b3ea727495e392884ee53c49a3697113e",
-      "spend_field_repair_pr_775": "0bfa3a46a3dcf7c1693a6c92025442386b2c21d6"
+      "authority_lock_pr_807_head": "cc434612bb8852411da7b37eeb1ae100ec4ac3aa",
+      "e2b_pair_pr_780": "e0cad406f38908e00b17d2af0a93ab71b43e3e65",
+      "experiment_runners_pr_766": "acb103a0bac80908b821859f13531f07d4d29c9a",
+      "family_3_stragglers_pr_777": "1896263b899830fb1e7d4b30b3b4a485ef59d390",
+      "mixture_retirement_pr_1132": "64ba9b3b90a98491b6d91515affe29005c75f7f2",
+      "spend_field_repair_pr_775": "312d4d9d4a6087e7837dd867c7a45e723cc66044"
     },
     "recorded_verdict": "LAND210G_EXPERIMENT_RUNNERS_26_LANDED_7_EXCLUDED",
     "recorded_verdict_exclusion_count_incorrect": true,
-    "subject_commit": "e8ca7191fd5ac29594868894ced6e5b5efafa9f8",
+    "subject_commit": "cdd2aaf123c40db584f2313f7c316d9d96a5b018",
     "subject_original_bytes_unchanged": 24,
     "subject_tracked_candidate_count": 34,
     "traceable_later_changes": [
       {
         "disposition": "later authority-and-totality lock",
         "landing_sha256": "4f948c2bc3c35fd33fb15294cc6fde94adee11baf99c7fc28947f6129ad3b34d",
-        "last_change_commit": "4f758db0ec11b5089698d80215a1145d48ef7537",
+        "last_change_commit": "cc434612bb8852411da7b37eeb1ae100ec4ac3aa",
         "path": "scripts/conv_c03_muon_ns3_live.py",
         "public_pr": "https://github.com/wordingone/ember/pull/807",
         "subject_sha256": "d45f8ac529a3d4febf3ae7253093e4d357dcc6708f032b1d6fd6f7fc2c324204"
@@ -117,7 +117,7 @@
       {
         "disposition": "later historical assembler retirement",
         "landing_sha256": "a503fc7f51bd3d5c6c452093fc9d7990f5ced1257631481b26a1646e40080057",
-        "last_change_commit": "7ea8b38b3ea727495e392884ee53c49a3697113e",
+        "last_change_commit": "64ba9b3b90a98491b6d91515affe29005c75f7f2",
         "path": "scripts/ember_cbase_mixture.py",
         "public_pr": "https://github.com/wordingone/ember/pull/1132",
         "subject_sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36"

@@ -9,7 +9,7 @@
   "ts": "2026-08-10T05:05:00Z",
   "issue": 35,
   "repository": "wordingone/ember",
-  "base_sha": "60f83718f4032905b3e39fa1cfc7565a01211c25",
+  "base_sha": "ce4e0f565bec1b847f0cb0b864769a10f0981019",
   "source_crosswalk": {
     "path": "manifests/authority/issue-35-authority-supersession-crosswalk-v1.json",
     "file_sha256": "99eee3b1790b826587d2cc1da2de821aa64ddd13e6da10aa4d99bd5f36229754",
@@ -73,5 +73,5 @@
   },
   "no_new_parallel_authority": true,
   "verdict": "PASS_FOR_TERMINAL_ZERO_CREDIT",
-  "receipt_sha256": "163e837904aaf25ef4c6023a97e1d24c23783b4eefd09638290baaaeb9b5f8cb"
+  "receipt_sha256": "eb4bb1855ce68013df703e1a62a13a4e1c2fc44070b7368db4965971190e30b4"
 }

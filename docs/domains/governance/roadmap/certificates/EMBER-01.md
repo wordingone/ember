@@ -7,7 +7,7 @@ EMBER-01 (custody, identity, and experiment spine) holds a verified completion
 certificate, minted 2026-08-05. The certifying verifier run resolved all nine
 certificate legs true (`VERIFIER_EXIT=0`, zero unresolved failures) against the
 public repository pinned at commit
-`323be9da58a7527f3526d4a9a839ae2b5765bfd1`, an ancestor of `master`.
+`1b674a2288e0694c617bdf9c3b92cf3e529b9a8e`, an ancestor of `master`.
 
 This document is the public record of that certificate. The certificate's
 canonical bytes and its evidence artifacts live in private operator custody;
@@ -21,7 +21,7 @@ else.
 {
   "artifact_sha256": {
     "custody-sidecar8.json": "8242f5db7d65ac092c684a8f1eaeeda7ef8af4d0d74979c518a3d74bae59d612",
-    "receipt9.json": "7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2",
+    "receipt9.json": "4cec97ccb0a91d4b9a057c45d0edff11ce9a1c719d311b58c8f0eaa76b6d71d9",
     "run9b.sh": "a3fb95a691726e39eba93b0f32331cfb9b1604a64fc8b0e97f74c503e77313f2"
   },
   "executed_commands": [
@@ -29,12 +29,12 @@ else.
     "python -B scripts/verify_ember01_completion.py --root <custody>/ember01-verify --selection <custody>/EMBER-GOAL-RESUME.md --receipt receipt9.json --run-custody --issue-census issue-census9.json <16 ROOT bindings> --run-seat --identity-manifest bundle_v2/model-identity.json --checkpoint-manifest bundle_v2/checkpoint/checkpoint-manifest.json --model-config bundle_v2/config.json"
   ],
   "node_id": "EMBER-01",
-  "public_commit_sha1": "323be9da58a7527f3526d4a9a839ae2b5765bfd1",
+  "public_commit_sha1": "1b674a2288e0694c617bdf9c3b92cf3e529b9a8e",
   "schema_version": "ember-goal-certificate-v1",
   "unresolved_failures": [],
   "verifier_results": [
     {
-      "evidence_sha256": "7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2",
+      "evidence_sha256": "4cec97ccb0a91d4b9a057c45d0edff11ce9a1c719d311b58c8f0eaa76b6d71d9",
       "name": "verify_ember01_completion (9/9 legs resolved-true, authority ok, VERIFIER_EXIT=0)",
       "status": "PASS"
     }
@@ -62,7 +62,7 @@ The private canonical certificate JSON hashes to:
 | Artifact | Custody class | SHA-256 |
 |---|---|---|
 | Completion certificate (canonical JSON) | private operator custody | `954d8deef8d6590479a565e1a0c2b54f36e2618fd8e77b833f4f5dd74aa8efb9` |
-| `receipt9.json` — the nine-leg completion receipt the certificate cites as evidence | private operator custody, `<custody>/census-assembly-20260802/` | `7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2` |
+| `receipt9.json` — the nine-leg completion receipt the certificate cites as evidence | private operator custody, `<custody>/census-assembly-20260802/` | `4cec97ccb0a91d4b9a057c45d0edff11ce9a1c719d311b58c8f0eaa76b6d71d9` |
 | `custody-sidecar8.json` — bounded custody-census sidecar (census receipt binding per `docs/domains/governance/custody/ember-01-custody-README.md`) | private operator custody, `<custody>/census-assembly-20260802/` | `8242f5db7d65ac092c684a8f1eaeeda7ef8af4d0d74979c518a3d74bae59d612` |
 | `run9b.sh` — the exact script that executed the certifying verifier run | private operator custody, `<custody>/census-assembly-20260802/` | `a3fb95a691726e39eba93b0f32331cfb9b1604a64fc8b0e97f74c503e77313f2` |
 

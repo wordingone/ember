@@ -451,7 +451,7 @@ def _source_custody(tmp_path: Path) -> tuple[Path, str, str]:
         "schema_version": "ember-text-lab-input-identity-v2",
         "corpus_sha256": _sha(corpus_raw),
         "code_files": code_files,
-        "source_base_commit": "4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        "source_base_commit": "ac27b5826c7954e71680f6ad6e3506c70d550aa8",
     }
     identity_raw = _write(custody / "owned-text-lab-input-identity-v3.json", identity)
     scratch_prefix = ".issue1719-deleted-mint-fixture"
@@ -513,7 +513,7 @@ def _source_custody(tmp_path: Path) -> tuple[Path, str, str]:
         "schema_version": "ember-issue1719-tranche3-admission-v1",
         "source_authority": {"fixture": "0" * 64},
         "source_code_files": code_files,
-        "source_commit": "4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        "source_commit": "ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         "unresolved_row_count": 44,
         "validation_receipt": {"result": "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING"},
     }
@@ -550,7 +550,7 @@ def test_generic_successor_republishes_packet_local_authority_and_reopens_it(tmp
 
     result = producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -617,7 +617,7 @@ def test_generic_successor_consumes_only_validated_projected_predecessor(tmp_pat
     })
     output = tmp_path / "published"
     producer.mint_successor(
-        repo=ROOT, source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        repo=ROOT, source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -686,7 +686,7 @@ def test_generic_successor_admits_one_closed_connector_case(tmp_path: Path):
 
     producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -717,7 +717,7 @@ def test_generic_successor_chains_from_its_own_published_receipt(tmp_path: Path)
     first_output = tmp_path / "first-published"
     first = producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -734,7 +734,7 @@ def test_generic_successor_chains_from_its_own_published_receipt(tmp_path: Path)
 
     second = producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=first_output,
         predecessor_receipt_name="tranche-admission-receipt.json",
         predecessor_receipt_sha256=first["receipt_sha256"],
@@ -765,7 +765,7 @@ def test_historical_reopen_evidence_is_frozen_and_successor_does_not_reopen_old_
     predecessor_output = tmp_path / "historical-predecessor"
     producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=legacy,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=legacy_sha,
@@ -828,7 +828,7 @@ def test_historical_reopen_evidence_is_frozen_and_successor_does_not_reopen_old_
     successor_output = tmp_path / "successor"
     successor = producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=predecessor_output,
         predecessor_receipt_name="tranche-admission-receipt.json",
         predecessor_receipt_sha256=_sha(predecessor_raw),
@@ -849,7 +849,7 @@ def test_historical_reopen_evidence_is_frozen_and_successor_does_not_reopen_old_
     )
     final = producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=successor_output,
         predecessor_receipt_name="tranche-admission-receipt.json",
         predecessor_receipt_sha256=successor["receipt_sha256"],
@@ -876,7 +876,7 @@ def test_generic_successor_refuses_to_overwrite_existing_output(tmp_path: Path):
     with pytest.raises(FileExistsError, match="output already exists"):
         producer.mint_successor(
             repo=ROOT,
-            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
             source_custody=custody,
             predecessor_receipt_name="tranche3-admission-receipt.json",
             predecessor_receipt_sha256=predecessor_sha,
@@ -909,7 +909,7 @@ def test_generic_successor_loses_publish_race_without_replacing_foreign_custody(
     with pytest.raises(FileExistsError):
         producer.mint_successor(
             repo=ROOT,
-            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
             source_custody=custody,
             predecessor_receipt_name="tranche3-admission-receipt.json",
             predecessor_receipt_sha256=predecessor_sha,
@@ -933,7 +933,7 @@ def test_generic_successor_refuses_forged_predecessor_validation_receipt(tmp_pat
     first_output = tmp_path / "first-published"
     producer.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,
@@ -958,7 +958,7 @@ def test_generic_successor_refuses_forged_predecessor_validation_receipt(tmp_pat
     with pytest.raises(ValueError, match="predecessor validation receipt changed"):
         producer.mint_successor(
             repo=ROOT,
-            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
             source_custody=first_output,
             predecessor_receipt_name="tranche-admission-receipt.json",
             predecessor_receipt_sha256=_sha(forged_receipt_raw),
@@ -980,7 +980,7 @@ def test_generic_successor_refuses_nonfile_in_predecessor_custody(tmp_path: Path
     with pytest.raises(ValueError, match="predecessor custody file set is not exact"):
         producer.mint_successor(
             repo=ROOT,
-            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
             source_custody=custody,
             predecessor_receipt_name="tranche3-admission-receipt.json",
             predecessor_receipt_sha256=predecessor_sha,
@@ -1009,7 +1009,7 @@ def test_generic_successor_refuses_postpublish_nonfile_and_rolls_back(tmp_path: 
     with pytest.raises(ValueError, match="published custody file set changed on reopen"):
         producer.mint_successor(
             repo=ROOT,
-            source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+            source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
             source_custody=custody,
             predecessor_receipt_name="tranche3-admission-receipt.json",
             predecessor_receipt_sha256=predecessor_sha,

@@ -14,7 +14,7 @@ SAME scan logic test_c_invariant.check_stamped_receipts runs, and emits one
 JSONL row per receipt -- no hand-typed paths, no hand-typed counts.
 
 Hard cutoff (issue #612 point 3): errata coverage is CLOSED to receipts
-created after the #608 hardening merge, 2026-07-10T00:08:35Z (sha 411d35e5).
+created after the #608 hardening merge, 2026-07-10T00:08:35Z (sha 4423ec97).
 A post-genesis violation whose own `ts` is AFTER the cutoff is NOT emitted as
 an errata row here -- it stays a genuine, uncovered violation that
 test_c_invariant.py's amended check_stamped_receipts must still RED on.
@@ -98,7 +98,7 @@ INVARIANT_SHA256 = c_inv.INVARIANT_SHA256
 GENESIS_TS = c_inv.GENESIS_TS
 
 # Issue #612 point 3, frozen constant: the #608 hardening merge commit's own
-# committer-date timestamp (sha 411d35e5, "fix: probe-harden C-GROW/C-INV
+# committer-date timestamp (sha 4423ec97, "fix: probe-harden C-GROW/C-INV
 # vocabulary gaps + totality ts self-stamp (#608)"). Duplicated here (not
 # imported) so this generator -- like the probe it feeds -- stays
 # self-contained; test_c_invariant.py carries the same literal constant for
@@ -155,7 +155,7 @@ def build_rows(violations, cutoff_epoch):
             "disposition": DISPOSITION,
             "note": (
                 f"pre-hardening receipt (ts={ts!r}) predates the #608 stamp-"
-                "enforcement merge (sha 411d35e5, 2026-07-10T00:08:35Z); "
+                "enforcement merge (sha 4423ec97, 2026-07-10T00:08:35Z); "
                 "invariant_sha256 stamping was not yet required when this "
                 "receipt was written. Not retro-stamped or retro-edited "
                 "(refs #482, receipts are append-only) -- this row is the "

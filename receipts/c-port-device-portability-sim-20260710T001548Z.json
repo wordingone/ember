@@ -45,7 +45,7 @@
       "device": "3090:86",
       "out_dir": "receipts"
     },
-    "git_sha": "9b7a2c617585e41494aed1486b26905fdad5d0eb",
+    "git_sha": "9d21f55e3f40b3536cecdbed71060324b89c700b",
     "git_branch": "exp/c-port-sim-device",
     "host_python": "3.12.3",
     "host_torch": "2.12.0+cpu",

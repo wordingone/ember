@@ -9,7 +9,7 @@ announce-first step, not performed here, and no running process was touched at a
 
 ## Build receipt
 
-- Source: `public/master` @ `23a1ab90d0f4d1005918aa320ad1e01b040e0d55` ("fix: model-client retry
+- Source: `public/master` @ `28db86d172cd60c2281edf8fcdd54193a6be0796` ("fix: model-client retry
   circuit breaker + startup endpoint disclosure (#258)") — fresh `git fetch public master` +
   `git worktree add` immediately before building, no local edits.
 - Build command: `bun run build` (`src/ember/infrastructure/tools/ember-cli/src/package.json`'s own script — `bun build
@@ -122,7 +122,7 @@ did-a-request-ever-arrive signal.
 
 #### Fix-verification re-run (post-#278 binary) — 2026-07-06
 
-Fresh binary, `public/master` @ `4cfaf4e32c798d3e86b3520e595f5eb1694770c5` (contains #278's
+Fresh binary, `public/master` @ `56d817290df6fdd5ec6cdf67b4272e5d8f5b2754` (contains #278's
 `clearInputRefForSubmit`, landed the day of the original run above), sha256
 `bb2cf7ea4e80b1cea2e2bdba407e303ba2bcbdb855f89f94c2a6558e26d8c4b4`, 118,904,832 bytes. Same
 discipline: control arm first, `:8082` requests-only exception, exact-PID teardown throughout.

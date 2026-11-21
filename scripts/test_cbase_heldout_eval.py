@@ -534,4 +534,4 @@ def test_evaluator_does_not_import_execution_denied_historical_trainer():
     assert "from timeshare_pretrain" not in source
     assert "from w1_collapse_control_run" not in source
     m=load_module()
-    assert m.HISTORICAL_EVAL_MODEL_CONTRACT == {"public_master":"db571b310b0ad20f8b257760cdc7c7ee69714929","w1_model_source_blob":"3dc627d49c5e48ceb8ab0c028eab68acb74e4f61","timeshare_source_blob":"ea367b382b975afd7afecbe86b6efa1148bd76ad","attention_heads":16,"max_sequence_length":1024}
+    assert m.HISTORICAL_EVAL_MODEL_CONTRACT == {"public_master":"b9e4e72879ed70bb2e1655ee74db3dd4e76d6433","w1_model_source_blob":"3dc627d49c5e48ceb8ab0c028eab68acb74e4f61","timeshare_source_blob":"ea367b382b975afd7afecbe86b6efa1148bd76ad","attention_heads":16,"max_sequence_length":1024}

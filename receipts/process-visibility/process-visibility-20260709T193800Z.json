@@ -17,7 +17,7 @@
  ],
  "open_prs": [],
  "covered_commits": {
-  ".": "6aa1f14971199eb9553a8efe80865874662375b3"
+  ".": "07055016b082d7efdcc50e34b0f27fb2b3677b30"
  },
  "delegation": {
   "#583": {
@@ -44,13 +44,13 @@
  "merges": [
   {
    "pr": 583,
-   "sha": "6185f5fb4effcb06747c3b82dd7ff5f876f182eb",
+   "sha": "8502922afb687fffa49b1a1806292afae60e1128",
    "merged_at": "2026-07-09T19:35:25Z",
    "subject": "hardening: boot matrix preflight + full-registry tool-failure injection (refs #159)"
   },
   {
    "pr": 584,
-   "sha": "6aa1f14971199eb9553a8efe80865874662375b3",
+   "sha": "07055016b082d7efdcc50e34b0f27fb2b3677b30",
    "merged_at": "2026-07-09T19:35:48Z",
    "subject": "c8 pre-launch tools: MDE, F2 schedule generator, run-ledger (refs #582 #123)"
   }

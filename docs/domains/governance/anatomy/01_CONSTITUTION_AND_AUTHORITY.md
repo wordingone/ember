@@ -48,7 +48,7 @@ and as part of the repo-guard pre-commit/pre-push hooks.
 A separate, narrower invariant lives in `src/ember/governance/scripts/receipt_check.py`:
 `INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"`,
 pinned at `GENESIS_TS = "2026-07-06T14:13:23-07:00"` (the committer date of
-commit `9c89f7f66`, tag `invariant-genesis`, "genesis: entrench
+commit `e3892493f`, tag `invariant-genesis`, "genesis: entrench
 constitutional invariant (#281)"). Every receipt whose `ts` postdates genesis
 must carry a matching `invariant_sha256` field (schema-floor rule R4) — see
 10_RECEIPTS_PROVENANCE.md.

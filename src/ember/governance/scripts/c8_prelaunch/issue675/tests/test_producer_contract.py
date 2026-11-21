@@ -62,7 +62,7 @@ def _fixture(root: Path):
         components[key] = path
     contract = {
         "schema_version": "q2-governed-producer-contract-v1",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "mode": "governed-vertical",
         "producer_sha256": _sha(producer),
         "component_sha256": {key: _sha(path) for key, path in components.items()},
@@ -85,7 +85,7 @@ def _fixture(root: Path):
 def _validate(module, contract: Path, producer: Path, components: dict[str, Path]):
     return module.validate_producer_contract(
         contract_path=contract,
-        source_commit="f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        source_commit="744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         producer_path=producer,
         component_paths=components,
     )
@@ -107,7 +107,7 @@ def test_validates_closed_current_governed_producer_contract(tmp_path: Path):
 
 def test_builder_round_trips_through_independent_validator(tmp_path: Path):
     module=_load(); _contract,producer,components=_fixture(tmp_path)
-    body=module.build_producer_contract(source_commit="f3c92ba984711ee34e91c6bea90713e6c89b4b4d",producer_path=producer,component_paths=components)
+    body=module.build_producer_contract(source_commit="744ff3e134e10ff8d13ee929ac2686daaebbffb1",producer_path=producer,component_paths=components)
     path=tmp_path/"built-contract.json"; path.write_text(json.dumps(body),encoding="utf-8")
     result=_validate(module,path,producer,components)
     assert result["contract_sha256"]==body["contract_sha256"]

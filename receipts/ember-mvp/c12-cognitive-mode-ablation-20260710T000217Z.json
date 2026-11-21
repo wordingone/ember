@@ -8,7 +8,7 @@
   "description": "Replays REAL ember totality board-run receipts (real repo decision points, not invented inputs) through the live state-dependent cognitive mode selector and two independently-executed degraded arms, recording per-decision state vectors, selected modes, and real MODE_GATE behavioral consequences.",
   "provenance": {
     "runner_script": "scripts/ember_cognitive_mode_ablation.py",
-    "git_sha": "7be0b283ad3382a25e5a98137ed55226435341cd",
+    "git_sha": "dc145136a9409bafd90c656cb62e707ca7e73488",
     "git_branch": "exp/c12-selector-ablation",
     "python_version": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
     "command": "python scripts/ember_cognitive_mode_ablation.py",

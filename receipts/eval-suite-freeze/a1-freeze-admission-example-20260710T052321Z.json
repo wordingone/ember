@@ -13,15 +13,15 @@
     "verdict":  "ADMITTED",
     "launch_ts":  "2026-07-10T06:00:00Z",
     "freeze_binding":  {
-                           "pointer":  "ccde4a676085e633b69d8ba1b501b80f49e2e907",
+                           "pointer":  "5dc478092e45c2244daa69889a618f80253f361a",
                            "pointer_is_commit":  true,
                            "declaration_sha256_at_pointer":  "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
                            "declaration_sha256_on_disk":  "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
                            "declaration_sha256_at_build_ref":  "e2bd475cce894c84e0a82ae55e828df1eb834233aa3baf7ac56d46e10bf6d816",
                            "declaration_byte_identical_in_build_ref":  true,
                            "build_ref":  "HEAD",
-                           "build_ref_commit":  "45fee5518a30b5438d88df886701f7f50ec1019a",
-                           "freeze_anchor_commit":  "45fee5518a30b5438d88df886701f7f50ec1019a",
+                           "build_ref_commit":  "761a9dda46d4bba796cc0e48c4837017be27d1b0",
+                           "freeze_anchor_commit":  "761a9dda46d4bba796cc0e48c4837017be27d1b0",
                            "pointer_is_ancestor_of_build_ref":  false,
                            "pointer_ancestry_disclosure":  "the EVAL-FREEZE-HASH pointer commit is NOT an ancestor of the build-ref: PR #603 was squash-merged, dangling the freeze-content commit. Binding is by declaration CONTENT verified byte-identical in the build lineage (squash-merge-robust); the declaration\u0027s rule (3) \u0027pointer is an ancestor\u0027 is unsatisfiable from master and is a coordinator item (re-anchor EVAL-FREEZE-HASH to a master-reachable commit would re-roll AC4, so it is NOT done here)."
                        },

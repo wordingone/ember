@@ -7,7 +7,7 @@
   "family": "family-3 stragglers: 6 files excluded from the original experiment-runners landing (PR #766) for a forward-family-dependency prerequisite (families 4/5, now landed in #773/#771), plus r3_feasibility_probe.py which was excluded from the same PR for a governor C-PORT prerequisite (now landed in #769) -- folded into this batch per team-lead ruling since it is content-coherent with family 3 (an experiment/probe script), not harness/entry or ops-tools.",
   "worktree": "landing worktree wt-land210j (sibling of the main ember tree); fresh cut from origin/master post-#773 (superseding the original wt-land210g prep, which was cut from a stale base before families 4/5 existed)",
   "branch": "chore/210j-family3-stragglers",
-  "base_sha": "ea39d69",
+  "base_sha": "cb1ac62",
   "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/scripts",
   "candidates_total": 7,
   "import_closure_check": "All 7 files' non-stdlib repo-internal imports re-verified against current master: ember_avir_tasks.py, ember_avir_harness.py (#771), governor.py (#769), ember_cbase_avir_data_v2.py (#773), timeshare_pretrain.py (pre-#210). In-batch cross-deps: ember_cbase_launch.py imports ember_cbase_s6_acceptance.py (both land together in this PR); test_ember_cbase_avir_augment.py imports ember_cbase_avir_augment.py (both land together). Zero hard blockers remaining.",

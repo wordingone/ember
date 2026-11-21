@@ -2,8 +2,8 @@
     "schema_version":  "c1-public-branch-archive-v6-receipt",
     "artifact":  "docs/hygiene/branch-deletion-proposal-20260718-v6.json",
     "bytes":  29640,
-    "file_sha256":  "3e86adc232dd4273caddac299f25df3235580061851306634ff1ce76f794ed10",
-    "public_master":  "f2a8a20e972d391fd5608295f2aa3120aafcae8a",
+    "file_sha256":  "23cd856695167f24e12bda385842efc71f9e910e00f8bf0107dcf469da66f254",
+    "public_master":  "b668582917382f8702f9046cb7c308801ffc1a03",
     "candidate_count":  2,
     "archival_refs_created":  true,
     "deletion_executed":  false,
@@ -26,7 +26,7 @@
                              "cmVmcy90YWdzL3ZlcmEtYzEtYXJjaGl2ZS8yMDI2MDcxOC9wci02OTAtZXhwLTU4MC1jb3JyZWN0ZWQtcmVydW4tMzlkYzllMWZiMDcz"
                          ],
     "source_heads":  [
-                         "af53c49f8b7e88f7fcc330034d0c22d36ab32464",
-                         "39dc9e1fb0737b61affbff0b6d413b3988bfbd36"
+                         "d92f58626f6e34b9fda5f2a8fa520dec1d4ff6ad",
+                         "1b43590fe9752ca9b30535af16e2bf2b2bb799ee"
                      ]
 }

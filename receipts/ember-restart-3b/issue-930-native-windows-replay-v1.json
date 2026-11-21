@@ -6,8 +6,8 @@
   "repository": "wordingone/ember",
   "issue": 930,
   "claim_boundary": "checkpoint-custody durability and recovery only; no checkpoint availability, resumability, training, admission, sufficient-pretraining, benchmark, or capability claim",
-  "base_commit": "8d79ce6455e347d51a832f114b93e352a344bb9b",
-  "implementation_commit": "0fd9c330a265a017a3254ee150bf78d25c5d7eee",
+  "base_commit": "298acc4a4f0c14ec50e9d4e5975fbb54ce6e687c",
+  "implementation_commit": "e0259872b7545a2f47e048c3000654c0b1460593",
   "replay_environment": {
     "os_name": "nt",
     "platform": "Windows-10-10.0.26200-SP0",
@@ -60,7 +60,7 @@
       "skipped": 0
     },
     "repository_guard": {
-      "command": "tools/repo-guard.sh --base 8d79ce6455e347d51a832f114b93e352a344bb9b",
+      "command": "tools/repo-guard.sh --base 298acc4a4f0c14ec50e9d4e5975fbb54ce6e687c",
       "result": "PASS"
     },
     "diff_check": "PASS",

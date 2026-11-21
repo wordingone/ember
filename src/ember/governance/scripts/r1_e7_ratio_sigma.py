@@ -63,7 +63,7 @@ pooled_sigma_seed = getattr(_ember_2afec9f76b7cd933_module, 'pooled_sigma_seed')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/r1_exit_battery.py
 
 
-PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
+PREREG_PIN = "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b"
 SCHEMA = "issue1464-r1-e7-ratio-sigma-composition-v1"
 
 

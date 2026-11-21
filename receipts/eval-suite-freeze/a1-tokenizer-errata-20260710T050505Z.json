@@ -19,7 +19,7 @@
     },
     "published_amendment": {
       "path": "receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-20260709T234148Z.json",
-      "sha256": "9f4b11c82cd757429456c0d0a91797227c4aea6f943689852d6070b97249981c"
+      "sha256": "90dffe122fa52f3f724567ec4f1bad68f27500c7277400fc9194ba5590d47dfc"
     }
   },
   "defect_reproduced": {

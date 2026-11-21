@@ -443,10 +443,10 @@ class TrainingSignatureCensusTests(unittest.TestCase):
         path = ROOT / "docs" / "domains" / "governance" / "spec" / "llmq" / "ember-training-signature-census-v1.json"
         self.assertEqual(
             hashlib.sha256(path.read_bytes()).hexdigest(),
-            "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c",
+            "177bbf2faf3d3f62ee25468953f963415b42c29b31d96de51a0b905a823db3d5",
         )
         census = training_acceleration.load_training_signature_census(path)
-        self.assertEqual(census["source_commit"], "728421bcca5092a89df483f7df804c7177c337a7")
+        self.assertEqual(census["source_commit"], "1a1978d18ad68c284a352518d5031f4bdff2e007")
         self.assertEqual(census["self_sha256"], "329115ccfdc11508da5b4918df08fe8ab95bbe20e483023843877e0d332dda77")
         self.assertEqual(census["observed_steps"], 4)
         self.assertEqual(census["signature_count"], 4)
@@ -921,7 +921,7 @@ class Fp8UpGateProjectionTests(unittest.TestCase):
         self.assertEqual(site.kernel_receipt()["weight_refreshes"], 2)
 
     def test_refresh_count_validation_refuses_the_probe_signature(self) -> None:
-        # probe #2 at 970f7b70: 14 sites, 30 steps, 14 refreshes = install only, no per-step refresh
+        # probe #2 at 528b2847: 14 sites, 30 steps, 14 refreshes = install only, no per-step refresh
         with self.assertRaisesRegex(RuntimeError, "FP8_REFRESH_COUNT_REFUSED:14!=434"):
             training_acceleration.validate_fp8_refresh_count(installed_sites=14, optimizer_steps=30, weight_refreshes=14)
         self.assertEqual(training_acceleration.validate_fp8_refresh_count(installed_sites=14, optimizer_steps=30, weight_refreshes=434), 434)

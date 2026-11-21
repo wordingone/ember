@@ -5,7 +5,7 @@ yield-window runbook. Reusable lifecycle obligations are conserved by current
 Ember Lab dispatch/lease authority and issue #802; the scheduled science is
 owned by its surviving canonical experiment carriers.
 
-Source master: `4d814bbec3116ea0eb9d16298a7747c043828727`.
+Source master: `0e2aedafd42f91def88d1c8b974bb72990a7e946`.
 
 ## Historical scope and outcome boundary
 

@@ -39,7 +39,7 @@
   },
   "thresholds": {
     "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
-    "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+    "sha256": "ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e",
     "required_ids": ["T-08", "T-09", "T-20"]
   },
   "lineage": {

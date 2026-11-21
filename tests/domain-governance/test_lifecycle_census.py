@@ -177,13 +177,13 @@ def test_receipt_binds_master_and_item_hashes_without_claiming_closure() -> None
 
     receipt = build_receipt(
         repository="wordingone/ember",
-        master_sha="c75738946168e6272743eda08efcaad270d0195b",
+        master_sha="44b91c220e10d7da6eac032c80bee571a2aa1f7a",
         collected_at="2026-07-22T00:00:00Z",
         issues=issues,
         pull_requests=prs,
     )
 
-    assert receipt["master_sha"] == "c75738946168e6272743eda08efcaad270d0195b"
+    assert receipt["master_sha"] == "44b91c220e10d7da6eac032c80bee571a2aa1f7a"
     assert receipt["counts"] == {"issues": 1, "pull_requests": 1}
     assert receipt["claim_limits"] == ["No issue closure or capability claim follows."]
     assert receipt["receipt_sha256"] == hashlib.sha256(
@@ -195,7 +195,7 @@ def test_stale_report_includes_stale_item_beyond_first_default_page() -> None:
     stale_item = {"number": 101, "title": "old item", "updated_at": "2026-07-01T00:00:00Z"}
     pages = {(1, 100): _items(1, 100), (2, 100): [stale_item], (3, 100): []}
     issues = collect_population(lambda page, size: pages[(page, size)], kind="issue", page_size=100)
-    receipt = build_receipt(repository="wordingone/ember", master_sha="c75738946168e6272743eda08efcaad270d0195b", collected_at="2026-07-22T00:00:00Z", issues=issues, pull_requests=[])
+    receipt = build_receipt(repository="wordingone/ember", master_sha="44b91c220e10d7da6eac032c80bee571a2aa1f7a", collected_at="2026-07-22T00:00:00Z", issues=issues, pull_requests=[])
     report = build_stale_report(receipt=receipt, issues=issues, pull_requests=[], stale_before="2026-07-10T00:00:00Z")
     assert report["receipt_sha256"] == receipt["receipt_sha256"]
     assert report["counts"] == {"issues": 1, "pull_requests": 0}

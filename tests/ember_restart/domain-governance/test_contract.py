@@ -483,7 +483,7 @@ print(json.dumps({
         "schema_version": "ember-owned-rung-v1",
         "stage": "CHECKPOINT_CANDIDATE",
         "run_id": "ember-3b-test",
-        "source_commit": "7f751ac0b4c26e1f7d6278e46a6e6bb3f0ecd647",
+        "source_commit": "d1da06f319c356432e0437a1da1bfe3607c1d25e",
         "lineage": {
             "genesis": "OWNED_RANDOM_INIT",
             "parent_checkpoint_sha256": None,
@@ -1337,7 +1337,7 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
             "r1-entry",
             str(REPO_ROOT / "configs/ember-restart-3b.json"),
             "--source-commit",
-            "60c0c6fe8d2fe66e10be4e1168d8be560642d954",
+            "4e149344b97a9be4ceb1fe6c474260ecb574cd64",
             "--source-root",
             str(REPO_ROOT),
             "--prereg",
@@ -1355,7 +1355,7 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["schema"] == "ember-r1-warm100-entry-refusal-v1"
-    assert payload["source_commit"] == "60c0c6fe8d2fe66e10be4e1168d8be560642d954"
+    assert payload["source_commit"] == "4e149344b97a9be4ceb1fe6c474260ecb574cd64"
     assert payload["result"] == "REFUSED"
     assert payload["claim_boundary"]["execution"] is False
     assert payload["next_action"] == "author and validate the governed R1 WARM-100 manifest"

@@ -5,13 +5,13 @@
  "merges": [
   {
    "pr": 734,
-   "sha": "10221b82 (head) squash-merged",
+   "sha": "828d16ae (head) squash-merged",
    "mergedAt": "2026-07-11T03:02:36Z",
    "what": "C-DISC hinge-tally feed: local emitter defs removed, cbase_grow_rung imported, REPO monkeypatch finally-restored at 5 sites (refs #729)"
   },
   {
    "pr": 745,
-   "sha": "post-#741 master f629e6f audit landing",
+   "sha": "post-#741 master 188c08e audit landing",
    "mergedAt": "2026-07-11T03:10:27Z",
    "what": "totality-audit receipt audit-20260711T020000Z.json (delta re-run)"
   },
@@ -23,21 +23,21 @@
   },
   {
    "pr": 747,
-   "sha": "squash 851e3c0",
+   "sha": "squash 37883f1",
    "mergedAt": "2026-07-11T03:21:13Z",
    "what": "board-eval-machinery family (#210 Tier 2), 2 files excluded on leak-gate -> #751"
   },
   {
    "pr": 750,
-   "sha": "squash c1b7ef3",
+   "sha": "squash 683966b",
    "mergedAt": "2026-07-11T03:45:42Z",
    "what": "three single-field GREEN-forcing bypasses closed: C6 truthy-keys OR-branch deleted, C8 incumbent exact-string shortcut removed, C_GROW daemon-flag demoted (refs #740)"
   },
   {
    "pr": 737,
-   "sha": "squash 9bf384d",
+   "sha": "squash 548d8ad",
    "mergedAt": "2026-07-11T03:47:42Z",
-   "what": "trajgate tokenizer-lineage sidecar (#724 AMENDMENT): all 8 selftest markers verified at 2e4c19c incl. #723 selector-replay + #726 definedness"
+   "what": "trajgate tokenizer-lineage sidecar (#724 AMENDMENT): all 8 selftest markers verified at f9d8249 incl. #723 selector-replay + #726 definedness"
   },
   {
    "pr": 751,
@@ -76,8 +76,8 @@
   }
  ],
  "lanes": {
-  "boardrun42": "board re-render dispatched (master 5de2572 target)",
-  "cockswap57": "cockpit rebuild+relaunch per runbook (drift 51 commits, 1 ember-cli PR since build 93c7877)",
+  "boardrun42": "board re-render dispatched (master 25a46bc target)",
+  "cockswap57": "cockpit rebuild+relaunch per runbook (drift 51 commits, 1 ember-cli PR since build 02ae1a7)",
   "builder711": "A8.2 calibration 3",
   "tlineage724": "issue #748 (wt-748-parent-edges created)",
   "attrib702": "status-demanded 04:0xZ (llama-server restored+healthy; legs c/d receipts not yet on disk)",
@@ -87,7 +87,7 @@
   "probetrio749": "mission complete (PR #753 merged)"
  },
  "coordinator_disclosures": [
-  "audit-latest needs_work cleared to [] after PR #750 own-read verification at head 49caebd6 (OR-branch enumeration rule applied)",
+  "audit-latest needs_work cleared to [] after PR #750 own-read verification at head c4ee7141 (OR-branch enumeration rule applied)",
   "main-tree stray trajgate WIP (blob 9ac432b, predecessor of merged #737 work) restored to master after origin confirmation",
   "untracked-collision on pull: ember-totality-20260710T230837Z.json local CRLF vs landed LF - newline-only, resolved local->pulled per byte-copy playbook (local copy retained in session scratchpad)",
   "cockpit relaunch dispatched per dated acting-operator ledger row (down since 2026-07-10 restart; restore-standing-state, not an unprompted new surface)"

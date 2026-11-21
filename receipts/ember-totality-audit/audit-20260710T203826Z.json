@@ -5,7 +5,7 @@
   "prior_batch_receipt": "receipts/ember-totality-audit/audit-20260710T145200Z.json",
   "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260710T163504Z.json",
   "board_fresh": "scripts/ember_totality/receipts-totality/ember-totality-20260710T202628Z.json",
-  "board_commit": "3d2c681",
+  "board_commit": "286118a",
   "board_summary": {"green": 12, "red": 24, "unevaluable": 1, "audit_ok": 3, "verdict_changes_vs_anchor": 0},
   "method": "3 read-only sonnet adversaries (workflow wf_9d5b165c-7cf, schema-forced), coordinator spot-verification of every load-bearing quoted field against raw files before banking",
   "findings": [

@@ -22,7 +22,7 @@ CONFIG_PATH = ROOT / "configs" / "ember-restart-3b.json"
 # Observed tensor-storage lower bound of the 3B config's optimizer-state.pt,
 # from the ember-checkpoint-write-failure-v1 quarantine receipt
 # checkpoint-write-failed-d09e090b...json (certified launch train-5,
-# master 9b18f1a6, 2026-08-02); also recorded in
+# master d9cf92ec, 2026-08-02); also recorded in
 # receipts/failure-classes/checkpoint-transient-scratch-cap-3b.json.
 OBSERVED_3B_OPTIMIZER_LOWER_BOUND = 7_798_675_456
 

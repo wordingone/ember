@@ -934,7 +934,7 @@ def named_launch_command(cfg: dict, identity: dict) -> dict:
     src/ember/governance/scripts/timeshare_pretrain.py is EXECUTION-DENIED: it carries
     "# EMBER_ARTIFACT_CLASS=historical_only" and unconditionally
     `raise SystemExit(...)` at module import time (locked in commit
-    4f758db "fix: lock Ember authority and totality" -- ANY import of that
+    cc43461 "fix: lock Ember authority and totality" -- ANY import of that
     module, including for the shard-dir interlock fix, fails immediately).
     Naming it here would be a FALSE command. src/ember/training/pretrain.py
     is a library (run_pretraining_segment/run_selection_pretraining_segment/
@@ -964,7 +964,7 @@ def named_launch_command(cfg: dict, identity: dict) -> dict:
     return {
         "note": (
             "src/ember/governance/scripts/timeshare_pretrain.py is EXECUTION-DENIED "
-            "(EMBER_ARTIFACT_CLASS=historical_only, commit 4f758db "
+            "(EMBER_ARTIFACT_CLASS=historical_only, commit cc43461 "
             "'lock Ember authority and totality'); it is never the real "
             "command. pretrain.py has no CLI. The real governed entry is "
             "run_vertical_slice.py's semantic subcommand."

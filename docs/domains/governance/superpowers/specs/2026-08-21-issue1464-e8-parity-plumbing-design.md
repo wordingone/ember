@@ -9,7 +9,7 @@ the existing R1-E8 validator.
 
 ## Authority and frozen constraints
 
-- Public source starts at `8846f5981bc01ee1a661de5e9a518a86dec57ab3`.
+- Public source starts at `a443cd23459ab63c892873548752bf1f1ced054f`.
 - The corrected liveness receipt remains `FALLBACK_REQUIRED` and is an input,
   never recomputed by the parity producer.
 - Candidate and reference use the same dense model identity, frozen data
@@ -63,8 +63,8 @@ that conservative direction explicitly.
 The receipt emits `loss` recomputed by the existing method,
 `grad_norm_ratio` as the F-11 authority, and `grad_norm` retained for the record
 with an explicit statement that the validator does not consume it. The
-preregistration pin `3d48d3870919bd04cec735f68d0fad45fcfae0b2` and threshold
-SHA `12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5`
+preregistration pin `64819ce5fff2e52d2294a5ee7f1e57e124e4c56b` and threshold
+SHA `ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e`
 remain unchanged. The v2 receipt carries the complete `prereg` block
 byte-identical to v1, including `document_pin` and `thresholds_sha256`, because
 the parity validator reopens `e7.prereg.thresholds_sha256` rather than a

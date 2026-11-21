@@ -191,7 +191,7 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
             index_path = root / INDEX_REL
             before_identity = json.loads(identity_path.read_bytes())
             before_index = json.loads(index_path.read_bytes())
-            new_source_base = "a774617a9665f69ed045eef16c75b4aa852830af"
+            new_source_base = "0d7fc8c5352722614fb35e28ce1af84a8933fbcd"
 
             write = subprocess.run(
                 [sys.executable, "-B", str(script), "--write", "--source-base-commit", new_source_base],

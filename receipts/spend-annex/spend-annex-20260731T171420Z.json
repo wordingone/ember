@@ -294,10 +294,10 @@
       "resolved_script": null,
       "attestation_sidecar": "receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json",
       "attestation_cites": [
-        "git commit 964a997",
+        "git commit 1f59a63",
         "PR #607"
       ],
-      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone + evidence (c) manually-authored: commit 964a997 ('ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift (#607)') adds ONLY this receipt JSON (62 lines), no .py/.ts/.js/.sh file alongside it (`git show --stat 964a997` confirmed). The receipt's own content is a hand-typed citation-drift repair note (prose 'scope'/'provenance'/'note' fields re-citing an existing, already-documented checkpoint at a probe-resolvable path) -- same manually-authored-governance shape as the existing c48-gate-stats-review-*/raw-corpus-materiality-* GENERATOR_ABSENT_HISTORICAL_BASENAMES entries, never a script output. Content re-scanned with this tree's own PAID_CLIENT_PATTERNS + API_KEY_ENV_NAME_RE detectors: zero hits on both (client_hits=[], key_hits=[])."
+      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone + evidence (c) manually-authored: commit 1f59a63 ('ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift (#607)') adds ONLY this receipt JSON (62 lines), no .py/.ts/.js/.sh file alongside it (`git show --stat 1f59a63` confirmed). The receipt's own content is a hand-typed citation-drift repair note (prose 'scope'/'provenance'/'note' fields re-citing an existing, already-documented checkpoint at a probe-resolvable path) -- same manually-authored-governance shape as the existing c48-gate-stats-review-*/raw-corpus-materiality-* GENERATOR_ABSENT_HISTORICAL_BASENAMES entries, never a script output. Content re-scanned with this tree's own PAID_CLIENT_PATTERNS + API_KEY_ENV_NAME_RE detectors: zero hits on both (client_hits=[], key_hits=[])."
     },
     {
       "path": "receipts/cbase-gpu-verify-20260707T014930.json",
@@ -695,7 +695,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
-      "sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+      "sha256": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -993,7 +993,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T160854Z.json",
-      "sha256": "2a993241405270b6b157ac4cae650503706f9418886da8397c6ed01a1ba66287",
+      "sha256": "614ed6edb6f629685ca7209a22d1d395de0577f9653727d604d9d883846dec7f",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1003,7 +1003,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
-      "sha256": "1de6c61e85b9d973b13f76f01c242d1e52c7604cd09ec9e2ea9a69debcda3a1c",
+      "sha256": "e20fdb6cead9327a2357c453d995e638a1e24272d77274e86bfce6f3d11d8d64",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1013,7 +1013,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json",
-      "sha256": "704d6c5a7b300ae36d1111b737ec01a5924ca309d2593a6e9d4d6540625eb8db",
+      "sha256": "441eaba1a0fb186115cecc7225ea176bd6702185ed9355ccb567f801456155dd",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -1033,7 +1033,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
-      "sha256": "0de233a1d8f2780a79c4ba69f33b517d47734605738a4b1461c22c60d84e7a54",
+      "sha256": "013ec299d7d5b0eedf9d20e6b2f7660b026a9bc699ee2208f3c44cd8d195ddbc",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -1073,7 +1073,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json",
-      "sha256": "414a5ad6c6e748003e72b9e031b70825a35552dd8a6249b35aff6f129b6cd3f5",
+      "sha256": "855ae80c02c2b80ac3aee2dc5925afc3181aa545ebafc16a0cb15f0274d854e9",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1294,7 +1294,7 @@
     },
     {
       "path": "receipts/custody-curation-20260708T235000Z.json",
-      "sha256": "d78fdc71387429509af9bc504fc046a6342c6a223ad4e06f87ac7c69a762a764",
+      "sha256": "7b1dda9a1a7ec303108eaa64757ec6ea693a822c3a9cfb51d6ec1efc91cd98b1",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1526,11 +1526,11 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/ember-c-scale/land210g-experiment-runners-receipt.json: manually-authored landing inventory introduced by commit 617f071e with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/ember-c-scale/land210g-experiment-runners-receipt.json: manually-authored landing inventory introduced by commit acb103a0 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-c-scale/land210g-public-revalidation-20260729T122328Z.json",
-      "sha256": "b20ff956906c170ab435fab1ac40884ce83212578ab53989f8843212468252e4",
+      "sha256": "102181b72f1607639c264368a738a46a91539fcba82888d2e6a43dca3de0d09e",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1582,11 +1582,11 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/ember-c-scale/land210h-ops-tools-receipt.json: manually-authored landing inventory introduced by commit ea39d694 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/ember-c-scale/land210h-ops-tools-receipt.json: manually-authored landing inventory introduced by commit cb1ac623 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-c-scale/land210h-public-revalidation-20260729T125110Z.json",
-      "sha256": "8f18efc460f5e714835386473f7f048e79ec98d7c103022a3a52d7791c5742c4",
+      "sha256": "40e6d3363af2661f9189f40fe13f612e256efb6f4c21d2a91e2506089e3994f8",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1638,11 +1638,11 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/ember-c-scale/land210i-harness-entry-receipt.json: manually-authored landing inventory introduced by commit 93b5b726 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/ember-c-scale/land210i-harness-entry-receipt.json: manually-authored landing inventory introduced by commit c121dc34 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-c-scale/land210i-public-revalidation-20260729T132700Z.json",
-      "sha256": "1c158a96ba8cc20fb53a12bdefc091066ffeaee1d442c3ce5547721420649163",
+      "sha256": "52c83be065ead5c6961cf9b5d30b340c1a6138b40fcfbcab2ca8b46827a6b32e",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1670,7 +1670,7 @@
     },
     {
       "path": "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json",
-      "sha256": "5ad3f57207f8e3016d8cbabc0a50612db511e92447124c7c88d68851852241bc",
+      "sha256": "a08ed74cba39c8d7ed47130bb4ccafcd271bf88abeebff0a20c27873877d892f",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1694,11 +1694,11 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json: manually-authored landing inventory introduced by commit 70aefaa0 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/ember-c-scale/land210j-family3-stragglers-receipt.json: manually-authored landing inventory introduced by commit 1896263b with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-c-scale/land210j-public-revalidation-20260729T135005Z.json",
-      "sha256": "538b48c24cdd73417951921b73a93cb13788232ee22224233ff362c17ef04fef",
+      "sha256": "6e07252d5dc41992f0b598a01b0f8407ee86dcf5986fe0e7f14cf40a75f59fe5",
       "evidence_class": "script_scanned_clean_via_convention",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1726,7 +1726,7 @@
     },
     {
       "path": "receipts/ember-c-scale/land210k-e2b-pair-receipt.json",
-      "sha256": "f0e121726a6f9803a56a73a18e5bfcd61085f92caed6a7ac1697d94f50799ee2",
+      "sha256": "6782c8f7133d9d186dccc668dc1247c87864cb94ba2bb7268542fddba1c12707",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1750,11 +1750,11 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/ember-c-scale/land210k-e2b-pair-receipt.json: manually-authored landing inventory introduced by commit 560f93c3 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/ember-c-scale/land210k-e2b-pair-receipt.json: manually-authored landing inventory introduced by commit e0cad406 with the reviewed family; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-c-scale/w1-baseline-replay-closure-20260711T025650Z-redacted-edition.json",
-      "sha256": "63892afaf53b6c1415fa6985392e506c84907cc37aa67a244e72f9a1ca460580",
+      "sha256": "2fbb3cbeede4ebd28ee1dce24de97a3e51334e7a09e8b8f2baae8200f858cb11",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1794,7 +1794,7 @@
     },
     {
       "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T054130Z-redacted-edition.json",
-      "sha256": "4bb14efd759830d9251816fc471cdc1a19bc70cb87f5fc2d673d3d5360e39452",
+      "sha256": "c82d8950b6cc8fb76fe48f3038672dcf20e245b2fc03ac6a0cb990496c244c00",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1804,7 +1804,7 @@
     },
     {
       "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T060432Z-redacted-edition.json",
-      "sha256": "7ccf6947b9cc90c32e4d7ed0409f91db845884e6aa4cacb3e34b7465f3c2e394",
+      "sha256": "3ff0cd151df5722d5ae2f8c36ea2bfea75df1dcae63afaa501a895ca7556b327",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1814,7 +1814,7 @@
     },
     {
       "path": "receipts/ember-c-scale/w1-fullstate-resume-verify-20260711T062151Z-redacted-edition.json",
-      "sha256": "d153a72cccf533749ae0557e18afe1358d38ab4c42a9e12220aacd104389080c",
+      "sha256": "117ed3dc0ec74d02f97b4a651280011784b0fce26eae846a6d4a84c94787a128",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -1890,7 +1890,7 @@
     },
     {
       "path": "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json",
-      "sha256": "0c856572684b449427d493dd38a1d8c2faa0f959e47890c7be323fc06dd0ba43",
+      "sha256": "035ba0dfd0dd68da68df2a5b901a6bdd25e00e178b2489b50206522d0799c635",
       "evidence_class": "script_scanned_clean_via_convention",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1942,7 +1942,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-44-43Z/receipt-redacted-edition.json",
@@ -1970,7 +1970,7 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-53-31Z/receipt-redacted-edition.json",
@@ -1998,7 +1998,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T03-00-39Z/receipt-redacted-edition.json",
@@ -2026,7 +2026,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T03-07-06Z/receipt-redacted-edition.json",
@@ -2054,7 +2054,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T05-41-41Z/receipt-redacted-edition.json",
@@ -2082,7 +2082,7 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T145316Z/d3-broader-multifamily-loop-receipt.json",
@@ -2142,7 +2142,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "bab6c6a765ed4eec23f5290a023f8309178a687fd30dc966dcc8e08787b10356",
+      "sha256": "ed9f2c89d0bb400baed3e8334f3b9c63b22b5ad65d892ddb79b97c9eab755f17",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2282,7 +2282,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "d42d5f0bc09b979e5f72adb925e6418a0d152b5c1dd594d5baf0cd043d76ea03",
+      "sha256": "02de24cca6e56736a9ba22a114eafff389cd68dfea8baf9f6ef6c9bd76fbaa66",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2422,7 +2422,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "e96e9d91c1dad70c0129ff7c0a7e59b0ba23bfdcc47aa0c81cb10eb3d080be53",
+      "sha256": "0929801ea9f2509997b02b564ca53d7674dae78d62382c00e04d18b3c18f7062",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2562,7 +2562,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "484c2ac2338d741e3437289cd45c30987d87ba2f0d6c5fa5a1d72a53d4d1dd79",
+      "sha256": "15e75bd9d02e06a062d88a69c3a4b4fe5873c0e807c78432f9513723825e22c4",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2814,7 +2814,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260621T133823Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "5900ede6089dcdb7c24d78c757a7b9ac18a0f574a52342f0c8b31ec6bddef755",
+      "sha256": "18943823846489f3883c85c197c8668fff9e94db0aa0b0271d37b2bc41037405",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2982,7 +2982,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T012000Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "1b13626e23e3e57bd9cbf60956516ab54e41ee98615084e0eb1bf6f9d5bd6570",
+      "sha256": "649868f7e29457936ef0de69c9ee082b4e45989f76972dac628bf11d4c37cea6",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -3514,7 +3514,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-native-loop-20260708T221708Z.json",
-      "sha256": "a4e8101f114fbd04393ad359337837f0037ff6c1ccf170a99bd1090a345b74b7",
+      "sha256": "fd7db7cd71d0563ee50f4a71537f3d2831d345a114954c30108026243a590ef6",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -3682,7 +3682,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-transfer-task21-24-repair-20260622T014300Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "260b34060a07f32d6ba55d742d85129b8ea59f4fe743c8237f5e72b70981f5d2",
+      "sha256": "2bc9c34f748b3e07a77ebf3eeb6b1d73e4de22f39eabf58c74b8cd528f21b2c3",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -7975,7 +7975,7 @@
     },
     {
       "path": "receipts/eval-suite-freeze/a1-freeze-admission-example-20260710T052321Z.json",
-      "sha256": "14641a73e0f54c6cfd695b76b319835dc2118f76d23c9ebde100b5cc5aa9e170",
+      "sha256": "9603a23f7197e625168c37538b41a0dfb2a2acae5c58cc7bfac3c81c1a9b3c5e",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -7995,7 +7995,7 @@
     },
     {
       "path": "receipts/floor_contract_manifest_final_20260705T132713Z.json",
-      "sha256": "06cac7e9dbefd193e17fda44ae9c489959830b40db4071896aa1bab62cabbcf6",
+      "sha256": "25ab4a01a92a0fbe8c40a3d28f591cdfa326fdd981a455bec7c2a8b9ce6f70ef",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -8847,7 +8847,7 @@
     },
     {
       "path": "receipts/issue-457-current-acceptance-20260730.json",
-      "sha256": "e069e98a509632189dccdd992bb05c0bafbd49df3d60acc38900fe578de7099d",
+      "sha256": "635aeab0cef3354555294d44bb0a11d112a33710ddd5109206ffda650ecd8b06",
       "evidence_class": "script_scanned_clean_via_convention",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -8875,7 +8875,7 @@
     },
     {
       "path": "receipts/issue-580-pr-b-retro-audit-20260730.json",
-      "sha256": "13c4991ecafe7d58b7f23006f417e46bd5efd78f8b8bf4db3a92f7047293ad50",
+      "sha256": "93249a79ab382dbb7762a87e5ef24bede8a7a604612412194ddbba7fa24f53ec",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -8899,7 +8899,7 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "receipts/issue-580-pr-b-retro-audit-20260730.json: manually-authored retrospective audit introduced by commit 7b75f758 alongside the corrected sources and tests; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "receipts/issue-580-pr-b-retro-audit-20260730.json: manually-authored retrospective audit introduced by commit 33506308 alongside the corrected sources and tests; no committed writer constructs this filename Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/m524-m2-memmap-residency-20260709T081425Z.json",

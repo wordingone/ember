@@ -1,6 +1,6 @@
 <!--
 Provenance:
-  Pinned to commit: 3d48d3870919bd04cec735f68d0fad45fcfae0b2
+  Pinned to commit: 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b
   Ingested: 2026-08-01
   Status: research annex — binding by incorporation into the EMBER-02 spec
 -->
@@ -13,7 +13,7 @@ Provenance:
 
 **Participants:** User; OpenAI model  
 **Prepared:** 1 August 2026  
-**Ember source snapshot:** `wordingone/ember @ 3d48d3870919bd04cec735f68d0fad45fcfae0b2`
+**Ember source snapshot:** `wordingone/ember @ 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b`
 
 ## Central questions
 
@@ -777,15 +777,15 @@ References are grouped by identifier rather than citation style. Ember documents
 
 ## Ember project sources
 
-**[E1]** Ember repository. README.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. State as of 1 Aug 2026. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/README.md
+**[E1]** Ember repository. README.md at commit 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b. State as of 1 Aug 2026. github.com/wordingone/ember/blob/64819ce5fff2e52d2294a5ee7f1e57e124e4c56b/README.md
 
-**[E2]** Ember repository. GOAL.md (Ember Constitution) at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/GOAL.md
+**[E2]** Ember repository. GOAL.md (Ember Constitution) at commit 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b. github.com/wordingone/ember/blob/64819ce5fff2e52d2294a5ee7f1e57e124e4c56b/GOAL.md
 
-**[E3]** Ember repository. docs/domains/governance/guides/START-HERE.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/docs/domains/governance/guides/START-HERE.md
+**[E3]** Ember repository. docs/domains/governance/guides/START-HERE.md at commit 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b. github.com/wordingone/ember/blob/64819ce5fff2e52d2294a5ee7f1e57e124e4c56b/docs/domains/governance/guides/START-HERE.md
 
-**[E4]** Ember repository. INVARIANT.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/INVARIANT.md
+**[E4]** Ember repository. INVARIANT.md at commit 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b. github.com/wordingone/ember/blob/64819ce5fff2e52d2294a5ee7f1e57e124e4c56b/INVARIANT.md
 
-**[E5]** Ember repository. CONTINUITY.md at commit 3d48d3870919bd04cec735f68d0fad45fcfae0b2. github.com/wordingone/ember/blob/3d48d3870919bd04cec735f68d0fad45fcfae0b2/CONTINUITY.md
+**[E5]** Ember repository. CONTINUITY.md at commit 64819ce5fff2e52d2294a5ee7f1e57e124e4c56b. github.com/wordingone/ember/blob/64819ce5fff2e52d2294a5ee7f1e57e124e4c56b/CONTINUITY.md
 
 ## Research and historical sources
 

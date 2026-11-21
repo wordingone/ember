@@ -5,7 +5,7 @@ independent exact-head PASS, fresh required-green checks, and a clean merge.
 This status retires only the duplicate issue carrier. It does not make C-INV
 green and does not resolve any of the nine uncovered receipts.
 
-Public-master basis: `c45ec200550a7d85264b8cae4d7c5cf622e9c90a`.
+Public-master basis: `5d2d1bc7497fcbea66f9bf99aad986fb3ef7fa70`.
 
 ## Accepted custody transfer
 

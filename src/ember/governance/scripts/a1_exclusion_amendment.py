@@ -213,7 +213,7 @@ def main() -> int:
         },
         "ac4_anchoring": {
             "statement": "the AC4 held-out selection stays anchored to the v1 "
-                         "declaration hash ccde4a676085e633b69d8ba1b501b80f49e2e907 "
+                         "declaration hash 5dc478092e45c2244daa69889a618f80253f361a "
                          "consumed at first derivation (index 7 -> SciQ); an "
                          "amendment NEVER re-rolls AC4 -- the selection binds once, "
                          "at first derivation, dated (ruling point 3)",

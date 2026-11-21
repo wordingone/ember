@@ -7,19 +7,19 @@
    "pr": 563,
    "what": "probe-fixture rename (PROBE_DIR_DRIFT cure)",
    "mergedAt": "2026-07-09T14:17:01Z",
-   "sha": "d026e40d"
+   "sha": "b1301368"
   },
   {
    "pr": 559,
    "what": "renderer multi-line newline fix + d5 test isolation",
    "mergedAt": "2026-07-09T14:18:53Z",
-   "sha": "4826c45e"
+   "sha": "0772faef"
   },
   {
    "pr": 564,
    "what": "#558 W1c K-batch orchestrator rebuild (real-corpus AC1/AC2, seq-length combinatorics finding disclosed)",
    "mergedAt": "2026-07-09T14:36:21Z",
-   "sha": "8aca8663"
+   "sha": "18ca2117"
   }
  ],
  "issues_filed": [
@@ -46,7 +46,7 @@
   "stab480": "sonnet - #480 stabilize GPU chain, leg receipts ~17:00Z",
   "w1ready": "sonnet - #121 launch-readiness receipts, CPU-only",
   "body485": "sonnet - #561 P0 + #565 spine, renderer-wide clip GO",
-  "boardrun38": "haiku - totality rerun on 4826c45e + landing (redact-only ruling)",
+  "boardrun38": "haiku - totality rerun on 0772faef + landing (redact-only ruling)",
   "spec-audit-workflow": "5 haiku + 1 sonnet - 196-doc spec-lattice audit"
  },
  "coordinator_disclosures": [

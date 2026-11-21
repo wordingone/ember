@@ -59,7 +59,7 @@
     },
     "old_disposed": {
       "count": 15,
-      "disposition_authority": "docs/custody-disposition-20260708.md (PR #432 / commit c499ff6, dated 2026-07-08)",
+      "disposition_authority": "docs/custody-disposition-20260708.md (PR #432 / commit 104f80c, dated 2026-07-08)",
       "cross_reference": "All 15 entries below are explicitly enumerated in the disposition document with their class, ruling, and evidence",
       "entries": [
         {

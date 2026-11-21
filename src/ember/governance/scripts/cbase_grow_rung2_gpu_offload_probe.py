@@ -888,7 +888,7 @@ def main() -> int:
                        "never calls widen_state_dict() again for this seed."),
             "prior_crash_history": (
                 "Before this cure: the identical widen_state_dict() call succeeded cleanly once "
-                "(2026-07-08T12:59:47Z, commit 1ff844e, cbase_grow_rung2_contended_launch_gate.py), "
+                "(2026-07-08T12:59:47Z, commit 7e1ced5, cbase_grow_rung2_contended_launch_gate.py), "
                 "then crashed natively 3/3 consecutive times ~30min later with no code change: "
                 "(1) inline in this probe's main process, exit 139 SIGSEGV; (2) inside a FRESH "
                 "subprocess with a clean heap (this repo's own established Part-A-style mitigation "

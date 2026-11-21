@@ -132,7 +132,7 @@ def _checkpoint_identity(
     return {
         "comparison_id": comparison["comparison_id"],
         "matched_identity": matched["identity"],
-        "config_sha256": "a9f9ba115dc8e139e18c528b2a3e13060ab874787e8f944bfaf4fc125fb23d80",
+        "config_sha256": "83928c6e91bea53801143be0c3d4ed6c3e98d238d3c6d3d48d493480a408b9c3",
         "source_commit": source_commit,
         "certified_launch_sha256": certified_launch_sha256,
         "tier": "TIER_1",
@@ -319,7 +319,7 @@ def _install_valid_tier2_authority(paths: dict[str, Path]) -> dict[str, Path]:
     shutil.copyfile(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json", contract)
     liveness = {
         "schema_version": "ember02-r1-e8-liveness-v1",
-        "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+        "thresholds_sha256": "ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e",
         "verdict": "FALLBACK_REQUIRED",
         "a1_series": {"path": "a1-live-series.json", "sha256": "1" * 64},
         "a3_series": {"path": "a3-live-series.json", "sha256": "2" * 64},

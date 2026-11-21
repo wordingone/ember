@@ -8,7 +8,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "map_source_sha": "sha256:df870f83e3ac7e3b423c2422dea3e75099bf2b2a0d1a48cc4674048e13da92ca",
-  "source_commit": "7e2e72fa44a5b501a2fde5e9555d7bf420b284d4",
+  "source_commit": "f4bbb723c8201191dc3985db95f64913ab3e0626",
   "run_import_manifest_sha256": "c45aad9d29efe1ee8635c838afc4d0f9e26659568d172890088639b79e44859f",
   "run_import_trace_sha256": "fce02ae488fb4f6530781d780687b5b7f2c69215230f67f93d16e94544ca8b69",
   "run_import_trace_producer_sha256": "7b76287dd28d5e07e928ef439f1e37fe78cc58d0b5bda225c26e9314c1edcb4a",
@@ -153,6 +153,6 @@
     "relative imports are resolved only within the governed repository root"
   ],
   "predecessor_receipt_path": "receipts/nativization-motion/nm-20260807T014339Z.json",
-  "predecessor_receipt_sha256": "2bd410fb9e177e0f8f69a826282535fc0b9b1f0fc7f5ab7493230c9654d93ea5",
-  "predecessor_source_commit": "fb412cad8ff55d655933fd8d54801116a277b0ec"
+  "predecessor_receipt_sha256": "ab8a73cb4e63f99745d66eca2f55fdc8eaab864fba65520a47b235355cc8b84c",
+  "predecessor_source_commit": "d57e100528c8c4a9f97db0a997844794882177d0"
 }

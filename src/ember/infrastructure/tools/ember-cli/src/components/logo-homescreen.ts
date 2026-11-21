@@ -5,7 +5,7 @@
 // logo-homescreen.ts — welcome/homescreen layout: logo, greeting, feeds, channels notice.
 // Bundle: components/logo-homescreen.ts (line 321680)
 //
-// D4 reconstruction (ember #168): commit 5f1b7e5 (#160) landed the flame-era test battery
+// D4 reconstruction (ember #168): commit 2a994a2 (#160) landed the flame-era test battery
 // (logo-homescreen.test.ts, homescreen-border-clip.test.ts, homescreen-fireball-live-tick.test.ts,
 // homescreen-mock1-parity.test.ts) against a rewritten Homescreen that never itself landed. This
 // rebuilds that module against those four files as the binding spec -- each file's own docstrings

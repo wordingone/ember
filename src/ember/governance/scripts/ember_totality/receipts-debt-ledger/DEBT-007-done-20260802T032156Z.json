@@ -5,7 +5,7 @@
   "ticket": "DEBT-007",
   "disposition": "DONE",
   "ts": "20260802T032156Z",
-  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "verified_against_master": "186a2e302354cd777bf4def58e0e375468ab64a3",
   "row": "DEBT-007 | ACTIVE-NEXT | Code-vs-docs metric required for each progress window",
   "required_receipt_text": "receipt field separating executable/test lines from docs/spec/receipt lines",
   "why_it_mattered": "This detects scaffolding drift before it masquerades as growth.",

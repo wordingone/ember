@@ -381,7 +381,7 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
 # than borrowing a production file's incidental dead-on-import behavior -- the
 # prior version of this constant pointed at
 # src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py, which became collectable
-# again once commit cc84936 (#1637, 2026-08-10) legitimately fixed that
+# again once commit ec37b2f (#1637, 2026-08-10) legitimately fixed that
 # production file's import path, silently breaking this negative test (#1751).
 # A negative fixture bound to production brokenness fails the moment someone
 # fixes the production file; it must own its dead subject, not borrow one.

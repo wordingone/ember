@@ -7,7 +7,7 @@
 This note disposes only the nine named historical citations below. It neither restores nor
 reconstructs bytes, grants capability credit, nor turns non-canonical evidence into public-master
 evidence. The scan was performed against exact public base
-`52d6d49037719e26b0268865037d295171f9a589` using all locally reachable Git refs.
+`0997f8089059e2c2900d43d0b39f2b35add15780` using all locally reachable Git refs.
 
 ## Exact cross-lineage bytes barred from public master
 

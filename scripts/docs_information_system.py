@@ -686,7 +686,7 @@ def validate_current_reference_reconciliation(
         raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_SCHEMA_INVALID")
     source = value.get("source")
     if not isinstance(source, dict) or source != {
-        "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+        "commit": "580fe6648049e3d4e5b7f97c3698655d3a6e00c0",
         "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
         "frozen_dispositions_raw_sha256": sha256_file(root / REFERENCE_DISPOSITIONS_PATH),
         "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
@@ -841,7 +841,7 @@ def build_current_reference_reconciliation(
 ) -> dict[str, Any]:
     prior_source = prior.get("source")
     expected_fixed_source = {
-        "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+        "commit": "580fe6648049e3d4e5b7f97c3698655d3a6e00c0",
         "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
         "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
         "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",

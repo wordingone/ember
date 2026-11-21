@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-keyboard-operator-controls.test.ts — R2b: the keyboard half of the operator
-// controls. #1102 (50498b7) wired the mouse-click path end to end (real SGR bytes -> decoder ->
+// controls. #1102 (95941fb) wired the mouse-click path end to end (real SGR bytes -> decoder ->
 // hit-test -> Box.onClick -> onControl -> driveOperatorControl -> a real JSONL append); this file
 // proves the keyboard path exists too, entering at the SAME kind of real boundary the click test
 // used: real key bytes on a fake stdin, read back from the real control-channel file, never the
@@ -672,7 +672,7 @@ describe("repl keyboard operator controls (R2b)", () => {
 
   // -----------------------------------------------------------------------
   // DD1 -- Shift+Tab: real production dual-registration. Reviewer-found defect (independent
-  // review at 0f9a5b17): repl.ts's operator pane and prompt-input.ts's usePromptInput both
+  // review at 5e501f69): repl.ts's operator pane and prompt-input.ts's usePromptInput both
   // registered `useInput` handlers on the shared ink/hooks.ts dispatcher, and Shift+Tab reached
   // BOTH -- the pane traversed backward AND the prompt cycled its permission mode. The fix pins
   // usePromptInput's own handler `isActive` to `!paneFocused`.

@@ -13,11 +13,11 @@
     "#551 (board totality landing; post-#549 re-render being added in-place)"
   ],
   "covered_commits": [
-    "31a316d docs: board refresh 20260709 (#543)",
-    "64823a8 chore: audit-trail landing + path redaction (#548)",
-    "539b856 fix(#537): C2 restore byte-exact d3 evidence + gate revision (#549)",
-    "9c225a0 fix(#544): <ROOT> placeholder for run-root in receipts (#547)",
-    "e042f6e feat(#449): eps0 gate-fingerprint rider (#550)"
+    "0c67eed docs: board refresh 20260709 (#543)",
+    "58f34c2 chore: audit-trail landing + path redaction (#548)",
+    "9924862 fix(#537): C2 restore byte-exact d3 evidence + gate revision (#549)",
+    "d0bb31f fix(#544): <ROOT> placeholder for run-root in receipts (#547)",
+    "29403a6 feat(#449): eps0 gate-fingerprint rider (#550)"
   ],
   "delegation": {
     "shape": "coordinator judges receipts only; all execution laned",

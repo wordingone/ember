@@ -7,12 +7,12 @@
     "sha_convention":  "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
     "ts":  "2026-07-30T19:31:56.5714200Z",
     "issue":  "wordingone/ember#580",
-    "base_commit":  "132599361745be20aa6caf086a7920aa54d0df19",
+    "base_commit":  "d9cec80f1c01af57b2402d65c36415e29d9da1c8",
     "policy":  "Historical receipts remain byte-identical. This dated sibling records the correction and bounded re-derivation.",
     "corrects":  [
                      {
                          "path":  "receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json",
-                         "sha256":  "414a5ad6c6e748003e72b9e031b70825a35552dd8a6249b35aff6f129b6cd3f5",
+                         "sha256":  "855ae80c02c2b80ac3aee2dc5925afc3181aa545ebafc16a0cb15f0274d854e9",
                          "old_verdict":  "TRUE_GAP (b)",
                          "corrected_verdict":  "FALSE_GLOBAL_VS_LOCAL_ID_COMPARISON_ARTIFACT",
                          "reason":  "The old derivation compared the union of two optimizer-local integer domains with the global model-state range. The shared checker now maps every parameter name to the correct optimizer-local slot before returning missing IDs."

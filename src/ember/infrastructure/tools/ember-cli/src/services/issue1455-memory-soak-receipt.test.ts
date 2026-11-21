@@ -22,7 +22,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-const SOURCE_COMMIT = "fdf12f72bef79ede8d9a7c1446df035be2d75e85";
+const SOURCE_COMMIT = "ebc426a488fbe856dbbefcd62c0b469dd5285ec6";
 const SHA_A = "a".repeat(64);
 const SHA_B = "b".repeat(64);
 const MIB = 1024 ** 2;

@@ -54,7 +54,7 @@
   },
   "generated_at": "2026-07-29T13:50:05Z",
   "goal_id": "EMBER-02",
-  "historical_receipt_sha256": "5ad3f57207f8e3016d8cbabc0a50612db511e92447124c7c88d68851852241bc",
+  "historical_receipt_sha256": "a08ed74cba39c8d7ed47130bb4ccafcd271bf88abeebff0a20c27873877d892f",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "owned_synthetic_cpu_replay": {
@@ -84,7 +84,7 @@
   },
   "public_lineage": {
     "candidate_count": 7,
-    "landing_commit": "70aefaa0a92fdebd376c068133749cc87760d074",
+    "landing_commit": "1896263b899830fb1e7d4b30b3b4a485ef59d390",
     "rows": [
       {
         "current_sha256": "2e8f3241383c3756ec72384a81be48b5b991e98f65ff48cff5312f0e55b2aba8",
@@ -126,7 +126,7 @@
   "replay_command": "CUDA_VISIBLE_DEVICES='' python -B scripts/r3_feasibility_probe.py --dry-run --max-new-tokens 64",
   "schema_version": "ember-land210j-public-revalidation/v1",
   "sha_convention": "bytes on disk as-is (binary read, no normalization)",
-  "subject_commit": "33027681a36ed351478e13ab05418b0698a00e15",
+  "subject_commit": "aabf1a5ef26cc9d153b748739c5d1c93a172f949",
   "ticket": "LAND210J-FAMILY3-STRAGGLERS",
   "ts": "2026-07-29T13:50:05Z",
   "verdict": "LAND210J_LINEAGE_REVALIDATED_AND_R3_DRYRUN_REPAIRED_TO_OWNED_RANDOM_INIT_CPU_PROOF",

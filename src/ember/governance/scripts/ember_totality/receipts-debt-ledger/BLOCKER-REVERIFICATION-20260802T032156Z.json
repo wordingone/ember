@@ -5,7 +5,7 @@
   "ticket": "DEBT-001, DEBT-002, DEBT-003, DEBT-005, DEBT-008, DEBT-010",
   "disposition": "NONE — rows remain OPEN",
   "ts": "20260802T032156Z",
-  "verified_against_master": "3b2a64561652e731fe2ffa3c1892f4d3d334fe0b",
+  "verified_against_master": "186a2e302354cd777bf4def58e0e375468ab64a3",
   "what_this_is": "A blocker re-verification, not a disposition. These six rows stay OPEN and keep board row C10 RED. The purpose is to replace each row's inherited 2026-06 blocker with one re-established against master's current bytes, so that no row is left resting on a reason that stopped being true.",
   "why_re_verification_was_necessary": {
     "the_prior_evidence_is_pinned_to_a_tree_that_no_longer_exists": "The resident-training gate receipts report component_status values that would, read naively, discharge several of these rows: paper_source_preflight PASS, train_multimodal_adapter PASS, train_multimodal_floor_contract PASS, native_goal_organ PASS, recursive_query_policy PASS, verifier_conditioned_update PASS. Every one of those verdicts is bound to artifact hashes that have since drifted from master, so none of them can be inherited as current.",

@@ -22,7 +22,7 @@
     "unaccounted_ids_neither_muon_nor_adamw": "140-184 (45 ids, contiguous)",
     "boundary_note": "layer 15's FF tensors are pids 140/141/142 -- exactly the first unaccounted ids; layer 15's own attention tensors (pids 136-139) ARE present. layers 16-19 (all 7 tensors each) are entirely absent. Contiguous global-index truncation, not scattered gaps.",
     "cross_check": "identical gap present in the earlier checkpoint step-00000730 (pre rung-1-stabilize) -- predates rung-1's own stabilize run",
-    "likely_cause": "commit 2445c4b 'fix: file-backed optimizer state to eliminate commit exhaustion' landed 2026-07-08T08:53:52-07:00 -- AFTER this checkpoint's write (manifest ts 20260703T155708Z). Checkpoint predates the exact fix that would have prevented a commit-exhaustion mid-write truncation."
+    "likely_cause": "commit 4b5de6c 'fix: file-backed optimizer state to eliminate commit exhaustion' landed 2026-07-08T08:53:52-07:00 -- AFTER this checkpoint's write (manifest ts 20260703T155708Z). Checkpoint predates the exact fix that would have prevented a commit-exhaustion mid-write truncation."
   },
   "verdict": "TRUE_GAP (b)",
   "reasoning": "Routing code confirmed uniform/unconditional (no construction-time exclusion for any layer). The saved optimizer state cuts off at a contiguous global param-index boundary consistent with a write-time truncation, not a per-layer routing decision. State for global param ids >=140 was never persisted in any checkpoint file that exists.",

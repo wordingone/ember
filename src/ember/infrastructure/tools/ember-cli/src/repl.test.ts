@@ -74,7 +74,7 @@ describe("AC1: welcome → Homescreen (not bare Text)", () => {
     expect(s).not.toContain(`"${welcomeContent}"`);
   });
 
-  // AC1 assertions superseded by the D4 homescreen battery landed in 5f1b7e5 (#160);
+  // AC1 assertions superseded by the D4 homescreen battery landed in 2a994a2 (#160);
   // updated to the D4 contract. Homescreen no longer nests WelcomeV2 (the D4 outer
   // titled panel replaced it — see logo-homescreen.ts's module docstring for why),
   // so the old "props include viewportWidth" evidence of nesting no longer applies;

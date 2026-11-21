@@ -3,7 +3,7 @@
   "ts": "20260709T123516Z",
   "auditor": "coordinator audit tick (2-hourly), receipts-only spot-verify pass",
   "board_ref": "ember-totality-20260709T121022Z (PR #551, STALE: pre-#549; post-#549 re-render in flight, same PR, lane boardrun37)",
-  "master_at_audit": "e042f6e322e6 (post #543,#548,#549,#547,#550)",
+  "master_at_audit": "29403a6f7005 (post #543,#548,#549,#547,#550)",
   "scope_note": "Delta-audit vs audit-20260709T102500Z: conditions whose ground truth moved since (C2 restore #549, eps0 landing #550, redaction chain #548/#547, board render custody). Full-board adversarial sweep deferred to the post-#549 render (in flight) \u2014 auditing the stale 121022Z snapshot per-condition would replay known-stale REDs.",
   "per_condition": {
     "C2": {

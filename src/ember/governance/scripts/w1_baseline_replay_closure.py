@@ -6,7 +6,7 @@
 
 Issue #735 names the ONE closure gap on the closest trustworthy salvage
 baseline in the program (W1 real random-init final-width control,
-w1-live-20260707T110231Z, commit 56a85a4, config 83bca6..., corpus
+w1-live-20260707T110231Z, commit 3bae7bb, config 83bca6..., corpus
 aa48f6ee...): the live run exited on match at step 50 WITHOUT ever saving a
 step50 checkpoint -- only the certified step25 resume checkpoint persists.
 
@@ -250,7 +250,7 @@ DEFAULT_CONTROL_STEP25_DIR = os.path.join(
 # receipt the launch/certification receipts CITE
 # (w2-heldout-decontam-20260707T055843Z.json) NEVER LANDED in git history --
 # only a CRASHED-20260707T034418Z sibling survives, in one worktree, never
-# committed. The file below IS the committed substitute: commit 5abbc54
+# committed. The file below IS the committed substitute: commit e259ffd
 # ("w2 decontam-batch regen", #118/#455) landed it and updated the stale
 # DECONTAM_RECEIPT_DEFAULT constant in w1_collapse_control_run.py. This is a
 # disclosed substitution, never a silent swap -- its identity claim is
@@ -267,7 +267,7 @@ PROVENANCE_NOTE_DECONTAM_SUBSTITUTION = (
     "history -- only a CRASHED-20260707T034418Z sibling survives, "
     "uncommitted, in one worktree. The substitute used here "
     "(w2-heldout-decontam-20260708T121128Z.json, landed in commit "
-    "5abbc54975f3e4c8efe6eaf77d9595a59201a3c5, 'w2 decontam-batch regen', "
+    "e259ffd4703159d9a62e1163ce5ed293607bc80a, 'w2 decontam-batch regen', "
     "#118/#455) is verified identical in the identity that matters: its "
     "batch_sha256 field is byte-equal to the launch-pinned eval-batch sha "
     "(91069e33b402b6a91267e59dfbeb02da96ddcbe683bc091817461fad79358929). "

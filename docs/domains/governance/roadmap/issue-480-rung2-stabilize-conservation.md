@@ -5,7 +5,7 @@ step-806/v8/v9 stabilization vehicle. Current-scale growth belongs to
 EMBER-05 issue #1119, optimizer work to #707, and resource/process custody to
 #898.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

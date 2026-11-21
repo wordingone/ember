@@ -172,7 +172,7 @@ class StalePageTests(Base):
         self.snapshot.write_text(json.dumps(payload), encoding='utf-8')
 
     def test_deliberate_red_valid_json_with_a_missing_status_is_stale_not_current(self):
-        # review of 82481add: the right schema_version and a loadable head passed freshness, then the page said CURRENT with no facts
+        # review of f7ca07d6: the right schema_version and a loadable head passed freshness, then the page said CURRENT with no facts
         self.rewrite_snapshot(lambda payload: payload.pop('status'))
         verdict = self.generate()
         self.assertEqual(verdict['state'], 'STALE')
@@ -219,7 +219,7 @@ class StalePageTests(Base):
             selected_continuation_head.current_head_sha256 = original
 
     def test_deliberate_red_a_snapshot_deleted_after_validation_is_stale_not_current(self):
-        # review of 3a481a02 (2340-1): freshness said CURRENT, the page then re-read the file, found it gone, and still said CURRENT
+        # review of 8aafec02 (2340-1): freshness said CURRENT, the page then re-read the file, found it gone, and still said CURRENT
         def head_reader_that_deletes_the_snapshot():
             self.snapshot.unlink()
             return H3

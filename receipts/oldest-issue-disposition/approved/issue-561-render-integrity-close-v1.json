@@ -10,7 +10,7 @@
       "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       "workstream_id": "EMBER-02A"
     },
-    "capture_sha256": "9015728ca35274427204b2fe8520ddb50dd6568dd63e690b95c5501c2fd144c6",
+    "capture_sha256": "271decc011e961e51e74922cfab8cca0e2a4f8f97099e8dc7f1b1e75675a1f53",
     "captured_at": "2026-07-30T17:55:49Z",
     "cursor": {
       "after_created_at": "2026-07-09T13:32:22Z",
@@ -1044,7 +1044,7 @@
         "url": "https://github.com/wordingone/ember/issues/650"
       }
     ],
-    "master_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+    "master_sha": "b86cf16e555d30a4c74e3259db9a694b1645c175",
     "open_issue_population": 153,
     "pagination": {
       "comments": [
@@ -1580,7 +1580,7 @@
       "issues_pre.json": "84082ccc7a889a5278d8ea4d893b8627528e42d3efafa7910cd0427b4298f861"
     }
   },
-  "capture_sha256": "9015728ca35274427204b2fe8520ddb50dd6568dd63e690b95c5501c2fd144c6",
+  "capture_sha256": "271decc011e961e51e74922cfab8cca0e2a4f8f97099e8dc7f1b1e75675a1f53",
   "deletion_or_issue_mutation_authority": "NOT_GRANTED",
   "disposition_counts": {
     "CLOSE": 1,
@@ -1588,15 +1588,15 @@
     "PARTIAL": 19,
     "SUPERSEDED": 0
   },
-  "master_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
-  "packet_sha256": "0eb135576af62c930d2160259d9f15de0a9ce5e83d83c17aba7e35cac59cddd4",
+  "master_sha": "b86cf16e555d30a4c74e3259db9a694b1645c175",
+  "packet_sha256": "1aaa9558ee06b73a2e3ef77aa38bb7c80f5ef55cdf59bc8c0bd9fcdd8d09a083",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
       "authority_review": {
         "citation": "https://github.com/wordingone/ember/pull/1218#issuecomment-5134336586",
         "review_provenance": "SELF_ONLY",
-        "reviewed_commit_sha": "3c75fb511aeffad0406d5bf8aada850982dd8299",
+        "reviewed_commit_sha": "2444b8a424f9ee8d0d1776080ab1ceda341f9f7c",
         "reviewer": "self-review-authority",
         "verdict": "PASS"
       },
@@ -1606,7 +1606,7 @@
           "blob_sha1": "c1aec625f9b5d092bef9451c3a09ccbb674453f3",
           "citation": "https://github.com/wordingone/ember/pull/1218#issuecomment-5134336586",
           "clean_checkout": true,
-          "commit_sha": "3c75fb511aeffad0406d5bf8aada850982dd8299",
+          "commit_sha": "2444b8a424f9ee8d0d1776080ab1ceda341f9f7c",
           "passed": true,
           "path": "tools/ember-cli/src/screens/repl-operator-surface.test.ts",
           "production_shaped": true,
@@ -1616,7 +1616,7 @@
           "blob_sha1": "c1aec625f9b5d092bef9451c3a09ccbb674453f3",
           "citation": "https://github.com/wordingone/ember/pull/1218",
           "clean_checkout": true,
-          "commit_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+          "commit_sha": "b86cf16e555d30a4c74e3259db9a694b1645c175",
           "passed": true,
           "path": "tools/ember-cli/src/screens/repl-operator-surface.test.ts",
           "production_shaped": true,
@@ -1626,7 +1626,7 @@
           "blob_sha1": "3e8e10db119eb5980529cf091cb1f342a6878fdc",
           "citation": "https://github.com/wordingone/ember/actions/runs/30567790368",
           "clean_checkout": true,
-          "commit_sha": "66322cbc6d2ccd71a13b285de9bbe17fc490b1d2",
+          "commit_sha": "b86cf16e555d30a4c74e3259db9a694b1645c175",
           "passed": true,
           "path": ".github/workflows/ci-main.yml",
           "production_shaped": true,
@@ -1636,7 +1636,7 @@
       "disposition": "CLOSE",
       "issue_number": 561,
       "issue_url": "https://github.com/wordingone/ember/issues/561",
-      "receipt_sha256": "8c63267216c81ee2c119b3bc7816b0b90f22ee461a4ceef8a14812cb8a21b3e7",
+      "receipt_sha256": "cddb9301705020b3fd48111568b81afb90b897e17285413a5844e28733bc1714",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,

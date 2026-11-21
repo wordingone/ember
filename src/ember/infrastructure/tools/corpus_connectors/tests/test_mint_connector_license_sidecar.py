@@ -400,7 +400,7 @@ def test_derived_receipt_survives_canonical_successor_mint_and_index_reopen(tmp_
     output = tmp_path / "tranche7"
     minted = minter.mint_successor(
         repo=ROOT,
-        source_commit="4a9b874d8a7418265f0f727ccecae59cf1de70f4",
+        source_commit="ac27b5826c7954e71680f6ad6e3506c70d550aa8",
         source_custody=custody,
         predecessor_receipt_name="tranche3-admission-receipt.json",
         predecessor_receipt_sha256=predecessor_sha,

@@ -108,7 +108,7 @@ def _make_synthetic_shard_receipt(tmpdir: str) -> tuple[str, dict]:
 
 
 def test_fcalib_default_mode_equivalence():
-    """Old (6675e2a) and new fcalib produce receipt-equivalent output (without flag).
+    """Old (08d8f4e) and new fcalib produce receipt-equivalent output (without flag).
 
     Proof that PR #506 changes (finalize_source signature) are behavior-preserving
     when --emit-boilerplate-keys is NOT set. Runs old and new on SAME fixture,
@@ -119,15 +119,15 @@ def test_fcalib_default_mode_equivalence():
         receipt_path, _ = _make_synthetic_shard_receipt(tmpdir)
         shard_dir = tmpdir
 
-        # Extract OLD fcalib from 6675e2a (master pre-PR)
+        # Extract OLD fcalib from 08d8f4e (master pre-PR)
         old_fcalib_result = subprocess.run(
-            ["git", "show", "6675e2a:src/ember/governance/scripts/heldout_v21_fcalib.py"],
+            ["git", "show", "08d8f4e:src/ember/governance/scripts/heldout_v21_fcalib.py"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True
         )
         assert old_fcalib_result.returncode == 0, (
-            f"Failed to extract old fcalib from 6675e2a: {old_fcalib_result.stderr}"
+            f"Failed to extract old fcalib from 08d8f4e: {old_fcalib_result.stderr}"
         )
 
         old_fcalib_path = os.path.join(tmpdir, "heldout_v21_fcalib_old.py")
@@ -155,7 +155,7 @@ def test_fcalib_default_mode_equivalence():
             "--commit-floor-gib=0.1",
         ], cwd=REPO_ROOT, capture_output=True, text=True, env=env_old)
 
-        print(f"\n[OLD] 6675e2a fcalib run")
+        print(f"\n[OLD] 08d8f4e fcalib run")
         print(f"  Return code: {old_result.returncode}")
         if old_result.returncode != 0:
             print(f"  Stderr: {old_result.stderr}")
@@ -233,7 +233,7 @@ def test_fcalib_default_mode_equivalence():
             f"New: {json.dumps(normalized_new, indent=2)}"
         )
 
-        print(f"[PASS] Old (6675e2a) and new fcalib produce equivalent receipts")
+        print(f"[PASS] Old (08d8f4e) and new fcalib produce equivalent receipts")
         print(f"  Old receipt: {out_old}")
         print(f"  New receipt: {out_new}")
         print(f"  Both: status={receipt_new.get('status')}, sources={sorted(receipt_new.get('per_source', {}).keys())}")

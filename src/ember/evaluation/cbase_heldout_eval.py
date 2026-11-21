@@ -518,7 +518,7 @@ def build_receipt(*,checkpoint: Mapping[str,Any],checkpoint_identity: Mapping[st
     return {"schema":"cbase-heldout-eval/v1","issue":"#760","issue_refs":["#760","#1433"],"ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"scale":slice_manifest["scale"],"checkpoint":dict(checkpoint),"checkpoint_identity":dict(checkpoint_identity),"slice_manifest_sha256":slice_manifest_sha256,"evaluation":dict(evaluation),"excluded_source_ranges_verified":[list(r) for r in excluded_source_ranges],"api_spend_usd":0.0,"paid_api_surface_used":False,"claim_boundary":"heldout NLL/BPB measurement only; no capability, same-quality, or milestone-completion claim","markers":["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]}
 
 FROZEN_SLICE_PATH = ROOT / "manifests" / "cbase-heldout-slice-v1.json"
-FROZEN_SLICE_SHA256 = "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14"
+FROZEN_SLICE_SHA256 = "eadcfb9018239946ac91fa859c4cb92f9e8ecd45d1e0784b196987684e075a62"
 CHECKPOINT_PINS = {
     "step25": {"model.pt":"3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac","optimizer.pt":"d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0","rng.pt":"c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379","manifest.json":"3bd76c858576a3a0ac48bd2eecf3d33702116874529be640e627d4558f45d138"},
     "step50": {"model.pt":"8055a9f4b67711b8f1103dcf76228c5f303ba6d6170af17243b17b7c5289ea54","optimizer.pt":"324b988f73b8741bc3b04c4a18bf0823ec271d56ecc1c6608b269121524da250","rng.pt":"c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379","manifest.json":"af828fd6388c7d0c00ec688bf291f474b0158c308a022f3d19fffc58b6b68504"},
@@ -526,7 +526,7 @@ CHECKPOINT_PINS = {
 V5_CHECKPOINT_KIND = "v5"
 V5_MINIMUM_GLOBAL_STEP = 100
 
-HISTORICAL_EVAL_MODEL_CONTRACT = {"public_master":"db571b310b0ad20f8b257760cdc7c7ee69714929","w1_model_source_blob":"3dc627d49c5e48ceb8ab0c028eab68acb74e4f61","timeshare_source_blob":"ea367b382b975afd7afecbe86b6efa1148bd76ad","attention_heads":16,"max_sequence_length":1024}
+HISTORICAL_EVAL_MODEL_CONTRACT = {"public_master":"b9e4e72879ed70bb2e1655ee74db3dd4e76d6433","w1_model_source_blob":"3dc627d49c5e48ceb8ab0c028eab68acb74e4f61","timeshare_source_blob":"ea367b382b975afd7afecbe86b6efa1148bd76ad","attention_heads":16,"max_sequence_length":1024}
 
 def _build_read_only_eval_model(identity: Mapping[str,Any], mtp_count: int, device: str, seed: int):
     import torch

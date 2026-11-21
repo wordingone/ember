@@ -5,7 +5,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the prohibited historical 102M model and
 under canonical EMBER-02 issue #1116 and may only be tested on an admissible
 current network with at least 3B parameters.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

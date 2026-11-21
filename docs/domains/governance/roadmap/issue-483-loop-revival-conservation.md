@@ -5,7 +5,7 @@ conditional on accepted #1117/#1120 transfers, exact-head independent review,
 fresh required checks, merge and terminal source comment. No Rung-B or autonomy
 completion is claimed.
 
-Source master: `834a4dbffc8844904bdf2c365f17f2fdd9059eb6`.
+Source master: `2278d9728a8f62df73672c362b615c4d3ef9a342`.
 
 Accepted transfers:
 
@@ -18,7 +18,7 @@ Accepted transfers:
 
 Preserve tracked receipt
 `receipts/ember-d3-native-loop/d3-native-loop-20260708T221708Z.json`, blob
-`40b6bc9daa7186d18581af7746535a316da9b11b`, and exact A/B/C/Deleted scores
+`0656705f04a3e69f3007a573040c52239d18ec17`, and exact A/B/C/Deleted scores
 `0.054167/0.399125/1.0/0.054167`. It is positive, deletion-sensitive,
 goal-organ-load-bearing CPU expressivity evidence only. Actual rows are offset
 20/length 12 while the stale per-row label says offset 8. It proves no full

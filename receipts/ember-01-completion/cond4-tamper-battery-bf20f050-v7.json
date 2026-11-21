@@ -1040,7 +1040,7 @@
     "historical_config": {
       "repository_path": "configs/ember-restart-3b.json",
       "sha256": "559959894dc603f9fbccbb091b3a084fef23b58d29add05efd14799a9a298ae0",
-      "source_commit": "aa3ceb915dd8bdd93b6f0a72e92479825e616a03"
+      "source_commit": "ad321bdcbaca9b6cfe8b45898dfbc8128ae9040e"
     },
     "source_receipt_path": "receipts/ember-01-completion/cond4-tamper-battery-bf20f050-v2.json",
     "source_receipt_schema": "ember-cond4-tamper-battery-receipt-v2",

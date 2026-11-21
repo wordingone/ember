@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Exact base is `b4084ac442a3f70c38f1bec0a0bd480512b7e145` plus the reviewed foreign-pressure plan changes.
+- Exact base is `c6519c37affbb96ff89a2f21f544d9ecefaae08d` plus the reviewed foreign-pressure plan changes.
 - Only an exact persisted PID/creation token/executable identity that is a current member of the exact persisted named Ember Lab Job Object is controllable.
 - Persist the decision receipt before termination and repeat identity/membership verification immediately before `TerminateJobObject`.
 - Any PID reuse, missing Job Object, lost membership, lease/state change, or unreadable identity refuses termination and retains a fenced/uncertain record.

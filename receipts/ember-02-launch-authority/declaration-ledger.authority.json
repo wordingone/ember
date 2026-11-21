@@ -6,7 +6,7 @@
   },
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "receipts/ember-02-launch-authority/declaration-ledger.jsonl",
-  "artifact_sha256": "d487c96ae88d06e57ba076ae5687bc049e78e0c005cb37f18f47cc833def1740",
+  "artifact_sha256": "fe4726d7835421ba855f3b1d4dab0f12264f237a6062eb02a21ee21049125330",
   "ticket": "1401",
   "ts": "2026-08-04T20:15:00Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",

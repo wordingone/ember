@@ -10,7 +10,7 @@
       "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       "workstream_id": "EMBER-02A"
     },
-    "capture_sha256": "f7c2c08d549d9ead5ad6c9643f44dc185d8c94ec0276c0bc7e098ac29b5d27e0",
+    "capture_sha256": "3971c7dc93defca96f165048f5f9128f46747bbab473180812ccea4d55d799f2",
     "captured_at": "2026-07-30T12:54:03Z",
     "cursor": {
       "after_created_at": "2026-07-11T01:29:33Z",
@@ -1236,7 +1236,7 @@
         "url": "https://github.com/wordingone/ember/issues/873"
       }
     ],
-    "master_sha": "40bca36516e8fce6ffad48f2036f743f433dc375",
+    "master_sha": "a4770d7e2235950b5b6608c57134268d96243614",
     "open_issue_population": 154,
     "pagination": {
       "comments": [
@@ -1772,7 +1772,7 @@
       "issues_pre.json": "fd5f54b860287ce6bc1408c837ffeeaf41a2286186ab7c68a27a86a8c91e49bc"
     }
   },
-  "capture_sha256": "f7c2c08d549d9ead5ad6c9643f44dc185d8c94ec0276c0bc7e098ac29b5d27e0",
+  "capture_sha256": "3971c7dc93defca96f165048f5f9128f46747bbab473180812ccea4d55d799f2",
   "deletion_or_issue_mutation_authority": "NOT_GRANTED",
   "disposition_counts": {
     "CLOSE": 1,
@@ -1780,8 +1780,8 @@
     "PARTIAL": 19,
     "SUPERSEDED": 0
   },
-  "master_sha": "40bca36516e8fce6ffad48f2036f743f433dc375",
-  "packet_sha256": "31a13aa18bd7dd6a7554d114b1192273aee94d70f0098fe0bf2460b68deb916f",
+  "master_sha": "a4770d7e2235950b5b6608c57134268d96243614",
+  "packet_sha256": "d4a5f7cbd1ffcdde801f93806a61d6fde8347fe9fbb1bafdce62202122f18500",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
@@ -2547,7 +2547,7 @@
       "authority_review": {
         "citation": "https://github.com/wordingone/ember/pull/1207#issuecomment-5130759639",
         "review_provenance": "SELF_ONLY",
-        "reviewed_commit_sha": "407d85c506d59cd6870fc960fd6d8d9b69639eb0",
+        "reviewed_commit_sha": "01197e444e68007f7054f503375353a42cd8e58d",
         "reviewer": "self-review-authority",
         "verdict": "PASS"
       },
@@ -2557,7 +2557,7 @@
           "blob_sha1": "eb26fb917d731fbfec502d6fe689c8138b6bca7e",
           "citation": "https://github.com/wordingone/ember/pull/1200",
           "clean_checkout": true,
-          "commit_sha": "5dec47f39053c398e5ec215029e321b533f2f1e2",
+          "commit_sha": "21f6e40253a7acaf7e54ac4f91f7fa6d679e6bb5",
           "passed": true,
           "path": "scripts/issue_close_sweep.py",
           "production_shaped": true,
@@ -2567,7 +2567,7 @@
           "blob_sha1": "4ff7ed081d70e0052eb907399e43f334b85f826a",
           "citation": "https://github.com/wordingone/ember/pull/1207#issuecomment-5130759639",
           "clean_checkout": true,
-          "commit_sha": "407d85c506d59cd6870fc960fd6d8d9b69639eb0",
+          "commit_sha": "01197e444e68007f7054f503375353a42cd8e58d",
           "passed": true,
           "path": ".github/workflows/issue-close-sweep.yml",
           "production_shaped": true,
@@ -2577,7 +2577,7 @@
           "blob_sha1": "4ff7ed081d70e0052eb907399e43f334b85f826a",
           "citation": "https://github.com/wordingone/ember/issues/744#issuecomment-5130798074",
           "clean_checkout": true,
-          "commit_sha": "d30cb9dfc87f1502ead2a9749519b74e23ce5f7a",
+          "commit_sha": "320388d8927fb0ecc74866039f29cef209301b8b",
           "passed": true,
           "path": ".github/workflows/issue-close-sweep.yml",
           "production_shaped": true,
@@ -2587,7 +2587,7 @@
           "blob_sha1": "7a23cf2a1ea4443045866db9a8db35e3deacde46",
           "citation": "https://github.com/wordingone/ember/actions/runs/30543014723",
           "clean_checkout": true,
-          "commit_sha": "d30cb9dfc87f1502ead2a9749519b74e23ce5f7a",
+          "commit_sha": "320388d8927fb0ecc74866039f29cef209301b8b",
           "passed": true,
           "path": "scripts/issue_close_sweep.py",
           "production_shaped": true,
@@ -2597,7 +2597,7 @@
       "disposition": "CLOSE",
       "issue_number": 805,
       "issue_url": "https://github.com/wordingone/ember/issues/805",
-      "receipt_sha256": "8a22c865d3a2973f85b37ad1c9c9b895f7180c0265342b7f30344a4bcad6445c",
+      "receipt_sha256": "30085658430e396c4ee8f85d9d60fc779c10a8ad1109e5dad17b2e50b8573b6c",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,

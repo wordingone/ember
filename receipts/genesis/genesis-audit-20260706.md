@@ -3,7 +3,7 @@
 Auditor: genesisaudit (read-only). Scope: every live training lineage under
 `models/` in the repository working tree, graded against clause 3 (CREATION) of
 the INVARIANT.md candidate text (v2 draft). Repo state audited: `public/master`
-(HEAD `15e467e9279222a4da5bc21925289ffe7d5150cb`, fetched from
+(HEAD `004525d8edc5907812edc75357ebf2626e14b66b`, fetched from
 `https://github.com/wordingone/ember.git` 2026-07-06) for tracked
 scripts/docs/receipts, plus the on-disk `models/` and `receipts/` trees (which
 are `.gitignore`d for the weight files, `.gitignore:19` = `models/`) as they

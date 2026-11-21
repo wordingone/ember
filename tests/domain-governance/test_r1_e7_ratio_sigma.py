@@ -85,7 +85,7 @@ def test_compose_e7_v2_binds_inputs_prereg_and_no_overwrite(tmp_path: Path) -> N
     thresholds = ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
     prereg = {
         "document": "docs/domains/governance/spec/ember02-preregistration-v1.md",
-        "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+        "pin": "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b",
         "thresholds_sha256": _sha(thresholds),
     }
     v1 = tmp_path / "r1-e7-v1.json"

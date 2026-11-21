@@ -6,7 +6,7 @@
 
 Date: 2026-08-17 PT
 Source authority: issues #1719 and #1581 at Ember commit
-`28bbe0ff912a7e7a12ab34c0acdba8959caa2a92`.
+`9cbd6dbe3aa7078340cbf09380303a30f887eb04`.
 
 ## Decision and non-claims
 

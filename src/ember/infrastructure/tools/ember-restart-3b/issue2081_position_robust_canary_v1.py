@@ -60,8 +60,8 @@ AA_PAIR_ORDERS = (("control", "treatment"), ("treatment", "control")) * 4
 # (excluded + one W-update burn-in window + one measured window) so both A/A
 # arms stay on one cursor and their windows cover identical records.
 #
-# Why there is no convergence gate.  Probe 2f4532c0 (24 warm updates) and probe
-# a6d2c3fd (40 warm updates, control arm) both receipted STEADY-STATE
+# Why there is no convergence gate.  Probe 7629b046 (24 warm updates) and probe
+# d08cce83 (40 warm updates, control arm) both receipted STEADY-STATE
 # per-update seconds spread uniformly over 0.23-0.41 s (CV 0.17, tokens fixed
 # at 512, no drift: window medians 1536 / 1496 / 1831 / 1392 / 1689 tokens/s).
 # A readiness rule that waits for two 8-sample window statistics to agree
@@ -85,7 +85,7 @@ AA_WARM_BURN_IN_UPDATES = AA_WARM_BURN_IN_WINDOWS * AA_WARM_WINDOW_UPDATES
 # Retained name: the receipt/test field "warm_updates_to_stability" counts the
 # fixed burn-in.
 AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = AA_WARM_BURN_IN_UPDATES
-# Probe 1432ec91 (v3 schema) was refused LOSS_DIVERGENCE_REFUSED:7 with an absolute
+# Probe 5a683491 (v3 schema) was refused LOSS_DIVERGENCE_REFUSED:7 with an absolute
 # gap of 0.001026 at loss ~6.7: the A/A row handed the base adjudicator the LAST
 # measured update's loss, so 25 updates of kernel-order drift were judged against
 # the base's same-start tolerance (its row loss is the FIRST update from the common
@@ -483,7 +483,7 @@ def _aa_constants() -> dict[str, object]:
         ),
         "aa_warm_readiness_criterion": (
             "fixed burn-in of one W-update window after the excluded post-switch"
-            " update; no convergence gate (probes 2f4532c0 and a6d2c3fd receipted"
+            " update; no convergence gate (probes 7629b046 and d08cce83 receipted"
             " the per-update spread as steady state)"
         ),
     }
@@ -568,7 +568,7 @@ def fast_update_census(
 ) -> dict[str, object]:
     """Updates whose event seconds fall under FRACTION of the median seconds.
 
-    Diagnostic only: the 2f4532c0 probe showed real applied updates completing
+    Diagnostic only: the 7629b046 probe showed real applied updates completing
     in ~1/3 of the median time.  They are counted and named, never dropped.
     """
     seconds = [
@@ -609,7 +609,7 @@ def warm_burn_in_complete(
 ) -> bool:
     """Exactly the fixed burn-in, every update a valid timed record.
 
-    No convergence criterion: probes 2f4532c0 and a6d2c3fd receipted that the
+    No convergence criterion: probes 7629b046 and d08cce83 receipted that the
     per-update spread (0.23-0.41 s at 512 tokens) is steady state, so any rule
     waiting for consecutive window statistics to agree refuses forever.
     """

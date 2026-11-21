@@ -173,7 +173,7 @@ consumers additionally have hand-reviewed semantics bound by exact root, path,
 category, and evidence hash in `consumer-semantics-v1.json`.
 
 The preserved multi-root discovery used public master
-`1d7c2d2ff13be8bb10ce5e0b731bd190d8e5d138`,
+`ab4c50752992cba4e2e091f5806b203d2d4252a5`,
 private-backup default `054d6e8d94ea218c3ad3b177df790602fe075b01`,
 the live execution tree, benchmark assets, two role-labelled coordination
 evidence surfaces, the current EMBER-01C exclusive namespace as a separate

@@ -41,7 +41,7 @@ def _trace() -> dict[str, object]:
         "schema_version": "q2-host-commit-measurement-v1",
         "job_id": "q2-actual-update-001",
         "measurement_mode": "bounded_dry_run",
-        "source_commit": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+        "source_commit": "744ff3e134e10ff8d13ee929ac2686daaebbffb1",
         "process": {"pid": 4312, "started_at_ms": 1_000, "ended_at_ms": 2_000, "exit_code": 0},
         "bindings": {
             "measurement_tool_sha256": _sha("tool"),

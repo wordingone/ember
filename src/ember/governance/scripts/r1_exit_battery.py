@@ -145,7 +145,7 @@ from r1_e8_validator import validate_e8
 
 ISSUE_REF = "#1463"
 PREREG_DOC = "docs/domains/governance/spec/ember02-preregistration-v1.md"
-PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
+PREREG_PIN = "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
 RUN_ROOT_LAYOUT_SPEC_PATH = "docs/domains/governance/spec/ember-run-root-layout-v1.md"
 RUN_ROOT_LAYOUT_SPEC = RUN_ROOT_LAYOUT_SPEC_PATH

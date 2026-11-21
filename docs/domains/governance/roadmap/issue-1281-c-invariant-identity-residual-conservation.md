@@ -5,7 +5,7 @@ and #1281 bridge remaining public, this carrier receiving independent exact-head
 PASS, fresh required-green checks, and a clean merge. This status retires only
 the duplicate issue carrier. It does not make C-INV green or cure any row.
 
-Public-master basis: `8a4e2e46bc1d708bc3fd86ec7c42a10521cea988`.
+Public-master basis: `432879dd68b59eb3bd02bcb6c8ba4c64d985d317`.
 
 Source: https://github.com/wordingone/ember/issues/1281
 
@@ -35,11 +35,11 @@ is inherited from #700's closure.
 ## Exact current RED census derivation
 
 The #700 carrier's direct basis result at
-`c45ec200550a7d85264b8cae4d7c5cf622e9c90a` was
+`5d2d1bc7497fcbea66f9bf99aad986fb3ef7fa70` was
 `1,131/294/153/101/31/0/9` for scanned/post-genesis/stamped/errata/
 anti-laundering-superseded/uncovered-pre-cutoff/uncovered-post-cutoff.
 
-From that basis to `8a4e2e46bc1d708bc3fd86ec7c42a10521cea988`, the only
+From that basis to `432879dd68b59eb3bd02bcb6c8ba4c64d985d317`, the only
 new tracked receipt is
 `receipts/hygiene/issue-488-first-cleanup-v1.json`; it has the exact invariant
 stamp and stable ticket `EMBER-488-HYGIENE`. The C-INV probe, errata,

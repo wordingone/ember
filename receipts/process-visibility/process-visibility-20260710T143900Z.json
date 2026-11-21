@@ -8,37 +8,37 @@
    "pr": 680,
    "what": "MTP parameter-accounting errata markers (realized 433,890,304 vs certified n_mtp=0 368,354,304)",
    "mergedAt": "2026-07-10T14:20:47Z",
-   "sha": "6d4d3c04"
+   "sha": "0f8330f7"
   },
   {
    "pr": 678,
    "what": "#485 rung-1 reverification: organism activity already shipped+live, no rebuild (three-layer receipt)",
    "mergedAt": "2026-07-10T14:23:03Z",
-   "sha": "abb37ed2"
+   "sha": "24e6b4ce"
   },
   {
    "pr": 673,
    "what": "DT1 PASS supersession markers - void as learning/GDN evidence (refs #670)",
    "mergedAt": "2026-07-10T14:22:59Z",
-   "sha": "2f5a2ace"
+   "sha": "3210a5c5"
   },
   {
    "pr": 669,
    "what": "Q2 bridge CPU leg: rho w/ empirical rotation null; verdict SIBLING_NON_NULL_ORIENTATION",
    "mergedAt": "2026-07-10T13:55:42Z",
-   "sha": "dcc79f4b"
+   "sha": "ad1c28bf"
   },
   {
    "pr": 668,
    "what": "lineage gate fail-closed on malformed deviation dates (unblocked AC2/v8 resume path)",
    "mergedAt": "2026-07-10T13:18:42Z",
-   "sha": "bce8fc8f"
+   "sha": "b97e7ba0"
   },
   {
    "pr": 664,
    "what": "corpus connector CLIs (HF/Kaggle/arXiv/OpenReview/HTTP) with L4 receipts",
    "mergedAt": "2026-07-10T13:12:09Z",
-   "sha": "073adf38"
+   "sha": "783a639d"
   },
   {
    "pr": 661,
@@ -50,199 +50,199 @@
    "pr": 660,
    "what": "board render post-#639 cure",
    "mergedAt": "2026-07-10T06:26:41Z",
-   "sha": "0351594b"
+   "sha": "e613bf02"
   },
   {
    "pr": 647,
    "what": "receipt emitters: artifact-root token/hash only, never local paths",
    "mergedAt": "2026-07-10T05:55:16Z",
-   "sha": "7702907a"
+   "sha": "548f871b"
   },
   {
    "pr": 646,
    "what": "C5(c) W-statistic readout grammar fix",
    "mergedAt": "2026-07-10T05:52:05Z",
-   "sha": "2d4bfc9e"
+   "sha": "e562c922"
   },
   {
    "pr": 645,
    "what": "A1 machinery cure: true-tokenizer rescan + quarantine + consumer",
    "mergedAt": "2026-07-10T05:51:01Z",
-   "sha": "25c6ffc8"
+   "sha": "da217143"
   },
   {
    "pr": 644,
    "what": "test_owned_core_widen config path fix",
    "mergedAt": "2026-07-10T05:42:23Z",
-   "sha": "242f84ac"
+   "sha": "c8a4ed4e"
   },
   {
    "pr": 643,
    "what": "rider-A2 fresh-seed replication receipt",
    "mergedAt": "2026-07-10T05:40:48Z",
-   "sha": "55a356bc"
+   "sha": "1e8c4a5b"
   },
   {
    "pr": 641,
    "what": "F2 instance commitment + verifier",
    "mergedAt": "2026-07-10T05:21:16Z",
-   "sha": "47f39fbe"
+   "sha": "5d7f160a"
   },
   {
    "pr": 640,
    "what": "O5 run-ledger hardening + launcher binding",
    "mergedAt": "2026-07-10T05:12:44Z",
-   "sha": "93c78775"
+   "sha": "02ae1a79"
   },
   {
    "pr": 638,
    "what": "board totality re-render post 619-635",
    "mergedAt": "2026-07-10T04:50:55Z",
-   "sha": "ea459564"
+   "sha": "64f74838"
   },
   {
    "pr": 637,
    "what": "stabilize v9 cure: R2/R3/R4 + counters + banked AC2 pace-smoke",
    "mergedAt": "2026-07-10T06:16:30Z",
-   "sha": "564886a8"
+   "sha": "7acba56d"
   },
   {
    "pr": 636,
    "what": "board totality re-render post 619-624",
    "mergedAt": "2026-07-10T04:39:12Z",
-   "sha": "c7c1ce95"
+   "sha": "806dbc01"
   },
   {
    "pr": 635,
    "what": "activity-feed summarizer: real actor/target only on kill-receipt rows",
    "mergedAt": "2026-07-10T04:33:56Z",
-   "sha": "46a29515"
+   "sha": "2327d650"
   },
   {
    "pr": 634,
    "what": "R_spectral null-model legs (vacuity check, real null, spectral non-equivalence)",
    "mergedAt": "2026-07-10T04:31:47Z",
-   "sha": "838e2252"
+   "sha": "855e80de"
   },
   {
    "pr": 633,
    "what": "C-BASE probe-root artifact visibility per frozen spec",
    "mergedAt": "2026-07-10T04:30:07Z",
-   "sha": "4f83d5b1"
+   "sha": "0c9bdb6b"
   },
   {
    "pr": 632,
    "what": "MDE paired-covariance cure per disposition",
    "mergedAt": "2026-07-10T04:25:32Z",
-   "sha": "dd4c14fa"
+   "sha": "bf605286"
   },
   {
    "pr": 624,
    "what": "C(-1) spend-declaration annex for uncovered decisive receipts",
    "mergedAt": "2026-07-10T01:24:35Z",
-   "sha": "c5631315"
+   "sha": "69467175"
   },
   {
    "pr": 623,
    "what": "C-INV append-only errata path per frozen spec",
    "mergedAt": "2026-07-10T01:22:49Z",
-   "sha": "12cccecb"
+   "sha": "e3cc31bd"
   },
   {
    "pr": 622,
    "what": "board refresh 20260710c",
    "mergedAt": "2026-07-10T01:30:36Z",
-   "sha": "45fee551"
+   "sha": "761a9dda"
   },
   {
    "pr": 621,
    "what": "response_rendered fires on actual render, not preamble",
    "mergedAt": "2026-07-10T01:16:36Z",
-   "sha": "aae1579a"
+   "sha": "bd36dd02"
   },
   {
    "pr": 619,
    "what": "stabilize leg1: commit-margin governor + grad memmap frontload",
    "mergedAt": "2026-07-10T01:15:55Z",
-   "sha": "ddf71554"
+   "sha": "4d6ae118"
   },
   {
    "pr": 618,
    "what": "C-GROW measured flop_saving receipt",
    "mergedAt": "2026-07-10T01:00:40Z",
-   "sha": "0b2940ce"
+   "sha": "2183ef5a"
   },
   {
    "pr": 617,
    "what": "C-IND legs IND-5/IND-3/IND-4 executed receipts",
    "mergedAt": "2026-07-10T00:56:18Z",
-   "sha": "5a0f4416"
+   "sha": "861f003e"
   },
   {
    "pr": 614,
    "what": "EMBER_GPU_FREE=1 precedence over persisted endpoint",
    "mergedAt": "2026-07-10T00:38:56Z",
-   "sha": "d10de3fe"
+   "sha": "62ed4d61"
   },
   {
    "pr": 613,
    "what": "(see PR record)",
    "mergedAt": "2026-07-10T00:30:39Z",
-   "sha": "b7382b94"
+   "sha": "ee8f7104"
   },
   {
    "pr": 610,
    "what": "(see PR record)",
    "mergedAt": "2026-07-10T00:38:24Z",
-   "sha": "a17f6ff2"
+   "sha": "ab67e74b"
   },
   {
    "pr": 609,
    "what": "(see PR record)",
    "mergedAt": "2026-07-10T00:09:02Z",
-   "sha": "d68f869e"
+   "sha": "acf1226a"
   },
   {
    "pr": 608,
    "what": "(see PR record)",
    "mergedAt": "2026-07-10T00:08:35Z",
-   "sha": "411d35e5"
+   "sha": "4423ec97"
   },
   {
    "pr": 607,
    "what": "(see PR record)",
    "mergedAt": "2026-07-09T23:52:39Z",
-   "sha": "964a997c"
+   "sha": "1f59a632"
   },
   {
    "pr": 606,
    "what": "(see PR record)",
    "mergedAt": "2026-07-09T23:56:25Z",
-   "sha": "9b7a2c61"
+   "sha": "9d21f55e"
   },
   {
    "pr": 605,
    "what": "(see PR record)",
    "mergedAt": "2026-07-10T00:38:40Z",
-   "sha": "4698797f"
+   "sha": "01842976"
   },
   {
    "pr": 604,
    "what": "(see PR record)",
    "mergedAt": "2026-07-09T23:38:48Z",
-   "sha": "7be0b283"
+   "sha": "dc145136"
   },
   {
    "pr": 603,
    "what": "(see PR record)",
    "mergedAt": "2026-07-09T23:49:45Z",
-   "sha": "9249cec9"
+   "sha": "e1c71d0b"
   },
   {
    "pr": 601,
    "what": "(see PR record)",
    "mergedAt": "2026-07-09T23:20:54Z",
-   "sha": "782796ce"
+   "sha": "38e815b9"
   }
  ],
  "prs_closed_unmerged": [

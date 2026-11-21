@@ -179,7 +179,7 @@ from ember_restart_eval_raw_forward import (  # noqa: E402
 
 _TRACKED_TOKENIZER_SOURCE = resolve_repository_authority(ROOT, "tokenizer").path
 _CHEAP_PROBE_SUITE_SCHEMA = "ember02-r1-r2-cheap-probe-suite/v1"
-_CHEAP_PROBE_SUITE_SHA256 = "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3"
+_CHEAP_PROBE_SUITE_SHA256 = "1248b2bd4204f3fef6372f28dfb0603917f0045f174423f626d564a74c2106eb"
 _TOKENIZER_FREEZE_RECEIPT = (
     ROOT / "receipts" / "tokenizer-freeze-20260611T154111Z.json"
 )

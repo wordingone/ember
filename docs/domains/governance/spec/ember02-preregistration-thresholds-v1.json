@@ -3,7 +3,7 @@
   "frozen": true,
   "change_control": "tighten-only",
   "ratification": "independent ratification pass 1 applied (E-A..E-G); see source document section 0",
-  "ember_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+  "ember_pin": "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b",
   "source_document": "ember02-preregistration-v1.md",
   "sigma_definition": "sigma_seed(m): pooled standard deviation of frozen probe metric m across independent-seed replicas at matched step counts, measured at R1 scale with >= T-07 seeds, filed as receipt R1-E7. Substituting measured sigma values into F-* formulas is mechanical and receipted, not an amendment.",
   "sigma_credit_definition": "sigma_credit(m) = max(sigma_seed(m) where R1-E7 measures m, sigma_eval(m)). sigma_eval(m): per-benchmark evaluation-variance bound - item-level nonparametric bootstrap standard error (10000 resamples) or exact binomial standard error for accuracy-type metrics - computed from and receipted with the frozen eval itself. Max widens the band, the stricter direction for credit predicates. (E-C)",

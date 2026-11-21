@@ -9,19 +9,19 @@
     {
       "pr": 721,
       "mergedAt": "2026-07-10T22:02:58Z",
-      "sha": "7667c6d",
+      "sha": "65e30d3",
       "what": "feat: #702 axis-3 attribution profiling runner"
     },
     {
       "pr": 720,
       "mergedAt": "2026-07-10T21:25:06Z",
-      "sha": "fa7eb0c",
+      "sha": "9157f38",
       "what": "probe-harden: C-BASE clause-(d) verdict binding + C-MANIFEST denominator regex"
     },
     {
       "pr": 719,
       "mergedAt": "2026-07-10T22:03:01Z",
-      "sha": "ab70b30",
+      "sha": "e22cf65",
       "what": "fix: C(-1) api_spend_usd declaration - 4 decisive receipts + emitter"
     },
     {
@@ -33,97 +33,97 @@
     {
       "pr": 713,
       "mergedAt": "2026-07-10T20:30:17Z",
-      "sha": "0c0f664",
+      "sha": "bcdcd12",
       "what": "chore: corpus census - 11-domain floor coverage receipt"
     },
     {
       "pr": 712,
       "mergedAt": "2026-07-10T19:52:34Z",
-      "sha": "3d2c681",
+      "sha": "286118a",
       "what": "fix: registry-gate relpath emitter + receipt row repair (#710 cure)"
     },
     {
       "pr": 709,
       "mergedAt": "2026-07-10T18:54:57Z",
-      "sha": "36011d0",
+      "sha": "03ce455",
       "what": "docs: barrier map axis-4 errata - FACTOR-1 primary (v2)"
     },
     {
       "pr": 706,
       "mergedAt": "2026-07-10T18:28:10Z",
-      "sha": "866e634",
+      "sha": "3955cf1",
       "what": "docs: barrier program - six-axis attack map + audit receipts"
     },
     {
       "pr": 699,
       "mergedAt": "2026-07-10T18:02:42Z",
-      "sha": "9bc79a7",
+      "sha": "5141fbe",
       "what": "probe-harden: C-EFF execution-binding + C-GROW field-read (refs #683)"
     },
     {
       "pr": 698,
       "mergedAt": "2026-07-10T18:00:06Z",
-      "sha": "007d53b",
+      "sha": "540191d",
       "what": "fix: C-INV post-cutoff residuals - emitter stamping + supersession"
     },
     {
       "pr": 695,
       "mergedAt": "2026-07-10T17:40:50Z",
-      "sha": "d1cce0f",
+      "sha": "049df1a",
       "what": "receipts: eval scoring-window (math500 + AC2 smoke + tokenizer gap)"
     },
     {
       "pr": 694,
       "mergedAt": "2026-07-10T17:45:33Z",
-      "sha": "76632d8",
+      "sha": "3eb9a51",
       "what": "exp: C-GROW completion receipt, honest rung-2 gap disclosure"
     },
     {
       "pr": 693,
       "mergedAt": "2026-07-10T17:40:46Z",
-      "sha": "8a46dec",
+      "sha": "bf1c580",
       "what": "feat(ember-cli): supervise the owned cbase brain server"
     },
     {
       "pr": 692,
       "mergedAt": "2026-07-10T17:40:43Z",
-      "sha": "6f05a29",
+      "sha": "d23ed9f",
       "what": "receipts: #580 custody cure - forensic erratum + cache commitment"
     },
     {
       "pr": 691,
       "mergedAt": "2026-07-10T17:17:08Z",
-      "sha": "30e9d34",
+      "sha": "2a6c695",
       "what": "receipts: #580 corrected-buffered-re-run, run_id 580rerun-20260710"
     },
     {
       "pr": 690,
       "mergedAt": "2026-07-10T16:46:37Z",
-      "sha": "50fc7c6",
+      "sha": "7d26ce8",
       "what": "fix: #580 site 4 - phase_b1m global-indexed lookup + repo sweep"
     },
     {
       "pr": 687,
       "mergedAt": "2026-07-10T15:44:18Z",
-      "sha": "225d5cf",
+      "sha": "d1ffdba",
       "what": "board: totality receipts 20260710 + audit + registry"
     },
     {
       "pr": 686,
       "mergedAt": "2026-07-10T15:43:58Z",
-      "sha": "7f7772c",
+      "sha": "97a0113",
       "what": "fix: v8 per-step trace + governed-abort receipt cures (refs #627)"
     },
     {
       "pr": 684,
       "mergedAt": "2026-07-10T15:17:00Z",
-      "sha": "5557f6e",
+      "sha": "6d4a67a",
       "what": "board: totality receipts 20260710 post-#664/#668 render"
     },
     {
       "pr": 681,
       "mergedAt": "2026-07-10T14:58:00Z",
-      "sha": "02640c9",
+      "sha": "e2d1b69",
       "what": "BitNet 102M exact-twin implementation preflight (#676)"
     }
   ],
@@ -163,7 +163,7 @@
     "released_this_window": [
       "auditland710 (audit batch A-U)",
       "probeharden710 (#720 delivered)",
-      "cockswap57 (cockpit 8a46dec swap)"
+      "cockswap57 (cockpit bf1c580 swap)"
     ]
   },
   "coordinator_disclosures": [

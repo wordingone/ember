@@ -47,7 +47,7 @@ def valid_manifest() -> dict:
         "checkpoint_sha256": digest,
         "tokenizer_sha256": digest,
         "config_sha256": digest,
-        "ember_source_commit": "e440cf96b4340038ca276386224bd144254a3265",
+        "ember_source_commit": "26b5fe5a6325b2cc1a48df7df775ced4d31492a4",
         "per_row_timeout_seconds": 30,
         "nltk_version": "3.9.3",
         "punkt_tab_tree_manifest_sha256": digest,

@@ -1475,7 +1475,7 @@ def _partition_producer_supersession_allows_v2(
         return False
     if (
         first.get("resolved_source_commits")
-        != ["71df8f892fa3a19a7bab1eee8c56e5a1fc700c6d"]
+        != ["2f9e46ab7f6f318bda6c39d585ff0caa8c77df1f"]
         or first["resolved_source_commits"][0]
         not in prior_entry.get("resolved_source_commits", [])
     ):
@@ -1486,7 +1486,7 @@ def _partition_producer_supersession_allows_v2(
     ):
         return False
     review_basis = (
-        "The producer byte change 5a07a1b6 (PR1847) was byte-reviewed and PASSed by the gate "
+        "The producer byte change e6c92a66 (PR1847) was byte-reviewed and PASSed by the gate "
         "before merge with the explicit finding that the per-row validation contract is unchanged — "
         "is_file + reparse + exact-size + full sha256 per blob — and only the execution concurrency "
         "changed (ThreadPoolExecutor, input-order deterministic)."
@@ -1511,9 +1511,9 @@ def _partition_producer_supersession_allows_v2(
         or set(third) != transition_fields
         or third.get("authorization_basis") != third_basis
         or second.get("successor_sha256") != third.get("superseded_sha256")
-        or third.get("cause_commit") != "b39ef2402dfc0a3cf7f9dedf6e28363b18b03bb9"
+        or third.get("cause_commit") != "6202773d8031f967a64765978d5e4aa971a79eca"
         or third.get("resolved_source_commits")
-        != ["5a07a1b6504605a88da817d093f6619eaf1960a6"]
+        != ["e6c92a66b7c531ba7f7980eb0c0fc5ab16a5cdae"]
     ):
         return False
     fourth_basis = (

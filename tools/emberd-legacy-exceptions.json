@@ -11,17 +11,17 @@
     },
     {
       "path": "manifests/ember-01-custody/public-issue-census.json",
-      "sha256": "ae73a98352064936bd64f64ff52f10e8a7b0e648216bc6c655be877f9f6315ea",
+      "sha256": "20a9f5979deccae51ee7ab14372722d4c42b94203e4499dc472b8fdcae44ad4a",
       "reason": "verbatim cached GitHub issue titles for two still-open issues whose real titles literally start with 'emberd'; renaming the cache would make it diverge from the live source it censuses. See docs/naming-migrations.md."
     },
     {
       "path": "manifests/roadmap/issue-reconciliation-v1.json",
-      "sha256": "1377726ba224d207dd6e2e30fb4f8df82b7d37dda0482479db0fa95016407252",
+      "sha256": "7aed567801873858907e243c7284afd915b653a683efafb9d451bc8b2e2dcb9c",
       "reason": "historical issue-title snapshot; exact retired daemon spelling is source evidence and must remain byte-identical"
     },
     {
       "path": "manifests/roadmap/public-issue-census-v1.json",
-      "sha256": "8ee4bef889257fe1da38ffcc995c8d8d07ffb0db0e792e2faaa42707b1032aef",
+      "sha256": "db8c42449c6c977a6f8d7a916c628994084fb8e31862889d913df7fa24ae020e",
       "reason": "historical public-issue census; exact retired daemon spelling is source evidence and must remain byte-identical"
     },
     {

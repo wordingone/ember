@@ -3,7 +3,7 @@
 **Date:** 2026-08-25  
 **Issue:** #898  
 **Packet:** L7 — daemon-lifetime foreign commit/GPU census, admission fence, and receipt-first owned-orphan reclamation  
-**Base:** `b4084ac442a3f70c38f1bec0a0bd480512b7e145`
+**Base:** `c6519c37affbb96ff89a2f21f544d9ecefaae08d`
 
 ## Outcome and authority
 

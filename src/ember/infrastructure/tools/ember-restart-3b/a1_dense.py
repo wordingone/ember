@@ -115,7 +115,7 @@ _AUTHORITY_FIELDS = {
 }
 _EXPECTED_THRESHOLD_PATH = "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json"
 _EXPECTED_THRESHOLD_IDS = ("T-08", "T-09", "T-20")
-A1_CONFIG_SHA256 = "a9f9ba115dc8e139e18c528b2a3e13060ab874787e8f944bfaf4fc125fb23d80"
+A1_CONFIG_SHA256 = "83928c6e91bea53801143be0c3d4ed6c3e98d238d3c6d3d48d493480a408b9c3"
 _LINEAGE_FIELDS = {
     "parent_checkpoint",
     "initialization",

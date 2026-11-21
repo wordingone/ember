@@ -42,7 +42,7 @@ class A1LowerBoundAmendmentContractTests(unittest.TestCase):
             {
                 "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
                 "sha256": sha256(PREREG),
-                "preregistration_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+                "preregistration_pin": "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b",
                 "scope": "section-4-A1-both-tiers-fail-only",
             },
         )
@@ -64,7 +64,7 @@ class A1LowerBoundAmendmentContractTests(unittest.TestCase):
             },
         )
         self.assertEqual(evidence["condition"], "BOTH_R1_E8_TIERS_FAIL")
-        self.assertEqual(evidence["source_commit"], "24decc312c771ec0e9309882f24f2a3ba82ea156")
+        self.assertEqual(evidence["source_commit"], "ce4d1fd4f3481429fa5fb81f2d350fbb034cedd3")
         self.assertEqual(evidence["comparison_id"], "e8-pair-24de-20260822T1230Z")
         self.assertEqual(evidence["charged_budget_contract_sha256"], "61c7b28b6b85d623b73ca30b057dc08a44428f96391bc98c796409625535c8f0")
         self.assertEqual(evidence["liveness_receipt_sha256"], "4d92cfeee4d7e4134a226641176cbc7d097aeaf0840f0b52423781a32a62577c")

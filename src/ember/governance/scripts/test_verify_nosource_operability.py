@@ -380,7 +380,7 @@ class OwnedServingConjunctionTests(unittest.TestCase):
 
     def test_custody_1064_description_does_not_satisfy_the_row(self):
         """The exact description text from PR #1064
-        (fix/custody-identity-discoverability, 15b3e211) contains "owned"
+        (fix/custody-identity-discoverability, d019ba4a) contains "owned"
         (via "owned model's identity" / "an owned seat is active") but no
         "serv" substring anywhere -- the conjunction must still refuse it,
         registered alone, with no competing module."""

@@ -6,7 +6,7 @@
   },
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "receipts/ember-02-launch-authority/run-spec.json",
-  "artifact_sha256": "02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8",
+  "artifact_sha256": "e6a6af0d821829186c343c8f46db1ebdf8eadbb06f2116041d5e86b231c242a5",
   "ticket": "1401",
   "ts": "2026-08-04T20:15:00Z",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",

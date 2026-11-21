@@ -14,7 +14,7 @@ citation registry: read it before treating any path below as a fresh custody vio
   (a=relocation, b=genuinely-lost, c=never-existed, d=extraction-artifact) + DESIGN RULING.
 - Governing PR: [#432](https://github.com/wordingone/ember/pull/432) — landed 13 of 16
   git-recoverable receipts, withheld 3, disclosed the resulting C(-1) regression.
-- Current probe verdict (this worktree, fresh checkout of `public/master` @ `5077a06`, run
+- Current probe verdict (this worktree, fresh checkout of `public/master` @ `aa354d0`, run
   2026-07-08):
 
   ```
@@ -28,9 +28,9 @@ citation registry: read it before treating any path below as a fresh custody vio
 
 ## Which tree this note binds to, and why an earlier pre-merge scan saw a different 20
 
-This note's 15 rows are bound to **`public/master` @ `5077a06`** (the #432 merge commit) — the
+This note's 15 rows are bound to **`public/master` @ `aa354d0`** (the #432 merge commit) — the
 exact tree scanned in this session. A separate lane's earlier scan, on a clean checkout of
-**`3a32358`** (the commit immediately BEFORE #432 merged), reported `cited_missing=20` with a
+**`215d90c`** (the commit immediately BEFORE #432 merged), reported `cited_missing=20` with a
 **different row composition** (sidecar `scripts/ember_totality/receipts-custody/custody-20260708T090209Z.json`).
 Reconciled in full below — every one of the 20 baseline rows and both new rows is individually
 accounted for; nothing is asserted without a re-run or a code citation.
@@ -43,8 +43,8 @@ then +2 new = 15:**
 - **3 persist unchanged**: Class 1 (barred-at-HEAD) — none of the 3 withheld files were landed, so they stay exactly as they were at baseline.
 - **10 persist unchanged**: the 2 Class 3 rows (`receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json`, `receipts/wheel/wheel-real-20260618T143007Z.json`) + the 7 Class 4 rows (5 sidecars + main json + `reference-cli-full-parity-harness-gate-20260622T141500Z.json`) + the 1 Class 5 row (`w2-heldout-decontam-...json`) were ALL already present, byte-identical in citation form, in the baseline-20 list. #432 touched none of their citers or targets.
 - **+2 newly visible, each independently explained (not papered over):**
-  - `receipts/stale-figure-adjudication-20260702T151929Z.json` — its ONLY citer in the current tree, `receipts/assembly-sha-as-manifest-adjudication-20260702T162500Z.json`, is itself one of #432's 13 restorations: it did not exist in the baseline tree at all (`ls` on the 3a32358 checkout: no such file). No citer existed pre-#432, so the citation could not have appeared in a pre-#432 scan. Simple case: the citing document is new, not the checker.
-  - `receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json` — this one is NOT simple, and is the case worth flagging to the cure lane. The path **was already referenced at baseline**, inside 3 pre-existing files (`receipts/publication-gate-20260705T{071930,072134,081939}Z.json`, all confirmed present in the 3a32358 checkout, landed via commit `c51d4ae` on 2026-07-05 — well before the baseline scan). But in all 3, the path appears **only as a JSON object KEY**: `"receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json": true` (e.g. `publication-gate-20260705T071930Z.json:156`). `_extract_citations()` (`scripts/ember_totality/test_c_custody.py:205-212`) iterates `obj.items()` and tests **only the value** (`isinstance(v, str) and "receipts/" in v`) — it never inspects the key `k`. A citation that exists solely as a dict key is therefore structurally invisible to the extractor, at baseline or now. What changed is that #432 also restored `receipts/citation-check-20260702T174352Z.json`, which cites the *same* missing path as a proper string **value** (`"ref": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json"`, line 414) — a form the extractor does catch. The path was real and missing the whole time; it only became *detectable* once a value-form citation of it existed anywhere in the tracked tree.
+  - `receipts/stale-figure-adjudication-20260702T151929Z.json` — its ONLY citer in the current tree, `receipts/assembly-sha-as-manifest-adjudication-20260702T162500Z.json`, is itself one of #432's 13 restorations: it did not exist in the baseline tree at all (`ls` on the 215d90c checkout: no such file). No citer existed pre-#432, so the citation could not have appeared in a pre-#432 scan. Simple case: the citing document is new, not the checker.
+  - `receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json` — this one is NOT simple, and is the case worth flagging to the cure lane. The path **was already referenced at baseline**, inside 3 pre-existing files (`receipts/publication-gate-20260705T{071930,072134,081939}Z.json`, all confirmed present in the 215d90c checkout, landed via commit `7978856` on 2026-07-05 — well before the baseline scan). But in all 3, the path appears **only as a JSON object KEY**: `"receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json": true` (e.g. `publication-gate-20260705T071930Z.json:156`). `_extract_citations()` (`scripts/ember_totality/test_c_custody.py:205-212`) iterates `obj.items()` and tests **only the value** (`isinstance(v, str) and "receipts/" in v`) — it never inspects the key `k`. A citation that exists solely as a dict key is therefore structurally invisible to the extractor, at baseline or now. What changed is that #432 also restored `receipts/citation-check-20260702T174352Z.json`, which cites the *same* missing path as a proper string **value** (`"ref": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json"`, line 414) — a form the extractor does catch. The path was real and missing the whole time; it only became *detectable* once a value-form citation of it existed anywhere in the tracked tree.
 
 **Verdict: fully reconciled, not a nondeterminism/ordering bug** — every row on both sides of the
 6/1/3/10/2 split has a named, re-checked cause. **One genuine, narrow checker coverage gap is
@@ -89,7 +89,7 @@ lands on `public/master`. This note is their permanent record.
 direct-restoration target that nothing else cites, so it doesn't appear in this count." That
 parenthetical is factually wrong, and this note corrects it rather than repeating it. A direct
 citer exists and pre-dates PR #432: `receipts/c9-cadence/code-vs-docs-20260702T180521Z.json`
-(landed via commit `716c96c`, merged PR #379, 2026-07-07 — one day before PR #432). That citer is
+(landed via commit `f06dc66`, merged PR #379, 2026-07-07 — one day before PR #432). That citer is
 exactly why `governor-repair-080` legitimately re-appears in the current 15-row
 `cited_missing` list; its presence is not an anomaly.
 
@@ -260,18 +260,18 @@ neither is `cited_missing`. No row in this note's enumeration is unexplained.
 
 ## 2026-07-08 addendum — 5 rows unmasked by the #437 key-form citation fix
 
-[PR #441](https://github.com/wordingone/ember/pull/441) (merged as `096e691`, fixing
+[PR #441](https://github.com/wordingone/ember/pull/441) (merged as `d7e5749`, fixing
 [#437](https://github.com/wordingone/ember/issues/437)) extended `_extract_citations()` to also
 scan dict **keys** for `receipts/` substrings, not only values — closing exactly the blind spot
 this note's own Class 2 section already named above (`_extract_citations` iterates `obj.items()`
 and previously tested only `v`, never `k`). The three
 `receipts/publication-gate-20260705T{071930,072134,081939}Z.json` receipts (landed via commit
-`c51d4ae`, 2026-07-05 — pre-dating both #437's discovery and #441's fix) cite 5 additional missing
+`7978856`, 2026-07-05 — pre-dating both #437's discovery and #441's fix) cite 5 additional missing
 paths **solely as dict keys** (`{"receipts/<path>.json": true}`, the identical existence-map/`refs`
 shape that hid `cgrow-superseded` until #432 restored a value-form citer). Before #441 these 5
 were structurally invisible to C-CUSTODY; after, they surface as `cited_missing`.
 
-**Live probe, this session, fresh `public/master` @ `60a92f3`:**
+**Live probe, this session, fresh `public/master` @ `e7da964`:**
 
 ```
 RED C-CUSTODY: 20 custody violation(s) detected; untracked=0 unparseable=0 cited_missing=20
@@ -288,7 +288,7 @@ plus the 5 new rows below.
 Verified independently in this session, not copied from PR #441's body: for each path, every
 commit reachable via `git log --all -- <path>` was checked with
 `git merge-base --is-ancestor <sha> public/master` against the current `public/master` HEAD
-(`60a92f3`). All 9 distinct commits across the 5 paths return **non-ancestor** (exit 1), and each
+(`e7da964`). All 9 distinct commits across the 5 paths return **non-ancestor** (exit 1), and each
 one resolves only on `goalforge/definitive-goal-20260701` or a `goalforge/lane/*` remote ref —
 the identical evidence shape as rows 4-5 above. Classifying all 5 as Class 2 additions, not a new
 class; no row's evidence deviated from that pattern.

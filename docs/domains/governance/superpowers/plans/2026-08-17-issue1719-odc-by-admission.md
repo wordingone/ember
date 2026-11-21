@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Exact source base: `80b34e5ef5e87b17ef5f11e8a7a716f28896bd4b`.
+- Exact source base: `785d98421c05da89c16b175456b157c36a8ef1ca`.
 - Production scope is one map entry in `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`.
 - Preserve the existing uniform lowercase-before-lookup rule for every closed-map entry; accept normalized `odc-by` but add no punctuation or alias normalization.
 - The root `README.md` bytes, connector license, and evidence declaration must independently converge on `ODC-By-1.0`.

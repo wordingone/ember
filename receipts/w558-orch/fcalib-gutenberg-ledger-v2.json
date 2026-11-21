@@ -1,7 +1,7 @@
 {
   "ticket": "HELDOUT-V21-FCALIB",
   "ts": "20260709T141254Z",
-  "runner_git_sha": "d1803e3f9f3d5085ce30892ea1b55ec02b80531d",
+  "runner_git_sha": "ffadfebe867aee13834cd524b08ecb4607c577be",
   "predicate_version": "v2.1-exact50-droponly",
   "predicate_source": "https://github.com/wordingone/ember/issues/440#issuecomment-4916781765",
   "status": "in_progress",

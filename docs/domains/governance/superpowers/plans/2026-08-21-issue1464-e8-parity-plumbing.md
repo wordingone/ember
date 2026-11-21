@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Start from public head `8846f5981bc01ee1a661de5e9a518a86dec57ab3` or a reviewed descendant.
+- Start from public head `a443cd23459ab63c892873548752bf1f1ced054f` or a reviewed descendant.
 - No production code is written before its named test fails for the missing behavior.
 - `grad_norm` is the L2 norm over every registered parameter whose gradient is non-`None`, including 1-D parameters, before update or release.
 - The E7 v2 estimator is seed-order invariant normalized pooled population sigma; no raw-key alias.

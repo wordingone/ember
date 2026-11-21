@@ -5,7 +5,7 @@ and llama-server window. The surviving growth science is conserved by
 EMBER-05 issue #1119, optimizer and transition-equivalence work by #707, and
 control/resource custody by #898.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

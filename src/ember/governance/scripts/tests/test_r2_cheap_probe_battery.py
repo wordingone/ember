@@ -162,7 +162,7 @@ def test_d04_authority_supersedes_d03_with_one_hash_pinned_text_manifest():
     decision = record["decision"]
     assert decision["id"] == battery.R2_AUTHORITY_DECISION_ID
     assert decision["registry_state"] == "HASH_PINNED_TEXT_AUTHORITY"
-    assert decision["source_manifest"]["sha256"] == "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3"
+    assert decision["source_manifest"]["sha256"] == "1248b2bd4204f3fef6372f28dfb0603917f0045f174423f626d564a74c2106eb"
     assert [(row["id"], row["items"]) for row in decision["defined_probes"]] == [
         ("mmlu-pro-10choice", 32), ("arc-challenge-4choice", 32)
     ]

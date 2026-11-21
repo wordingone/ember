@@ -36,7 +36,7 @@ from pathlib import Path
 
 # Constitutional invariant hash and genesis timestamp
 # genesis_ts is the committerDate of the genesis merge commit (tag: invariant-genesis)
-# commit: 9c89f7f66 "genesis: entrench constitutional invariant (#281)"
+# commit: e3892493f "genesis: entrench constitutional invariant (#281)"
 GENESIS_TS = "2026-07-06T14:13:23-07:00"
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 

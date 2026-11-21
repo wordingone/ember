@@ -39,10 +39,10 @@
     "satisfying_receipt": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json"
   },
   "source_sha256": {
-    "historical_receipt": "c0c2b9a7a47347d3b50c7437e8566d1bfb490a5a4995a7f2ac7dcf00dae4cf82",
+    "historical_receipt": "d7e7082830bdeadc833c3d60bee793ef91c0b18c9e31300dce5cf7cc4d03fedc",
     "probe": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
     "producer": "ff8ee9e0dabac96ff89d23e6007134860e504db068413aaaa4fc434589f0c433",
-    "satisfying_receipt": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8"
+    "satisfying_receipt": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9"
   },
   "supersedes": "receipts/cbase-grow-rung/cbase-grow-rung2-completion-20260710T172500Z.json",
   "ticket": "CBASE-GROW-RUNG2-COMPLETION",

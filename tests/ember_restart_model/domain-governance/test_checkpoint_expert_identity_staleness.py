@@ -12,7 +12,7 @@ Failure #892: the expectation was captured at run-start (active_expert=reasoning
 so at checkpoint the six numeric capacity fields agreed but active_expert_ids
 mismatched (expected [reasoning] vs receipt [vision]) and the run failed closed.
 
-Cure #893 (commit cf965fb, in origin/master 21d9b75): the run() verifier now
+Cure #893 (commit 345f077, in origin/master ca04404): the run() verifier now
 re-measures the *live* routed expert at publication via
 ``_counter_expected_counts(model)`` instead of the run-start ``counts``.
 
@@ -34,7 +34,7 @@ import torch
 
 # The exact required-field tuple and mismatch rule the production verifier
 # applies, mirrored from src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py
-# (_execute_realization_counter, lines ~1881-1891 at base 21d9b75). Kept in
+# (_execute_realization_counter, lines ~1881-1891 at base ca04404). Kept in
 # lockstep with the source; a divergence in the six numeric fields would be a
 # separate contract change and is asserted against the source below.
 _REQUIRED_FIELDS = (

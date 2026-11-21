@@ -4,7 +4,7 @@
   "board_ref": "ember-totality-20260709T143435Z.json",
   "prior_audit_ref": "audit-20260709T171500Z.json",
   "prior_finding_recheck": {
-    "C-PROC": "CURED - newest process-visibility receipt 20260709T203500Z cites covered_commit decdc2f2 with 16 issue URLs and full delegation block; the 17:15Z staleness finding no longer holds"
+    "C-PROC": "CURED - newest process-visibility receipt 20260709T203500Z cites covered_commit 5afd888d with 16 issue URLs and full delegation block; the 17:15Z staleness finding no longer holds"
   },
   "verified_findings": [
     {

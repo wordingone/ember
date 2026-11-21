@@ -39,7 +39,7 @@
   "public_lineage_revalidation": {
     "current_tokenizer": {
       "blob_oid": "57d245157f145c3159704903b3896692011abd15",
-      "last_change_commit": "df272db32a106f774a1b30185e142f8e0de3ed2a",
+      "last_change_commit": "9130a95494ddac004747c0d72cf0c19ca0577e26",
       "load_pass": true,
       "path": "tokenizer/tokenizer.json",
       "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
@@ -81,7 +81,7 @@
       }
     ],
     "import_closure_rows_sha256": "3967be85b0e68717024e1c6d3d04094972ad2117ef3cf1b1e5b23bcb4d699a3c",
-    "landing_commit": "ea39d6944155575145c6d17dbe87e8f0f8db153e",
+    "landing_commit": "cb1ac623b4fa1756ab1e816217baa25507bbbe97",
     "landing_rows": [
       {
         "blob_oid": "2445d0c742b03247d06d02a7855898c2bc400f7a",
@@ -116,10 +116,10 @@
     ],
     "landing_rows_sha256": "9b67847f31cfcf643fbca3297d78621b7a9820001b5c81cc33337c9c0b46acc0",
     "lineage_commits": {
-      "ops_tools_pr_773_merge": "ea39d6944155575145c6d17dbe87e8f0f8db153e",
-      "tokenizer_repair": "df272db32a106f774a1b30185e142f8e0de3ed2a"
+      "ops_tools_pr_773_merge": "cb1ac623b4fa1756ab1e816217baa25507bbbe97",
+      "tokenizer_repair": "9130a95494ddac004747c0d72cf0c19ca0577e26"
     },
-    "subject_commit": "801cd32723734697eab58e19b7a22aef7b28f0a8",
+    "subject_commit": "edd6e639568fedc88918d92c468d35c389e92433",
     "subject_original_bytes_unchanged": 5
   },
   "sha_convention": "bytes on disk as-is (binary read, no normalization)",

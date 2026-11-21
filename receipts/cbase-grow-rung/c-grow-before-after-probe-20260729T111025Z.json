@@ -2,9 +2,9 @@
   "baseline": {
     "clean": true,
     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
-    "evidence_sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+    "evidence_sha256": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9",
     "exit_code": 0,
-    "head_sha": "8f28341f0059bcc5f0da8e533daf20ca82af7004",
+    "head_sha": "a1f93dc35321115c38d15e36d0ed60ddcda45a7e",
     "probe_sha256": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
     "stderr": "",
     "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present"
@@ -12,9 +12,9 @@
   "candidate": {
     "clean": true,
     "evidence_path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
-    "evidence_sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+    "evidence_sha256": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9",
     "exit_code": 0,
-    "head_sha": "012dd1c1ff4d1660f666c6cfa269e9f322870ce2",
+    "head_sha": "5180fed7a79ffd68085017a71189eaf0e23c10a2",
     "probe_sha256": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
     "stderr": "",
     "stdout": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured_by_instrumented_execution: sha256-verified checkpoints + FLOP totals independently recomputed and matched); no invalid-token present"
@@ -28,7 +28,7 @@
     "training_claim": false
   },
   "goal_id": "EMBER-02",
-  "historical_receipt_sha256": "3bf8ed8490ce2309571338b18a71b48f78417097cf8968cd1b4100f34b0e7ba8",
+  "historical_receipt_sha256": "a413a8e6105a40c286dddb0ecf19cde8e2d167135ce3c31101c747e3a7d1ae40",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "issue": 700,
   "mode": "CLEAN_IMMUTABLE_SNAPSHOT_REPLAY",

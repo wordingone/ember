@@ -6,13 +6,13 @@
   "record_type": "REMOTE_BRANCH_RETIREMENT_RECEIPT",
   "claim_boundary": "repository-custody-only; no capability, training, checkpoint, or admission claim",
   "repository": "wordingone/ember",
-  "master_sha_at_record": "80f8fe3055457f4550a6d9dd66687826e5446f77",
+  "master_sha_at_record": "9ae7c9085718a72466d93cbfbf6c208e203af2a8",
   "batch_id": "C1-BRANCH-RETIREMENT-775-20260719",
   "ref": "refs/heads/fix/210-receipt-spend-field",
-  "retired_head_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
+  "retired_head_sha": "b7e98ecad0f3da13c76d79e20f1f3c71debf7704",
   "authorization": {
     "scope": "exactly this ref and no other ref",
-    "expected_old_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
+    "expected_old_sha": "b7e98ecad0f3da13c76d79e20f1f3c71debf7704",
     "expires_at": "2026-07-19T18:45:00-07:00",
     "precondition": "fresh exact-ref GET matched expected_old_sha"
   },
@@ -21,10 +21,10 @@
     "pull_request_url": "https://github.com/wordingone/ember/pull/775",
     "pull_request_state": "MERGED",
     "merged_at": "2026-07-11T08:26:04Z",
-    "base_sha": "93b5b7260ddca9c0fa8344e93924d4ab16190895",
-    "branch_head_sha": "294def11e4952295e47e3effa8ccb97ebc517af2",
-    "merge_sha": "0bfa3a46a3dcf7c1693a6c92025442386b2c21d6",
-    "actual_merge_parent_sha": "93b5b7260ddca9c0fa8344e93924d4ab16190895",
+    "base_sha": "c121dc348a1648eb26c4525e6c6b51fbff4481e2",
+    "branch_head_sha": "b7e98ecad0f3da13c76d79e20f1f3c71debf7704",
+    "merge_sha": "312d4d9d4a6087e7837dd867c7a45e723cc66044",
+    "actual_merge_parent_sha": "c121dc348a1648eb26c4525e6c6b51fbff4481e2",
     "merge_is_ancestor_of_master": true
   },
   "patch_equivalence": {
@@ -60,15 +60,15 @@
   "reconstruction": {
     "commands": [
       "git fetch origin refs/pull/775/head:refs/reconstruct/branch-retirement-775",
-      "test \"$(git rev-parse --verify refs/reconstruct/branch-retirement-775^{commit})\" = \"294def11e4952295e47e3effa8ccb97ebc517af2\"",
-      "git show --stat 294def11e4952295e47e3effa8ccb97ebc517af2",
-      "git diff --stat 93b5b7260ddca9c0fa8344e93924d4ab16190895..294def11e4952295e47e3effa8ccb97ebc517af2",
-      "git diff --stat 93b5b7260ddca9c0fa8344e93924d4ab16190895..0bfa3a46a3dcf7c1693a6c92025442386b2c21d6",
-      "git diff --exit-code 294def11e4952295e47e3effa8ccb97ebc517af2:receipts/ember-c-scale/land210g-experiment-runners-receipt.json 0bfa3a46a3dcf7c1693a6c92025442386b2c21d6:receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
-      "git diff --exit-code 294def11e4952295e47e3effa8ccb97ebc517af2:receipts/ember-c-scale/land210i-harness-entry-receipt.json 0bfa3a46a3dcf7c1693a6c92025442386b2c21d6:receipts/ember-c-scale/land210i-harness-entry-receipt.json"
+      "test \"$(git rev-parse --verify refs/reconstruct/branch-retirement-775^{commit})\" = \"b7e98ecad0f3da13c76d79e20f1f3c71debf7704\"",
+      "git show --stat b7e98ecad0f3da13c76d79e20f1f3c71debf7704",
+      "git diff --stat c121dc348a1648eb26c4525e6c6b51fbff4481e2..b7e98ecad0f3da13c76d79e20f1f3c71debf7704",
+      "git diff --stat c121dc348a1648eb26c4525e6c6b51fbff4481e2..312d4d9d4a6087e7837dd867c7a45e723cc66044",
+      "git diff --exit-code b7e98ecad0f3da13c76d79e20f1f3c71debf7704:receipts/ember-c-scale/land210g-experiment-runners-receipt.json 312d4d9d4a6087e7837dd867c7a45e723cc66044:receipts/ember-c-scale/land210g-experiment-runners-receipt.json",
+      "git diff --exit-code b7e98ecad0f3da13c76d79e20f1f3c71debf7704:receipts/ember-c-scale/land210i-harness-entry-receipt.json 312d4d9d4a6087e7837dd867c7a45e723cc66044:receipts/ember-c-scale/land210i-harness-entry-receipt.json"
     ],
     "pre_delete_git_transport_attempt": {
-      "command_shape": "git push --force-with-lease=refs/heads/fix/210-receipt-spend-field:294def11e4952295e47e3effa8ccb97ebc517af2 origin :refs/heads/fix/210-receipt-spend-field",
+      "command_shape": "git push --force-with-lease=refs/heads/fix/210-receipt-spend-field:b7e98ecad0f3da13c76d79e20f1f3c71debf7704 origin :refs/heads/fix/210-receipt-spend-field",
       "wrapper_exit_code": 1,
       "result": "REFUSED_BEFORE_REMOTE_MUTATION",
       "failure": "Windows CreateFileMapping access error followed by unavailable GitHub credential prompt"

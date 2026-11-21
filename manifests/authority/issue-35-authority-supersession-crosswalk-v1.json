@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "b1f6072d4063cb31a9e88be1ef1c0d100292b109",
+  "source_commit": "ace96585a23cb5193e79b46629b4abbab04ab415",
   "current_authority": {
     "matrix_path": "docs/domains/governance/authority/ember-authority-matrix.md",
     "matrix_sha256": "4032a7c488b1ac495fdddfb3aa439c9b94ee62d1a7f429d1eb684fedf6080b25",
@@ -203,7 +203,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         }
       ]
     },
@@ -231,7 +231,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2410,7 +2410,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2435,7 +2435,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2460,7 +2460,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2485,7 +2485,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2510,7 +2510,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2535,7 +2535,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2560,7 +2560,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2585,7 +2585,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2610,7 +2610,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2635,7 +2635,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2660,7 +2660,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -2685,7 +2685,7 @@
         },
         {
           "path": "docs/domains/governance/authority/GOAL.md",
-          "sha256": "b4583cb2f7e1c54c2b433f214f45a1e8b0541cd769a345d9c649ae8fea669308"
+          "sha256": "c589eed9ce5631643e1adbd9627dfe04ebfb584819f03e59056ae57b761d2686"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
@@ -5224,5 +5224,5 @@
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "570baa0216208db5858ad66b940c9aba025c5070f7e1d15145cf96693fcfe276"
+  "crosswalk_sha256": "95a7b85173c153034e0c2fc9778291452000259b8c2fa5cc2e161fdc51ac02f9"
 }

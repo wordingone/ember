@@ -5,7 +5,7 @@
 <!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 
 Date: 2026-08-17 PT
-Source authority: issue #1719 and public Ember commit `80b34e5ef5e87b17ef5f11e8a7a716f28896bd4b`.
+Source authority: issue #1719 and public Ember commit `785d98421c05da89c16b175456b157c36a8ef1ca`.
 
 ## Objective and boundary
 

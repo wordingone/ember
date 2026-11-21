@@ -62,7 +62,7 @@ Resolution is **PENDING** the pulse at `T` (the beacon value cannot exist in-PR 
 selected dataset is a development-signal-only held-out addition until pinned into suite **v2**
 (the freeze doc's versioning law: a frozen suite is never appended to).
 
-**v1 record (`ccde4a67 → index 7 → SciQ`)**: the landed v1 declaration + amendment carry an
+**v1 record (`5dc47809 → index 7 → SciQ`)**: the landed v1 declaration + amendment carry an
 `ac4_anchoring` clause stating the selection "binds once, at first derivation, dated" and "an
 amendment NEVER re-rolls AC4." Those landed artifacts are **byte-law immutable and are not
 re-rolled here.** This v2 spec does not edit them; it installs the non-grindable beacon as the

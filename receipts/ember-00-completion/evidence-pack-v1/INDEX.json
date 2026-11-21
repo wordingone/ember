@@ -9,7 +9,7 @@
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "completion_subject_goal_id": "EMBER-00",
-  "assembled_against_public_master_sha": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7",
+  "assembled_against_public_master_sha": "c9a569897257af085e31e9e506ac537a04a1f2fa",
   "purpose": "Provide the one current, repository-reopenable receipt required by EMBER-00 CERT.001. Every certificate entry binds live source bytes or an executed run; a clause remains false if its evidence cannot be reopened and rederived.",
   "certificate_entries": [
     {
@@ -108,7 +108,7 @@
         "test_borrowed_reference_requires_frozen_non_ingress_seat",
         "test_candidate_lineage_mutations_are_rejected"
       ],
-      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7", "command": "python -B -m pytest -p no:cacheprovider scripts/tests/test_authority_conservation.py -q", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16}
+      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "c9a569897257af085e31e9e506ac537a04a1f2fa", "command": "python -B -m pytest -p no:cacheprovider scripts/tests/test_authority_conservation.py -q", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16}
     },
     {
       "clause_id": "CERT.005",
@@ -116,21 +116,21 @@
       "receipt_kind": "executed-run+PR-merge",
       "direct_execution": {
         "executed_at_utc": "2026-08-18T00:23:00Z",
-        "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7",
+        "source_head": "c9a569897257af085e31e9e506ac537a04a1f2fa",
         "command": "python -B scripts/verify_authority_conservation.py",
         "result": "PASS",
         "stdout_verdict": "EMBER_AUTHORITY_CONSERVATION PASS",
         "provenance_path": "scripts/verify_authority_conservation.py",
         "provenance_sha256": "18ae2682aa355ab301dad54f0e4a19ecc2eaa86b506e7bfe010501fcbcac567c"
       },
-      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "bfc394a09cf09bf61b7a6cdbe6cfd52c132807b7", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16},
+      "suite_execution": {"executed_at_utc": "2026-08-18T00:23:00Z", "source_head": "c9a569897257af085e31e9e506ac537a04a1f2fa", "result": "PASS", "passed": 97, "failed": 0, "duration_seconds": 36.16},
       "python_312_collection_cures": [
-        {"receipt_kind": "PR-merge", "merge_commit": "b978f124", "purpose": "scripts/tests collection cure"},
-        {"receipt_kind": "PR-merge", "merge_commit": "4a5870c1", "purpose": "optional numpy consumer collection cure"}
+        {"receipt_kind": "PR-merge", "merge_commit": "8215784e", "purpose": "scripts/tests collection cure"},
+        {"receipt_kind": "PR-merge", "merge_commit": "8787bfe5", "purpose": "optional numpy consumer collection cure"}
       ],
       "extended_audit": {
         "run_id": 32068087873,
-        "source_commit": "4a5870c118a752f278f96be33b409fb041875dc9",
+        "source_commit": "8787bfe511f1428b2aa471124012857dbf6a3a14",
         "collection_guard": "SCRIPTS_TESTS_COLLECTION_PASS: collected=626 floor=380",
         "authority_suite_execution": "EXECUTED",
         "authority_suite_environment_conditional_failure": {
@@ -178,7 +178,7 @@
         {"path": "scripts/tests/test_authority_conservation.py", "sha256": "9ccbbfe6c61c260c2892d764366970b5ab8a7c87381653988cac764732bab5f5", "git_blob_sha": "99a86a28df041d8c63c5b4dbdb86a9f7cfb40239"}
       ],
       "mechanism": {"gate_call": "tools/repo-guard.sh invokes scripts/verify_authority_conservation.py", "validator": "check_changed_artifact_bindings", "changed_range_diff_filter": "ACMRT", "python_is_source_suffix": true, "failure_classes": ["artifact.goal_binding", "artifact.workstream_binding"]},
-      "production_regression": {"test": "test_staged_binding_covers_scripts_and_python_experiments", "reproduced_at_commit": "b0e7ec42", "observations": ["A headerless staged Python artifact is refused.", "Bound staged Python and TypeScript artifacts pass."]},
+      "production_regression": {"test": "test_staged_binding_covers_scripts_and_python_experiments", "reproduced_at_commit": "45405352", "observations": ["A headerless staged Python artifact is refused.", "Bound staged Python and TypeScript artifacts pass."]},
       "new_parallel_checker_added": false
     }
   ],

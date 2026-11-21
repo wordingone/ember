@@ -25,8 +25,8 @@ from typing import Any, Mapping, Sequence
 
 
 SCHEMA_VERSION = "ember-issue2071-qk-rope-matched-loss-canary-v1"
-CONTROL_HEAD = "a0cc9acd565af48636e3ed40c6f8cd98b1b94a70"
-TREATMENT_HEAD = "3dbc1197d4cd23363b3223c1fb340aed50c93d6a"
+CONTROL_HEAD = "66e3ecd3e37370aca2452f821d7e1990e2662767"
+TREATMENT_HEAD = "4ad7f3ffe3a78ee4cf5e70c32736386d6e0a85ab"
 ADMITTED_ROW_SET_SHA256 = "f29eb6e65c59de5f1d767ecdc26d7488fbfe251ffcf6c8a04f4ce3e859ee82c7"
 TEXT_LAB_CORPUS_RELATIVE_PATH = Path("data/ember-restart-3b/owned-text-lab-corpus-v4.json")
 TEXT_LAB_CORPUS_SHA256 = "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca"

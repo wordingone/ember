@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the historical W2 G-arm vehicle. The
 surviving growth/control obligations are conserved by the canonical EMBER-05
 contract and roadmap parent #1119.
 
-Source master: `3cc9c1634a91d04059242c6765e1cd025bc88147`.
+Source master: `9d2704d3023c9c061727f90589480b1feb6b1b34`.
 
 ## Historical scope and completed portion
 
@@ -17,8 +17,8 @@ checkpoint:
    parameters, trained it, and produced the comparison receipts.
 
 The file-set reconciliation landed in PR #117 (merge
-`7087a0398467984a277e650bb3a0eff92cb8c094`). The CPU dry-run implementation
-landed in PR #209 (merge `7e32941cd5fb68199634c5e3519e6a8b671aa7e5`).
+`d13ef92b0f0a2866d5eb0640c4c39e16daa3d900`). The CPU dry-run implementation
+landed in PR #209 (merge `2f266bc4e3c1d129afdc4deb8ae8f66aaf89307f`).
 The issue's 2026-07-06 acceptance comment records that dry-run boundary as
 complete. Current master retains the fail-closed historical runner at
 `src/ember/governance/scripts/w2_garm_runner.py`.

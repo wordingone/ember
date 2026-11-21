@@ -98,7 +98,7 @@ def _write_fixture(root: Path) -> tuple[Path, Path, Path]:
     })
     (root / "non-target-manifest.json").write_bytes(non_target_bytes)
 
-    source_commit = "f3c92ba984711ee34e91c6bea90713e6c89b4b4d"
+    source_commit = "744ff3e134e10ff8d13ee929ac2686daaebbffb1"
     dispatch_manifest_sha = "a" * 64
     dispatch = {
         "schema_version": "ember-lab-dispatch-preflight-v1",

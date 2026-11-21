@@ -6,10 +6,10 @@
 
 This directory is the content-addressed installed-binary evidence for issue #54.
 `receipt.json` binds Ember source commit
-`5782062d60602d040efe18edce07ffeadc726eb7`, the compiled binary SHA-256,
+`2c60a90886799fc0b6230f74b5ce91bce2f189c5`, the compiled binary SHA-256,
 the capture producer SHA-256, the operator viewport, three captures at least two
 seconds apart, and every frame/cell artifact hash. The receipt SHA-256 is
-`08f04159ad515c1c70deb26e6e578927bccfc00104d43b2ce2fc611988dda2e3`.
+`ddd98d8e867914ffcb407360a2581374f00f3e030fdc17824630d236020a3d63`.
 
 The installed 190x85 ConPTY frames were captured at the operator's 1720x1440
 left-snapped layout. All three have the same 5x5 bounds and the same 13 occupied

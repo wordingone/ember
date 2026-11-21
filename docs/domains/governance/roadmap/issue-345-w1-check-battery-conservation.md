@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` for the historical W1 cbase
 step-50 / step-766 check battery. The surviving current-scale growth
 interpretation obligations are conserved by canonical EMBER-05 issue #1119.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 

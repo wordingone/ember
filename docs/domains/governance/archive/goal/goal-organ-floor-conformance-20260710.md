@@ -6,7 +6,7 @@ softened to make a row read green.
 - **Floor (the contract):** `docs/domains/governance/contracts/goal-mode-mechanism.md`, restated as the six frozen clauses
   enumerated in issue #642's body. That restatement is the audit's frozen scope; no clause here
   was invented, and no floor clause was dropped (see "Floor coverage" below).
-- **Audited tree:** `wordingone/ember` at `ebae9f3aef1f497302c956ca534dc38f10e7e852`
+- **Audited tree:** `wordingone/ember` at `88181f15de4c7d0ef9f8774710daebe61d9b2b85`
   (`origin/master`, "docs(spec): freeze C8 F3 instrument list (#1323) (#1334)").
 - **Evidence suite:** `src/ember/infrastructure/tools/ember-cli/src/core/goal-organ-floor-conformance-642.test.ts` —
   one `describe` block per clause, each test written so it would FAIL if its clause were violated.
@@ -71,7 +71,7 @@ Per the floor's own wording, an audit that merely fails to find remaining work i
 definition; an organ that cannot tell whether the audit happened at all is a fortiori non-conforming.
 
 Reproduction: un-skip the CLAUSE 4 test. Re-executed 2026-08-03 against
-`ebae9f3aef1f497302c956ca534dc38f10e7e852` — the gap reproduces unchanged from #663's original
+`88181f15de4c7d0ef9f8774710daebe61d9b2b85` — the gap reproduces unchanged from #663's original
 report:
 
 ```
@@ -137,7 +137,7 @@ the bounded-exception contract; a future change that bypasses any one of them
 reopens #1348 rather than silently widening the timer.
 
 This ruling is re-bound to current public master
-`4b5868370c4472152313894ccf4a389e81fa3525`: `goal-continuation-wiring.ts`
+`2fca6bbd74ece98565f04e7c49fe5081743a4967`: `goal-continuation-wiring.ts`
 blob `0b141c37e25ff7f439d170f64ea9fede38d91e7e`, `screens/repl.ts` blob
 `cbed052374d1a2be2673a4fcf46f27ac473c739a`, and the current floor document
 `docs/domains/governance/contracts/goal-mode-mechanism.md` blob `69484c1f6904630b611162c9dda7f6898d0b886a`.

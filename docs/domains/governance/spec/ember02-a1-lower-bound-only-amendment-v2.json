@@ -4,18 +4,18 @@
   "issue": 1116,
   "supersedes": {
     "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
-    "sha256": "759d722b854d8656bac8ebba2bd498708443e43d9eca6fb17c660c1e460d264b",
-    "preregistration_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
+    "sha256": "4194baeb3f35deefc2d86521f72cea3c4895154f94d831f82f721f828941d0c7",
+    "preregistration_pin": "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b",
     "scope": "section-4-A1-both-tiers-fail-only"
   },
   "thresholds": {
     "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
-    "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+    "sha256": "ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e",
     "change": "NO_THRESHOLD_CHANGE"
   },
   "trigger_evidence": {
     "condition": "BOTH_R1_E8_TIERS_FAIL",
-    "source_commit": "24decc312c771ec0e9309882f24f2a3ba82ea156",
+    "source_commit": "ce4d1fd4f3481429fa5fb81f2d350fbb034cedd3",
     "comparison_id": "e8-pair-24de-20260822T1230Z",
     "charged_budget_contract_sha256": "61c7b28b6b85d623b73ca30b057dc08a44428f96391bc98c796409625535c8f0",
     "liveness_receipt_sha256": "4d92cfeee4d7e4134a226641176cbc7d097aeaf0840f0b52423781a32a62577c",

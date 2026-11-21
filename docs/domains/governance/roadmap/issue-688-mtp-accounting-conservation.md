@@ -5,7 +5,7 @@ sub-3B H-Q pilot vehicle. Current live MTP accounting belongs to EMBER-02
 issue #1116; the preserved horizon-quality question and manifest binding also
 remain linked to issue #722.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 ## Authority and credit boundary
 
@@ -40,7 +40,7 @@ compensating-trunk, orphan and independent-head fixtures.
 ## Existing #1514 boundary
 
 Draft PR #1514 remains historical apparatus at head
-`39ca211ac2c6461fd0ecf5d74f7a905224846b99`. Its checked configuration is
+`77850b7bc1639a31afe05ea070861a59fee37ec6`. Its checked configuration is
 `artifact_class=historical_only` with `execution_authority=denied`. It has no
 authorized actual-run pricing receipt and grants no completion, production,
 training, GPU or capability credit. This ruling does not merge, revive or

@@ -7,7 +7,7 @@
   "family": "family 6: c-e2b paired-legs runner + its surpass-scoring companion + a discovered hard runtime prerequisite (ember_c_e2b_e2b_arm.py) that neither of the other two families claims",
   "worktree": "landing worktree wt-land210k (sibling of the main ember tree); fresh cut from origin/master post-#777",
   "branch": "chore/210k-e2b-pair",
-  "base_sha": "70aefaa",
+  "base_sha": "1896263",
   "stage_source": "scratch/seed-export-v5/dryrun-20260704T211712Z/stage/ember_main/scripts",
   "candidates_total": 3,
   "import_closure_check": "ember_c_e2b_paired_run.py: top-level imports are all stdlib + torch + in-batch (ember_c_e2b_e2b_arm as e2b_arm). Lazy/function-scoped imports re-verified against current master: test_c0 (scripts/ember_totality/test_c0.py), ember_c14_owned_run._sha256_file, ember_c14_owned_core, receipt_write.checked_write, v0_pretrain_launch_gate, resident_adapter (scripts/ember_phase3_c14/resident_adapter.py, both build_toy_adapter and build_fp16_adapter). ember_e2b_surpass_run.py: top-level import ember_c_e2b_paired_run as paired (in-batch). ember_c_e2b_e2b_arm.py: zero repo-internal imports (copy, itertools, sys, pathlib, typing, torch only). One safe circular reference: ember_c_e2b_paired_run.py lazily imports load_owned_core_from_c14_checkpoint from ember_e2b_surpass_run (function-scoped, at point of use only) while ember_e2b_surpass_run imports paired at module level -- safe because the reverse import never fires at module-load time.",

@@ -196,7 +196,7 @@ def issue2103_real_timing_pairs():
 
 # One fixed W=8 burn-in window (no convergence gate under the v3 cure).
 STABLE_WARM_RATES = (100.0, 102.0, 101.0, 100.0, 99.0, 101.0, 100.0, 102.0)
-# a6d2c3fd pre-merge probe, control arm: 40 warm updates at 512 tokens, per-update
+# d08cce83 pre-merge probe, control arm: 40 warm updates at 512 tokens, per-update
 # seconds spread uniformly over 0.23-0.41 s with no drift. The median-window rule
 # (eps 0.10) refused it at the horizon: relative changes 0.03 / 0.22 / 0.24 / 0.21.
 PROBE_A6D2C3FD_CONTROL_WARM_RATES = (
@@ -206,7 +206,7 @@ PROBE_A6D2C3FD_CONTROL_WARM_RATES = (
     1377.0, 1369.0, 1671.0, 1406.0, 1720.0, 1886.0, 1299.0, 1255.0,
     1714.0, 2198.0, 1989.0, 1434.0, 1315.0, 1664.0, 1402.0, 1770.0,
 )
-# 2f4532c0 pre-merge probe, control arm, the 24 warm updates that the summed
+# 7629b046 pre-merge probe, control arm, the 24 warm updates that the summed
 # window rate refused (1677 / 1872 / 1733 tokens/s: 11.6 % then 7.4 %).
 PROBE_2F4532C0_CONTROL_WARM_RATES = (
     1941.2, 4804.9, 1512.3, 1702.9, 1565.9, 1431.7, 1247.4, 1517.5,
@@ -541,7 +541,7 @@ def test_aa_constants_are_the_fixed_schedule():
 
 
 def test_aa_convergence_rules_refused_both_probes_and_the_fixed_burn_in_accepts_them():
-    # Probe 2f4532c0 (24 warm updates): the summed-rate rule at eps 0.06 refused it.
+    # Probe 7629b046 (24 warm updates): the summed-rate rule at eps 0.06 refused it.
     warm_2f = [
         update_record(rate, [f"s-{index}", f"e-{index}"], tokens=512)
         for index, rate in enumerate(PROBE_2F4532C0_CONTROL_WARM_RATES)
@@ -553,7 +553,7 @@ def test_aa_convergence_rules_refused_both_probes_and_the_fixed_burn_in_accepts_
     assert census["count"] == 3
     assert census["indices"] == [1, 10, 12]
     assert census["threshold_seconds"] == pytest.approx(0.5 * census["median_seconds"])
-    # Probe a6d2c3fd (40 warm updates): the median-window rule at eps 0.10 refused it.
+    # Probe d08cce83 (40 warm updates): the median-window rule at eps 0.10 refused it.
     warm_a6 = [
         update_record(rate, [f"s-{index}", f"e-{index}"], tokens=512)
         for index, rate in enumerate(PROBE_A6D2C3FD_CONTROL_WARM_RATES)
@@ -1419,7 +1419,7 @@ def test_configured_non_aa_refuses_control_corpus_pin(tmp_path: Path):
     with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
         module.BASE.validate_text_lab_corpus(corpus, "0" * 64)
 
-# Probe 1432ec91 (v3 schema), pair 7: the excluded post-switch update was bit-identical
+# Probe 5a683491 (v3 schema), pair 7: the excluded post-switch update was bit-identical
 # across arms; the sixteen measured updates drifted by kernel order to an absolute
 # gap of 0.001026 at the window end (relative 1.58e-4), which the base same-start
 # absolute limit refused. Sampled parameters were identical across arms.

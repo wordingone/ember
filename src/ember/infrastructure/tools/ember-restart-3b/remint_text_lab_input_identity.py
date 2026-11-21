@@ -8,7 +8,7 @@ sha256 hashes of three source modules (text_lab_corpus.py, train.py,
 run_vertical_slice.py). Any commit that edits those modules' bytes without
 re-running this script strands the pin and reddens test_text_lab_corpus.py
 (#1461 root cause; recurred within hours of the #1470 instance fix at commit
-e9e0671, proving the class was not killed by a one-off hand edit).
+90426ba, proving the class was not killed by a one-off hand edit).
 
 Usage:
     python src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py --check

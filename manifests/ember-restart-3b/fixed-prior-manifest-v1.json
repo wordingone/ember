@@ -12,7 +12,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "5bfdf2d206e7cd53d383b3e4f9e43a2f0aeee8aa",
+    "commit": "8a8b14c673dec1a7e358e94568c3b5b5bb91fbe7",
     "branch": "feat/issue2183-forward-backward-boundary"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
@@ -923,7 +923,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.ts",
-          "sha256": "c18063450ed3e3c2a4ee3502cb38635610e3a58f444d3f106201ce8df97d7a7a",
+          "sha256": "6f93fe81165a4a5efb5bf0e1437f92f00b308a73ed34e2045009c7aaa9febd51",
           "size_bytes": 38665
         },
         {
@@ -1493,7 +1493,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json",
-          "sha256": "d975ca83095e9005f96c7d06f4381c580b9a9bd2c0ddafa28ed429c0774c7324",
+          "sha256": "fb76f5ed94465e685deaec7730abcb2cc64e8a2a85f361f88034cd414402041f",
           "size_bytes": 8950
         },
         {
@@ -1523,7 +1523,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/goal-live-session-compiled.test.ts",
-          "sha256": "63a81181226479d262d020c5ca0dbd4a7905aa07ea01ecd0a110406df666cbd7",
+          "sha256": "b13166f8f80b22010c37dce4ed9c4dd513b0ccc706d1cd5dd1e0a95f2d30488b",
           "size_bytes": 8990
         },
         {
@@ -1668,7 +1668,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/ink/heap-attribution-diagnostic.test.ts",
-          "sha256": "d071947580a8314f012981f9c75bab9627a9cb7594e94d327fecd83d3619597d",
+          "sha256": "550f52f9e745fbe1220ecf9c1b6dbc47d0072484a882b8e67ee2fe89d15a94c8",
           "size_bytes": 8976
         },
         {
@@ -1728,7 +1728,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts",
-          "sha256": "d74fb4e99deffd9dad460a851583fd257118e11c76ee1526db9bc144702e7dc2",
+          "sha256": "41744f96786cb2e4b8b754b33e84a529956d8bb35b91a22cbcab35243064f8a7",
           "size_bytes": 11604
         },
         {
@@ -2048,7 +2048,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/repl.test.ts",
-          "sha256": "67a68a951d3f8ae6aa0c6f6b96d1766eb412a66b6f4442f2976f111d4cc2b4e3",
+          "sha256": "93e483cd50adb26fda082875f59cd140e74d3471179eba5002b9e8365568d20d",
           "size_bytes": 11714
         },
         {
@@ -2108,7 +2108,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/screens/repl-host-telemetry-wiring.test.ts",
-          "sha256": "6ceab2e0633aacfe828c58a52e803aaed06187a1c9fecdc73476d1a356063775",
+          "sha256": "e2626154ec706586152d0a9445a5506fd6c207d15c98e52183f29853ac6ff8c4",
           "size_bytes": 4884
         },
         {
@@ -2123,7 +2123,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/screens/repl-keyboard-operator-controls.test.ts",
-          "sha256": "639fc1a703373422d67fb9a6e2187d13e44bb15ba6b1b13480af3b232b09ddd0",
+          "sha256": "1b20f6338ca22cd2e150f7f61b2720607f7122017b2ec05e6e50646b9131d0ec",
           "size_bytes": 46967
         },
         {
@@ -2528,7 +2528,7 @@
         },
         {
           "name": "src/ember/infrastructure/tools/ember-cli/src/services/issue1455-memory-soak-receipt.test.ts",
-          "sha256": "9fdc554ea0f830854fd05b49fccdbf35155e201fa46b00797b3ebc83e6fa8c97",
+          "sha256": "0825c2ec09c1f7da3a1b2f1edf62c35e21e8ee77842039f9396f6990481c35c5",
           "size_bytes": 15044
         },
         {
@@ -3441,7 +3441,7 @@
       "kind": "file",
       "provenance": "Frozen receipt validator behind the writer.",
       "path": "src/ember/governance/scripts/receipt_check.py",
-      "sha256": "591455575ac65eb25b62bd71a6aa47b29f77f406ad8f62d2d9147ae4aee75392",
+      "sha256": "5877c192ebc5f860912422a43eb41f5f7fb0595129ccb27a1a798abeb7a9f244",
       "size_bytes": 15339
     },
     {
@@ -3670,7 +3670,7 @@
       "kind": "file",
       "provenance": "The pre-registration this run is hash-pinned to (`--prereg <sha256>`).",
       "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
-      "sha256": "759d722b854d8656bac8ebba2bd498708443e43d9eca6fb17c660c1e460d264b",
+      "sha256": "4194baeb3f35deefc2d86521f72cea3c4895154f94d831f82f721f828941d0c7",
       "size_bytes": 41298
     },
     {
@@ -3678,7 +3678,7 @@
       "kind": "file",
       "provenance": "Frozen machine-readable threshold table; tighten-only.",
       "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
-      "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
+      "sha256": "ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e",
       "size_bytes": 14031
     },
     {

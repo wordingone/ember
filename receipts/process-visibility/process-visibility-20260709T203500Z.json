@@ -26,7 +26,7 @@
   }
  ],
  "covered_commits": {
-  ".": "decdc2f25eca32b860664f0dd925e5a1e12fb389"
+  ".": "5afd888d2a2d898237a819b6cae924efd323e43d"
  },
  "delegation": {
   "#557": {
@@ -57,7 +57,7 @@
  "merges": [
   {
    "pr": 557,
-   "sha": "decdc2f25eca32b860664f0dd925e5a1e12fb389",
+   "sha": "5afd888d2a2d898237a819b6cae924efd323e43d",
    "mergedAt": "2026-07-09T18:40:44Z",
    "subject": "spend-annex regen: C(-1) provenance annex round-3 (refs #17)"
   }

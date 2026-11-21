@@ -308,7 +308,7 @@ class RangeUnsupportedTests(ChunkedFetchServerTestCase):
 
 
 class ContentRangeBoundExploitTests(ChunkedFetchServerTestCase):
-    """Permanent regression coverage for the review finding on 37a95be:
+    """Permanent regression coverage for the review finding on b54abf9:
     _fetch_one_chunk trusted the server-supplied Content-Range `end` with no
     bound against either the client's own requested end or the server's own
     claimed total, so a hostile (or merely broken) server answering a small

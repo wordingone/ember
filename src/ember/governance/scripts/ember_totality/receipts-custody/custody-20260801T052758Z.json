@@ -237,7 +237,7 @@
       {
         "ref": "receipts/ember-cli/issue-1043-text-wrap/ember.exe",
         "subject_receipt": "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json",
-        "subject_receipt_sha256": "0c856572684b449427d493dd38a1d8c2faa0f959e47890c7be323fc06dd0ba43",
+        "subject_receipt_sha256": "035ba0dfd0dd68da68df2a5b901a6bdd25e00e178b2489b50206522d0799c635",
         "binary_sha256": "1181f882bdb71e329ff185f0939b9cc352b75e1bd6f106b25ec989915653ad5c",
         "classification": "EPHEMERAL_COMPILED_TEST_SUBJECT"
       }

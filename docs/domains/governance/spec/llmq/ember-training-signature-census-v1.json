@@ -13,7 +13,7 @@
   "observed_steps": 4,
   "runner_source_sha256": "4d4aa1cf85efed495e6823c570250a218bb3b99e27e95ade97c60053b38c6e75",
   "schema_version": "ember-training-signature-census-v1",
-  "self_sha256": "329115ccfdc11508da5b4918df08fe8ab95bbe20e483023843877e0d332dda77",
+  "self_sha256": "fcb9167fddd0cd015622e51f16ec3d0aa674e28d95f1277a1c93075be6d2595f",
   "signature_count": 4,
   "signatures": [
     {
@@ -289,6 +289,6 @@
       "signature_sha256": "f7ed6d57149b86d8cf8d3fd16b319f4a18c644268dfa8e43d1ac9cde047b7779"
     }
   ],
-  "source_commit": "728421bcca5092a89df483f7df804c7177c337a7",
+  "source_commit": "1a1978d18ad68c284a352518d5031f4bdff2e007",
   "status": "OBSERVED_NOT_ACTIVATED"
 }

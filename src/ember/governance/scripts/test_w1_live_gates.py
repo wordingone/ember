@@ -435,7 +435,7 @@ def test_main_dryrun_manifest_mode_receipt_write_does_not_crash():
     receipt-write path (shared by main_live's live tail and this CPU
     dry-run tail -- same two lines, same bug, same fix) end-to-end via
     main(argv) in --rung-manifest mode, with --rung-receipt left at its
-    real DEFAULT_RUNG_RECEIPT value. At the pre-fix commit (6d9185a2,
+    real DEFAULT_RUNG_RECEIPT value. At the pre-fix commit (3b1770e1,
     PR #330 merge -- the exact head attempt 2 ran against) this raises
     FileNotFoundError while writing the terminal receipt, reproducing the
     crash exactly. After the fix it must return 0 and the written receipt's

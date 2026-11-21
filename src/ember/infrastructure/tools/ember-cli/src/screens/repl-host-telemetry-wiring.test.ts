@@ -5,7 +5,7 @@
 // R1e (state/operator-pass-2026-07-26.md, "W3 diagnosed" -- corrected root cause, see the
 // delivery report): the operator-pass description of this defect as "nothing in the production
 // path calls pushGpuSample(), so vram/gpu series have ZERO entries" is WRONG as of this branch's
-// base -- commit 9f998b4 already wires `useGpuStatePoller()` -> `useHostTelemetryPoller(gpuState)`
+// base -- commit 801fadc already wires `useGpuStatePoller()` -> `useHostTelemetryPoller(gpuState)`
 // -> `host: hostTelemetry` into OperatorSurfacePane inside screens/repl.ts (verified via git blame
 // before this commit). host-telemetry-poller.test.ts already covers `createHostTelemetryPoller`
 // and `pushGpuSample` in isolation, but never through the REAL React hook chain at its production

@@ -13,7 +13,7 @@ and historical training-config subjects are execution-denied provenance only.
 They are not current Ember training, evaluation, paper, or receipt authority.
 
 Draft PR #1518 at historical head
-`4596764d381b3bae16b07c19e7e4deb4dce6543e` remains unmerged apparatus. It
+`faac8a95c6ce25ef8e4fcc4080bdcf4663196ead` remains unmerged apparatus. It
 does not close #552, authorize a current run, or replace the accepted owner
 comments below. Current `src/ember/governance/scripts/paper/contamination_scan.py`,
 `src/ember/governance/scripts/paper/provenance_manifest.py`, and `src/ember/governance/scripts/paper/compute_ledger.py`

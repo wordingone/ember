@@ -14,8 +14,8 @@
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "prereg": {
     "document": "docs/spec/ember02-preregistration-v1.md",
-    "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
-    "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5"
+    "pin": "64819ce5fff2e52d2294a5ee7f1e57e124e4c56b",
+    "thresholds_sha256": "ae845ada492d24670f6fa2f1a426ed23d312b621306d09cefd9b6e3ca7634f3e"
   },
   "exit_criterion": "R1-E2",
   "subject": {

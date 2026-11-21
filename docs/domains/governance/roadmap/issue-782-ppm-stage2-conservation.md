@@ -3,7 +3,7 @@
 Status: `SUPERSEDED_NOT_PLANNED` for the historical Stage-2 execution carrier,
 conditional on accepted transfer to EMBER-02/#1116.
 
-Source master: `87f9669c537715ff0008080c22002eff04040bba`.
+Source master: `6f041ddf914fdd7bc69fe39beeeec98068568ec0`.
 
 Review packet SHA-256:
 `4B58EA388CB411875697B0537200017BBB76521C05063670008C620CC6C9A6B0`.

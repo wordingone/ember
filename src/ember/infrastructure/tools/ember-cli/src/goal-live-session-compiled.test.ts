@@ -12,7 +12,7 @@ import {
 } from "./services/goal-live-session-frames.ts";
 
 const SRC_DIR = resolve(import.meta.dir);
-const REVIEWED_SOURCE_COMMIT = "c636fe87b3828cf21a2759abc99b597fe6480220";
+const REVIEWED_SOURCE_COMMIT = "d42da4475706c29992e62ae92bfc71492c65cd84";
 
 function text(value: Uint8Array | undefined): string {
   return new TextDecoder().decode(value ?? new Uint8Array());

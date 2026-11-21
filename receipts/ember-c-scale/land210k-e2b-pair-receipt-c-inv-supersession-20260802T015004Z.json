@@ -11,8 +11,8 @@
   },
   "goal_id": "EMBER-02",
   "historical_declared_ts": "20260711T091500Z",
-  "historical_landing_commit": "560f93c3ceb9a86e67f663f9f8bfc5c8389ccaa7",
-  "historical_receipt_sha256": "f0e121726a6f9803a56a73a18e5bfcd61085f92caed6a7ac1697d94f50799ee2",
+  "historical_landing_commit": "e0cad406f38908e00b17d2af0a93ab71b43e3e65",
+  "historical_receipt_sha256": "6782c8f7133d9d186dccc668dc1247c87864cb94ba2bb7268542fddba1c12707",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "revalidation": {

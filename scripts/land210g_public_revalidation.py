@@ -71,8 +71,8 @@ GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 TICKET = "LAND210G-EXPERIMENT-RUNNERS"
-LANDING_COMMIT = "617f071e36b2af20efccd9af4a574ea488ed3088"
-EXPECTED_SUBJECT_COMMIT = "e8ca7191fd5ac29594868894ced6e5b5efafa9f8"
+LANDING_COMMIT = "acb103a0bac80908b821859f13531f07d4d29c9a"
+EXPECTED_SUBJECT_COMMIT = "cdd2aaf123c40db584f2313f7c316d9d96a5b018"
 EXPECTED_HISTORICAL_SHA256 = (
     "ca77488917d85467f021c4d939e8a061aa0880ffa9ed99b10de5496cd6ccb703"
 )
@@ -81,23 +81,23 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 LINEAGE_COMMITS = {
     "experiment_runners_pr_766": LANDING_COMMIT,
-    "spend_field_repair_pr_775": "0bfa3a46a3dcf7c1693a6c92025442386b2c21d6",
-    "family_3_stragglers_pr_777": "70aefaa0a92fdebd376c068133749cc87760d074",
-    "e2b_pair_pr_780": "560f93c3ceb9a86e67f663f9f8bfc5c8389ccaa7",
-    "authority_lock_pr_807_head": "4f758db0ec11b5089698d80215a1145d48ef7537",
-    "mixture_retirement_pr_1132": "7ea8b38b3ea727495e392884ee53c49a3697113e",
+    "spend_field_repair_pr_775": "312d4d9d4a6087e7837dd867c7a45e723cc66044",
+    "family_3_stragglers_pr_777": "1896263b899830fb1e7d4b30b3b4a485ef59d390",
+    "e2b_pair_pr_780": "e0cad406f38908e00b17d2af0a93ab71b43e3e65",
+    "authority_lock_pr_807_head": "cc434612bb8852411da7b37eeb1ae100ec4ac3aa",
+    "mixture_retirement_pr_1132": "64ba9b3b90a98491b6d91515affe29005c75f7f2",
 }
 
 EXPECTED_LATER_CHANGES = {
     "src/ember/governance/scripts/conv_c03_muon_ns3_live.py": {
         "sha256": "d45f8ac529a3d4febf3ae7253093e4d357dcc6708f032b1d6fd6f7fc2c324204",
-        "last_change_commit": "4f758db0ec11b5089698d80215a1145d48ef7537",
+        "last_change_commit": "cc434612bb8852411da7b37eeb1ae100ec4ac3aa",
         "public_pr": "https://github.com/wordingone/ember/pull/807",
         "disposition": "later authority-and-totality lock",
     },
     "src/ember/governance/scripts/ember_cbase_mixture.py": {
         "sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36",
-        "last_change_commit": "7ea8b38b3ea727495e392884ee53c49a3697113e",
+        "last_change_commit": "64ba9b3b90a98491b6d91515affe29005c75f7f2",
         "public_pr": "https://github.com/wordingone/ember/pull/1132",
         "disposition": "later historical assembler retirement",
     },

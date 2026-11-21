@@ -37,7 +37,7 @@ What this explicitly does NOT claim (claim_boundary on every output row):
   git-lineage + byte-identity revalidation only -- an honest, weaker claim
   than the bespoke land210-style producers, disclosed as such.
 
-24 receipts were RED at C-INV ground-truth time (365be536); 9 of them
+24 receipts were RED at C-INV ground-truth time (9e62d8f3); 9 of them
 (receipts/ember-totality-audit/audit-*.json x6 and
 receipts/process-visibility/*.json x3) carry NEITHER `ticket` NOR
 `receipt_class`/`leg`, so _leg_class_identity() returns None for the

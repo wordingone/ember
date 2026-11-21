@@ -4,7 +4,7 @@
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "workstream_id": "EMBER-02A"
   },
-  "capture_sha256": "3184de232a05e9de1a125e6163450c5c3df251a4133c0bd00eb953b5747231b7",
+  "capture_sha256": "9998e4269b72ab7ab20178eca75f3fa7c548b81e4d14e279bbc1b05b5b21a819",
   "captured_at": "2026-07-26T10:08:50Z",
   "excluded_pull_request_population": 44,
   "issues": [
@@ -847,7 +847,7 @@
       "url": "https://github.com/wordingone/ember/issues/111"
     }
   ],
-  "master_sha": "e8a89a39cee293d793543e025a0d03fee0181e6d",
+  "master_sha": "7e4227d8e3a64edcf65c929ecd8a0e34c86416b9",
   "open_issue_population": 215,
   "pagination": {
     "comments": [

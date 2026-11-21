@@ -1429,7 +1429,7 @@ def main():
     constitutional_invariant = {
         "invariant_sha256": INVARIANT_SHA256,
         "status": c_inv_status,  # Sourced from C-INV probe result
-        "genesis_ts": "2026-07-06T14:13:23-07:00",  # committerDate of genesis merge (commit 9c89f7f66)
+        "genesis_ts": "2026-07-06T14:13:23-07:00",  # committerDate of genesis merge (commit e3892493f)
         "errata_sha256": errata_sha256,
         "errata_length": errata_length,
         "c_inv_receipt_path": c_inv_receipt_path,  # Path to the newest timestamped C-INV receipt (issue #377)

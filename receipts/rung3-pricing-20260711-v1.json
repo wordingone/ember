@@ -4,7 +4,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "source_commit": "94fc16408e382461370698f4098b4b8c0765d9cd",
+  "source_commit": "7e7967f3a0afd9a1b0a2e097e8d0c8327f612054",
   "issue": 795,
   "status": "ACCEPTED_HISTORICAL_DERIVATION",
   "measurement_boundary": "DERIVATION_ONLY_NO_NEW_MEASUREMENT",

@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Exact base: `1886adca492523e679cb0bbc7db263f6c80a8eb5`.
+- Exact base: `408ffabec38849f65c6afe4357c43daebcc62d4d`.
 - Work is governed by issue #1251 and must append, not erase, corrections to #894, #54, and #565.
 - No model, training, benchmark, or capability completion claim.
 - Every production change follows witnessed RED then GREEN.

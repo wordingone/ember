@@ -71,7 +71,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     let now = 0;
     const withDiagnostic = render(createRendererDiagnostic({
       filePath,
-      sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+      sourceCommit: "64f3e83656a754bf7a81aa16d4f0361003689158",
       now: () => now,
       emitEveryMs: 30_000,
     }));
@@ -86,7 +86,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     let handle: ReturnType<typeof mountInk> | undefined;
     try {
       process.env[RENDER_DIAGNOSTIC_ENV] = filePath;
-      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "d76e9bfd285f30536ef6922ea03c6b89c82ae47a";
+      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "64f3e83656a754bf7a81aa16d4f0361003689158";
       handle = mountInk(React.createElement(Text, null, "env-wired"), {
         stream: { write() { return true; } },
         stdout: { columns: 20, rows: 2 },
@@ -115,7 +115,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     let handle: ReturnType<typeof mountInk> | undefined;
     try {
       process.env[RENDER_DIAGNOSTIC_ENV] = filePath;
-      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "d76e9bfd285f30536ef6922ea03c6b89c82ae47a";
+      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "64f3e83656a754bf7a81aa16d4f0361003689158";
       handle = mountInk(React.createElement(Text, null, "frame-0"), {
         stream: { write(chunk: string) { raw += chunk; return true; } },
         stdout: { columns: 20, rows: 2 },
@@ -146,7 +146,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     fs.writeFileSync(filePath, "custody\n", "utf8");
     expect(() => createRendererDiagnostic({
       filePath,
-      sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+      sourceCommit: "64f3e83656a754bf7a81aa16d4f0361003689158",
     })).toThrow("RENDER_DIAGNOSTIC_PATH_EXISTS");
     expect(fs.readFileSync(filePath, "utf8")).toBe("custody\n");
   });
@@ -156,7 +156,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     let now = 1_000;
     const diagnostic = createRendererDiagnostic({
       filePath,
-      sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+      sourceCommit: "64f3e83656a754bf7a81aa16d4f0361003689158",
       now: () => now,
       emitEveryMs: 30_000,
     });
@@ -194,7 +194,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     const row = rows[1]!;
     expect(row.schema_version).toBe("ember-renderer-diagnostic-v1");
     expect(row.sequence).toBe(1);
-    expect(row.source_commit).toBe("d76e9bfd285f30536ef6922ea03c6b89c82ae47a");
+    expect(row.source_commit).toBe("64f3e83656a754bf7a81aa16d4f0361003689158");
     expect(row.pid).toBe(process.pid);
     expect(row.runtime_origin_token).toMatch(/^\d+$/);
     expect(row.render_calls).toBeGreaterThanOrEqual(5);
@@ -215,7 +215,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     let now = 1_000;
     const diagnostic = createRendererDiagnostic({
       filePath,
-      sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+      sourceCommit: "64f3e83656a754bf7a81aa16d4f0361003689158",
       now: () => now,
       emitEveryMs: 30_000,
     });
@@ -247,7 +247,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
       let now = 1_000;
       const diagnostic = createRendererDiagnostic({
         filePath,
-        sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+        sourceCommit: "64f3e83656a754bf7a81aa16d4f0361003689158",
         now: () => now,
         emitEveryMs: 30_000,
       });

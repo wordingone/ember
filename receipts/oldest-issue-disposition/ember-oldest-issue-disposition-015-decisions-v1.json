@@ -4,7 +4,7 @@
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
     "workstream_id": "EMBER-02A"
   },
-  "master_sha": "e8a89a39cee293d793543e025a0d03fee0181e6d",
+  "master_sha": "7e4227d8e3a64edcf65c929ecd8a0e34c86416b9",
   "rows": [
     {
       "authority_review": null,

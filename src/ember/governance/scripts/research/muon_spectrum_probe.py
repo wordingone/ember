@@ -439,7 +439,7 @@ def run_spectrum_collection(dims, warmup, timed, device=None, arm="synthetic",
     )
 
     # INTEGRITY GATE BINDING (A7): replicate leg-1's LITERAL RNG sequence
-    # Leg-1 code (commit 937f8e1):
+    # Leg-1 code (commit f477e6d):
     #   torch.manual_seed(MODEL_SEED=42)  [global RNG]
     #   model = MicroTransformer(...)     [consumes global RNG for weight init]
     #   batch_gen = torch.Generator().manual_seed(BATCH_GEN_SEED=20260706)  [separate gen]

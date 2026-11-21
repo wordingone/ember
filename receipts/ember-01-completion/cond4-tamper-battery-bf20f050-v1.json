@@ -28,7 +28,7 @@
     },
     "issue_census_builder": {
       "path": "scripts/ember_01_custody/issue_census.py",
-      "sha256": "106d74bad84aef269dca360beebec148b689c97b26c872f02759bd8a6803c5cc"
+      "sha256": "3ed6616c286a3688db17dff2d55b20403f9dd0f8be442f135096a1a02c0a76e6"
     },
     "identity_validator": {
       "path": "scripts/ember_01_identity/validate_identity.py",

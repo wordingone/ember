@@ -691,7 +691,7 @@ def _selftest():
         f"SELFTEST: unexpected disposition status {result['disposition']}")
 
     # --- sensitivity_preflight() integration: this receipt shape must be
-    # exactly what exp711_verdict's preflight (landed 0cee0b4) accepts.
+    # exactly what exp711_verdict's preflight (landed 53b2382) accepts.
     preflight_receipt = {"direction_correct": result["direction_correct"],
                           "measured_delta": result["measured_delta"]}
     live_check = ev.sensitivity_preflight(preflight_receipt, floor=FROZEN_FLOOR)

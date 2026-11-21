@@ -26,7 +26,7 @@
   }
  ],
  "covered_commits": {
-  ".": "5dd0539a05445ac3904cb8279719e3d26760d65a"
+  ".": "7c71509af789049635780285cfce4268e35f3a20"
  },
  "delegation": {
   "#570": {
@@ -63,7 +63,7 @@
    "pr": 569,
    "what": "drop two superseded debug receipts",
    "mergedAt": "2026-07-09T14:59:03Z",
-   "sha": "c5607303"
+   "sha": "2f5a335b"
   },
   {
    "pr": 568,
@@ -75,25 +75,25 @@
    "pr": 571,
    "what": "render integrity: banner/input/status regions + overflow:hidden renderer-wide",
    "mergedAt": "2026-07-09T15:45:04Z",
-   "sha": "b1ee1020"
+   "sha": "494f76b7"
   },
   {
    "pr": 573,
    "what": "forward mmap_cache_dir through run_v0_segment + regression test",
    "mergedAt": "2026-07-09T16:36:50Z",
-   "sha": "a6321769"
+   "sha": "b6f34f5a"
   },
   {
    "pr": 574,
    "what": "P0-B activity-feed watermark/exclusion/coalescing",
    "mergedAt": "2026-07-09T16:36:48Z",
-   "sha": "33e01642"
+   "sha": "1f3eeeba"
   },
   {
    "pr": 578,
    "what": "tailpoll per-tick emission cap + boot-path diagnostics",
    "mergedAt": "2026-07-09T17:23:06Z",
-   "sha": "5dd0539a"
+   "sha": "7c71509a"
   }
  ],
  "prs_closed_unmerged": [

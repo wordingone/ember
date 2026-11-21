@@ -6,7 +6,7 @@
   "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization) for checkpoint files; sha256 over device-normalized (cpu, contiguous, bitcast-to-uint8) tensor bytes prefixed with shape+dtype for every model/optimizer state tensor and RNG buffer hashed below (the tensor_hash convention used throughout this receipt)",
   "ref": "issue #735 comment 4942417647 (coordinator erratum + scope-narrowing on the landed w1-baseline-replay-closure-20260711T025650Z.json receipt); supplements, never retro-edits, that receipt -- append-only evidence. v2 repair round: PR #758 review (external falsifier BLOCK, CLEAR on load-path values / BLOCK on the unscoped verdict) -- binds the runtime reconstruction inputs + closure config_sha, and narrows the verdict language accordingly.",
   "source_commit": {
-    "sha": "8bac592b62bc60e2a2c2e2484ddbb2b685fe0e1f",
+    "sha": "1907f5a36cc7bfed50881edd3a341ed564969ce4",
     "working_tree_dirty": true,
     "available": true
   },

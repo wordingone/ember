@@ -43,7 +43,7 @@ each `name_hits` file is still required before any entry is adjudicated.
 ## Live findings, 2026-08-12
 
 Run against the live main working tree at commit
-`1e843d23c02c6299e1286ba188a8129d7f2fc317` (the manifest this scan is bound
+`97dae89a4daafa2784ad54bbf4326ce589b2e5c8` (the manifest this scan is bound
 to is not committed — see below):
 
 - **27 / 82** top-level entries have at least one tracked-repository

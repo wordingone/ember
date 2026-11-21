@@ -4,7 +4,7 @@ Status: `SUPERSEDED_NOT_PLANNED` becomes effective only after independent
 exact-head review, green required checks, and merge of this carrier. This file
 does not claim that the registered sweep ran.
 
-Public-master basis: `aa569a9f53ce4caacd7f958a1f37c01a8c434e3f`.
+Public-master basis: `f310a00aad7aa783294022305a975ebee05770ee`.
 
 ## Accepted transfers
 

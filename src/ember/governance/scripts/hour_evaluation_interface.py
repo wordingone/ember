@@ -84,7 +84,7 @@ HOUR_SCHEMA = 'ember-cia-hour-result-v1'
 # row re-readable by anyone; the checkout path only makes it findable on one host, so the commit
 # is recorded and the path is not.
 PRODUCER_ROOT = 'the ember repository, read at PRODUCER_COMMIT'
-PRODUCER_COMMIT = '717cf23412516865bb4271dbff2a225018efed69'
+PRODUCER_COMMIT = '4b86c5721307c9942fe462c98b5b49153f28ce27'
 
 
 class InterfaceRefusal(Exception):

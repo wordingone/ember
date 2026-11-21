@@ -1,7 +1,7 @@
 {
     "schema_version":  "ember-branch-deletion-proposal-v1",
     "generated_at":  "2026-07-17T17:04:44Z",
-    "public_master_git_oid":  "f919b116066106fc91a7d86feff39eecc70e14d0",
+    "public_master_git_oid":  "11425de39b64a8a2b823ff4932b4d958a310442e",
     "baseline":  {
                      "open_issues":  242,
                      "remote_branches":  237,
@@ -15,7 +15,7 @@
     "screened_examples":  [
                               {
                                   "branch":  "feat/576-tailpoll-cap-instrumentation",
-                                  "head_oid":  "ec127731c7d5262fb196cc845e0946fd28a26811",
+                                  "head_oid":  "8bbfc8eea9713c272dd8e3b21c5b328ac5588204",
                                   "merged_pr":  578,
                                   "merged_at":  "2026-07-09T17:23:06Z",
                                   "reachability":  {
@@ -27,7 +27,7 @@
                               },
                               {
                                   "branch":  "docs/acceptance-250-goal-fix-verified",
-                                  "head_oid":  "d3f720437a134de6cae06b8814ddf3b8701b2d94",
+                                  "head_oid":  "f8d91459167fdd10477e15095580336c42943b81",
                                   "merged_pr":  284,
                                   "merged_at":  "2026-07-06T20:38:46Z",
                                   "reachability":  {
@@ -39,7 +39,7 @@
                               },
                               {
                                   "branch":  "chore/custody-land-8",
-                                  "head_oid":  "e2bd7130056b6a5e79aa370828603b506e32e07a",
+                                  "head_oid":  "f79fe8778255800f3c084545d79486f019d17503",
                                   "merged_pr":  418,
                                   "merged_at":  "2026-07-08T06:47:15Z",
                                   "reachability":  {
@@ -54,47 +54,47 @@
                                        {
                                            "number":  754,
                                            "branch":  "fix/748-parent-edges",
-                                           "head_oid":  "5f71cbdc1357dcf3541a39aac1bcac590d455494"
+                                           "head_oid":  "0fba46c46a235dca8afbe09f711bb84c0a48766d"
                                        },
                                        {
                                            "number":  799,
                                            "branch":  "fix/cbase-clause-d-dryrun",
-                                           "head_oid":  "e1b18eb22d090a9af8dd7191b8d7e7ad5f4945f2"
+                                           "head_oid":  "89609ddc51730e5db2018eeea59a2ad0c9addcbc"
                                        },
                                        {
                                            "number":  806,
                                            "branch":  "fix/cockpit-ux-240-243-242",
-                                           "head_oid":  "981dfef8eb9b721510c42e64fe63ec53c8be04c2"
+                                           "head_oid":  "be8e12ff57ad99ee7411b303f70f9f142bcd8420"
                                        },
                                        {
                                            "number":  809,
                                            "branch":  "feat/ember-01c-identity-contract",
-                                           "head_oid":  "f7eafdd9bdfb373e4c77d9c4f52180f58bd0c024"
+                                           "head_oid":  "0d737d3710091ba3995935624c5d5cfb687f7280"
                                        },
                                        {
                                            "number":  810,
                                            "branch":  "feat/ember-01b-custody-benchmark-census",
-                                           "head_oid":  "feda8c59878a9fc175488b9beec7c56cbb018448"
+                                           "head_oid":  "b6f0d7d5b5ac1c276df493fa2a9699237094085b"
                                        },
                                        {
                                            "number":  821,
                                            "branch":  "feat/ember-restart-vera-spider-adapter",
-                                           "head_oid":  "81a49c2b7c0a36e2c61a06429304ea6d0a67fa21"
+                                           "head_oid":  "52a30d0c732b7efc320bbd1a687af55477bc5c00"
                                        },
                                        {
                                            "number":  846,
                                            "branch":  "feat/ember-restart-vera-benchmark-matrix",
-                                           "head_oid":  "af90cccd36cb0c7cd8d21f98d066c78380d0b24c"
+                                           "head_oid":  "bcd667364599ba874c71c21bfad48eb30d44e8d1"
                                        },
                                        {
                                            "number":  862,
                                            "branch":  "feat/ember-restart-vera-benchmark-matrix-queue6",
-                                           "head_oid":  "68e67fa68a6bf7529d1c2f2165f736a556c2f860"
+                                           "head_oid":  "dc91356f3c3b53bf77184374ec9b0326c5e97798"
                                        },
                                        {
                                            "number":  878,
                                            "branch":  "feat/ember-restart-vera-benchmark-matrix-next",
-                                           "head_oid":  "b0a412f1a2072d8711d55f5d8b6873bc8243d1cf"
+                                           "head_oid":  "10322e7c9049a09c8c3ef593316a8be71fa8f467"
                                        },
                                        {
                                            "number":  911,
@@ -104,23 +104,23 @@
                                        {
                                            "number":  913,
                                            "branch":  "feat/ember-counter-publication-repair-successor",
-                                           "head_oid":  "69435720ed7468deef72386628874019bbcc1d21"
+                                           "head_oid":  "95e0a651a795256d0ec5465c03228c8190621628"
                                        },
                                        {
                                            "number":  915,
                                            "branch":  "feat/ember-restart-vera-benchmark-matrix-p1",
-                                           "head_oid":  "fbf28c8f1bcfdd5da31851f574dde88cf5bc4d73"
+                                           "head_oid":  "25dd8955de6071d99f6e5971c8e7f15efb225dbc"
                                        },
                                        {
                                            "number":  919,
                                            "branch":  "fix/postrun-checkpoint-admission",
-                                           "head_oid":  "574d54fd114ff36ed1c923258cd47983e84fcb56"
+                                           "head_oid":  "97253767f46e6d466c68aae6434bfd7ec245076f"
                                        },
                                        {
                                            "number":  920,
                                            "branch":  "docs/continuous-custodian-c3",
                                            "head_oid":  "SELF_REFERENTIAL_UNBOUND",
-                                           "snapshot_head_oid":  "0e83f071f73ae0c6b752d47cee8912b3e6fe812f"
+                                           "snapshot_head_oid":  "07ab6631b28990a60acb3014ecc6d2cc4101f319"
                                        }
                                    ],
     "deletion_rules":  [

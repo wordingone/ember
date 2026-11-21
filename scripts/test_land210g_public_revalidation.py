@@ -18,7 +18,7 @@ HISTORICAL = (
     / "ember-c-scale"
     / "land210g-experiment-runners-receipt.json"
 )
-SUBJECT = "e8ca7191fd5ac29594868894ced6e5b5efafa9f8"
+SUBJECT = "cdd2aaf123c40db584f2313f7c316d9d96a5b018"
 
 
 def load_revalidator():

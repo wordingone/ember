@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
-    "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+    "commit": "580fe6648049e3d4e5b7f97c3698655d3a6e00c0",
     "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
     "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
     "frozen_dispositions_raw_sha256": "abeb1322a2bd9fcace6acd372fcd9f0a0c310103809c80e75ee3547ecb395575",

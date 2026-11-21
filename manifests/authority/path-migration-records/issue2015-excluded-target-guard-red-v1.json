@@ -4,7 +4,7 @@
   "workstream_id": "EMBER-02B",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "result": "RED_AS_EXPECTED",
-  "base_commit": "a190f5d64b9a244e89add25f9a761696ebbd1a64",
+  "base_commit": "d01babb9ea0f496f033f276961fa1037e8792343",
   "test_path": "tests/ember_restart_model/domain-governance/test_issue2015_path_migration_partition.py",
   "test_sha256": "6747f0f5a9a524fe1dd956fd25830692068ec5584df59e08a57f7951c15870e6",
   "planted_shim": {

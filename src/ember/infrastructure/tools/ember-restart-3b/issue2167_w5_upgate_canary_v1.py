@@ -53,7 +53,7 @@ W5_ARM_KERNEL = {"control": "bf16", "treatment": "fp8"}
 # first post-switch update in all eight pairs). W5 changes the forward GEMM numeric
 # format at 14 sites, so a cross-arm difference at that scale IS the treatment, not
 # drift: the inherited gates assert a property this unit is not required to have and
-# are ten times tighter than its own bar. Real-path finding at merged head 32b5b927
+# are ten times tighter than its own bar. Real-path finding at merged head 11588294
 # (probe issue2167-w5-ab-probe-32b5b927-20260906T1110Z): the base row-loss gate refused
 # pair 0 at absolute 2.0294e-3 / relative 2.1678e-4, and the robust measured-window
 # gate would have refused pairs 0 and 6; worst observed relative delta across the eight

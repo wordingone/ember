@@ -174,7 +174,7 @@ Enumerated individually in `PATHPAT_FIXTURE_EXCLUDE_ARGS` in `tools/repo-guard.s
 operator-name checks still cover both files in full.
 
 - `receipts/ember-02-launch-authority/certificate.json`
-  (sha256: `10696f763a682e47e243d3b72cf6e85e24b128faeda43b69ee494e7438fcd8a0`)
+  (sha256: `94a049bb024e36c7ec099dbe398f49b5cda906246d83dfdb20038fc8ebdd3619`)
   — the SPINE_CERTIFIED declaration. This digest is its identity: it is cited by
   `declaration-ledger.jsonl` and by `run-spec.json`, and issue #1401 acceptance
   clause 4 requires a stranger to reproduce it from the committed bytes. Contains:
@@ -182,7 +182,7 @@ operator-name checks still cover both files in full.
   `execution_scope` custody/artifact roots carrying the project drive.
 
 - `receipts/ember-02-launch-authority/run-spec.json`
-  (sha256: `02ef9f24cbc5b5bcd7d1412e8b3d86897b5854c87d8c278acec2ab1d54ed88c8`)
+  (sha256: `e6a6af0d821829186c343c8f46db1ebdf8eadbb06f2116041d5e86b231c242a5`)
   — the certified run-spec bound to that certificate. Its `requested_scope` roots are
   compared literally against the certificate's `execution_scope`; redacting one side
   of that comparison and not the other would make a consistent pair read as a
@@ -226,7 +226,7 @@ The exclusion covers the whole paths check for each file, Windows rules included
 operator-name checks still cover them in full.
 
 - `receipts/ember-01-custody/freeze-artifact-integrity-issue531-v1.json`
-  (sha256: `c375ae6cda92b0d2944f2e2755f04f13d970ce6bcb923064cdabd41be177fefa`)
+  (sha256: `ac0cfadcb1dfe215111735ba555401829c2fcc20be722af9f076b3c1e6bc31d6`)
   — a custody freeze artifact that pins other files by hash; the match is a truncated
   on-screen label inside an embedded terminal capture, not a path the host wrote.
   Editing custody evidence is out of bounds.

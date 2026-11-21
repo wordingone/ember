@@ -44,7 +44,7 @@
     "historical_receipt": "1c7aefb790878a643ac460788e4b49d62681c83bd8d36d4766c048cd78721eec",
     "probe": "1146b1d903db61e059b5608838bd4d80dde4be6bb5570fd75ef7ce68a18551f9",
     "producer": "6c58288ac2b5e162a6da6d0e7a0310b3319b4fa33c3fd81569937c60bca10ce9",
-    "satisfying_receipt": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8"
+    "satisfying_receipt": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9"
   },
   "supersedes": "receipts/cbase-grow-rung/c-grow-candidate-audit-20260710T172304Z.json",
   "ticket": "C-GROW-CANDIDATE-AUDIT",

@@ -183,10 +183,10 @@
       "resolved_script": null,
       "attestation_sidecar": "receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json",
       "attestation_cites": [
-        "git commit 964a997",
+        "git commit 1f59a63",
         "PR #607"
       ],
-      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone + evidence (c) manually-authored: commit 964a997 ('ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift (#607)') adds ONLY this receipt JSON (62 lines), no .py/.ts/.js/.sh file alongside it (`git show --stat 964a997` confirmed). The receipt's own content is a hand-typed citation-drift repair note (prose 'scope'/'provenance'/'note' fields re-citing an existing, already-documented checkpoint at a probe-resolvable path) -- same manually-authored-governance shape as the existing c48-gate-stats-review-*/raw-corpus-materiality-* GENERATOR_ABSENT_HISTORICAL_BASENAMES entries, never a script output. Content re-scanned with this tree's own PAID_CLIENT_PATTERNS + API_KEY_ENV_NAME_RE detectors: zero hits on both (client_hits=[], key_hits=[])."
+      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/cbase-clause-a-checkpoint-citation-repair-20260709T234558Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone + evidence (c) manually-authored: commit 1f59a63 ('ember-cli: repair C-BASE clause (a)/(c) checkpoint citation drift (#607)') adds ONLY this receipt JSON (62 lines), no .py/.ts/.js/.sh file alongside it (`git show --stat 1f59a63` confirmed). The receipt's own content is a hand-typed citation-drift repair note (prose 'scope'/'provenance'/'note' fields re-citing an existing, already-documented checkpoint at a probe-resolvable path) -- same manually-authored-governance shape as the existing c48-gate-stats-review-*/raw-corpus-materiality-* GENERATOR_ABSENT_HISTORICAL_BASENAMES entries, never a script output. Content re-scanned with this tree's own PAID_CLIENT_PATTERNS + API_KEY_ENV_NAME_RE detectors: zero hits on both (client_hits=[], key_hits=[])."
     },
     {
       "path": "receipts/cbase-gpu-verify-20260707T014930.json",
@@ -584,7 +584,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json",
-      "sha256": "b1b23804ecb51d9bedc730c5a3a7bc40be1c377d1416ac5f5accd5c5085bb1e8",
+      "sha256": "1572b01636f703cfc17be5b12ae317f4124f8c047cc731ed385146d2e0a744b9",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -812,7 +812,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T160854Z.json",
-      "sha256": "2a993241405270b6b157ac4cae650503706f9418886da8397c6ed01a1ba66287",
+      "sha256": "614ed6edb6f629685ca7209a22d1d395de0577f9653727d604d9d883846dec7f",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -822,7 +822,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T171259Z.json",
-      "sha256": "1de6c61e85b9d973b13f76f01c242d1e52c7604cd09ec9e2ea9a69debcda3a1c",
+      "sha256": "e20fdb6cead9327a2357c453d995e638a1e24272d77274e86bfce6f3d11d8d64",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": false,
@@ -832,7 +832,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json",
-      "sha256": "704d6c5a7b300ae36d1111b737ec01a5924ca309d2593a6e9d4d6540625eb8db",
+      "sha256": "441eaba1a0fb186115cecc7225ea176bd6702185ed9355ccb567f801456155dd",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -852,7 +852,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-gpu-offload-probe-20260709T092042Z.json",
-      "sha256": "0de233a1d8f2780a79c4ba69f33b517d47734605738a4b1461c22c60d84e7a54",
+      "sha256": "013ec299d7d5b0eedf9d20e6b2f7660b026a9bc699ee2208f3c44cd8d195ddbc",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -872,7 +872,7 @@
     },
     {
       "path": "receipts/cbase-grow-rung2-stabilize-transplant-wall-diagnostic-20260709T130000Z.json",
-      "sha256": "414a5ad6c6e748003e72b9e031b70825a35552dd8a6249b35aff6f129b6cd3f5",
+      "sha256": "855ae80c02c2b80ac3aee2dc5925afc3181aa545ebafc16a0cb15f0274d854e9",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1093,7 +1093,7 @@
     },
     {
       "path": "receipts/custody-curation-20260708T235000Z.json",
-      "sha256": "d78fdc71387429509af9bc504fc046a6342c6a223ad4e06f87ac7c69a762a764",
+      "sha256": "7b1dda9a1a7ec303108eaa64757ec6ea693a822c3a9cfb51d6ec1efc91cd98b1",
       "evidence_class": "generator_absent_content_clean",
       "evidence_subtype": "manually_authored",
       "scanned_surfaces": [
@@ -1411,7 +1411,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-44-43Z/receipt-redacted-edition.json",
@@ -1439,7 +1439,7 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T02-53-31Z/receipt-redacted-edition.json",
@@ -1467,7 +1467,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T03-00-39Z/receipt-redacted-edition.json",
@@ -1495,7 +1495,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T03-07-06Z/receipt-redacted-edition.json",
@@ -1523,7 +1523,7 @@
       ],
       "verdict_pass_class": true,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-cockpit-live-surface1/2026-06-28T05-41-41Z/receipt-redacted-edition.json",
@@ -1551,7 +1551,7 @@
       ],
       "verdict_pass_class": false,
       "resolved_script": null,
-      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit d3dff30): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
+      "notes": "evidence (a) external-tree import: each receipt's own `exact_rerun_command` field (a field name distinct from every entry in CMD_FIELD_CANDIDATES, so the field-based resolver never sees it) names a local one-off capture helper (scripts/ember_cockpit_live_capture.cjs) that was never committed to this tree -- confirmed absent (no such file on disk anywhere under this repo, zero grep hits for its name in scripts/, tools/, or docs/). This whole directory was restored wholesale via the C-CUSTODY-23 import (receipts/custody-curation-20260708T235000Z.json, source_commit fa49af4, 'public: receipt hygiene banking (26 files)', landed at commit 851f2b8): a live local UI-capture session against a local qwen model server, never a paid-API call -- same historical-import shape as receipts/ember-mvp/ above. Receipt's own content scanned clean: zero paid-client pattern or paid-API-key env name hits."
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T145316Z/d3-broader-multifamily-loop-receipt.json",
@@ -1611,7 +1611,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "bab6c6a765ed4eec23f5290a023f8309178a687fd30dc966dcc8e08787b10356",
+      "sha256": "ed9f2c89d0bb400baed3e8334f3b9c63b22b5ad65d892ddb79b97c9eab755f17",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1751,7 +1751,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T012626Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "d42d5f0bc09b979e5f72adb925e6418a0d152b5c1dd594d5baf0cd043d76ea03",
+      "sha256": "02de24cca6e56736a9ba22a114eafff389cd68dfea8baf9f6ef6c9bd76fbaa66",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -1891,7 +1891,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013548Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "e96e9d91c1dad70c0129ff7c0a7e59b0ba23bfdcc47aa0c81cb10eb3d080be53",
+      "sha256": "0929801ea9f2509997b02b564ca53d7674dae78d62382c00e04d18b3c18f7062",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2031,7 +2031,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-broader-multifamily-loop-20260622T013711Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "484c2ac2338d741e3437289cd45c30987d87ba2f0d6c5fa5a1d72a53d4d1dd79",
+      "sha256": "15e75bd9d02e06a062d88a69c3a4b4fe5873c0e807c78432f9513723825e22c4",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2283,7 +2283,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260621T133823Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "5900ede6089dcdb7c24d78c757a7b9ac18a0f574a52342f0c8b31ec6bddef755",
+      "sha256": "18943823846489f3883c85c197c8668fff9e94db0aa0b0271d37b2bc41037405",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2451,7 +2451,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-generalized-candidate-20260622T012000Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "1b13626e23e3e57bd9cbf60956516ab54e41ee98615084e0eb1bf6f9d5bd6570",
+      "sha256": "649868f7e29457936ef0de69c9ee082b4e45989f76972dac628bf11d4c37cea6",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -2983,7 +2983,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-native-loop-20260708T221708Z.json",
-      "sha256": "a4e8101f114fbd04393ad359337837f0037ff6c1ccf170a99bd1090a345b74b7",
+      "sha256": "fd7db7cd71d0563ee50f4a71537f3d2831d345a114954c30108026243a590ef6",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -3151,7 +3151,7 @@
     },
     {
       "path": "receipts/ember-d3-native-loop/d3-transfer-task21-24-repair-20260622T014300Z-c6-rerun-20260709T233518Z/d3-generalized-candidate-receipt.json",
-      "sha256": "260b34060a07f32d6ba55d742d85129b8ea59f4fe743c8237f5e72b70981f5d2",
+      "sha256": "2bc9c34f748b3e07a77ebf3eeb6b1d73e4de22f39eabf58c74b8cd528f21b2c3",
       "evidence_class": "script_scanned_clean",
       "scanned_surfaces": [
         "anthropic_client_call",
@@ -7406,7 +7406,7 @@
     },
     {
       "path": "receipts/floor_contract_manifest_final_20260705T132713Z.json",
-      "sha256": "06cac7e9dbefd193e17fda44ae9c489959830b40db4071896aa1bab62cabbcf6",
+      "sha256": "25ab4a01a92a0fbe8c40a3d28f591cdfa326fdd981a455bec7c2a8b9ce6f70ef",
       "evidence_class": "declared",
       "scanned_surfaces": [],
       "verdict_pass_class": true,
@@ -8240,7 +8240,7 @@
         "receipts/grow-op-rung2-void-20260708T060900Z.json",
         "receipts/grow-op-verify-20260708T060841Z.json"
       ],
-      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/grow-op-verify-20260707T220138Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone: this receipt was added by commit 9062e073573a1bb8276fd977419af22906391f04 ('C-BASE clause (d): grow-operator DRY-RUN receipts'), whose full diff (git show --stat) touches ONLY receipts/grow-op-verify-20260707T220138Z.json and the paired receipts/grow-operator-dryrun-20260707T220138Z.json -- zero .py files in that commit. No script under scripts/ or tools/ constructs either basename anywhere in this branch's HEAD-reachable history (confirmed: no scripts/cbase_grow_verify.py or similarly-named harness was ever added; the only cbase_grow_*.py scripts in history are cbase_grow_dryrun.py/cbase_grow_live.py/cbase_grow_rung.py, none of which match this receipt's own content, which carries no script/cmd/generator field of any kind). This receipt's CURRENT on-disk content (verdict=PASS, net2net_assertion.passed=false, max_abs_diff=0.0) is the ORIGINAL fabricated measurement later superseded by grow-op-rung2-void-20260708T060900Z.json's VOID disposition; that VOID receipt's own supersedes entry records only a 16-hex-char TRUNCATED prefix of this file's sha256 (ea2806b150ca66fc, vs the full 64-char ea2806b150ca66fc86123289a4055f9328948bdd27b8a4500020b4cedc538486), so it does not satisfy void_supersession.py's exact (basename, full-sha256) match -- this receipt is NOT excluded from the decisive-claim corpus by the VOID-supersession mechanism and needs its own annex coverage independent of the VOID receipt. Content re-scan: zero paid-client-pattern or paid-API-key-env-name hits in this receipt's own raw JSON text (schema_version/experiment/arm/verdict/timestamp/net2net_assertion/grow-operator fields only)."
+      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/grow-op-verify-20260707T220138Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone: this receipt was added by commit 7922ea3ceeb346a783e77ca83792f9c67c11c4d7 ('C-BASE clause (d): grow-operator DRY-RUN receipts'), whose full diff (git show --stat) touches ONLY receipts/grow-op-verify-20260707T220138Z.json and the paired receipts/grow-operator-dryrun-20260707T220138Z.json -- zero .py files in that commit. No script under scripts/ or tools/ constructs either basename anywhere in this branch's HEAD-reachable history (confirmed: no scripts/cbase_grow_verify.py or similarly-named harness was ever added; the only cbase_grow_*.py scripts in history are cbase_grow_dryrun.py/cbase_grow_live.py/cbase_grow_rung.py, none of which match this receipt's own content, which carries no script/cmd/generator field of any kind). This receipt's CURRENT on-disk content (verdict=PASS, net2net_assertion.passed=false, max_abs_diff=0.0) is the ORIGINAL fabricated measurement later superseded by grow-op-rung2-void-20260708T060900Z.json's VOID disposition; that VOID receipt's own supersedes entry records only a 16-hex-char TRUNCATED prefix of this file's sha256 (ea2806b150ca66fc, vs the full 64-char ea2806b150ca66fc86123289a4055f9328948bdd27b8a4500020b4cedc538486), so it does not satisfy void_supersession.py's exact (basename, full-sha256) match -- this receipt is NOT excluded from the decisive-claim corpus by the VOID-supersession mechanism and needs its own annex coverage independent of the VOID receipt. Content re-scan: zero paid-client-pattern or paid-API-key-env-name hits in this receipt's own raw JSON text (schema_version/experiment/arm/verdict/timestamp/net2net_assertion/grow-operator fields only)."
     },
     {
       "path": "receipts/grow-op-verify-20260708T060841Z.json",
@@ -8284,7 +8284,7 @@
         "receipts/grow-op-rung2-void-20260708T060900Z.json",
         "receipts/grow-operator-dryrun-20260708T060841Z.json"
       ],
-      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/grow-operator-dryrun-20260707T220138Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone: this receipt was added by the same commit as its paired grow-op-verify-20260707T220138Z.json, commit 9062e073573a1bb8276fd977419af22906391f04 ('C-BASE clause (d): grow-operator DRY-RUN receipts'), whose full diff touches ONLY the two receipt JSON files -- zero .py files. No script under scripts/ or tools/ constructs this basename anywhere in this branch's HEAD-reachable history; the receipt's own content carries a grow_operator_evidence cross-reference field (pointing at the paired grow-op-verify receipt) but no script/cmd/generator field naming its own generator. This receipt's CURRENT on-disk content (verdict=FAIL, a synthetic hand-authored monotonic loss_trace [4.5..3.6], replays=true, replay_across_shape=true with no real training behind it) is the ORIGINAL fabricated measurement later superseded by grow-op-rung2-void-20260708T060900Z.json's VOID disposition; that VOID receipt's own supersedes entry records only a 16-hex-char TRUNCATED prefix of this file's sha256 (764da6e2e756f729, vs the full 64-char 764da6e2e756f729a71114868d91a3f83403db182c4e6576464a8a37d463eb2d), so it does not satisfy void_supersession.py's exact (basename, full-sha256) match -- this receipt is NOT excluded from the decisive-claim corpus by the VOID-supersession mechanism and needs its own annex coverage independent of the VOID receipt. Content re-scan: zero paid-client-pattern or paid-API-key-env-name hits in this receipt's own raw JSON text (schema_version/experiment/arm/timestamp/grow_operator_evidence/verification/grow_dry_run/larger_shape/replays/replay_across_shape/post_grow/net2net/grow_operator/grow_metrics/verdict fields only)."
+      "notes": "sha-pin verified via direct against 'receipts/spend-annex/attestations/grow-operator-dryrun-20260707T220138Z.json'; receipt's own CURRENT content scanned clean. Evidence: evidence (b) git-archaeology confirmed gone: this receipt was added by the same commit as its paired grow-op-verify-20260707T220138Z.json, commit 7922ea3ceeb346a783e77ca83792f9c67c11c4d7 ('C-BASE clause (d): grow-operator DRY-RUN receipts'), whose full diff touches ONLY the two receipt JSON files -- zero .py files. No script under scripts/ or tools/ constructs this basename anywhere in this branch's HEAD-reachable history; the receipt's own content carries a grow_operator_evidence cross-reference field (pointing at the paired grow-op-verify receipt) but no script/cmd/generator field naming its own generator. This receipt's CURRENT on-disk content (verdict=FAIL, a synthetic hand-authored monotonic loss_trace [4.5..3.6], replays=true, replay_across_shape=true with no real training behind it) is the ORIGINAL fabricated measurement later superseded by grow-op-rung2-void-20260708T060900Z.json's VOID disposition; that VOID receipt's own supersedes entry records only a 16-hex-char TRUNCATED prefix of this file's sha256 (764da6e2e756f729, vs the full 64-char 764da6e2e756f729a71114868d91a3f83403db182c4e6576464a8a37d463eb2d), so it does not satisfy void_supersession.py's exact (basename, full-sha256) match -- this receipt is NOT excluded from the decisive-claim corpus by the VOID-supersession mechanism and needs its own annex coverage independent of the VOID receipt. Content re-scan: zero paid-client-pattern or paid-API-key-env-name hits in this receipt's own raw JSON text (schema_version/experiment/arm/timestamp/grow_operator_evidence/verification/grow_dry_run/larger_shape/replays/replay_across_shape/post_grow/net2net/grow_operator/grow_metrics/verdict fields only)."
     },
     {
       "path": "receipts/grow-operator-dryrun-20260708T060841Z.json",

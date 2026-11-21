@@ -13,7 +13,7 @@ change issue bodies, rewrite acceptance clauses, claim roadmap completion, or
 claim model, training, benchmark, research, or capability progress.
 
 Source master at migration start:
-`8c350dfc3987234467c89ddd1e3f06134e9ab2c6`.
+`7a12fc89e3cf443b5e3928c3897b339dc1d45e7a`.
 
 Content-addressed full snapshots are retained outside Git because they contain
 the complete body and comment history:

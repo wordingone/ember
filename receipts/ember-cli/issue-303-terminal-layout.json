@@ -9,13 +9,13 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "issue_id": 303,
   "result": "PASS",
-  "source_commit": "cc5cd173f0849302a780bb8884290ecc2a194001",
+  "source_commit": "6c69ef68f5b1d4857362fee7a31de6f2053df69d",
   "binary_sha256": "976f28d2228133b064746b3782f81760e454c1853d7d211a1e16ac8c4f57bbc7",
   "evidence": {
     "resize_receipt": "current-master-resize/prompt-resize-receipt.json",
-    "resize_receipt_sha256": "d221fb7c85c06a385193eea9f92f9a9efd616efcc66bb1d212f680bc3ef13171",
+    "resize_receipt_sha256": "4f809d7813654819e6b3e7da39c2129012b3453f154065fab274de4300529c2a",
     "half_screen_receipt": "current-master-half-screen/receipt.json",
-    "half_screen_receipt_sha256": "f221ffc0239c4847864fbc2d1b3eb5da84ee4016be7cc164210eb94194354697",
+    "half_screen_receipt_sha256": "7b6c652ab47157ad13b9d574171c8c702a921edd54a1cb934798595fde497754",
     "resize_dimensions": [
       "80x24",
       "40x24",

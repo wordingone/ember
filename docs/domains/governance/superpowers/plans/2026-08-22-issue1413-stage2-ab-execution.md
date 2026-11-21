@@ -2,9 +2,9 @@
 
 **Goal:** Wire the merged census-bound FP8 and CUDA-graph primitives into the real governed vertical training loop, then produce a fail-closed matched BF16-versus-Stage-2 receipt.
 
-**Immutable base:** `e2283dfd04aa7e61436764d6821d3afe6c64f13b` (public merge of PR #1878).
+**Immutable base:** `2f848ac6708a4cd3c137c4829c5fa94082098518` (public merge of PR #1878).
 
-**Architecture:** The default governed route remains unchanged. An explicit Stage-2 flag opens only the checked-in census sidecar at raw SHA-256 `86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c`, installs FP8 only at reviewed SwiGLU down sites, and routes forward/loss/backward through one graph executor. Decode, verifier, gradient clipping, optimizer update, FP8 refresh, cursor mutation, checkpoint publication, and telemetry stay outside capture. Each arm writes a no-overwrite run receipt; a separate comparator requires identical source/config/input/seed/order, zero fallbacks, finite matched losses, real FP8 dispatches, real graph replays, and accelerated throughput strictly above 1,000 tok/s.
+**Architecture:** The default governed route remains unchanged. An explicit Stage-2 flag opens only the checked-in census sidecar at raw SHA-256 `177bbf2faf3d3f62ee25468953f963415b42c29b31d96de51a0b905a823db3d5`, installs FP8 only at reviewed SwiGLU down sites, and routes forward/loss/backward through one graph executor. Decode, verifier, gradient clipping, optimizer update, FP8 refresh, cursor mutation, checkpoint publication, and telemetry stay outside capture. Each arm writes a no-overwrite run receipt; a separate comparator requires identical source/config/input/seed/order, zero fallbacks, finite matched losses, real FP8 dispatches, real graph replays, and accelerated throughput strictly above 1,000 tok/s.
 
 ---
 

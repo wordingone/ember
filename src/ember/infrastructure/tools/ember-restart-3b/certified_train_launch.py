@@ -334,7 +334,7 @@ A1_FAMILIES = {
     "dense-tier1-full-state-adamw-cpu-offload-v1",
     "dense-tier2-owned-q-galore-v1",
 }
-A1_CONFIG_SHA256 = "a9f9ba115dc8e139e18c528b2a3e13060ab874787e8f944bfaf4fc125fb23d80"
+A1_CONFIG_SHA256 = "83928c6e91bea53801143be0c3d4ed6c3e98d238d3c6d3d48d493480a408b9c3"
 OPTIONAL_RUN_SPEC_KEYS = (
     {"training_verify_receipt_path", "training_verify_receipt_sha256"}
     | RESUME_RUN_SPEC_KEYS

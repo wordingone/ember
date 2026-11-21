@@ -3,7 +3,7 @@
  "ts": "2026-07-09T17:15:00Z",
  "auditor": "coordinator manual diff-mode (wf_board_integrity_audit.js absent in-tree; #89 rebuild pending; prompt's own 2026-07-04 note governs)",
  "board_ref": "ember-totality-20260709T150230Z (GREEN 9 / AUDIT-OK 3 / RED 27 / UNEVALUABLE 1 of 40)",
- "master_at_audit": "a6321769 (post #569 #568 #571 #573 #574; #566 #572 closed unmerged)",
+ "master_at_audit": "b6f34f5a (post #569 #568 #571 #573 #574; #566 #572 closed unmerged)",
  "scope_note": "Diff-driven vs prior audit 123516Z (its board 121022Z): status diffs C-PROC GREEN->RED, C2 RED->GREEN across renders. C2's GREEN was already adversarially verified genuine at the 12:35 audit (byte-pins) - carried, not re-litigated. No OTHER condition entered the GREEN set since the last adversarial pass, so no unverified GREEN exists on the operator-facing board.",
  "per_condition": {
   "C-PROC": {

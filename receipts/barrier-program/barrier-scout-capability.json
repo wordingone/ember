@@ -40,7 +40,7 @@
    ],
    "zero_attack_gaps": [
     "eval-reference receipts: ABSENT — no locally-reproduced reference baseline exists for any external benchmark; 27B-class validation runs not executed",
-    "tokenizer efficiency measurement: ABSENT — tokenizer freeze pinned (sha256 6923a52...) but no tokens-per-eval-point efficiency metric; tokenizer gap noted in commit d1cce0f but no receipted quantification of encoding efficiency vs alternatives (BPE variants, n-gram floor from parameter golf)",
+    "tokenizer efficiency measurement: ABSENT — tokenizer freeze pinned (sha256 6923a52...) but no tokens-per-eval-point efficiency metric; tokenizer gap noted in commit 049df1a but no receipted quantification of encoding efficiency vs alternatives (BPE variants, n-gram floor from parameter golf)",
     "capability-per-token unified metric: ABSENT — no single canonical measurement binding training choices to eval capability today; losses reported in NLL but no tokens-to-capability-point crossing metric or tokens-per-quality metric on held-out",
     "n-gram backoff blending implementation: ABSENT — parameter-golf's sole robust frontier survivor (n-gram cache, +0.080 BPB CI [0.06,0.10]) not attempted in ember; zero-parameter lever available but no receipt",
     "int6-QAT checkpoint export validation: ABSENT — golf identified int6 sweet spot for compression but ember's int8-only/binary state unverified against int6; no checkpoint export proof on external eval suite",

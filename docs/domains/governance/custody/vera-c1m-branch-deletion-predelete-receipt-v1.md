@@ -9,15 +9,15 @@ receipt_schema: vera-c1m-1r-v1
 snapshot_utc: 2026-07-18T00:12:38Z
 status: PREDELETE_REVIEW_ONLY
 deletion_performed: false
-current_master: c8ce2dd4022cc03533b31059c667b90365da60d5
+current_master: 6430491106613db3d7d5f70d29201b324cee5e4f
 
 The following live facts were refreshed from the public API and immutable Git
 objects. Protection returned HTTP 404 for every ref, open-PR count was zero for
 each head-specific query, and all merge commits were reachable from master.
 
-- 385 / feat/main-tree-guard / ref 198a18b83e6fc19594eadfd6896d99bfb76ca570 / merge 16ed66ab345f45e835d84e094c6c49a1253bb439 / age_seconds 886301
-- 403 / fix/issue-400 / ref d105e2e7b454839d12873c5a22a0c6e4b5cfc1d1 / merge 06834127cd104bb3cc92b8b7522fc4ad3356ca51 / age_seconds 848700
-- 409 / fix/custody-sidecar-401 / ref d938e32a2e52b3edb374238b39c161f5a66839f1 / merge d134d51f67a64fc739739b93fd05394f97881a67 / age_seconds 845370
+- 385 / feat/main-tree-guard / ref 7c1d69098a0e79aafc44cdb7344a40690c323d60 / merge 01829cc97d783086db68a158fd0d363a1b2e560e / age_seconds 886301
+- 403 / fix/issue-400 / ref 267e98420545611c43f08895c17b670d6e7ab7c4 / merge aa9d2022cb17ff746f9e4b5ebd990e7a075d09c6 / age_seconds 848700
+- 409 / fix/custody-sidecar-401 / ref eb62ceea3a5a78832fa8215a1833a37cb1c2640b / merge ab31cd4a6a471bf8ef617f62332e0487bf171c73 / age_seconds 845370
 
 Seven-day floor: 604800 seconds; all three candidates pass. Exact path/patch
 set digests and the full #403 intermediate path/blob disposition are in the

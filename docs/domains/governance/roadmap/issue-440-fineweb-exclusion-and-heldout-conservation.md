@@ -38,8 +38,8 @@ persistent-index mechanics contract and cannot supply #440 predicate evidence.
 Historical shard 19 maps 100% to `fineweb_edu`: 1,666,837,789 tokens at stream
 offsets [4,055,121,325, 5,723,508,974). Comment 5187250498 correctly recorded
 the then-current source-blind gap. Merged PR #1456, reviewed head
-`e535e9f9f8979301fe790d2613e5318490dc00c1`, merge
-`75448febc5f469057ef18af189e3c80cf3ad07dc`, subsequently cured the default
+`0b3f9e9c471606a7488e906a9d035799b70e01b4`, merge
+`23ee2e52c5be18759dc3ac6596a0bcffc86bb430`, subsequently cured the default
 consumer path.
 
 Current `src/ember/governance/scripts/fineweb_exclusion.py` derives the exclusion from the

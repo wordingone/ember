@@ -36,7 +36,7 @@ def _canonical(value: object) -> bytes:
 
 def _authority(root: Path) -> tuple[Path, dict[str, Path]]:
     root.mkdir(parents=True)
-    source_commit = "f3c92ba984711ee34e91c6bea90713e6c89b4b4d"
+    source_commit = "744ff3e134e10ff8d13ee929ac2686daaebbffb1"
     dispatch = {
         "schema_version": "ember-lab-dispatch-preflight-v1",
         "result": "PREFLIGHT_PASSED",

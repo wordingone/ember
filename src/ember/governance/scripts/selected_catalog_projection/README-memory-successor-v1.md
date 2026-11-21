@@ -1,6 +1,6 @@
 # Selected projection memory successor
 
-This is the one bounded memory delta authorized by reviewer rulings 75005/75037 on draft [PR #2361](https://github.com/<org>/ember/pull/2361). The predecessor commit is 5509abfcbfde07a7800574c236118767ce42b19b. Its reviewed source90fea10d and actual production refusal8268ebb6 remain unchanged.
+This is the one bounded memory delta authorized by reviewer rulings 75005/75037 on draft [PR #2361](https://github.com/<org>/ember/pull/2361). The predecessor commit is b450fbd3b6abb6244cd7608917ecf1b67b189e87. Its reviewed source90fea10d and actual production refusal8268ebb6 remain unchanged.
 
 ## Change
 

@@ -103,7 +103,7 @@ for _ember_e1908f060d71f822_alias in _ember_e1908f060d71f822_aliases:
 verify_replay = getattr(_ember_e1908f060d71f822_module, 'verify_replay')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/verify_oldest_issue_disposition_packet.py
 
-CAPTURED_MASTER = "e8a89a39cee293d793543e025a0d03fee0181e6d"
+CAPTURED_MASTER = "7e4227d8e3a64edcf65c929ecd8a0e34c86416b9"
 
 SCHEMA = ROOT / "manifests" / "oldest-issue-disposition" / "schema-v1.json"
 PACKET = (

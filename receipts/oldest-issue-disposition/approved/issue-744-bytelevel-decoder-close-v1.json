@@ -10,7 +10,7 @@
       "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
       "workstream_id": "EMBER-02A"
     },
-    "capture_sha256": "494eb77a3adb36e6be38cb01c5123a5df67160858fcf4daea1029c28de7618eb",
+    "capture_sha256": "3e1fbb8669abe3bec1b38598735b55f53f5ceeff8be0df1b32558fe565270927",
     "captured_at": "2026-07-30T11:49:55Z",
     "cursor": {
       "after_created_at": "2026-07-11T01:29:33Z",
@@ -1247,7 +1247,7 @@
         "url": "https://github.com/wordingone/ember/issues/872"
       }
     ],
-    "master_sha": "9293d3965989570fe55e964cc97f7c08780b4467",
+    "master_sha": "ab4ae9efcef59ffc002545e7a5dd6a4e1fa9a90c",
     "open_issue_population": 155,
     "pagination": {
       "comments": [
@@ -1783,7 +1783,7 @@
       "issues_pre.json": "2ac8dd9d316949bb0deca287b08359bebb604c00fd966f6b8efbbf914d85cbf4"
     }
   },
-  "capture_sha256": "494eb77a3adb36e6be38cb01c5123a5df67160858fcf4daea1029c28de7618eb",
+  "capture_sha256": "3e1fbb8669abe3bec1b38598735b55f53f5ceeff8be0df1b32558fe565270927",
   "deletion_or_issue_mutation_authority": "NOT_GRANTED",
   "disposition_counts": {
     "CLOSE": 1,
@@ -1791,15 +1791,15 @@
     "PARTIAL": 19,
     "SUPERSEDED": 0
   },
-  "master_sha": "9293d3965989570fe55e964cc97f7c08780b4467",
-  "packet_sha256": "23c460d3c67247ccd729fa413cd76eb7315eddbd5b67f57e4207e2ff1664e6de",
+  "master_sha": "ab4ae9efcef59ffc002545e7a5dd6a4e1fa9a90c",
+  "packet_sha256": "bbe47748b89d9df77efe1b093e957663c3f1d14cb5206e907ef868a641a5a671",
   "public_issue_mutation_performed": false,
   "receipts": [
     {
       "authority_review": {
         "citation": "https://github.com/wordingone/ember/pull/1204#issuecomment-5130330376",
         "review_provenance": "SELF_ONLY",
-        "reviewed_commit_sha": "9293d3965989570fe55e964cc97f7c08780b4467",
+        "reviewed_commit_sha": "ab4ae9efcef59ffc002545e7a5dd6a4e1fa9a90c",
         "reviewer": "self-review-authority",
         "verdict": "PASS"
       },
@@ -1809,7 +1809,7 @@
           "blob_sha1": "3ba6ce2ecb6d5e6b5b6ce9995022858d67a74d35",
           "citation": "https://github.com/wordingone/ember/pull/1203#issuecomment-5130231536",
           "clean_checkout": true,
-          "commit_sha": "db94920caad21a6dbc4255cd47f3529265d88be6",
+          "commit_sha": "c465d9054af10f6debc00cc5f2a3a048e0e7a9f3",
           "passed": true,
           "path": "tools/ember-restart-3b/frozen_tokenizer_decoder.py",
           "production_shaped": true,
@@ -1819,7 +1819,7 @@
           "blob_sha1": "4fff612f739b4c76af2685f54bf1d04a32ca7d32",
           "citation": "https://github.com/wordingone/ember/pull/1204#issuecomment-5130330376",
           "clean_checkout": true,
-          "commit_sha": "9293d3965989570fe55e964cc97f7c08780b4467",
+          "commit_sha": "ab4ae9efcef59ffc002545e7a5dd6a4e1fa9a90c",
           "passed": true,
           "path": "scripts/exp711_intervals.py",
           "production_shaped": true,
@@ -1829,7 +1829,7 @@
       "disposition": "CLOSE",
       "issue_number": 744,
       "issue_url": "https://github.com/wordingone/ember/issues/744",
-      "receipt_sha256": "628d372157e163f83ca0716d0a79e8e6efd90867993a0f2fecc69ccc06ff3c0a",
+      "receipt_sha256": "3c6be1d0dca2de782319b467eb5682c6388357e5481804c40b6283d4badf69b2",
       "replacement_citation": null,
       "retained_lesson": null,
       "smallest_binding_action": null,

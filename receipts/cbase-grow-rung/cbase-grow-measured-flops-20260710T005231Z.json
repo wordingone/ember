@@ -160,13 +160,13 @@
   "measured_on_train_daemon": false,
   "measured_via_instrumented_flop_counter": true,
   "script": "scripts/cbase_grow_measured_flops.py",
-  "git_sha": "d10de3fef44f145c70e6e99f441028e8e4bcc4ed",
+  "git_sha": "62ed4d61aea29c8726573cc2fc041f10e6e5e878",
   "args": {
     "measure_batch": 1,
     "prod_batch": 16,
     "seq": 1024,
     "skip_batch_linearity_check": false,
-    "git_sha": "d10de3fef44f145c70e6e99f441028e8e4bcc4ed",
+    "git_sha": "62ed4d61aea29c8726573cc2fc041f10e6e5e878",
     "live_tree_root": "<live-tree-root, not persisted as an absolute path>",
     "receipt_dir": "<this-worktree>/receipts/cbase-grow-rung"
   },

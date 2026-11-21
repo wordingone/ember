@@ -5,7 +5,7 @@
   "command": "wsl python3 scripts/ember_totality/test_c_grow.py",
   "probe_edited_in_this_pr": false,
   "before": {
-    "worktree_state": "origin/master HEAD (50fc7c610d78a227e54d59ff32a95042f2e1ff2e), before any file in this PR was added",
+    "worktree_state": "origin/master HEAD (7d26ce8c8fb5a979d280c3894b044def87ebc49e), before any file in this PR was added",
     "output": "GREEN C-GROW: measured function-preserving growth receipt present in receipts/cbase-grow-rung/cbase-grow-measured-flops-20260710T005231Z.json (grow method + before/after params + loss-continuity + FLOP-saving vs from-scratch, measured); no invalid-token present"
   },
   "after": {

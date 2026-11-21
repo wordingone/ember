@@ -2,7 +2,7 @@
 
 **Goal:** Produce mergeable source for a governed audio-64 packed specialist route and exact >1000 true-token/s close evidence.
 
-**Base:** `bd2a836c894c21d1431e49b3c515d7977fbe3193`
+**Base:** `355c10f38febc47c441a5ae4d23870ff63f699b5`
 
 ### Task 1: Deterministic specialist-stream remint
 

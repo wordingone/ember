@@ -3000,7 +3000,7 @@
       "title": "EMBER-11: Independent local release"
     }
   ],
-  "public_master_sha": "73ba2165cb87e5d9e38c93ac8da667ba0c4b923a",
+  "public_master_sha": "e621548f9d0f85ec055dd1638b80952f1a08cd39",
   "repository": "wordingone/ember",
   "schema_version": "ember-roadmap-public-state-v1"
 }

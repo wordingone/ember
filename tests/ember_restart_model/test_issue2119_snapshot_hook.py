@@ -196,7 +196,7 @@ class HookTests(Fixture):
         self.assertTrue(snap.check_live(self.out, current_head=lambda: 'e' * 64)['stale'])
 
     def test_the_repair_cli_exits_8_when_the_snapshot_is_written_but_the_page_is_not(self):
-        # review of 82481add: main() returned 0 for WRITTEN even when the requested live page FAILED, so a repair rerun read as success
+        # review of f7ca07d6: main() returned 0 for WRITTEN even when the requested live page FAILED, so a repair rerun read as success
         spec_file = self.root / 'spec.json'
         spec_file.write_text('{}', encoding='utf-8')
         cases = (({'status': 'WRITTEN', 'page': {'status': 'FAILED', 'why': 'OSError: disk full'}}, 8),

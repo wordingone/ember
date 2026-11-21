@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Closed-boundary frontier-receipt generator -- R1-E5 (issue #1464).
 
-Prereg authority: docs/domains/governance/spec/ember02-preregistration-v1.md (pin 3d48d387) section 5.4:
+Prereg authority: docs/domains/governance/spec/ember02-preregistration-v1.md (pin 64819ce5) section 5.4:
 "A rung receipt is an admissible closed-boundary frontier point iff: (1) ledger
 complete, failed work included; (2) fixed-prior manifest hash-verified +
 learned-import attestation; (3) capability leg -- frozen held-out eval bound to

@@ -28,7 +28,7 @@
     },
     {
       "path": "src/ember/governance/scripts/forecast_recalibration.py",
-      "sha256": "ee5e0a18884c5c26e7b36a8ec8b30911cc56c0693180343f439047d2e0101b51",
+      "sha256": "eedfef5dd412063daf36dbc17ce3ce79f21ec2354dfd3da2cbcf88bfcc269001",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -43,7 +43,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "9a960614c813e0e41e4336c583c2ab6ff4dc6af205deb158376fdba73755dba8",
+      "sha256": "1d6243cdf063419789ff789f760c78232487224ff991535c03dd5924d7485df5",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned 2026-09-03 from bdf97da8ac4202dd74c648ad7489756e9968f3bbe9cec95e6a057cfd0c4af406: content diff is DEFAULT_THRESHOLDS_PATH repointed to the tracked docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json (the cutover moved it) and the --selftest _e5_repo fixture creating and writing its documents at E5_PREREG_PATH / E5_INVARIANT_PATH instead of pre-cutover literals; no training-segment API reference changed. Planted test: the existing --selftest."
     },
     {

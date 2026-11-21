@@ -5,7 +5,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02B",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "source_base_commit": "2708cfa1a59f049429c40398c2d49ac83116e966",
+  "source_base_commit": "d66dea24bb005f3f76b0755f36fe8f635eab51ec",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "subject_checkpoint_sha256": "bf20f05018991eb611b0623edd50a00ec30639da2f8ccae646f6962f152a2a2b",
@@ -174,5 +174,5 @@
   "gpu_allocated": false,
   "claim_boundary": "No model, manifest admission, training, GPU, checkpoint, capability, benchmark, result, issue closure, or milestone completion credit.",
   "next_action": "After issue #1719 corpus admission completes, the governed fresh-genesis 100-step run must produce its own run_id, ancestry-bound source_commit, lineage, optimizer receipt, token ledger, and checkpoint receipt before an owned-rung candidate can be authored and validated.",
-  "payload_sha256": "0df4a666e1458e06a842da5e4a8d150b4a6fffd05ecfd325df83be3f5647a61a"
+  "payload_sha256": "51872c33e6f5687ee84fca5e3d1dda970b856ec9a037cbc6af84107b94b8b3d0"
 }

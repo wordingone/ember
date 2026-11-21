@@ -3,8 +3,8 @@
 Status: `SUPERSEDED_DUPLICATE_NOT_PLANNED` on current public master.
 
 Source issue: #696 (`ember-cli: wire brain-server supervisor into a real consumer path`).
-Current source master: `63f33108b41441d4bd7ef93662d2cc29d51d0ecd`.
-Canonical current carrier: merged #802 / Ember Lab `00eec85d2bd3073b137b51f2d89b78d905b46076`,
+Current source master: `749eff1d121c7c70dd2bd4677bba59f0c2c6680f`.
+Canonical current carrier: merged #802 / Ember Lab `6b6f2e89bf5d7ae1844aef5254606636d50d5aa2`,
 with the continuing current-architecture owner `runtime/ember-lab` and the open
 `EMBER-03` roadmap parent (#1117), which accepted this transfer append-only at
 https://github.com/wordingone/ember/issues/1117#issuecomment-5221421459.

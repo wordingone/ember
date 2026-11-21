@@ -10,7 +10,7 @@
   "prior_batch_receipt": "receipts/ember-totality-audit/audit-20260710T203826Z.json",
   "board_anchor": "scripts/ember_totality/receipts-totality/ember-totality-20260710T220944Z.json",
   "board_fresh": true,
-  "board_commit": "3f0abdc",
+  "board_commit": "8b9531d",
   "board_summary": {
     "total": 40,
     "green": 12,
@@ -68,7 +68,7 @@
     }
   ],
   "carried_from_prior_batch": {
-    "c_base_harden": "LANDED via #720 (fa7eb0c) - C-BASE flipped honestly RED on the 220944Z render exactly as the prior audit's honest_green_delta predicted; cure = successor grow run (goal-loop queue)",
+    "c_base_harden": "LANDED via #720 (9157f38) - C-BASE flipped honestly RED on the 220944Z render exactly as the prior audit's honest_green_delta predicted; cure = successor grow run (goal-loop queue)",
     "c_manifest_denominator": "LANDED via same PR #720 - C-MANIFEST GREEN at 220944Z is post-cure",
     "process_visibility_schema_gap": "PERSISTS: newest process receipt (20260710T221000Z, landing in flight) has no publication_state field. Substantive clause-f check passes (all 21 landings since 14:39Z via public PRs; open PR = the landing lane's own). Next process-receipt refresh MUST add the field."
   },

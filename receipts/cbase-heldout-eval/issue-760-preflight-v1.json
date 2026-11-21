@@ -1,7 +1,7 @@
 {
     "schema":  "cbase-heldout-eval-preflight/v1",
     "issue":  "#760",
-    "captured_public_master":  "db571b310b0ad20f8b257760cdc7c7ee69714929",
+    "captured_public_master":  "b9e4e72879ed70bb2e1655ee74db3dd4e76d6433",
     "captured_at":  "20260731T005114Z",
     "status":  "IMPLEMENTATION_VERIFIED_REAL_METRICS_UNMEASURABLE",
     "implementation":  {
@@ -10,7 +10,7 @@
                            "test":  "scripts/test_cbase_heldout_eval.py",
                            "test_sha256":  "4898f4532c846b684efbc6277cb4f443550809578374fdd9dfb7c81f48ee9903",
                            "slice_manifest":  "manifests/cbase-heldout-slice-v1.json",
-                           "slice_manifest_sha256":  "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14",
+                           "slice_manifest_sha256":  "eadcfb9018239946ac91fa859c4cb92f9e8ecd45d1e0784b196987684e075a62",
                            "historical_imports_execution_denied":  true,
                            "read_only_eval_contract":  {
                                                            "w1_model_source_blob":  "3dc627d49c5e48ceb8ab0c028eab68acb74e4f61",

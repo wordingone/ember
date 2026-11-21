@@ -4,7 +4,7 @@
 """Fail-closed properties of the CONTINUITY board-status generator.
 
 Each test here was RED against the generator as it stood at master
-1619621a8aeacb70b45887c52040f18b54618f04, where an unbound receipt rendered as
+f9c82b413665bd0cff70705ed20c3c619dfd2361, where an unbound receipt rendered as
 LEGACY_UNBOUND and no code path hashed a receipt's bytes at all. They exercise
 render_block -- the function main() itself calls -- rather than a helper fixture.
 """

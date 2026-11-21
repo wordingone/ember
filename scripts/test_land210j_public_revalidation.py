@@ -20,7 +20,7 @@ HISTORICAL = (
     ROOT / "receipts" / "ember-c-scale"
     / "land210j-family3-stragglers-receipt.json"
 )
-SUBJECT = "33027681a36ed351478e13ab05418b0698a00e15"
+SUBJECT = "aabf1a5ef26cc9d153b748739c5d1c93a172f949"
 
 
 def load_probe():

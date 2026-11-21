@@ -55,7 +55,7 @@ class CostCalibrationReceiptTests(unittest.TestCase):
     def _certificate(receipt_bytes: bytes) -> dict[str, object]:
         return {
             "schema_version": "ember-anchor-cost-calibration-certificate-v1",
-            "source_commit": "04586852b76c7dd4c1e092d656850897c4c0c8d0",
+            "source_commit": "260de6788c30005dce21e6eac08d74aeab4d3518",
             "prereg_sha256": "a32e6962eb6f88ddb2155f522191b0454851c885b6fa438ead42fa97470fbab8",
             "replication_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
             "terminal_runner_sha256": "b7473516c3a60abb3e0c3a04a38ec984a5da9aeb2dd5f547ad4a9944e98efbb5",

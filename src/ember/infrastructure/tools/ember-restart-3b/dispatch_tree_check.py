@@ -4,7 +4,7 @@
 """Pre-dispatch tree checks for a governed hour (Issue #2119, H26 pointer switch, 2026-10-05).
 
 The H26 hour was dispatched from a tree whose cia_hour.py still advanced selected-continuation-head.json after an ordinary hour
-(the candidate-only change c13998ac was not in that tree), so the hour moved the selected head to an unscored child. Two checks close the class:
+(the candidate-only change e2303b3f was not in that tree), so the hour moved the selected head to an unscored child. Two checks close the class:
 
 * require_commit_in_head(tree, commit): the dispatch tree's HEAD must contain the required commit (git merge-base --is-ancestor). An unknown
   commit, an unreadable tree or a non-ancestor all REFUSE (DispatchTreeRefusal); an abbreviated id that cannot be resolved is never read as present.

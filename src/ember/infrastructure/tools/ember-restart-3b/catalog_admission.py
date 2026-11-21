@@ -66,7 +66,7 @@ from mint_github_license_partition import validate_partition_receipt
 
 
 # Frozen from runtime/ember-lab/src/data_catalog.rs at source commit
-# 8c89896b1045c12eca6cc06bd7035966e48d2ba3 (raw SHA-256 below). The binary
+# da294293e7637f0e6e5207ceae8f0f52496be3e9 (raw SHA-256 below). The binary
 # deliberately accepts no authority-extension fields on any current edge.
 _FROZEN_DATA_CATALOG_SCHEMA_RAW_SHA256 = (
     "554e775f1b631f0754922da331cc84981807e7fe0d847fb1c29d4684788b0941"
