@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
+import type { StartHourOptions, StartHourResult } from "../services/ember-lab-hour.ts";
 
 export const REDIRECT = 'exec bash "$0" >>"$1" 2>&1';
 export const DISPATCH_NAME = /^h\d+_dispatch_v\d+\.sh$/;
@@ -32,6 +33,13 @@ export interface ResumeHourSpawn {
 export interface ResumeHourDeps {
   spawn?: ResumeHourSpawn;
   bash?: string;
+  /**
+   * When both are set the hour starts through the resident lab (`startHour` of services/ember-lab-hour.ts), so it takes the `hour-chain`
+   * lease and a start while another hour or learn job holds the card is refused `hour_lease_conflict` instead of starting a second hour
+   * outside the lease (#2460 F21). Neither set: the detached spawn below, unchanged.
+   */
+  labPipe?: string;
+  startHour?: (options: StartHourOptions) => Promise<StartHourResult>;
 }
 
 export type ResumeHourCheck =
@@ -104,6 +112,21 @@ export function createResumeHourCommand(deps: ResumeHourDeps = {}): RegistryComm
       if (!bash) return { type: "message", message: "REFUSED: no Git bash (set EMBER_RESUME_HOUR_BASH; the System32 bash shim is refused)" };
       // A detached child given file-descriptor stdio loses its output under the Windows Git bash launcher
       // (receipted: the script runs, the log stays empty), so bash itself opens the log, and the log is created first.
+      if (deps.labPipe && deps.startHour) {
+        // the lab creates the log itself and refuses one that exists; the refusal code is printed as the lab names it
+        const started = await deps.startHour({ pipeName: deps.labPipe, script: check.script, sha256: check.sha256, log: check.log, cwd: ctx.cwd, bash });
+        if (!started.ok) return { type: "message", message: `REFUSED: ${started.refusalCode}: ${started.detail}` };
+        return {
+          type: "message",
+          message: [
+            `RESUME_HOUR_STARTED pid=${started.pid} job=${started.jobId}`,
+            `  bash:   ${bash}`,
+            `  script: ${check.script}`,
+            `  sha256: ${check.sha256}`,
+            `  log:    ${check.log}`,
+          ].join("\n"),
+        };
+      }
       closeSync(openSync(check.log, "a"));
       const spawn = deps.spawn ?? (nodeSpawn as unknown as ResumeHourSpawn);
       const child = spawn(bash, ["-c", REDIRECT, check.script, check.log], {
