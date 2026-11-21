@@ -72,7 +72,11 @@ _PACKAGE_KEYS = {
 _SOURCE_KEYS = {"kind", "locator", "commit", "artifact_sha256"}
 _OPTIONAL_KEYS = {"imports", "feature", "reason"}
 _PROSE_KEYS = {"path", "required_marker"}
-_LINKED_KEYS = {"rust", "typescript"}
+_LINKED_KEYS = {"typescript"}
+# C22: the Ember Lab source lives in a private repository, so a tree without
+# runtime/ember-lab carries no `rust` row. The row stays accepted, and is
+# validated like any linked manifest, for trees that still hold the source.
+_LINKED_OPTIONAL_KEYS = {"rust"}
 _PRIMARY_INDEX_LOCATOR = "https://pypi.org/simple"
 _EXPECTED_INDEX_LOCATOR = "https://download.pytorch.org/whl/cu126"
 _EXPECTED_PIP_OPTIONS = [
@@ -866,8 +870,14 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
     linked = manifest.get("linked_manifests")
     if not isinstance(linked, dict):
         raise EnvironmentContractError("linked_manifests must be an object")
-    _require_exact_keys(linked, _LINKED_KEYS, "linked_manifests")
-    for key in sorted(_LINKED_KEYS):
+    present = set(linked)
+    if not _LINKED_KEYS <= present or not present <= _LINKED_KEYS | _LINKED_OPTIONAL_KEYS:
+        raise EnvironmentContractError(
+            "linked_manifests keys must be "
+            f"{sorted(_LINKED_KEYS)} plus optionally {sorted(_LINKED_OPTIONAL_KEYS)}; "
+            f"got {sorted(present)}"
+        )
+    for key in sorted(present):
         path = _require_text(linked.get(key), f"linked_manifests.{key}")
         relative_path = Path(path)
         if relative_path.anchor or ".." in relative_path.parts:

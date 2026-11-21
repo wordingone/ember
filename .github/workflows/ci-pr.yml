@@ -201,7 +201,7 @@ jobs:
     # printed its self-hashed terminal PASS at ~3.8s wall (PR #1991, exit 124):
     # hosted-runner startup variance exceeds 3x the originally measured wall.
     # New bound = ceil(3 * 3.83) = 12; the receipt, not the wall, is the gate.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
