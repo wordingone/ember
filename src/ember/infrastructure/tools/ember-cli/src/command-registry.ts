@@ -5,6 +5,7 @@
 // command-registry.ts — loads, caches, and queries the slash-command registry.
 
 import { createResumeHourCommand } from "./commands/resume-hour.ts";
+import { startHour } from "./services/ember-lab-hour.ts";
 import type { RegistryCommand } from './types/command-types.ts';
 import { createObservatoryCommand } from './commands/observatory.ts';
 import { createWatchCommand } from './commands/watch.ts';
@@ -61,7 +62,8 @@ const defaultDeps: CommandRegistryDeps = {
     createFinetuneCommand(),
     createModelCommand(),
     createTrainCommand(),
-    createResumeHourCommand(),
+    // with a lab pipe (a connected seat) the hour starts as a lab job under the exclusive hour-chain lease (#2460 F21); without one, the detached spawn
+    createResumeHourCommand({ labPipe: process.env["EMBER_LAB_PIPE"], startHour }),
     createVerifyCommand(),
     createVerifyTrainingCommand(),
     createAdmitCommand(),
