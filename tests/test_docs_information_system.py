@@ -732,7 +732,7 @@ def test_checked_in_information_system_is_terminal_green() -> None:
     module = load_module()
     receipt = module.check_repository(REPO_ROOT, run_commands=False)
     assert receipt["result"] == "PASS"
-    assert receipt["current_reference_reconciliation_count"] == 484
+    assert receipt["current_reference_reconciliation_count"] == 564
     assert receipt["metadata_document_count"] >= 12
     assert receipt["claim_count"] >= 8
 
@@ -753,7 +753,7 @@ def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
         module.validate_current_reference_reconciliation(
             REPO_ROOT, reconciliation, frozen
         )
-    ) == 484
+    ) == 564
 
     drifted = json.loads(json.dumps(reconciliation))
     drifted["rows"].pop()
@@ -918,3 +918,95 @@ def test_first_reader_surfaces_in_this_checkout_state_no_retired_claim() -> None
     module = load_module()
     value = json.loads((REPO_ROOT / module.FIRST_READER_IDENTITY_PATH).read_text(encoding="utf-8"))
     assert module.validate_first_reader_identity(REPO_ROOT, value)["first_reader_surface_count"] == len(value["surfaces"])
+
+
+def _moved_private_fixture(tmp_path: Path, module, *, target: str, kind: str):
+    """A one-row repository whose single document names `target`, and the
+    reconciliation document that classifies that row with `kind`."""
+    write(tmp_path / "README.md", "# root\n")
+    write(tmp_path / "docs/historical.md", f"The daemon lived in `{target}`.\n")
+    tracked = {"README.md", "docs/historical.md"}
+    rows = module.current_unresolved_reference_rows(
+        tmp_path, module.FILING_REFERENCE_RE, tracked_paths=tracked
+    )
+    assert [row["target"] for row in rows] == [target]
+    resolution = {
+        "MOVED_PRIVATE": {
+            "kind": "MOVED_PRIVATE",
+            "private_repository": "wordingone/ember-lab",
+            "moved_by": "C22",
+        }
+    }.get(kind)
+    return tracked, rows, resolution
+
+
+def test_moved_private_builder_classifies_a_removed_lab_path_and_refuses_other_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    tracked, rows, _ = _moved_private_fixture(
+        tmp_path, module, target="runtime/ember-lab/src/lib.rs", kind="MOVED_PRIVATE"
+    )
+    monkeypatch.setattr(module, "tracked_repository_paths", lambda _root: tracked)
+    write(tmp_path / module.REFERENCE_DISPOSITIONS_PATH, "{}")
+    built = module.build_current_reference_reconciliation(
+        tmp_path,
+        {"rows": []},
+        {
+            "source": {
+                "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+                "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
+                "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
+                "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
+            }
+        },
+    )
+    assert [row["resolution"]["kind"] for row in built["rows"]] == ["MOVED_PRIVATE"]
+    assert built["counts"]["moved_private"] == 1
+
+
+def test_unreconciled_reference_still_fails_while_a_moved_private_row_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    source_row = {"commit": "f78e05de04b375e87a2f385316fbbda385930272",
+                  "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
+                  "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
+                  "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04"}
+    prior = {"source": source_row}
+    write(tmp_path / module.REFERENCE_DISPOSITIONS_PATH, "{}")
+
+    # An unreconciled reference (a path no rule covers) still fails the generator.
+    tracked, _, _ = _moved_private_fixture(
+        tmp_path, module, target="runtime/ember-other/src/lib.rs", kind="NONE"
+    )
+    monkeypatch.setattr(module, "tracked_repository_paths", lambda _root: tracked)
+    with pytest.raises(module.DocsInfoError, match="UNRECONCILED_CURRENT_REFERENCE"):
+        module.build_current_reference_reconciliation(tmp_path, {"rows": []}, prior)
+
+    # The same shape of reference under the moved-private prefix is classified and
+    # its row validates.
+    write(tmp_path / "docs/historical.md", "The daemon lived in `runtime/ember-lab/src/lib.rs`.\n")
+    built = module.build_current_reference_reconciliation(tmp_path, {"rows": []}, prior)
+    (row,) = built["rows"]
+    assert row["resolution"] == {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22",
+    }
+    assert module.validate_current_reference_reconciliation(
+        tmp_path, built, {"rows": []}
+    ) == built["rows"]
+
+    # A moved-private row is refused when it names a target that still exists, names
+    # the wrong repository, or carries an extra field.
+    wrong_repository = json.loads(json.dumps(built))
+    wrong_repository["rows"][0]["resolution"]["private_repository"] = "someone/else"
+    extra_field = json.loads(json.dumps(built))
+    extra_field["rows"][0]["resolution"]["note"] = "x"
+    for drifted in (wrong_repository, extra_field):
+        with pytest.raises(module.DocsInfoError, match="MOVED_PRIVATE_INVALID"):
+            module.validate_current_reference_reconciliation(tmp_path, drifted, {"rows": []})
+    write(tmp_path / "runtime/ember-lab/src/lib.rs", "// still here\n")
+    with pytest.raises(module.DocsInfoError, match="MOVED_PRIVATE_INVALID"):
+        module.validate_current_reference_reconciliation(tmp_path, built, {"rows": []})

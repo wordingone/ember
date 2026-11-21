@@ -78,8 +78,8 @@ the operator entry.
 Python dependency authority: manifests/python-environment-v1.json.
 
 Installation authorities are distinct: Python uses
-[`manifests/python-environment-v1.json`](manifests/python-environment-v1.json), Rust uses
-[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and `ember-cli` uses
+[`manifests/python-environment-v1.json`](manifests/python-environment-v1.json), the ember-lab daemon is installed from the released build on
+[wordingone/ember-studio](https://github.com/wordingone/ember-studio/releases) (its source is in a private repository, so there is no Rust build here), and `ember-cli` uses
 [`src/ember/infrastructure/tools/ember-cli/src/package.json`](src/ember/infrastructure/tools/ember-cli/src/package.json). From the repository
 root, install the measured direct environment:
 

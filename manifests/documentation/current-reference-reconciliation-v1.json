@@ -15,10 +15,11 @@
   },
   "counts": {
     "documents": 400,
-    "filing_classifier_current_unresolved": 484,
-    "corrected_classifier_current_unresolved": 380,
-    "explicit_filing_dispositions": 444,
-    "contained_resolved_canonical_tokens": 40
+    "filing_classifier_current_unresolved": 564,
+    "corrected_classifier_current_unresolved": 460,
+    "explicit_filing_dispositions": 443,
+    "contained_resolved_canonical_tokens": 40,
+    "moved_private": 81
   },
   "rows": [
     {
@@ -1870,12 +1871,32 @@
       }
     },
     {
+      "document": "docs/domains/governance/charter/github-work-system-v1.md",
+      "line": 75,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
       "document": "docs/domains/governance/charter/loop-graph-engine-contract.md",
       "line": 5,
       "target": "schemas/loop-graph/",
       "resolution": {
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
         "canonical_token": "domains/governance/schemas/loop-graph/"
+      }
+    },
+    {
+      "document": "docs/domains/governance/charter/loop-graph-engine-contract.md",
+      "line": 87,
+      "target": "runtime/ember-lab/",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -3332,6 +3353,16 @@
       }
     },
     {
+      "document": "docs/domains/governance/design/sota-stack-floor.md",
+      "line": 24,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
       "document": "docs/domains/governance/design/the-actual-stack.md",
       "line": 9,
       "target": "configs/v1-pretrain-config.json",
@@ -3369,6 +3400,66 @@
       "resolution": {
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
         "canonical_token": "domains/model/configs/v1-pretrain-config.json"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-1344-dispatch-token-inventory.md",
+      "line": 17,
+      "target": "runtime/ember-lab/src/main.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-1344-dispatch-token-inventory.md",
+      "line": 19,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-1344-dispatch-token-inventory.md",
+      "line": 20,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-917-architecture-crosswalk.md",
+      "line": 5,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-917-architecture-crosswalk.md",
+      "line": 9,
+      "target": "runtime/ember-lab/src/main.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/ember-lab/issue-917-architecture-crosswalk.md",
+      "line": 10,
+      "target": "runtime/ember-lab/src/rehearsal.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -3444,6 +3535,16 @@
       "resolution": {
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
         "canonical_token": "domains/model/configs/v0-pretrain-config.json"
+      }
+    },
+    {
+      "document": "docs/domains/governance/evidence/issue-54-fireball-installed-capture/README.md",
+      "line": 38,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -4483,6 +4584,16 @@
       }
     },
     {
+      "document": "docs/domains/governance/roadmap/issue-562-native-liveness-conservation.md",
+      "line": 51,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
       "document": "docs/domains/governance/roadmap/issue-649-659-corpus-domain-conservation.md",
       "line": 227,
       "target": "data/evaluation",
@@ -4523,6 +4634,16 @@
     },
     {
       "document": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
+      "line": 8,
+      "target": "runtime/ember-lab",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
       "line": 14,
       "target": "tools/ember-cli/src/services/brain-server-supervisor.ts",
       "resolution": {
@@ -4532,6 +4653,16 @@
         "source_target": "tools/ember-cli/src/services/brain-server-supervisor.ts",
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "visible_classification": "reference"
+      }
+    },
+    {
+      "document": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
+      "line": 45,
+      "target": "runtime/ember-lab/src/server_supervisor.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -4623,6 +4754,16 @@
         "source_target": "data/mechanism",
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "visible_classification": "reference"
+      }
+    },
+    {
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-03.md",
+      "line": 206,
+      "target": "runtime/ember-lab/src/server_supervisor.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -5420,12 +5561,19 @@
       "line": 37,
       "target": "runtime/ember-lab/target/release/ember-lab.exe",
       "resolution": {
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
-        "source_line": 37,
-        "source_target": "runtime/ember-lab/target/release/ember-lab.exe",
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "visible_classification": "reference"
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
+      "line": 41,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -5890,6 +6038,66 @@
     },
     {
       "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 62,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 65,
+      "target": "runtime/ember-lab/tests/dispatch_manifest.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 123,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 124,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 125,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "line": 167,
+      "target": "runtime/ember-lab/tests/dispatch_manifest.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
       "line": 192,
       "target": "state/issue898-probe-",
       "resolution": {
@@ -5899,6 +6107,266 @@
         "source_target": "state/issue898-probe-",
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "visible_classification": "reference"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 31,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 32,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 33,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 85,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 157,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 170,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 171,
+      "target": "runtime/ember-lab/tests/data_catalog.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 172,
+      "target": "runtime/ember-lab/tests/artifact_custody.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 195,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 196,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 197,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 230,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 264,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 265,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 279,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 280,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 281,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 282,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 283,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 305,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 335,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 336,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 337,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 351,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 352,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 364,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -5915,6 +6383,126 @@
       }
     },
     {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 374,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 387,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 388,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 389,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 399,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 400,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 401,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 402,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 403,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 408,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 417,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "line": 418,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
       "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
       "line": 7,
       "target": "state/lease",
@@ -5925,6 +6513,186 @@
         "source_target": "state/lease",
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "visible_classification": "reference"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 28,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 29,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 41,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 54,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 55,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 67,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 68,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 69,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 91,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 121,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 134,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 135,
+      "target": "runtime/ember-lab/tests/control_plane.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 145,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 146,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 147,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 148,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 153,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "line": 162,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
       }
     },
     {
@@ -6063,6 +6831,26 @@
       }
     },
     {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "line": 239,
+      "target": "runtime/ember-lab/Cargo.lock",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "line": 239,
+      "target": "runtime/ember-lab/Cargo.toml",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
+    },
+    {
       "document": "docs/domains/governance/superpowers/specs/2026-07-25-ember-cli-prompt-input-border-design.md",
       "line": 119,
       "target": "tools/ember-cli/src/ember.exe",
@@ -6152,7 +6940,17 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "visible_classification": "reference"
       }
+    },
+    {
+      "document": "docs/domains/model/cia3-r1-n61-contract.md",
+      "line": 66,
+      "target": "runtime/ember-lab/src/lib.rs",
+      "resolution": {
+        "kind": "MOVED_PRIVATE",
+        "private_repository": "wordingone/ember-lab",
+        "moved_by": "C22"
+      }
     }
   ],
-  "rows_sha256": "48efcd7a8d52fdaa69841dc9fadda1b5f59070dffcf4ab22eab160bb0294b453"
+  "rows_sha256": "a17c0976cedb15c43520f47cfaa404c0d9d83dcf98f151b03f90b510a752b24f"
 }

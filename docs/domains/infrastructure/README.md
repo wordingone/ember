@@ -8,6 +8,6 @@ permitted dependency of the other domains where the architecture manifest says s
 describe build authority; they do not establish runtime or model results.
 
 Smallest safe verification: inspect [`pyproject.toml`](../../../pyproject.toml),
-[`runtime/ember-lab/Cargo.toml`](../../../runtime/ember-lab/Cargo.toml), and
+the released ember-lab build on [wordingone/ember-studio](https://github.com/wordingone/ember-studio/releases), and
 [`src/ember/infrastructure/tools/ember-cli/src/package.json`](../../../src/ember/infrastructure/tools/ember-cli/src/package.json), then run the
 CPU-only authority command in the [verification guide](../../guides/VERIFY.md).

@@ -194,81 +194,6 @@ jobs:
       - run: python -m pip install "pytest==8.4.1"
       - name: Prove controller-death cleanup on ${{ matrix.os }} (retry)
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q src/ember/governance/scripts/tests/test_owned_process.py
-  rust:
-    runs-on: windows-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: runtime/ember-lab
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Check Rust formatting
-        run: cargo fmt --check
-      - name: Lint Rust with clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
-      # Compile the complete suite, then run the host-independent gate. Four
-      # governed-dispatch tests require a fixed positive Windows pagefile
-      # maximum; GitHub-hosted Windows uses system-managed pagefiles, which the
-      # production daemon correctly refuses. Those tests remain covered by the
-      # exact local fixed-pagefile replay recorded in the PR.
-      - name: Compile complete Rust test suite
-        run: cargo test --locked --no-run
-      # This block runs under pwsh (the windows-latest default), which
-      # propagates only the LAST command's exit code. A native command that
-      # fails mid-block does not stop the block and does not fail the job, so
-      # every cargo invocation needs its OWN exit check -- a single trailing
-      # guard only ever gated the one line directly above it, leaving --lib,
-      # control_plane and dispatch_manifest able to fail internally while the
-      # job still reported success.
-      #
-      # control_plane carries --show-output because two of its tests skip
-      # themselves on hosted windows-latest (system-managed pagefile, see
-      # #1771) by printing a reason and returning early. That makes them
-      # *pass*, and libtest discards a passing test's output, so without this
-      # flag the log shows only "68 passed" and a reader cannot tell the two
-      # ran from the two skipped. --show-output rather than --nocapture: it
-      # keeps capture on, so each reason line stays attributed to its test
-      # instead of interleaving across parallel threads. Measured cost is 32
-      # lines (115 -> 147 locally).
-      - name: Run host-independent Rust gate
-        run: |
-          cargo test --locked --lib
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test control_plane -- --show-output
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test dispatch_manifest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test artifact_custody
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The hour job class tests are cfg(windows): the Linux job compiles none of them, and the compile-only step above never
-          # runs them. They start real Git bash hour scripts, so they run here (lead review 82524 item 3).
-          cargo test --locked --test hour_job
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test hour_job_process
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --locked --test hour_job_risk1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  rust-linux-test:
-    # Run the same ember-lab suite and verdict semantics that ci-main consumes,
-    # while enumerating every target after a red so one PR run names the class.
-    # The Windows Rust job cannot detect a Linux-only compile or test failure.
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: runtime/ember-lab
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - name: Run complete Rust test suite on Linux
-        run: cargo test --locked --no-fail-fast
   eval-canary-image:
     # ISSUE1948_FROZEN_TIMEOUT_SECONDS: 12
     # ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33279094639
@@ -418,7 +343,7 @@ jobs:
         run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
-    needs: [python, owned-process-posix, owned-process-posix-retry, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay, production-rung-replay-retry]
+    needs: [python, owned-process-posix, owned-process-posix-retry, eval-canary-image, cli, launcher, production-rung-replay, production-rung-replay-retry]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -32,6 +32,7 @@ _GOVERNED_ORIGIN = "https://github.com/IST-DASLab/llmq.git"
 _ADOPTION_DESIGN_PATH = "docs/domains/governance/spec/llmq/adoption-design-v1.json"
 _MECHANISM_ATTRIBUTION_PATH = "docs/domains/governance/spec/llmq/mechanism-attribution-v1.json"
 _LLMQ_PIN = "f5b234c4b95009dfe43ee15181be93bc3fb34563"
+# The label the private daemon source stamps into its build receipts; a string identity, not a path in this tree (C22).
 _EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
@@ -252,62 +253,27 @@ def _installed_ember_lab_release() -> tuple[Path, str] | None:
 def _canonical_ember_lab_binary(repository_root: Path) -> Path | None:
     """Resolve the one governed daemon binary, never a packet/env path.
 
-    An installed release (`_installed_ember_lab_release`) comes first, so a host
-    without the lab source can still bind the daemon; the fallback is the local
-    build under the repository.
+    C22: the daemon source is not carried in this repository, so the only
+    governed binary is the installed release (`_installed_ember_lab_release`)
+    whose `ember-lab-release.json` manifest binds its sha256. No manifest, no
+    binary: there is no local-build fallback (fail closed).
     """
     installed = _installed_ember_lab_release()
     if installed is not None:
         return installed[0]
-    exe_name = "ember-lab.exe" if os.name == "nt" else "ember-lab"
-    root = repository_root.resolve(strict=True)
-    candidates = (
-        root / "runtime" / "ember-lab" / "target" / "release" / exe_name,
-        root / "runtime" / "ember-lab" / "target" / "debug" / exe_name,
-    )
-    for candidate in candidates:
-        try:
-            if _has_reparse_component(candidate, root):
-                continue
-            resolved = candidate.resolve(strict=True)
-            if resolved.is_file() and resolved.is_relative_to(root):
-                return resolved
-        except OSError:
-            continue
     return None
 
 
 def _canonical_ember_lab_source_sha256(repository_root: Path) -> str | None:
     """The source identity bound to `_canonical_ember_lab_binary`.
 
-    For an installed release, the release's recorded `source_sha256`; for the local
-    build, Rust's length-delimited daemon source identity over the canonical files.
+    The installed release's recorded `source_sha256` from its manifest. Nothing
+    is derived from the repository tree; with no valid manifest the answer is None.
     """
     installed = _installed_ember_lab_release()
     if installed is not None:
         return installed[1]
-    root = repository_root.resolve(strict=True)
-    relative_sources = (
-        "runtime/ember-lab/src/lib.rs",
-        "runtime/ember-lab/src/data_catalog.rs",
-        "runtime/ember-lab/src/rpc.rs",
-        "runtime/ember-lab/src/main.rs",
-        "runtime/ember-lab/src/training_verify.rs",
-        "runtime/ember-lab/Cargo.toml",
-        "runtime/ember-lab/Cargo.lock",
-    )
-    digest = hashlib.sha256()
-    try:
-        for relative in relative_sources:
-            path = root / relative
-            if _has_reparse_component(path, root) or not path.is_file():
-                return None
-            raw = path.read_bytes()
-            digest.update(len(raw).to_bytes(8, "little"))
-            digest.update(raw)
-    except OSError:
-        return None
-    return digest.hexdigest()
+    return None
 
 
 def _acquire_live_daemon_assessment(repository_root: Path, job_id: object) -> dict | None:

@@ -921,7 +921,6 @@
     }
   ],
   "linked_manifests": {
-    "rust": "runtime/ember-lab/Cargo.toml",
     "typescript": "src/ember/infrastructure/tools/ember-cli/src/package.json"
   }
 }

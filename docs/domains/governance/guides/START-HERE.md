@@ -24,8 +24,7 @@ Its operating constraint is one consumer GPU.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
 - Inspection starts at the root `README.md` and this canonical start page. On Windows, `tools/launchers/Ember.cmd`
-  is the operator entry. Python uses `manifests/python-environment-v1.json`; Rust uses
-  `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `src/ember/infrastructure/tools/ember-cli/src/package.json`.
+  is the operator entry. Python uses `manifests/python-environment-v1.json`; the ember-lab daemon is a released build from `wordingone/ember-studio` (source in a private repository); `ember-cli` uses `src/ember/infrastructure/tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
   `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
@@ -50,8 +49,8 @@ To inspect Ember, start at the repository-root `README.md` and continue through 
 `docs/domains/governance/guides/START-HERE.md` page. On Windows, `tools/launchers/Ember.cmd` is the operator entry.
 
 Installation authorities are distinct: Python uses
-[`manifests/python-environment-v1.json`](../../../../manifests/python-environment-v1.json), Rust uses
-[`runtime/ember-lab/Cargo.toml`](../../../../runtime/ember-lab/Cargo.toml), and `ember-cli` uses
+[`manifests/python-environment-v1.json`](../../../../manifests/python-environment-v1.json), the ember-lab daemon is installed from the released build on
+[wordingone/ember-studio](https://github.com/wordingone/ember-studio/releases) (source in a private repository), and `ember-cli` uses
 [`src/ember/infrastructure/tools/ember-cli/src/package.json`](../../../../src/ember/infrastructure/tools/ember-cli/src/package.json).
 
 From the repository root:
