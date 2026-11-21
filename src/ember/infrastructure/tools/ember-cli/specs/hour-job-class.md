@@ -26,22 +26,50 @@ closed on exit for the hour class, and a restarted daemon re-adopts the running
 hour through `reconcile()`. The typed client returns a refusal as a value
 (`EmberLabRpcError` carries the server's error object).
 
-Surviving descendants. `stop_job` ends the hour's whole process tree. When the hour's main process exits on its own, a
-descendant it spawned and left running is NOT killed and is outside lab custody: the job is recorded `exited`, its
-`hour-chain` lease is released, and `stop_job` on the `exited` row opens nothing, so a second job can start on the card while
-the survivor runs and the lab cannot stop it (parity with a detached `/resume-hour`). The pinned hour and learn scripts run
-their work in the foreground, so this does not arise for them; a script that detaches breaks one-job-at-a-time and the follow-up
-issue (#2460) tracks keeping the lease and reporting `job_exited_with_survivors`.
+Surviving descendants. `stop_job` ends the hour's whole process tree. The job object is not closed on exit for the hour class, so a
+descendant the hour's main process left running is NOT killed when the main process exits, and it keeps the card. The lab therefore
+treats the card as busy while the named job holds a process: the row becomes `exited` (with the exit code), the `hour-chain`
+lease is KEPT, and the event `job_exited_with_survivors` names how many processes are left. A second start, and `check_hour`, are
+refused `hour_lease_conflict` with a detail that names the hour and says `stop_job <id>` ends what it left. `stop_job` on that `exited`
+row (or on an `orphaned` one: the main process ended while no lab was running) ends the named job's processes, releases the lease and
+records `job_survivors_stopped`; a root that is alive without its named job cannot be ended by the lab and is reported with its pid.
+When the survivors end on their own the next start, check or reconcile frees the lease (`job_survivors_gone`). At lab start a lease
+whose job has no row is cleared (`hour_lease_without_job_cleared`).
+
+Verified bytes. The script's sha256 is checked before the lease, then the lab opens the script file with a share mode that denies
+writing, renaming and deleting, hashes the bytes through that handle (`hour_identity_changed` when they are not the pinned ones) and
+holds the handle until the first lab call after the job leaves `running`. The start receipt records `script_locked: true`. Bash
+still reads the file by its own path, so `$0` is the pinned path; nothing can change those bytes while the lab holds the handle. A
+lab restart ends the protection (the hour itself is unaffected).
 
 Exclusive lease and receipt state. A start takes the `hour-chain` lease exclusively: any existing owner, including the same job
 id from an identical concurrent start (same script, sha and log), refuses with `hour_lease_conflict`, and a refused start releases
-no lease. If the child is already running but the `started`-phase receipt cannot be completed, the start still SUCCEEDS: the
-result carries `job_id`, `pid`, `receipt_complete: false` and `receipt_error`, `START_HOUR_OK` ends with
-`receipt_incomplete=<error>`, and the `intent` receipt stays on disk; the caller must not retry, because the hour is running.
-Likewise, if the lab's own start returns an error AFTER the child was resumed and its row says `running`, the start still
-SUCCEEDS and the lease is KEPT: the result carries `start_tail_error` (job id, pid and the error), `START_HOUR_OK` ends with
-`start_tail_error=<error>`, and the `started` receipt records it. An error while the row is not `running` still frees the lease and
-answers `hour_spawn_failed`. Freeing the lease of a live hour would let a second hour start on the card beside it.
+no lease and leaves no identity row. If the child is already running but the `started`-phase receipt cannot be completed, the start
+still SUCCEEDS: the result carries `job_id`, `pid`, `receipt_complete: false` and `receipt_error`, `START_HOUR_OK` ends with
+`receipt_incomplete="<error>"`, and the `intent` receipt stays on disk whole (the completing receipt is written to a temporary file,
+synced and renamed over it, so a failed write cannot truncate the intent); the caller must not retry, because the hour is running.
+Likewise, if the lab's own start returns an error AFTER the child was resumed and its row says `running` (or the row cannot be read),
+the start still SUCCEEDS and the lease is KEPT: the result carries `start_tail_error` (job id, pid and the error), `START_HOUR_OK`
+ends with `start_tail_error="<error>"` (both free-text fields are JSON strings, so a line carrying both parses unambiguously), and the
+`started` receipt records it. The lab is NOT watching such an hour (no exit monitor was set up): when it ends its row stays `running`
+and its lease stays until `stop_job <id>` or a restart of the lab. An error while the row is not `running` still frees the lease and
+answers a refusal. Freeing the lease of a live hour would let a second hour start on the card beside it.
+
+Refusal codes added for the start-only checks: `hour_outage_active` (122: a planned outage of `hour-chain` is in force),
+`hour_job_object_exists` (123: the job object name is taken), `hour_identity_changed` (124: the script bytes changed after the first
+check). 38 and 39 belong to the lab verbs, so these sit beside 120 and 121. `check_hour` mirrors the outage check; the others cannot be
+known before a start creates anything.
+
+Shell and working directory. `bash` must be `bash.exe` under a Git for Windows root (a folder holding `git-cmd.exe` one to three
+levels above it) or the lab's own default path; any other file, even an existing `bash.exe`, is `hour_bash_refused`. An omitted
+`cwd` means the lab daemon's working directory, which `/resume-hour` never uses: clients send their own (the typed client does by
+default). The environment of the hour is the one the request carries (the client's environment minus every `EMBER_*` key); the lab
+adds nothing to it for the `hour` and `learn` kinds.
+
+Wire shape. `start_hour` params: `kind`, `script`, `sha256`, `log`, `cwd`, `bash`, `env`; result: `kind`, `job_id`, `pid`, `script`,
+`sha256`, `log`, `receipt_path`, `bash`, `cwd`, `receipt_complete`, `receipt_error?`, `start_tail_error?`. `check_hour` takes the same
+params and answers `kind`, `job_id` (the id a start would use), `script`, `sha256`, `log`, `receipt_path`, `bash`, `cwd`. `job_events`
+returns at most 1000 events per call, oldest first after `after_seq`. The start receipt has two phases, `intent` then `started`.
 
 Job kinds. The request carries `kind`, `hour` (the default, everything above) or
 `learn` (a LEARN job, issue #2453). Kind `learn` takes a script named
