@@ -37,6 +37,20 @@ class EvalCanaryCiJobTests(unittest.TestCase):
         for needle in required:
             self.assertIn(needle, workflow)
 
+    def test_canary_job_runs_on_an_image_that_carries_python_3_10_11(self) -> None:
+        # ubuntu-latest moved to a release whose setup-python manifest has no 3.10.11,
+        # and the frozen torch wheel is cp310, so the job pins the last image that has it.
+        workflow = (ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(encoding="utf-8")
+        lines = workflow.splitlines()
+        start = lines.index("  eval-canary-image:")
+        block = []
+        for line in lines[start + 1 :]:
+            if line.startswith("  ") and not line.startswith("   "):
+                break
+            block.append(line.strip())
+        runs_on = [line for line in block if line.startswith("runs-on:")]
+        self.assertEqual(runs_on, ["runs-on: ubuntu-24.04"])
+
 
 if __name__ == "__main__":
     unittest.main()
