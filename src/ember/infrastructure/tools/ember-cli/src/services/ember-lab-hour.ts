@@ -13,12 +13,18 @@ import { resolve } from "node:path";
 import { hourEnv } from "../commands/resume-hour.ts";
 import { callEmberLab, EmberLabRpcError } from "./ember-lab-rpc.ts";
 
+/** The job kinds the lab runs through this verb. Default `hour`. */
+export type HourJobKind = "hour" | "learn" | "dream";
+
 export interface StartHourOptions {
   pipeName: string;
+  /** Default `hour`. A learn job's script is `learn_<name>.sh`, a dream's `dream_<name>.sh`; the lab refuses any other kind (`hour_kind_unknown`). */
+  kind?: HourJobKind;
   /** Absolute, or relative to `baseDir` (default: this process's cwd). */
   script: string;
   sha256: string;
   log: string;
+  /** Default: `baseDir` (this process's cwd), exactly what `/resume-hour` inherits. Never the lab daemon's cwd (#2460 F8). */
   cwd?: string;
   bash?: string;
   baseDir?: string;
@@ -29,6 +35,8 @@ export interface StartHourOptions {
 
 export interface HourStarted {
   ok: true;
+  /** `hour`, `learn` or `dream`, as the lab ran it. An older lab that does not say is read as `hour`. */
+  kind: string;
   jobId: string;
   pid: number;
   script: string;
@@ -61,6 +69,29 @@ export interface HourRefused {
 
 export type StartHourResult = HourStarted | HourRefused;
 
+/** What `check_hour` answers when a start would be accepted right now: the same checks as `start_hour`, nothing created. */
+export interface HourChecked {
+  ok: true;
+  kind: string;
+  /** The job id the start would use (the next free attempt). */
+  jobId: string;
+  script: string;
+  sha256: string;
+  log: string;
+  receiptPath: string;
+  bash: string;
+  cwd: string | null;
+}
+
+export type CheckHourResult = HourChecked | HourRefused;
+
+/** A job's exit, with "still running" and "exit unknown" told apart (#2460 F14). */
+export type HourJobExit =
+  | { status: "running" }
+  | { status: "exited"; exitCode: number }
+  /** The job is over (or was lost) and the lab holds no exit code for it: the process was ended by stop_job, or its exit was never observed. */
+  | { status: "unknown"; state: string };
+
 export interface HourJobEvent {
   seq: number;
   ts_ms: number;
@@ -82,38 +113,71 @@ function str(value: unknown, what: string): string {
   return value;
 }
 
-/** Start an hour as a lab job. Resolves with the refusal (never throws) for a contract refusal; throws on transport faults. */
-export async function startHour(options: StartHourOptions): Promise<StartHourResult> {
+function hourParams(options: StartHourOptions): Record<string, unknown> {
   const base = options.baseDir ?? process.cwd();
-  const env = hourEnv(options.env ?? process.env);
+  return {
+    kind: options.kind ?? "hour",
+    script: resolve(base, options.script),
+    sha256: options.sha256,
+    log: resolve(base, options.log),
+    // F8: the lab would otherwise run the hour in ITS OWN working directory, which /resume-hour never does.
+    cwd: resolve(base, options.cwd ?? "."),
+    bash: options.bash === undefined ? null : resolve(base, options.bash),
+    env: hourEnv(options.env ?? process.env),
+  };
+}
+
+function refusalOf(error: unknown): HourRefused | null {
+  if (error instanceof EmberLabRpcError) {
+    const data = error.rpcError["data"];
+    if (data && typeof data === "object" && !Array.isArray(data) && "refusal_code" in data) {
+      const refusal = data as Record<string, unknown>;
+      return {
+        ok: false,
+        refusalCode: str(refusal["refusal_code"], "refusal_code"),
+        rc: Number(refusal["rc"]),
+        detail: typeof refusal["detail"] === "string" ? refusal["detail"] : "",
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Ask the lab whether a start would be accepted right now (`check_hour`): the same checks as `start_hour`, nothing created. Resolves with the
+ * refusal (never throws) for a contract refusal; throws on transport faults.
+ */
+export async function checkHour(options: StartHourOptions): Promise<CheckHourResult> {
   let result: Record<string, unknown>;
   try {
-    result = await callEmberLab({
-      pipeName: options.pipeName,
-      timeoutMs: options.timeoutMs,
-      method: "start_hour",
-      params: {
-        script: resolve(base, options.script),
-        sha256: options.sha256,
-        log: resolve(base, options.log),
-        cwd: options.cwd === undefined ? null : resolve(base, options.cwd),
-        bash: options.bash === undefined ? null : resolve(base, options.bash),
-        env,
-      },
-    });
+    result = await callEmberLab({ pipeName: options.pipeName, timeoutMs: options.timeoutMs, method: "check_hour", params: hourParams(options) });
   } catch (error) {
-    if (error instanceof EmberLabRpcError) {
-      const data = error.rpcError["data"];
-      if (data && typeof data === "object" && !Array.isArray(data) && "refusal_code" in data) {
-        const refusal = data as Record<string, unknown>;
-        return {
-          ok: false,
-          refusalCode: str(refusal["refusal_code"], "refusal_code"),
-          rc: Number(refusal["rc"]),
-          detail: typeof refusal["detail"] === "string" ? refusal["detail"] : "",
-        };
-      }
-    }
+    const refusal = refusalOf(error);
+    if (refusal) return refusal;
+    throw error;
+  }
+  const cwd = result["cwd"];
+  return {
+    ok: true,
+    kind: typeof result["kind"] === "string" ? result["kind"] : "hour",
+    jobId: str(result["job_id"], "job_id"),
+    script: str(result["script"], "script"),
+    sha256: str(result["sha256"], "sha256"),
+    log: str(result["log"], "log"),
+    receiptPath: str(result["receipt_path"], "receipt_path"),
+    bash: str(result["bash"], "bash"),
+    cwd: typeof cwd === "string" ? cwd : null,
+  };
+}
+
+/** Start an hour as a lab job. Resolves with the refusal (never throws) for a contract refusal; throws on transport faults. */
+export async function startHour(options: StartHourOptions): Promise<StartHourResult> {
+  let result: Record<string, unknown>;
+  try {
+    result = await callEmberLab({ pipeName: options.pipeName, timeoutMs: options.timeoutMs, method: "start_hour", params: hourParams(options) });
+  } catch (error) {
+    const refusal = refusalOf(error);
+    if (refusal) return refusal;
     throw error;
   }
   const pid = result["pid"];
@@ -121,6 +185,7 @@ export async function startHour(options: StartHourOptions): Promise<StartHourRes
   const cwd = result["cwd"];
   return {
     ok: true,
+    kind: typeof result["kind"] === "string" ? result["kind"] : "hour",
     jobId: str(result["job_id"], "job_id"),
     pid: pid as number,
     script: str(result["script"], "script"),
@@ -169,7 +234,18 @@ export async function hourJobState(pipeName: string, jobId: string, timeoutMs?: 
   return str(result["state"], "job_state result");
 }
 
-/** The exit code of a terminal job, or null while it has none. */
+/**
+ * The job's exit with "still running" and "exit unknown" told apart (#2460 F14): `running` while the lab says so, `exited` with the code,
+ * `unknown` for a job that is over without a code (stopped by `stop_job`, or lost). Prefer this to `hourJobExitCode`.
+ */
+export async function hourJobExit(pipeName: string, jobId: string, timeoutMs?: number): Promise<HourJobExit> {
+  const state = await hourJobState(pipeName, jobId, timeoutMs);
+  if (state === "running" || state === "starting" || state === "prepared" || state === "stopping") return { status: "running" };
+  const code = await hourJobExitCode(pipeName, jobId, timeoutMs);
+  return code === null ? { status: "unknown", state } : { status: "exited", exitCode: code };
+}
+
+/** The exit code of a terminal job, or null while it has none (null is ALSO "exit unknown": use `hourJobExit` to tell them apart). */
 export async function hourJobExitCode(pipeName: string, jobId: string, timeoutMs?: number): Promise<number | null> {
   const result = await callEmberLab({ pipeName, timeoutMs, method: "job_exit_code", params: { job_id: jobId } });
   const code = result["exit_code"];

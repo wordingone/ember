@@ -68,6 +68,44 @@ describe("/resume-hour", () => {
     expect(existsSync(w.log)).toBe(true);
   });
 
+  it("with a lab pipe the hour starts as a lab job (hour-chain lease), the client's cwd is sent, and no detached spawn or log file is made (#2460 F21)", async () => {
+    const w = world();
+    let spawned = 0;
+    const seen: Array<Record<string, unknown>> = [];
+    const cmd = createResumeHourCommand({
+      bash: "bash-test",
+      labPipe: "pipe-test",
+      spawn: () => { spawned++; return { pid: 1, unref() {} }; },
+      startHour: async (options) => {
+        seen.push({ ...options });
+        return { ok: true, kind: "hour", jobId: "hour-lab-1", pid: 777, script: options.script, sha256: options.sha256, log: options.log, receiptPath: `${options.log}.lab-start.json`, bash: "bash-test", cwd: options.cwd ?? null, receiptComplete: true };
+      },
+    });
+    const out = await cmd.execute(`${w.script} ${w.sha} ${w.log}`, ctx(w.dir));
+    expect(String((out as { message: string }).message)).toContain("RESUME_HOUR_STARTED pid=777 job=hour-lab-1");
+    expect(spawned).toBe(0);
+    expect(existsSync(w.log)).toBe(false);
+    expect(seen.length).toBe(1);
+    expect(seen[0]!["pipeName"]).toBe("pipe-test");
+    expect(seen[0]!["sha256"]).toBe(w.sha);
+    expect(seen[0]!["cwd"]).toBe(w.dir);
+  });
+
+  it("a lab refusal (hour_lease_conflict) is REFUSED with the lab's code and nothing is spawned", async () => {
+    const w = world();
+    let spawned = 0;
+    const cmd = createResumeHourCommand({
+      bash: "bash-test",
+      labPipe: "pipe-test",
+      spawn: () => { spawned++; return { pid: 1, unref() {} }; },
+      startHour: async () => ({ ok: false, refusalCode: "hour_lease_conflict", rc: 120, detail: "another hour holds the card" }),
+    });
+    const out = await cmd.execute(`${w.script} ${w.sha} ${w.log}`, ctx(w.dir));
+    const message = String((out as { message: string }).message);
+    expect(message).toContain("REFUSED: hour_lease_conflict: another hour holds the card");
+    expect(spawned).toBe(0);
+  });
+
   it("startup entry yields exactly one /resume-hour, and nothing for other or unsafe values", () => {
     expect(startupResumeHourInput({ EMBER_STARTUP_RESUME_HOUR: " a b c " })).toBe("/resume-hour a b c");
     expect(startupResumeHourInput({})).toBe(null);
