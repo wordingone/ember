@@ -169,6 +169,20 @@ else
   FAIL=1
 fi
 
+# ---- 1f. removed private source paths must never be tracked again ----------
+# The lab daemon and Studio application source live in a private repository. Its former
+# homes in this repository (runtime/ and domains/runtime/runtime/) were removed from the
+# whole history on 2026-11-21; a stray `git add -A` of a leftover working copy must not
+# put them back. The index is checked, so a staged add fails the local pre-commit hook and a
+# tracked file fails the required guard job on every pull request and push.
+REMOVED_PRIVATE_SOURCE_HITS="$(git ls-files -- runtime domains/runtime/runtime 2>/dev/null | head -10)"
+if [ -n "$REMOVED_PRIVATE_SOURCE_HITS" ]; then
+  fail "removed-paths" "private source paths are tracked again (runtime/ or domains/runtime/runtime/); the source lives in the private repository"
+  printf '%s\n' "$REMOVED_PRIVATE_SOURCE_HITS" | sed 's/^/      /'
+else
+  ok "removed-paths" "runtime/ and domains/runtime/runtime/ are not tracked"
+fi
+
 # ---- 2. no absolute local filesystem paths in tracked text ---------------
 # Matches drive-rooted private directories, temporary Windows locations, local
 # mount roots, and similar forms. Separator is one-OR-MORE slash characters
