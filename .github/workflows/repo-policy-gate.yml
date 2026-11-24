@@ -3,10 +3,17 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 name: repo-policy-gate
 
+# Runs on the ordinary pull_request event (GitHub blocks the privileged target variant of
+# that event by default in public repositories from 2026-12-02). Everything the guard trusts still comes from
+# the base commit checked out as guard-kernel; the pull-request merge commit is checked
+# out only as data. The job holds read-only permissions and no write authority, so it
+# also runs, degraded to what a read-only token and no secrets allow, for a fork or
+# Dependabot pull request: the guard then falls back to the committed names denylist and
+# fails closed when none is available.
 on:
   push:
     branches: [master]
-  pull_request_target:
+  pull_request:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled, milestoned, demilestoned]
 
@@ -38,7 +45,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Checkout pull-request merge subject as hostile data
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ github.repository }}
@@ -59,8 +66,8 @@ jobs:
           REPO_GUARD_NAMES: ${{ secrets.REPO_GUARD_NAMES }}
           REPO_GUARD_KERNEL_ROOT: ${{ github.workspace }}/guard-kernel
           REPO_GUARD_SUBJECT_ROOT: ${{ github.workspace }}/guard-subject
-          REPO_GUARD_PR_MERGE_SUBJECT: ${{ github.event_name == 'pull_request_target' && 'true' || 'false' }}
-          BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.before }}
+          REPO_GUARD_PR_MERGE_SUBJECT: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail
           kernel="${GITHUB_WORKSPACE}/guard-kernel"
@@ -73,7 +80,7 @@ jobs:
           }
           bash "${kernel}/tools/repo-guard.sh" --base "${BASE_SHA}"
       - name: Acquire and validate live PR policy with trusted kernel
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

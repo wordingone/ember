@@ -3,10 +3,18 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 name: pr-auto-merge-enrollment
 
+# GitHub blocks pull_request_target by default in public repositories from 2026-12-02, and
+# this repository's workflow policy refuses write authority on the pull_request event.
+# Enrollment therefore follows the policy gate: it runs when repo-policy-gate has
+# completed for a pull request. repo-policy-gate runs on every activity type enrollment
+# used to listen for (opened, reopened, ready_for_review, synchronize, labeled,
+# unlabeled, and the metadata edits). A workflow_run workflow is always read from the
+# default branch, never from the pull request, and the half-hourly sweep below remains the
+# backstop.
 on:
-  pull_request_target:
-    branches: [master]
-    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+  workflow_run:
+    workflows: [repo-policy-gate]
+    types: [completed]
   schedule:
     - cron: "17,47 * * * *"
   workflow_dispatch:
@@ -16,24 +24,41 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: pr-auto-merge-enrollment-${{ github.event.pull_request.number || 'sweep' }}
+  group: pr-auto-merge-enrollment-${{ github.event.workflow_run.pull_requests[0].number || 'sweep' }}
   cancel-in-progress: false
 
 jobs:
   enroll:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: >-
+      github.event_name != 'workflow_run'
+      || github.event.workflow_run.event == 'pull_request'
     steps:
+      - name: Skip pull requests from forks
+        id: origin
+        env:
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ] && [ "${HEAD_REPO}" != "${GITHUB_REPOSITORY}" ]; then
+            echo "::notice::pull request head is ${HEAD_REPO}, not ${GITHUB_REPOSITORY}; auto-merge enrollment needs write access and covers same-repository branches only"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
       - name: Checkout trusted default-branch automation only
+        if: steps.origin.outputs.skip != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: master
           path: trusted-kernel
           persist-credentials: false
       - name: Enroll only deliberately authorized bounded PRs
+        if: steps.origin.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
           set -euo pipefail
           args=()
