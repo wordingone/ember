@@ -3,6 +3,17 @@
 This directory makes Ember's complete milestone decomposition public without
 creating a competing authority surface.
 
+## Direction as of 2026-11-24
+
+The size rungs are retired by the owner: EMBER-02 and EMBER-05 (the 3B birth and its accretion rung; training of the 3B lineage has ended),
+EMBER-07 (7B) and EMBER-08 (15B) are no longer worked toward as separate model births. Their contracts below are kept unchanged as the
+record of the earlier plan, and no certificate will be issued for them. The clean-genesis rule in those contracts was withdrawn by the
+owner on 2026-11-15.
+
+The model being built is Ember 27B A3B. Its requirements, architecture and specification are in
+[the model domain](../../model/ember-27b-a3b/PRD.md); where a contract below differs from them, the requirements document is what work
+is measured against. The laboratory programs are tracked in the ember-studio repository's issues.
+
 ## One hierarchy, four surfaces
 
 1. [`INVARIANT.md`](../../../authority/INVARIANT.md) is Ember's unamendable identity and
