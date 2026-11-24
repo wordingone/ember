@@ -1087,7 +1087,7 @@ def test_required_workflow_uses_base_pinned_kernel():
         encoding="utf-8"
     )
     required = (
-        "pull_request_target:",
+        "pull_request:",
         "path: guard-kernel",
         "path: guard-subject",
         "REPO_GUARD_KERNEL_ROOT:",
@@ -1101,9 +1101,10 @@ def test_required_workflow_uses_base_pinned_kernel():
     )
     for marker in required:
         assert marker in text, f"trusted workflow marker missing: {marker}"
-    assert "\n  pull_request:\n" not in text, (
-        "candidate-authored pull_request workflow cannot be the required trust gate"
+    assert "pull_request_target" not in text, (
+        "pull_request_target is blocked by default in public repositories from 2026-12-02"
     )
+    assert "\n  pull_request:\n    branches: [master]\n" in text
     assert text.count("persist-credentials: false") == 3
     kernel_checkout = text.split(
         "- name: Checkout trusted guard kernel", 1
@@ -1117,7 +1118,7 @@ def test_required_workflow_uses_base_pinned_kernel():
     assert "ref: refs/pull/${{ github.event.pull_request.number }}/merge" in text
     assert "ref: ${{ github.sha }}" in text
     assert (
-        "github.event_name == 'pull_request_target' && "
+        "github.event_name == 'pull_request' && "
         "github.event.pull_request.base.sha || github.event.before"
     ) in text, "push and pull-request events must both bind an explicit changed-range base"
     assert 'git cat-file -e "${BASE_SHA}^{commit}"' in text
