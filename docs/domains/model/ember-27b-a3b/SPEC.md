@@ -34,7 +34,7 @@ The rules, gates and tests that [PRD.md](PRD.md) and [ARCHITECTURE.md](ARCHITECT
 | Router | Do new router rows alone suffice to send work to a new module? | 0.8B scale | not run |
 | Module split | Add and remove a module at zero leakage beyond the bound | donor-family stack | a frozen bar exists; result not read for this document |
 | P1 | Is "module off = low precision" cheaper than "module off = zero"? Loss at 2, 3 and 4 bits with 0 to 32 remainder groups on | 0.8B, forward only | not run |
-| L1 | Retrieval with no literal match and bits per byte at 32,000, 128,000, 512,000 and 1,000,000 tokens | 0.8B | harness built; not run on an Ember body |
+| L1 | Retrieval with no literal match and bits per byte at 32,000, 128,000, 512,000 and 1,000,000 tokens (the acceptance length of EM-03) | 0.8B | harness built; not run on an Ember body |
 | Residency | Transfer rate host to card; how often the router's choice changes per segment; answers equal with a module resident or loaded on demand | the card | not run |
 | Together | A module trains while the model answers; both measured, memory cap held (EM-15) | the card | not run |
 
@@ -48,7 +48,7 @@ Each test's own file states its prediction before the first number.
 | State-space mixer backward memory over the floor | 0.978, 1.099, 1.111, 1.136 GiB at 32,000, 131,000, 262,000, 524,000 tokens | chunk-recurrent exact backward |
 | Training rate | 0.024 to 0.032 billion tokens a day | earlier stack, fallback kernel |
 | Feed-forward copies' share of a domain gap | 0.41 and 0.58 | inside one family |
-| One trainable family per step | at most 754,974,720 parameters at 16 bytes each, 20.46 GiB peak | arithmetic |
+| One trainable family per step | at most 754,974,720 parameters at 16 bytes each (11.25 GiB); 20.46 GiB peak once the 1,000,000-token pass is added | arithmetic, for the donor-family stack's dimensions |
 
 Their receipts are in the research records of this repository's custody; a value is restated elsewhere only from its receipt.
 

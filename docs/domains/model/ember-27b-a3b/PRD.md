@@ -26,8 +26,8 @@ The transformation from open models to Ember 27B A3B is a research and engineeri
 |---|---|---|---|---|
 | EM-01 | About 27 billion parameters in total. | The count by the rule in SPEC.md, read from the model's own configuration, is at least 27.0 billion. | owner, 2026-11-15 | not started for an own-family body |
 | EM-02 | About 3 billion parameters in use per token, and that number stays about constant as the total grows ("capacity to grow larger but maintain constant partial number of params that require compute"). The name "A3B" is carried only after this is measured. | The in-use count per token, measured over the evaluation suite, stays under the in-use bar, and scores hold inside frozen bounds against the all-on setting. The bar's exact value is not set. | owner, 2026-11-14, 11-15 | hypothesis |
-| EM-03 | A context window of at least 1,000,000 tokens that can grow further. Non-negotiable. | At 1,048,576 positions on the card: a retrieval test with no literal match and held-out bits per byte both pass bars frozen before the run. | owner, 2026-11-13 ("Id like at least a mil total"), 11-14, 11-15 | hypothesis; one layer's forward and backward pass at 1,000,000 tokens has been measured (SPEC.md) |
-| EM-04 | It is built from open weights, donors and transplants by design; training by gradient is also allowed. | Every component's origin (donor, map, or training run) is in its record. | owner, 2026-11-15 | established as the route |
+| EM-03 | A context window of at least 1,000,000 tokens that can grow further. Non-negotiable. | At 1,000,000 positions or more on the card: a retrieval test with no literal match and held-out bits per byte both pass bars frozen before the run. | owner, 2026-11-13 ("Id like at least a mil total"), 11-14, 11-15 | hypothesis; one layer's forward and backward pass at 1,000,000 tokens has been measured (SPEC.md) |
+| EM-04 | It is built from open weights, donors and transplants by design; training by gradient is also allowed. | Every component's origin (donor, map, or training run) is in its record. | owner, 2026-11-15 | decided as the route; no measurement is claimed |
 | EM-05 | It is built, never left as a plan. | Each report names what was built toward it and the receipt. | owner, 2026-11-15 | partial |
 
 ## Its own family
@@ -37,18 +37,19 @@ The transformation from open models to Ember 27B A3B is a research and engineeri
 | EM-07 | It is its own family and shape, not any donor's. Width, depth, vocabulary, positions and router are Ember's own. No donor is the frame; every donor, the stock 27B model included, enters through maps. | No interface quantity of the model is defined by reference to a donor's configuration, and the model loads and runs with any single donor's files absent. | owner, 2026-11-13 ("nope on the same shape as qwen"; "the goal isnt to make ember27b a qwen specific recipient, but more of a universal recipient"), 2026-11-24 ("the model cannot be same family as qwen, as thats not the point") | not met; width, depth and vocabulary are the owner's to set (Not set, below) |
 | EM-08 | It is a universal recipient: it takes capability from donors of other families, other shapes and other block kinds, including models released later and architectures that do not exist yet. | Transplants pass EM-11 from at least two families, at least two widths, and at least one block kind that is not a transformer block. | owner, 2026-11-13 ("what happens when newer open source models are released?"; "and what happens if different architectures arise in the future?") | hypothesis |
 | EM-09 | Transplants are studied in both size directions: a smaller model giving to a larger one, and a larger giving to a smaller. | One transplant of each direction passes or fails EM-11 with its record. | owner, 2026-11-15 | not started |
-| EM-10 | A transplant never destroys existing weights. It only adds. | The hash of every core tensor is equal before and after a transplant, and removing what was added returns the earlier scores. A mismatch refuses the transplant. | owner, 2026-11-13 ("the transplants should happen without ever destroying those weights") | hypothesis: structural gate specified, not run on this model |
-| EM-11 | A transplant raises the recipient to the donor's score on a whole benchmark domain, on held-out items, with other scores inside a frozen bound. | As stated, with bars frozen before the run and the void range named. | owner, 2026-11-13, 11-14 | partial: copies inside one family carried 0.41 and 0.58 of a donor's gap in two measurements |
+| EM-10 | A transplant never destroys existing weights. It only adds. | The hash of every tensor that existed before the transplant, and of every existing router row, is equal after it (a transplant appends new router rows and new files only), and removing what was added returns the earlier scores. A mismatch refuses the transplant. | owner, 2026-11-13 ("the transplants should happen without ever destroying those weights") | hypothesis: structural gate specified, not run on this model |
+| EM-11 | A transplant raises the recipient to the donor's score on a whole benchmark domain, on held-out items, with other scores inside a frozen bound. | As stated, with bars frozen before the run and the void range named. | owner, 2026-11-13, 11-14 | partial: two earlier measurements inside one family reported 0.41 and 0.58 of a donor's gap; their receipts are re-read before either number is cited as a result (EM-30) |
+| EM-12 | It is universal in both directions ("universal donor-able"): Ember takes from any donor (EM-08), and an Ember module, with its recorded interface, can be given to another model. | One Ember module is transplanted into a recipient of another family and passes the bar of EM-11 there. | owner, 2026-11-24 | hypothesis |
 
-The owner's words of 2026-11-24 also say "the point is to make it universal donor-able?". Read here as EM-08 (recipient) because the 2026-11-13 statement says recipient. Whether Ember's own modules must also be givable to other models is not stated (Not set, below).
+The owner's words of 2026-11-24 also say "the point is to make it universal donor-able?". Both readings are carried: receiving from any donor is EM-08, and giving an Ember module to another model is EM-12.
 
 ## Sparse, and working while it learns
 
 | Id | Requirement | Acceptance | Source | State |
 |---|---|---|---|---|
-| EM-14 | It is truly sparse: not every module sits on the card. The core and the active modules are on the card; the rest are in host memory or on disk and are brought in by the router's choice. | With the model serving, the card holds less than the whole model, by a process read; a module not resident is loaded on the router's choice and the answer is the same as with everything resident, inside a frozen bound. | owner, 2026-11-14 ("every expert must NOT sit on the card") | hypothesis |
+| EM-14 | It is truly sparse: not every module sits on the card. The core and the active modules are on the card; the rest are in host memory or on disk and are brought in by the router's choice. | With the model serving, a process read shows the card holding no more than the core plus the modules active in that window, and a count of modules never brought to the card during the run is above zero; a module not resident is loaded on the router's choice and the answer is the same as with everything resident, inside a frozen bound. | owner, 2026-11-14 ("every expert must NOT sit on the card") | hypothesis |
 | EM-15 | Inference, training and experiments run at the same time on the one card, each side taking more or less as needed. | While the model answers an agent's turn, a training job on one of its modules advances; both are measured; neither is refused or voided; the card's memory cap holds. | owner, 2026-11-14 ("does not, then, allow for simultaneous training/finetuning/gpu-experiments and inference"), 2026-11-24 ("it should allow for the simultaneous inference/training as well") | hypothesis |
-| EM-16 | Training touches a chosen part only: the modules in use or one deliberately chosen module, never the whole 27B, and it is faster per token than the earlier 3B sparse design was. | A training step updates only the chosen module's tensors (all other hashes equal) and its tokens per second are recorded against the earlier design's record. | owner, 2026-11-15 ("would 3/27b fit? or whatever selective amount of weights and experts? ... the 27b oine should do the same but better") | hypothesis: one module family of at most 754,974,720 parameters per step fits the card by arithmetic |
+| EM-16 | Training touches a chosen part only: the modules in use or one deliberately chosen module, never the whole 27B, and it is faster per token than the earlier 3B sparse design was. | A training step updates only the chosen module's tensors (all other hashes equal) and its tokens per second are recorded against the earlier design's record. | owner, 2026-11-15 ("would 3/27b fit? or whatever selective amount of weights and experts? ... the 27b oine should do the same but better") | hypothesis: one module family of at most 754,974,720 parameters per step fits the card by arithmetic done for the donor-family stack's dimensions; redone when Ember's own shape is set |
 
 ## Modules
 
@@ -81,12 +82,13 @@ The owner's words of 2026-11-24 also say "the point is to make it universal dono
 
 ## Not set
 
+Requirement ids are not contiguous; an unused number is not reused.
+
 | What | State |
 |---|---|
 | Ember's width, depth and vocabulary | the owner's to set; a proposal with the cost of each choice is owed first (ARCHITECTURE.md, Body) |
 | The in-use bar of EM-02 | "about 3 billion"; no exact number |
 | The frozen bounds of EM-02, EM-10, EM-11, EM-14, EM-17 | set per test, before its run |
-| Whether Ember's modules must be givable to other models | not stated |
 | Whether a sparse model's routing mechanism can itself be transplanted without training (owner's question, 2026-11-14) | a candidate route in ARCHITECTURE.md, untested |
 
 ## Supersedes

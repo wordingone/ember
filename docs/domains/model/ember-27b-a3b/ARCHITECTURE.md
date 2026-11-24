@@ -58,7 +58,7 @@ Partial evidence, inside one family only: copies of a donor's feed-forward weigh
 
 ## 5. One million tokens (decided: EM-03; hypothesis in every part)
 
-- Measured: for one layer of the donor's stack with random weights, a forward and backward pass completes at 1,000,000 tokens on the card (attention peak 20.19 GiB, state-space mixer 20.38 GiB, under a 22 GiB cap), using tiled attention with per-tile recomputation. A state-space mixer's backward memory was flat from 32,000 to 524,000 tokens.
+- Measured: for one layer of the donor's stack with random weights, a forward and backward pass completes at 1,000,000 tokens on the card (attention peak 20.19 GiB, state-space mixer 20.38 GiB, under a 22 GiB cap), using tiled attention with per-tile recomputation. A state-space mixer's backward memory over the floor rose from 0.978 to 1.136 GiB between 32,000 and 524,000 tokens (16 times the length, 1.16 times the memory).
 - Not measured: a whole stack, real weights, serving, recall at length.
 - What follows for the body: block kinds whose state does not grow with length are preferred for most of the depth, and the cache of the blocks that attend globally is the quantity that bounds length. Both are Ember's own levers under the contract.
 - Measured training rate on the card with the earlier stack: 0.024 to 0.032 billion tokens a day. Any route that needs training tokens is priced with this number until a faster kernel is measured.
@@ -85,7 +85,7 @@ Vision and audio encoders enter as modules behind maps like any donor. Structure
 | Fact | Standing |
 |---|---|
 | One layer's pass at 1,000,000 tokens fits the card | established, random weights, donor's layer kinds |
-| Feed-forward copies inside one family carry part of a domain's gap (0.41, 0.58) | established, two measurements |
-| A dense model's modules cannot simply be switched off | established on a 0.8B model |
+| Feed-forward copies inside one family carry part of a domain's gap (0.41, 0.58) | reported by two earlier measurements; receipts to be re-read before citation |
+| Switching off modules of one dense 0.8B model lowered its scores | measured on that one model; not generalised |
 | Training rate 0.024 to 0.032 billion tokens a day | established for the earlier stack |
 | Anything across families, any own-family body, residency off the card, simultaneous training and inference on this model | hypothesis |
