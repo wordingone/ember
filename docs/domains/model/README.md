@@ -10,3 +10,5 @@ but their presence is not an admitted model. Model may depend on Infrastructure 
 Smallest safe inspection: open [`pyproject.toml`](../../../pyproject.toml) and the
 [`tokenizer/`](../../../domains/model/tokenizer/) source without executing a model. Domain and package authority
 is fixed by [`manifests/architecture/domain-authority-v1.json`](../../../manifests/architecture/domain-authority-v1.json).
+
+The requirements, architecture and specification of the model being built, Ember 27B A3B, are in [`ember-27b-a3b/`](ember-27b-a3b/PRD.md).
